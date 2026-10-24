@@ -10,7 +10,7 @@ const EFFECT = {
 
 const CATEGORY_ORDER = ['Privacy & telemetry', 'Start, search & taskbar', 'Ads & suggestions', 'Explorer & UI', 'Windows Update'];
 
-export function DebloatView({ filter, admin, onError, onStatus }) {
+export function DebloatView({ filter, admin, onError, onStatus, beforeChange }) {
   const [tweaks, setTweaks] = useState(null);
   const [working, setWorking] = useState(new Set());
   // Tweaks toggled this session whose effect is still pending.
@@ -41,6 +41,7 @@ export function DebloatView({ filter, admin, onError, onStatus }) {
       onError(`"${t.title}" needs administrator rights. Use File › Restart as Administrator.`);
       return;
     }
+    if (beforeChange && !(await beforeChange(t.title))) return;
     setWorking((s) => new Set(s).add(t.id));
     try {
       await api.invoke('debloat:set', { id: t.id, enable: !t.enabled });

@@ -30,6 +30,17 @@ It has a compact single-list window with a dark terminal theme, built with Elect
 - **Analyze Leftovers** shows what belongs to a program without uninstalling it.
 - Running processes in the install folder are detected and can be closed before deleting.
 
+**Batch uninstall**
+- Select several programs with `Ctrl+click`, `Shift+click`, `Shift+arrows` or `Ctrl+A`, then press `Del` or choose **Uninstall N Programs** from the right-click menu. This works for desktop programs and Store apps.
+- Each program's own uninstaller runs in turn. **Stop After This One** cancels the rest of the batch once the current uninstaller finishes.
+- Afterwards, one combined leftover list shows every program's files, folders, registry entries and services, grouped by program, with one **Delete Selected**.
+- The summary reports any uninstaller that failed or was cancelled, and any program that was skipped.
+
+**Restore points**
+- Before an uninstall, a batch, a force removal, or your first Debloat change in a session, the confirmation offers **Create a restore point first** (ticked by default).
+- Creating a restore point needs administrator rights and System Protection turned on. Windows may also skip it if one was made in the last 24 hours. If no point is made, SweepUninstall shows a warning and continues.
+- **Tools › Create Restore Points** sets whether the checkbox starts ticked.
+
 **Installation monitor**
 - **Tools › Monitor an Installation** takes a snapshot of the file system and registry, runs your installer, takes a second snapshot and records every folder, file, registry key, startup entry and service that was added.
 - Monitored programs appear under **View › Monitored Programs**. Uninstalling one removes exactly what its installation created.
@@ -57,6 +68,10 @@ It has a compact single-list window with a dark terminal theme, built with Elect
 | Leftover scan | Context menu |
 | --- | --- |
 | ![Leftover scan](docs/screenshots/leftovers.png) | ![Context menu](docs/screenshots/context-menu.png) |
+
+| Multi-select | Batch uninstall leftovers |
+| --- | --- |
+| ![Three programs selected](docs/screenshots/multi-select.png) | ![Combined leftover list after a batch uninstall](docs/screenshots/batch-uninstall.png) |
 
 | Installation monitor | Windows Store apps |
 | --- | --- |
@@ -88,7 +103,9 @@ Use **File › Restart as Administrator** or the link in the status bar.
 
 | Key | Action |
 | --- | --- |
-| `Del` | Uninstall |
+| `Del` | Uninstall (all selected programs when several are selected) |
+| `Ctrl+click` / `Shift+click` / `Shift+arrows` | Select several programs |
+| `Ctrl+A` | Select all listed programs |
 | `Shift+Del` | Force removal |
 | `Ctrl+L` | Analyze leftovers |
 | `Alt+Enter` / `Enter` | Properties |
@@ -108,6 +125,7 @@ Use **File › Restart as Administrator** or the link in the status bar.
 | `electron/monitor.cjs` | Before/after snapshots of file system and registry, and the diff |
 | `electron/backups.cjs` | Backup (`reg export`, value capture, Recycle Bin), removal and restore |
 | `electron/debloat.cjs` | Debloat tweak catalog: reads, applies and reverts registry values |
+| `electron/restore.cjs` | Creates System Restore points with `Checkpoint-Computer` and explains why Windows skipped one |
 | `electron/paths.cjs` | Well-known install roots, plus guards that refuse to touch system folders |
 | `src/` | React UI |
 

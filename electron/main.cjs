@@ -7,6 +7,7 @@ const leftovers = require('./leftovers.cjs');
 const backups = require('./backups.cjs');
 const monitor = require('./monitor.cjs');
 const debloat = require('./debloat.cjs');
+const restore = require('./restore.cjs');
 const { runCommandLine, reg, runPS, psq } = require('./shell.cjs');
 
 let win;
@@ -56,7 +57,7 @@ function buildMenu() {
     },
     {
       label: '&Tools',
-      submenu: [item('Monitor an Installation...', 'monitor', 'CmdOrCtrl+M')],
+      submenu: [item('Monitor an Installation...', 'monitor', 'CmdOrCtrl+M'), { type: 'separator' }, item('Create Restore Points', 'toggleRestore')],
     },
     { label: '&Help', submenu: [item('About', 'about')] },
   ]);
@@ -81,8 +82,25 @@ function createWindow() {
 const isAdmin = () =>
   new Promise((resolve) => execFile('net.exe', ['session'], { windowsHide: true }, (err) => resolve(!err)));
 
+const DEFAULT_SETTINGS = { createRestorePoints: true };
+const settingsFile = () => path.join(app.getPath('userData'), 'settings.json');
+function readSettings() {
+  try {
+    return { ...DEFAULT_SETTINGS, ...JSON.parse(fs.readFileSync(settingsFile(), 'utf8')) };
+  } catch {
+    return { ...DEFAULT_SETTINGS };
+  }
+}
+
 const handlers = {
   'app:isAdmin': isAdmin,
+  'settings:get': () => readSettings(),
+  'settings:set': (patch) => {
+    const next = { ...readSettings(), ...patch };
+    fs.writeFileSync(settingsFile(), JSON.stringify(next, null, 2));
+    return next;
+  },
+  'restore:create': async ({ description, kind }) => restore.create(description, kind, await isAdmin()),
   'app:elevate': async () => {
     const args = [app.getAppPath(), ...process.argv.slice(2)].map((a) => `'"${a.replace(/'/g, "''")}"'`).join(',');
     await runPS(`Start-Process -FilePath ${psq(process.execPath)} -ArgumentList ${args} -Verb RunAs`);
@@ -156,9 +174,10 @@ const handlers = {
     shell.openPath(r.filePath);
     return r.filePath;
   },
-  'dialog:confirm': async ({ message, detail }) => {
-    const r = await dialog.showMessageBox(win, { type: 'question', buttons: ['Yes', 'No'], defaultId: 0, cancelId: 1, message, detail });
-    return r.response === 0;
+  // With checkboxLabel, resolves to { ok, checked } instead of a boolean.
+  'dialog:confirm': async ({ message, detail, checkboxLabel, checkboxChecked }) => {
+    const r = await dialog.showMessageBox(win, { type: 'question', buttons: ['Yes', 'No'], defaultId: 0, cancelId: 1, message, detail, checkboxLabel, checkboxChecked });
+    return checkboxLabel ? { ok: r.response === 0, checked: r.checkboxChecked } : r.response === 0;
   },
 };
 

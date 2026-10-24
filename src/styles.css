@@ -318,3 +318,21 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .fx-reboot { color: var(--violet); border-color: #4f4370; }
 .fx-reboot::before { content: '⏻ '; }
 .fx-admin { color: var(--muted); border-color: var(--border-strong); }
+
+/* notices, multi-select, batch leftovers, menu checkmarks */
+.notice-bar {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  padding: 4px 8px; border-bottom: 1px solid var(--border); user-select: text;
+}
+.notice-bar.ok { background: #0f1f15; color: var(--green); }
+.notice-bar.ok::before { content: 'OK'; font-weight: bold; margin-right: 6px; }
+.notice-bar.warn { background: #241d0c; color: var(--amber); }
+.notice-bar.warn::before { content: 'WARN'; font-weight: bold; margin-right: 6px; }
+.notice-bar span { flex: 1; }
+.notice-bar button { border: 0; background: none; cursor: pointer; color: inherit; }
+.row.focused:not(.selected) { box-shadow: inset 0 0 0 1px var(--border-strong); }
+.tree-program { display: flex; align-items: center; gap: 6px; padding: 4px 6px; color: var(--text); background: var(--raised); border-top: 1px solid var(--border); }
+.tree-program b { font-weight: bold; }
+.nested .tree-group { padding-left: 22px; }
+.nested .tree-item { padding-left: 46px; }
+.check { display: inline-block; width: 14px; margin-left: -16px; color: var(--green); }

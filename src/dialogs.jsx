@@ -26,16 +26,30 @@ export function Dialog({ title, onClose, children, buttons, width = 520 }) {
   );
 }
 
-export function Busy({ message }) {
+export function Busy({ message, onStop }) {
+  const [stopping, setStopping] = useState(false);
   return (
     <div className="overlay">
-      <div className="dialog busy" style={{ width: 380 }}>
+      <div className="dialog busy" style={{ width: 400 }}>
         <div className="dialog-body">
           <div className="busy-msg">{message}</div>
           <div className="progress">
             <div className="progress-bar" />
           </div>
         </div>
+        {onStop && (
+          <div className="dialog-buttons">
+            <button
+              disabled={stopping}
+              onClick={() => {
+                setStopping(true);
+                onStop();
+              }}
+            >
+              {stopping ? 'Stopping after this one…' : 'Stop After This One'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -52,9 +66,20 @@ const itemLabel = (i) => (i.kind === 'value' ? `${i.path}  ›  ${i.name}` : i.k
 export function LeftoversDialog({ title, heading, items, onClose, onRemove }) {
   const [checked, setChecked] = useState(() => new Set(items.map((it, idx) => (it.confidence === 'high' ? idx : -1)).filter((i) => i >= 0)));
   const [collapsed, setCollapsed] = useState(new Set());
-  const groups = useMemo(
-    () => GROUPS.map((g) => ({ ...g, rows: items.map((it, idx) => ({ it, idx })).filter(({ it }) => g.kinds.includes(it.kind)) })).filter((g) => g.rows.length),
-    [items]
+  // Batch results carry `program`; those are grouped by program first, then by type.
+  const programs = useMemo(() => [...new Set(items.map((it) => it.program || ''))], [items]);
+  const byProgram = programs.length > 1 || programs[0] !== '';
+  const sections = useMemo(
+    () =>
+      programs.map((program) => {
+        const groups = GROUPS.map((g) => ({
+          ...g,
+          id: `${program}|${g.id}`,
+          rows: items.map((it, idx) => ({ it, idx })).filter(({ it }) => (it.program || '') === program && g.kinds.includes(it.kind)),
+        })).filter((g) => g.rows.length);
+        return { program, groups, rows: groups.flatMap((g) => g.rows) };
+      }),
+    [items, programs]
   );
   const toggle = (idx) =>
     setChecked((s) => {
@@ -89,15 +114,27 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove }) {
     >
       <p className="heading">{heading}</p>
       {items.length === 0 ? (
-        <div className="empty-box">No leftovers found. This program was removed cleanly.</div>
+        <div className="empty-box">No leftovers found. Everything was removed cleanly.</div>
       ) : (
         <div className="tree">
-          {groups.map((g) => {
+          {sections.map((s) => [
+            byProgram && (
+              <div key={`p|${s.program}`} className="tree-program">
+                <input
+                  type="checkbox"
+                  checked={s.rows.every(({ idx }) => checked.has(idx))}
+                  ref={(el) => el && (el.indeterminate = !s.rows.every(({ idx }) => checked.has(idx)) && s.rows.some(({ idx }) => checked.has(idx)))}
+                  onChange={() => toggleGroup(s)}
+                />
+                <b>{s.program}</b> <span className="muted">({s.rows.length})</span>
+              </div>
+            ),
+            ...s.groups.map((g) => {
             const all = g.rows.every(({ idx }) => checked.has(idx));
             const some = !all && g.rows.some(({ idx }) => checked.has(idx));
             const open = !collapsed.has(g.id);
             return (
-              <div key={g.id}>
+              <div key={g.id} className={byProgram ? 'nested' : ''}>
                 <div className="tree-group">
                   <button
                     className="twisty"
@@ -125,7 +162,8 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove }) {
                   ))}
               </div>
             );
-          })}
+            }),
+          ])}
         </div>
       )}
       <p className="footnote">Everything you delete is backed up first. Registry entries can be restored from View › Backups, and files go to the Recycle Bin.</p>

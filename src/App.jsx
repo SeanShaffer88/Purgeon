@@ -60,11 +60,11 @@ const MENUS = [
       ['refresh', 'Refresh', 'F5'],
     ],
   ],
-  ['Tools', [['monitor', 'Monitor an Installation...', 'Ctrl+M']]],
+  ['Tools', [['monitor', 'Monitor an Installation...', 'Ctrl+M'], null, ['toggleRestore', 'Create Restore Points']]],
   ['Help', [['about', 'About']]],
 ];
 
-function MenuBar({ onAction }) {
+function MenuBar({ onAction, checked = {} }) {
   const [open, setOpen] = useState(null);
   useEffect(() => {
     if (open === null) return;
@@ -94,7 +94,10 @@ function MenuBar({ onAction }) {
                       it[0] === 'quit' ? window.close() : onAction(it[0]);
                     }}
                   >
-                    <span>{it[1]}</span>
+                    <span>
+                      {it[0] in checked && <span className="check">{checked[it[0]] ? '✓' : ''}</span>}
+                      {it[1]}
+                    </span>
                     <span className="accel">{it[2]}</span>
                   </button>
                 ) : (
@@ -122,6 +125,14 @@ export default function App() {
   const [modal, setModal] = useState(null);
   const [busy, setBusy] = useState('');
   const [menu, setMenu] = useState(null);
+  // Multi-selection (keys); `selected` is the focused row and the range anchor moves with plain clicks.
+  const [marked, setMarked] = useState(() => new Set());
+  const anchor = useRef(null);
+  const [busyStop, setBusyStop] = useState(null);
+  const stopBatch = useRef(false);
+  const [notice, setNotice] = useState(null);
+  const [restoreOn, setRestoreOn] = useState(true);
+  const debloatGatePassed = useRef(false);
   const searchRef = useRef(null);
   const listRef = useRef(null);
   const desktopCache = useRef([]);
@@ -151,11 +162,14 @@ export default function App() {
 
   useEffect(() => {
     setSelected(null);
+    setMarked(new Set());
+    anchor.current = null;
     if (view !== 'debloat') load(view);
   }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     api.invoke('app:isAdmin').then(setAdmin);
+    api.invoke('settings:get').then((s) => setRestoreOn(s.createRestorePoints));
     api.invoke('monitor:status').then((s) => s && setModal({ type: 'monitor', resume: s }));
   }, []);
 
@@ -189,13 +203,65 @@ export default function App() {
   }, [rows, filter, sort]);
 
   const current = visible.find((r) => r.key === selected) || null;
+  const markedRows = visible.filter((r) => marked.has(r.key));
+  const batchable = view === 'desktop' || view === 'store';
+  const isBatch = batchable && markedRows.length > 1;
+
+  // ---- selection -----------------------------------------------------------
+
+  const selectRow = (key, { ctrl = false, shift = false } = {}) => {
+    const keys = visible.map((r) => r.key);
+    if (shift && anchor.current && keys.includes(anchor.current)) {
+      const [a, b] = [keys.indexOf(anchor.current), keys.indexOf(key)].sort((x, y) => x - y);
+      setMarked(new Set(keys.slice(a, b + 1)));
+    } else if (ctrl) {
+      setMarked((m) => {
+        const n = new Set(m);
+        n.has(key) ? n.delete(key) : n.add(key);
+        return n;
+      });
+      anchor.current = key;
+    } else {
+      setMarked(new Set([key]));
+      anchor.current = key;
+    }
+    setSelected(key);
+  };
+
+  // ---- restore points ------------------------------------------------------
+
+  const confirmWithRestore = (message, detail) =>
+    api.invoke('dialog:confirm', { message, detail, checkboxLabel: 'Create a restore point first', checkboxChecked: restoreOn });
+
+  const makeRestorePoint = async (description, kind) => {
+    setBusy('Creating a restore point…\nThis can take a minute.');
+    try {
+      const r = await api.invoke('restore:create', { description, kind });
+      setNotice(r.created ? { tone: 'ok', text: `Restore point created: "${description}".` } : { tone: 'warn', text: `${r.reason} Continuing without one.` });
+    } catch (e) {
+      setNotice({ tone: 'warn', text: `No restore point was made: ${e.message} Continuing without one.` });
+    } finally {
+      setBusy('');
+    }
+  };
+
+  // Called by the Debloat view before a change; asks once per session.
+  const beforeDebloatChange = async (title) => {
+    if (debloatGatePassed.current || !restoreOn) return true;
+    const r = await confirmWithRestore('Change Windows settings?', `SweepUninstall will apply "${title}". This question appears only before your first debloat change of this session.`);
+    if (!r.ok) return false;
+    if (r.checked) await makeRestorePoint('SweepUninstall: before Windows debloat changes', 'settings');
+    debloatGatePassed.current = true;
+    return true;
+  };
 
   // ---- actions -------------------------------------------------------------
 
   const removeWithBackup = async (title, items, location) => {
     setModal(null);
-    if (location) {
-      const procs = await api.invoke('program:processes', location).catch(() => []);
+    const locations = [].concat(location || []).filter(Boolean);
+    if (locations.length) {
+      const procs = (await Promise.all(locations.map((l) => api.invoke('program:processes', l).catch(() => [])))).flat();
       if (procs.length) {
         const ok = await api.invoke('dialog:confirm', {
           message: 'Close running programs?',
@@ -242,7 +308,9 @@ export default function App() {
   const uninstallMonitored = async (rec) => {
     const keys = new Set(rec.uninstallKeys.map(normKey));
     const registered = desktopCache.current.find((p) => keys.has(normKey(p.key)));
-    if (registered && (await api.invoke('dialog:confirm', { message: `Run ${registered.name}'s own uninstaller first?`, detail: 'Recommended. Afterwards SweepUninstall removes everything else the installation created.' }))) {
+    const run = registered && (await confirmWithRestore(`Run ${registered.name}'s own uninstaller first?`, 'Recommended. Afterwards SweepUninstall removes everything else the installation created.'));
+    if (run?.ok) {
+      if (run.checked) await makeRestorePoint(`SweepUninstall: before uninstalling ${registered.name}`, 'uninstall');
       setBusy(`Running the uninstaller for ${registered.name}…`);
       await api.invoke('program:runUninstaller', registered);
       setBusy('');
@@ -261,11 +329,65 @@ export default function App() {
     });
   };
 
+  // Runs each program's own uninstaller in turn, then shows one combined leftover list.
+  const batchUninstall = async (list) => {
+    const go = await confirmWithRestore(
+      `Uninstall ${list.length} programs?`,
+      `${list.map((p) => `• ${p.name}`).join('\n')}\n\nEach program's own uninstaller runs in turn, so finish each uninstaller's window. Afterwards SweepUninstall scans all of them for leftovers.`
+    );
+    if (!go.ok) return;
+    if (go.checked) await makeRestorePoint(`SweepUninstall: before uninstalling ${list.length} programs`, 'uninstall');
+
+    stopBatch.current = false;
+    setBusyStop(() => () => {
+      stopBatch.current = true;
+    });
+    const outcomes = [];
+    for (const [i, p] of list.entries()) {
+      if (stopBatch.current) {
+        outcomes.push({ p, skipped: true });
+        continue;
+      }
+      setBusy(`Uninstalling ${i + 1} of ${list.length}: ${p.name}…\nFinish the uninstaller's window if one appears.`);
+      try {
+        outcomes.push({ p, result: await api.invoke('program:runUninstaller', p) });
+      } catch (e) {
+        outcomes.push({ p, result: { ok: false, error: e.message } });
+      }
+    }
+    setBusyStop(null);
+
+    const ran = outcomes.filter((o) => !o.skipped && !o.p.store);
+    const items = [];
+    for (const [i, { p }] of ran.entries()) {
+      setBusy(`Scanning for leftovers (${i + 1} of ${ran.length}): ${p.name}…`);
+      const found = await api.invoke('program:scan', p).catch(() => []);
+      items.push(...found.map((it) => ({ ...it, program: p.name })));
+    }
+    setBusy('');
+    load();
+
+    const ok = outcomes.filter((o) => o.result?.ok).length;
+    const problems = outcomes
+      .filter((o) => !o.result?.ok)
+      .map((o) => (o.skipped ? `${o.p.name}: skipped` : o.result.error ? `${o.p.name}: ${o.result.error}` : `${o.p.name}: uninstaller exited with code ${o.result.code}`));
+    const heading = `Uninstalled ${ok} of ${list.length} programs.${problems.length ? ` ${problems.join('; ')}.` : ''} SweepUninstall found ${items.length} leftover items.`;
+    setModal({
+      type: 'leftovers',
+      title: `Batch Uninstall – ${list.length} programs`,
+      heading,
+      items,
+      onRemove: (sel) => removeWithBackup(`Batch uninstall (${list.length} programs)`, sel, ran.map((o) => o.p.location)),
+    });
+  };
+
   const actions = {
     uninstall: async (p) => {
       if (view === 'monitored') return uninstallMonitored(p);
       if (view === 'backups') return actions.deleteBackup(p);
-      if (!(await api.invoke('dialog:confirm', { message: `Uninstall ${p.name}?`, detail: p.store ? 'The app package will be removed.' : "The program's own uninstaller will run first, then SweepUninstall scans for leftovers." }))) return;
+      const go = await confirmWithRestore(`Uninstall ${p.name}?`, p.store ? 'The app package will be removed.' : "The program's own uninstaller will run first, then SweepUninstall scans for leftovers.");
+      if (!go.ok) return;
+      if (go.checked) await makeRestorePoint(`SweepUninstall: before uninstalling ${p.name}`, 'uninstall');
       setBusy(`Running the uninstaller for ${p.name}…\nFinish the uninstaller's window if one appears.`);
       let result;
       try {
@@ -289,11 +411,13 @@ export default function App() {
     },
     force: async (p) => {
       if (view !== 'desktop') return actions.uninstall(p);
-      const ok = await api.invoke('dialog:confirm', {
-        message: `Force removal of ${p.name}?`,
-        detail: "This skips the program's uninstaller and deletes its files and registry entries directly. Use it for programs whose uninstaller is broken or missing. Everything is backed up first.",
-      });
-      if (ok) scanFor(p, `Force Removal – ${p.name}`, (items) => `SweepUninstall found ${items.length} items belonging to ${p.name}.`);
+      const go = await confirmWithRestore(
+        `Force removal of ${p.name}?`,
+        "This skips the program's uninstaller and deletes its files and registry entries directly. Use it for programs whose uninstaller is broken or missing. Everything is backed up first."
+      );
+      if (!go.ok) return;
+      if (go.checked) await makeRestorePoint(`SweepUninstall: before force removal of ${p.name}`, 'uninstall');
+      scanFor(p, `Force Removal – ${p.name}`, (items) => `SweepUninstall found ${items.length} items belonging to ${p.name}.`);
     },
     analyze: (p) => {
       if (view === 'desktop') scanFor(p, `Analysis – ${p.name}`, (items) => `${items.length} files, folders and registry entries are associated with ${p.name}.`);
@@ -342,6 +466,11 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     refresh: () => load(),
     monitor: () => setModal({ type: 'monitor' }),
     about: () => setModal({ type: 'about' }),
+    toggleRestore: async () => {
+      const s = await api.invoke('settings:set', { createRestorePoints: !restoreOn });
+      setRestoreOn(s.createRestorePoints);
+      setNotice({ tone: 'ok', text: s.createRestorePoints ? 'Restore points are on: confirmations offer to create one first.' : 'Restore points are off: the checkbox starts unticked.' });
+    },
   };
 
   const dispatch = (action) => {
@@ -349,6 +478,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     if (action.startsWith('view:')) return setView(action.slice(5));
     if (global[action]) return global[action]();
     if (busy || modal) return;
+    if (action === 'clearSelection') return setMarked(new Set(current ? [current.key] : []));
+    if (action === 'uninstall' && isBatch) return batchUninstall(markedRows);
     if (current && actions[action]) actions[action](current);
   };
   const dispatchRef = useRef(dispatch);
@@ -368,20 +499,25 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     else if (e.key === 'PageDown') next = Math.min(visible.length - 1, i + 15);
     else if (e.key === 'PageUp') next = Math.max(0, i - 15);
     else if (e.key === 'Enter') return dispatch(view === 'backups' ? 'restore' : 'properties');
-    else if (e.key.length === 1 && /\S/.test(e.key) && !e.ctrlKey && !e.altKey) {
+    else if (e.ctrlKey && e.key.toLowerCase() === 'a') {
+      e.preventDefault();
+      if (batchable) setMarked(new Set(visible.map((r) => r.key)));
+      return;
+    } else if (e.key.length === 1 && /\S/.test(e.key) && !e.ctrlKey && !e.altKey) {
       const ch = e.key.toLowerCase();
       const after = [...visible.slice(i + 1), ...visible.slice(0, i + 1)];
       const hit = after.find((r) => r.name.toLowerCase().startsWith(ch));
-      if (hit) setSelected(hit.key);
+      if (hit) selectRow(hit.key);
       return;
     } else return;
     e.preventDefault();
-    setSelected(visible[next].key);
+    selectRow(visible[next].key, { shift: e.shiftKey && batchable });
     listRef.current?.querySelector(`[data-idx="${next}"]`)?.scrollIntoView({ block: 'nearest' });
   };
 
-  const contextItems =
-    view === 'backups'
+  const contextItems = isBatch
+    ? [['uninstall', `Uninstall ${markedRows.length} Programs...`, 'Del'], null, ['clearSelection', 'Clear Selection']]
+    : view === 'backups'
       ? [['restore', 'Restore'], ['properties', 'Show Contents'], null, ['deleteBackup', 'Delete Backup']]
       : view === 'monitored'
         ? [['uninstall', 'Uninstall...'], null, ['properties', 'Recorded Changes'], ['search', 'Search Online']]
@@ -406,7 +542,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
 
   return (
     <div className="app" onClick={() => menu && setMenu(null)}>
-      <MenuBar onAction={dispatch} />
+      <MenuBar onAction={dispatch} checked={{ toggleRestore: restoreOn }} />
       <div className="toolbar">
         <div className="toolbar-left">
           <select
@@ -449,9 +585,17 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           <button onClick={() => setError('')}>✕</button>
         </div>
       )}
+      {notice && (
+        <div className={`notice-bar ${notice.tone}`}>
+          <span>{notice.text}</span>
+          <button onClick={() => setNotice(null)} aria-label="Dismiss">
+            ✕
+          </button>
+        </div>
+      )}
 
       {view === 'debloat' ? (
-        <DebloatView key={debloatKey} filter={filter} admin={admin} onError={setError} onStatus={setDebloatStatus} />
+        <DebloatView key={debloatKey} filter={filter} admin={admin} onError={setError} onStatus={setDebloatStatus} beforeChange={beforeDebloatChange} />
       ) : (
       <div className="list" tabIndex={0} ref={listRef} onKeyDown={onListKey}>
         <div className="list-header">
@@ -473,12 +617,13 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             <div
               key={r.key}
               data-idx={idx}
-              className={`row ${r.key === selected ? 'selected' : ''} ${r.arch === 'user' ? 'user' : ''}`}
-              onMouseDown={() => setSelected(r.key)}
-              onDoubleClick={() => dispatch(view === 'backups' ? 'restore' : 'uninstall')}
+              className={`row ${marked.has(r.key) ? 'selected' : ''} ${r.key === selected ? 'focused' : ''} ${r.arch === 'user' ? 'user' : ''}`}
+              onMouseDown={(e) => e.button === 0 && selectRow(r.key, { ctrl: batchable && e.ctrlKey, shift: batchable && e.shiftKey })}
+              onDoubleClick={(e) => !e.ctrlKey && !e.shiftKey && dispatch(view === 'backups' ? 'restore' : 'uninstall')}
               onContextMenu={(e) => {
                 e.preventDefault();
-                setSelected(r.key);
+                if (!marked.has(r.key)) selectRow(r.key);
+                else setSelected(r.key);
                 setMenu({ x: Math.min(e.clientX, window.innerWidth - 220), y: Math.min(e.clientY, window.innerHeight - contextItems.length * 24 - 10) });
               }}
             >
@@ -504,6 +649,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             {loading ? 'Loading' : visible.length} {VIEWS[view].noun}
             {totalKB ? `, total size ${formatSize(totalKB)}` : ''}
             {filter && rows.length !== visible.length ? ` (of ${rows.length})` : ''}
+            {isBatch ? `, ${markedRows.length} selected` : ''}
           </span>
         )}
         <span className="status-right">
@@ -532,7 +678,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         </div>
       )}
 
-      {busy && <Busy message={busy} />}
+      {busy && <Busy message={busy} onStop={busyStop} />}
       {modal?.type === 'leftovers' && <LeftoversDialog {...modal} onClose={() => setModal(null)} />}
       {modal?.type === 'results' && <ResultsDialog {...modal} onClose={() => setModal(null)} />}
       {modal?.type === 'properties' && <PropertiesDialog program={modal.program} onClose={() => setModal(null)} />}
