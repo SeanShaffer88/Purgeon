@@ -8,10 +8,11 @@
 // - an existing registry key is exported before the backup is imported over it;
 // - everything restored is recorded, so the restore can be undone from Change History.
 // Services, scheduled tasks and drivers are not included; reinstall a program that needs them.
-import { sys, homeDir } from './sys.js';
+import { sys, homeDir, env } from './sys.js';
 import * as path from './winpath.js';
 import { runPS, runPSJson, reg, psq } from './shell.js';
 import { isProtected, isProtectedKey } from './paths.js';
+import { detect } from './installers.js';
 
 let root = '';
 export const setRoot = async (dir) => {
@@ -67,12 +68,26 @@ try {
 [pscustomobject]@{ file = $in.file; items = @($items) } | ConvertTo-Json -Compress -Depth 5
 `;
 
-// Writes a backup of the chosen items (dir, file, key, value) to `file`.
-export async function exportProgram(program, items, file) {
+// Migration splits a program into its program part and the user's own settings, so it can be
+// moved with or without them. Settings: anything in the user profile except installed programs
+// (AppData\Local\Programs) and shortcuts, and per-user registry except the uninstall entry.
+export function isSettings(item, profile = homeDir(), local = env('LOCALAPPDATA')) {
+  if (item.kind === 'key' || item.kind === 'value') return /^HKEY_CURRENT_USER\\/i.test(item.path) && !/\\CurrentVersion\\Uninstall\\/i.test(item.path);
+  const p = item.path.toLowerCase();
+  const inside = (root) => !!root && (p === root.toLowerCase() || p.startsWith(root.toLowerCase().replace(/\\+$/, '') + '\\'));
+  if (!inside(profile)) return false;
+  if (local && inside(path.join(local, 'Programs'))) return false;
+  if (/\.(lnk|url)$/i.test(p) || /\\start menu\\/i.test(p) || /\\desktop(\\|$)/i.test(p)) return false;
+  return true;
+}
+
+// Writes a backup of the chosen items (dir, file, key, value) to `file`. `contents` says what the
+// package holds: 'all' (program and settings), 'program' or 'settings'.
+export async function exportProgram(program, items, file, contents = 'all') {
   if (!/\.swpkg$/i.test(file)) throw new Error('The backup file must end in .swpkg');
-  const wanted = items.filter((i) => ['dir', 'file', 'key', 'value'].includes(i.kind));
+  const wanted = items.filter((i) => ['dir', 'file', 'key', 'value'].includes(i.kind) && (contents === 'all' || (contents === 'settings') === isSettings(i)));
   const [out] = await runPSJson(EXPORT, {
-    input: JSON.stringify({ file, program: { name: program.name, version: program.version || '', publisher: program.publisher || '', key: program.key || '' }, items: wanted.map((i) => ({ kind: i.kind, path: i.path, name: i.name || '' })) }),
+    input: JSON.stringify({ file, program: { name: program.name, version: program.version || '', publisher: program.publisher || '', key: program.key || '', installer: detect(program).type, contents }, items: wanted.map((i) => ({ kind: i.kind, path: i.path, name: i.name || '' })) }),
   });
   return out;
 }

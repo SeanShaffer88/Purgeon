@@ -4,6 +4,7 @@
 // (through backups.removeItems), so a cleanup can be undone. The registry is never touched.
 import { sys, env } from './sys.js';
 import * as path from './winpath.js';
+import { runPS, runPSJson, reg } from './shell.js';
 
 const DAY = 24 * 3600 * 1000;
 
@@ -31,7 +32,133 @@ export const CATEGORIES = [
     roots: () => [win('ServiceProfiles', 'NetworkService', 'AppData', 'Local', 'Microsoft', 'Windows', 'DeliveryOptimization', 'Cache')],
     admin: true,
   },
+  {
+    id: 'appdata',
+    label: 'Leftover app data folders',
+    detail: 'Data folders of Microsoft Store apps that are no longer installed.',
+    roots: () => [local('Packages')],
+    orphanPackages: true,
+  },
 ];
+
+// ---- Windows' own clean-up tools -------------------------------------------------------
+// These are done by Windows itself (DISM, Disk Cleanup, Volume Shadow Copy) and cannot be undone
+// through the Recycle Bin, so they are never selected by default and need administrator rights.
+
+const drive = () => (env('SystemDrive') || 'C:').replace(/\\+$/, '');
+const freeBytes = async () => Number((await runPS(`(Get-PSDrive -Name ${drive().slice(0, 1)}).Free`).catch(() => '0')).trim()) || 0;
+
+// Runs one Disk Cleanup handler: sets its StateFlags for a private set number, runs cleanmgr with
+// that set, then removes the flag again so no setting is left behind.
+async function diskCleanup(handler) {
+  const key = `HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VolumeCaches\\${handler}`;
+  if (!(await reg(['query', key])).ok) return { ok: false, detail: 'This Disk Cleanup option is not available on this PC' };
+  const set = await reg(['add', key, '/v', 'StateFlags0177', '/t', 'REG_DWORD', '/d', '2', '/f']);
+  if (!set.ok) return { ok: false, detail: set.stderr.trim() || 'Needs administrator rights' };
+  try {
+    const r = await sys.exec('cleanmgr.exe', ['/sagerun:177']);
+    return { ok: r.ok, detail: r.ok ? 'Done by Windows Disk Cleanup' : `Disk Cleanup exited with code ${r.code}` };
+  } finally {
+    await reg(['delete', key, '/v', 'StateFlags0177', '/f']);
+  }
+}
+
+const folderBytes = async (p) => ((await sys.exists(p)) ? (await sys.folderSize(p, 2000000, 20000)).bytes : 0);
+
+export const SYSTEM_CATEGORIES = [
+  {
+    id: 'winsxs',
+    label: 'Outdated WinSxS libraries',
+    detail: "Superseded Windows components kept after updates. Removed with Windows' DISM tool; updates installed so far can no longer be uninstalled.",
+    measure: async () => ({ present: true, bytes: null, note: 'Size is reported after cleaning' }),
+    clean: async () => {
+      const r = await sys.exec('Dism.exe', ['/Online', '/Cleanup-Image', '/StartComponentCleanup']);
+      return { ok: r.ok, detail: r.ok ? 'Done by Windows DISM' : (String(r.stdout || r.stderr).trim().split(/\r?\n/).pop() || `DISM exited with code ${r.code}`) };
+    },
+  },
+  {
+    id: 'windowsold',
+    label: 'Previous Windows installation',
+    detail: 'Windows.old, kept after a Windows upgrade. Once removed, you can no longer go back to the previous version of Windows.',
+    measure: async () => {
+      const p = `${drive()}\\Windows.old`;
+      return (await sys.exists(p)) ? { present: true, bytes: await folderBytes(p) } : { present: false };
+    },
+    clean: () => diskCleanup('Previous Installations'),
+  },
+  {
+    id: 'updatecleanup',
+    label: 'Windows Update clean-up',
+    detail: 'Older versions of updates that newer ones replaced. Removed by Windows Disk Cleanup.',
+    measure: async () => ({ present: true, bytes: null, note: 'Size is reported after cleaning' }),
+    clean: () => diskCleanup('Update Cleanup'),
+  },
+  {
+    id: 'retaildemo',
+    label: 'Windows demo content',
+    detail: 'Store demo-mode content shipped with some PCs.',
+    measure: async () => {
+      const p = env('ProgramData') && path.join(env('ProgramData'), 'Microsoft', 'Windows', 'RetailDemo');
+      const bytes = p ? await folderBytes(p) : 0;
+      return bytes ? { present: true, bytes } : { present: false };
+    },
+    clean: () => diskCleanup('RetailDemo Offline Content'),
+  },
+  {
+    id: 'restorepoints',
+    label: 'Older system restore points',
+    detail: 'Every restore point except the newest one. The newest is kept so you can still go back to it.',
+    measure: async () => {
+      const [s] = await runPSJson(
+        `$c = @(Get-CimInstance Win32_ShadowCopy -ErrorAction Stop | Where-Object { $_.ClientAccessible })
+         $u = (Get-CimInstance Win32_ShadowStorage -ErrorAction SilentlyContinue | Measure-Object -Property UsedSpace -Sum).Sum
+         [pscustomobject]@{ count = $c.Count; used = [int64]$u } | ConvertTo-Json -Compress`
+      ).catch(() => [null]);
+      if (!s || s.count < 2) return { present: false };
+      return { present: true, bytes: Math.round((s.used * (s.count - 1)) / s.count), note: `${s.count - 1} of ${s.count} restore points` };
+    },
+    clean: async () => {
+      const out = await runPS(
+        `$c = @(Get-CimInstance Win32_ShadowCopy -ErrorAction Stop | Where-Object { $_.ClientAccessible } | Sort-Object InstallDate)
+         if ($c.Count -lt 2) { 'NONE'; return }
+         $n = 0
+         foreach ($s in $c[0..($c.Count - 2)]) { & vssadmin.exe delete shadows "/shadow=$($s.ID)" /quiet | Out-Null; if ($LASTEXITCODE -eq 0) { $n++ } }
+         "$n of $($c.Count - 1)"`
+      ).catch((e) => `ERR ${e.message}`);
+      return /^ERR/.test(out) ? { ok: false, detail: out.slice(4).trim() } : { ok: true, detail: out.trim() === 'NONE' ? 'Nothing to remove' : `Removed ${out.trim()} older restore points; the newest was kept` };
+    },
+  },
+];
+
+// Measures every Windows clean-up option: [{ id, label, detail, system: true, admin: true, present, bytes, note }].
+export async function scanSystem() {
+  return Promise.all(
+    SYSTEM_CATEGORIES.map(async (c) => {
+      const m = await c.measure().catch(() => ({ present: false }));
+      return { id: c.id, label: c.label, detail: c.detail, system: true, admin: true, items: [], present: !!m.present, bytes: m.bytes ?? null, note: m.note || '' };
+    })
+  );
+}
+
+// Runs the chosen Windows clean-up options one by one: [{ id, label, ok, detail, freed }].
+export async function cleanSystem(ids) {
+  const results = [];
+  for (const c of SYSTEM_CATEGORIES.filter((x) => ids.includes(x.id))) {
+    const before = await freeBytes();
+    const r = await c.clean().catch((e) => ({ ok: false, detail: String(e?.message || e) }));
+    const freed = Math.max(0, (await freeBytes()) - before);
+    results.push({ id: c.id, label: c.label, ok: r.ok, detail: r.detail, freed });
+  }
+  return results;
+}
+
+// Package family names installed for this user, to tell leftover app data from live app data.
+export async function installedFamilies() {
+  const out = await runPS('@(Get-AppxPackage -ErrorAction SilentlyContinue | ForEach-Object { $_.PackageFamilyName }) -join "`n"');
+  const set = new Set(out.split(/\r?\n/).map((s) => s.trim().toLowerCase()).filter(Boolean));
+  if (!set.size) throw new Error('Could not read the installed apps');
+  return set;
+}
 
 const allRoots = () =>
   CATEGORIES.flatMap((c) => c.roots())
@@ -52,12 +179,16 @@ export function isJunkPath(p) {
 // Lists what each category would clean: [{ id, label, detail, admin, bytes, items: [{ path, dir, bytes }] }].
 export async function scan(now = Date.now()) {
   const own = [sys.info.dataDir].filter(Boolean).map((d) => path.resolve(d).toLowerCase());
+  // App data is offered only for apps that are not installed; if that can't be read, none is offered.
+  const families = await installedFamilies().catch(() => null);
   return Promise.all(
     CATEGORIES.map(async (c) => {
       const items = [];
+      if (c.orphanPackages && !families) return { id: c.id, label: c.label, detail: c.detail, admin: !!c.admin, bytes: 0, items };
       for (const root of [...new Set(c.roots().filter(Boolean))]) {
         for (const e of await sys.listJunk(root, 8000).catch(() => [])) {
           if (c.match && !c.match.test(path.basename(e.path))) continue;
+          if (c.orphanPackages && (!e.dir || families.has(path.basename(e.path).toLowerCase()) || !/_[a-z0-9]{13}$/i.test(path.basename(e.path)))) continue;
           if (c.minAge && now - e.newest < c.minAge) continue;
           if (own.some((o) => e.path.toLowerCase().startsWith(o))) continue;
           items.push({ path: e.path, dir: e.dir, bytes: e.bytes });

@@ -1,7 +1,7 @@
 # SweepUninstall
 
 A Windows uninstaller that removes a program and then finds the files, folders, registry keys, startup entries and services it left behind.
-It can monitor installations, take snapshots of your system to compare before and after, clean junk files, and manage startup programs and services. Every change is backed up first and can be undone.
+It can monitor installations, take snapshots of your system to compare before and after, find orphaned leftovers, migrate programs to another PC, clean junk files, update programs with winget, and manage everything that starts with Windows. Every change is backed up first and can be undone.
 
 It has a compact single-list window with a dark terminal theme. It is built with [Tauri](https://tauri.app/) and React on Windows' built-in WebView2, so the whole app is a **3.8 MB** exe in a **1.2 MB** installer.
 
@@ -12,13 +12,22 @@ It has a compact single-list window with a dark terminal theme. It is built with
 **Program list**
 - Two even toolbars sit under the menu bar:
   - the top one switches between Desktop Programs and Windows Store Apps, opens **Debloat Windows** and **Startup & Services**, and has the search box;
-  - the second opens **Monitored Programs**, **Snapshots** and **Junk Files**, and picks a program group.
+  - the second opens **Monitored Programs**, **Snapshots** and **Finding what belongs where**
+- **Tools › Who Owns This** tells you which installed program a file, folder or registry key belongs to, and how sure it is (its install folder, a monitored installation, or names along the path).
+- **Tools › Find Orphaned Leftovers** looks for folders, registry keys and services of programs that are no longer installed. Nothing is selected for you: Windows' own folders, anything a program still uses, anything used in the last 30 days and game saves in `AppData\LocalLow` are left out, and folders that contain programs are marked as possibly portable apps.
+
+**Program updates (winget)**
+- **Tools › Program Updates** lists newer versions available through the Windows Package Manager and updates the ones you choose, silently, one after another.
+- **Tools › Export Program List** saves your programs as a winget list; on a new PC, `winget import -i <file>` installs them all.
+
+**Junk Files**, and picks a program group.
 - Clicking an active button again returns to the program list. **Backups** and **Change History** are in the Tools menu.
 - Desktop programs from all three registry uninstall locations (64-bit, 32-bit and per-user), with icons, size and install date
 - When a program doesn't report its size or install date, SweepUninstall measures its folder in the background. Measured values are shown in italics; hover one to see which folder it came from.
 - Windows Store apps
 - Sort by any column, instant search, and type-to-jump
 - Programs installed only for the current user are shown in amber
+- Insight tags flag programs whose program file is **unsigned** or has a bad signature, programs **installed together with** another publisher's program (how bundled offers usually arrive), names typical of **possible bundled offers**, and programs that keep **growing** in size. The group list filters by each of these, and Properties shows the details and a size history.
 
 **Program groups**
 - Right-click a program (or several) and choose **Set Group** (Ctrl+G) to file it under a name such as Games, Work or Media. The group shows as a tag next to the program's name.
@@ -74,14 +83,35 @@ It has a compact single-list window with a dark terminal theme. It is built with
 - The **timeline** above the list shows your snapshots in order, ending at Now. Click one, then Ctrl+click a second to compare them, or click Now.
 - Comparisons can be exported to HTML.
 
+**Finding what belongs where**
+- **Tools › Who Owns This** tells you which installed program a file, folder or registry key belongs to, and how sure it is (its install folder, a monitored installation, or names along the path).
+- **Tools › Find Orphaned Leftovers** looks for folders, registry keys and services of programs that are no longer installed. Nothing is selected for you: Windows' own folders, anything a program still uses, anything used in the last 30 days and game saves in `AppData\LocalLow` are left out, and folders that contain programs are marked as possibly portable apps.
+
+**Program updates (winget)**
+- **Tools › Program Updates** lists newer versions available through the Windows Package Manager and updates the ones you choose, silently, one after another.
+- **Tools › Export Program List** saves your programs as a winget list; on a new PC, `winget import -i <file>` installs them all.
+
 **Junk Files**
-- **Junk Files** (`Ctrl+8`) finds files that Windows and programs recreate when needed, with their sizes:
+- **Finding what belongs where**
+- **Tools › Who Owns This** tells you which installed program a file, folder or registry key belongs to, and how sure it is (its install folder, a monitored installation, or names along the path).
+- **Tools › Find Orphaned Leftovers** looks for folders, registry keys and services of programs that are no longer installed. Nothing is selected for you: Windows' own folders, anything a program still uses, anything used in the last 30 days and game saves in `AppData\LocalLow` are left out, and folders that contain programs are marked as possibly portable apps.
+
+**Program updates (winget)**
+- **Tools › Program Updates** lists newer versions available through the Windows Package Manager and updates the ones you choose, silently, one after another.
+- **Tools › Export Program List** saves your programs as a winget list; on a new PC, `winget import -i <file>` installs them all.
+
+**Junk Files** (`Ctrl+8`) finds files that Windows and programs recreate when needed, with their sizes:
   - temporary files (yours and Windows'), keeping anything used in the last day
   - crash dumps and Windows error reports
   - the Explorer thumbnail cache and DirectX shader caches
   - downloaded Windows Update files and the Delivery Optimization cache
 - Tick the categories to clean and click **Clean**. Expand a category to see its largest items.
+- Data folders of Microsoft Store apps that are no longer installed (checked again right before removal).
 - Cleaned items go to the Recycle Bin, so a cleanup can be undone from Change History. Files in use are skipped. The registry is never touched.
+- A separate **Windows clean-up** section uses Windows' own tools for **outdated WinSxS libraries** (DISM), the **previous Windows installation** (Windows.old), **Windows Update clean-up**, **Windows demo content** and **older system restore points** (the newest is always kept). These are permanent, so they are never selected for you, need administrator rights, and have their own confirmation.
+
+**Scheduled maintenance**
+- **Tools › Scheduled Maintenance** runs SweepUninstall once a week through Windows Task Scheduler: a Quick snapshot, the junk categories you choose (to the Recycle Bin) and your backup limits. It never uninstalls anything and never runs the permanent Windows clean-ups, and each run writes a short report and appears in Change History.
 
 **Debloat Windows**
 - The **Debloat Windows** button next to the view picker (or `Ctrl+5`) lists 26 safe, reversible tweaks in five groups: Privacy & telemetry, Start/search/taskbar, Ads & suggestions, Explorer & UI, and Windows Update.
@@ -96,17 +126,23 @@ It has a compact single-list window with a dark terminal theme. It is built with
   - scheduled tasks outside Windows' own `\Microsoft\` folder
   - third-party services that start automatically, but only ones that can actually be changed (Windows-protected services, and services that lock their own settings, are not listed)
 - Each entry shows **ENABLED** (green) or **DISABLED** (red), its publisher, its command, and which installed program it belongs to. Click to toggle.
+- It also shows **everything that runs in the background**: a summary line, programs accepting incoming connections (grouped from the firewall's inbound rules, each removable with a backup), whether each program is digitally signed, update agents, and how many seconds Windows measured each entry adding to start-up (with administrator rights).
 - Turning an entry off never deletes it:
   - Run entries and shortcuts use Windows' own on/off switch, the same one Task Manager's Startup tab uses.
   - Tasks are disabled.
   - Services are switched from Automatic to Manual. They no longer start at boot but can still start when needed. Their original start mode is remembered and restored when you turn them back on.
 - Entries from Microsoft are tagged **Windows** and ask before being turned off. Each entry says when a change applies: **Next sign-in** or **Next restart**.
 
-**Program backup and transfer**
-- Right-click a program and choose **Back Up Program** to pack its folders, shortcuts and registry settings into one `.swpkg` file. Nothing on your PC changes.
+**Program migration and backup**
+- Right-click a program and choose **Migrate / Back Up Program** to pack it into one `.swpkg` file to install on another PC. Choose **Program and my settings**, **Program only** (a clean copy without your settings, history or sign-ins) or **My settings only** (for a PC where it is already installed). Nothing on your PC changes.
+- Each item is shown as part of the program (install folders, shortcuts, machine-wide settings, the uninstall entry) or your settings (AppData, documents, per-user registry).
 - **Tools › Restore a Program Backup** restores one on this or another PC. Paths in the old user profile are moved into yours, and the old user's registry settings into your own.
 - A restore never overwrites existing folders or files. Existing registry keys are saved before the backup is merged into them, and the whole restore can be undone from Change History.
-- Services, scheduled tasks and drivers are not included; if a program needs them, run its installer on the new PC first and then restore its settings.
+- Services, scheduled tasks and drivers are not included; if a program needs them, run its installer on the new PC first and then restore its settings. Programs installed by Windows Installer run after a restore, but need their installer to repair or update them; the restore says so.
+
+**Uninstall Archive**
+- **View › Uninstall Archive** (`Ctrl+9`) keeps a record of every program you removed: when, how, and its removal backups.
+- Right-click an entry to **reinstall it with winget**, open its website, or put back the leftovers that were removed.
 
 **Backups and restore**
 - Before anything is deleted, it is backed up:
@@ -143,6 +179,7 @@ It has a compact single-list window with a dark terminal theme. It is built with
 **Display**
 - The window opens at a size that fits your screen, and very large screens get a little extra zoom automatically. Windows' display scale setting is respected.
 - `Ctrl++` / `Ctrl+-` / `Ctrl+0` (or View › Zoom) change the zoom; your choice is remembered.
+- **View › Grid Lines** (on by default) draws lines between rows and columns.
 
 **Also**
 - Remove a stale uninstall entry
@@ -176,6 +213,14 @@ It has a compact single-list window with a dark terminal theme. It is built with
 | Junk Files | Program groups |
 | --- | --- |
 | ![Junk files by category](docs/screenshots/junk.png) | ![Program list filtered to one group](docs/screenshots/groups.png) |
+
+| Migrate a program | Uninstall Archive |
+| --- | --- |
+| ![Migrating a program with or without its settings](docs/screenshots/migrate.png) | ![Uninstall archive](docs/screenshots/archive.png) |
+
+**Windows clean-up in Junk Files**
+
+![Windows clean-up options in Junk Files](docs/screenshots/junk-windows.png)
 
 | Debloat Windows | Debloat Windows (Explorer and Windows Update) |
 | --- | --- |
@@ -236,6 +281,7 @@ SweepUninstall --help
 - `--preset` is `quick`, `standard` (the default) or `deep`.
 - A snapshot is named by its id, its name, or `latest`. Compare two snapshots, or one with `now`.
 - `--report` saves the comparison as HTML, JSON or plain text, depending on the file extension.
+- `--maintenance` runs the weekly maintenance you set up in Tools › Scheduled Maintenance.
 - `--monitor` records an installation: it runs the installer, waits for it to finish and saves the recording under Monitored Programs, with live tracking when run as administrator.
 - The exit code is 0 on success and 1 on an error. Because SweepUninstall asks for administrator rights, run it from an administrator terminal to see its output there.
 
@@ -263,6 +309,7 @@ npm test
 | `Ctrl+6` | Startup & Services |
 | `Ctrl+7` | Snapshots |
 | `Ctrl+8` | Junk Files |
+| `Ctrl+9` | Uninstall Archive |
 | `Ctrl+G` | Set group for the selected programs |
 | `Ctrl+M` | Monitor an installation |
 | `Ctrl+H` | Change History |
@@ -287,6 +334,12 @@ npm test
 | `src/backend/installers.js` | Installer types, silent uninstall commands, and the files listed in Windows Installer packages and Inno Setup logs |
 | `src/backend/safety.js` | The check made right before deleting, and dependency warnings |
 | `src/backend/log.js` | The command log |
+| `src/backend/insights.js` | Signatures, programs installed together, bundled-offer names and size history |
+| `src/backend/owners.js` | Who owns a path or key, and the orphan finder |
+| `src/backend/winget.js` | Program updates, export and reinstall through winget |
+| `src/backend/archive.js` | The uninstall archive |
+| `src/backend/running.js` | Start-up delays from Windows' boot records, and inbound firewall rules |
+| `src/backend/maintenance.js` | Scheduled weekly maintenance |
 | `src/backend/transfer.js` | Program backup files and restoring them |
 | `src/backend/junk.js` | Junk file categories, scanning and the junk-folder guard |
 | `src/backend/groups.js` | Program groups |

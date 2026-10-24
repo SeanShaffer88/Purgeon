@@ -6,6 +6,7 @@
 import { sys } from './backend/sys.js';
 import * as snapshots from './backend/snapshots.js';
 import * as monitor from './backend/monitor.js';
+import * as maintenance from './backend/maintenance.js';
 import { runCommandLine } from './backend/shell.js';
 
 const HELP = `SweepUninstall command line
@@ -17,6 +18,9 @@ const HELP = `SweepUninstall command line
         lists what was added, removed and changed.
   --list-snapshots
         Lists saved snapshots.
+  --maintenance
+        Runs the weekly maintenance chosen in Tools › Scheduled Maintenance:
+        a snapshot, the chosen junk clean-up and the backup limits.
   --monitor "<installer>" [--name "<program name>"]
         Records an installation: runs the installer, waits for it to finish
         and saves what it created and changed under Monitored Programs, so the
@@ -109,6 +113,12 @@ async function run(args) {
       ...rec.items.map((i) => `  ${i.kind.padEnd(8)} ${i.path}${i.name !== undefined ? ` › ${i.name || '(default)'}` : ''}  [${i.reason}]`),
     ];
     return lines.join('\r\n') + '\r\n';
+  }
+  if (cmd === '--maintenance') {
+    // Run by the weekly scheduled task (Tools › Scheduled Maintenance).
+    const settings = await sys.readText(`${sys.info.dataDir}\\settings.json`).then(JSON.parse).catch(() => ({}));
+    const out = await maintenance.run(settings.maintenance || {}, settings);
+    return `${out.lines.join('\r\n')}\r\nReport: ${out.report}\r\n`;
   }
   if (cmd === '--list-snapshots') {
     const list = await snapshots.list();

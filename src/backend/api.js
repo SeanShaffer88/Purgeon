@@ -18,8 +18,14 @@ import * as installers from './installers.js';
 import * as safety from './safety.js';
 import * as transfer from './transfer.js';
 import * as log from './log.js';
+import * as insights from './insights.js';
+import * as owners from './owners.js';
+import * as winget from './winget.js';
+import * as archive from './archive.js';
+import * as running from './running.js';
+import * as maintenance from './maintenance.js';
 
-const DEFAULT_SETTINGS = { createRestorePoints: true, silentUninstall: false, safeMode: false, backupMaxDays: 0, backupMaxMB: 0 };
+const DEFAULT_SETTINGS = { createRestorePoints: true, silentUninstall: false, safeMode: false, backupMaxDays: 0, backupMaxMB: 0, gridLines: true };
 const settingsFile = () => path.join(sys.info.dataDir, 'settings.json');
 const readSettings = () =>
   sys
@@ -64,6 +70,7 @@ const handlers = {
   'program:runUninstaller': async (program) => {
     if (program.store) {
       await programs.removeStoreApp(program.key);
+      await archive.add(program, 'store').catch(() => {});
       return { ok: true };
     }
     // With Tools › Silent Uninstall turned on, uninstallers whose silent switches are known run without their windows.
@@ -71,6 +78,7 @@ const handlers = {
     const cmd = silent || program.uninstall || program.quiet;
     if (!cmd) return { ok: false, error: 'This program has no uninstall command. Use Force Removal.' };
     const result = { ...(await runCommandLine(cmd)), silent: !!silent };
+    // Recorded in the uninstall archive once the program's entry is gone (checked below).
     // Many uninstallers relaunch themselves from %TEMP% and exit at once; wait for the
     // registry entry to disappear for a while before scanning.
     for (let i = 0; i < 120; i++) {
@@ -79,6 +87,7 @@ const handlers = {
       await new Promise((r) => setTimeout(r, 1000));
       if (i > 3 && !(await uninstallerStillRunning())) break;
     }
+    if (!(await reg(['query', program.key])).ok) await archive.add(program, 'uninstalled').catch(() => {});
     return result;
   },
   'program:scan': (program) => leftovers.scan(program),
@@ -128,6 +137,51 @@ const handlers = {
   'snapshots:compare': ({ before, after }) => snapshots.compare(before, after),
   'snapshots:cleanupItems': ({ before, selected }) => snapshots.cleanupItems(before, selected),
   'junk:scan': () => junk.scan(),
+  'junk:scanSystem': () => junk.scanSystem(),
+  'junk:cleanSystem': (ids) => junk.cleanSystem(ids),
+  'programs:insights': (list) => insights.programInsights(list),
+  'programs:recordSizes': (list) => insights.recordSizes(list).then(() => true),
+  'programs:sizeHistory': () => insights.sizeHistory(),
+  'files:signatures': async (paths) => Object.fromEntries(await insights.signatures(paths)),
+  'owners:who': (target) => owners.whoOwns(target),
+  'owners:pick': async (folder) => {
+    const { open: openDialog } = await import('@tauri-apps/plugin-dialog');
+    const file = await openDialog({ title: folder ? 'Choose a folder' : 'Choose a file', directory: !!folder, multiple: false });
+    return typeof file === 'string' ? file : null;
+  },
+  'orphans:scan': () => owners.orphans(),
+  'winget:available': () => winget.available(),
+  'winget:upgrades': () => winget.upgrades(),
+  'winget:upgrade': (id) => winget.upgrade(id),
+  'winget:find': (name) => winget.find(name),
+  'winget:install': (id) => winget.install(id),
+  'winget:export': async () => {
+    const { save } = await import('@tauri-apps/plugin-dialog');
+    const file = await save({ title: 'Export program list for winget', defaultPath: 'my-programs.winget.json', filters: [{ name: 'winget package list', extensions: ['json'] }] });
+    return file ? winget.exportList(file) : null;
+  },
+  'archive:list': () => archive.list(),
+  'archive:add': ({ program, how }) => archive.add(program, how),
+  'archive:attachBackup': ({ keys, backupId }) => archive.attachBackup(keys, backupId),
+  'archive:setPackage': ({ id, wingetId }) => archive.setPackage(id, wingetId),
+  'archive:remove': (id) => archive.remove(id),
+  'running:bootImpact': () => running.bootImpact(),
+  'running:inbound': () => running.inboundRules(),
+  'maintenance:status': () => maintenance.status(),
+  'maintenance:apply': async (m) => {
+    const s = await readSettings();
+    const next = { ...s, maintenance: { ...maintenance.DEFAULTS, ...m } };
+    await sys.writeText(settingsFile(), JSON.stringify(next, null, 2));
+    return maintenance.apply(next.maintenance);
+  },
+  'maintenance:runNow': async () => {
+    const s = await readSettings();
+    return maintenance.run(s.maintenance || {}, s);
+  },
+  'open:url': (url) => {
+    if (!/^https?:\/\/[^\s"]+$/i.test(url || '')) throw new Error('Not a web address');
+    return open(url);
+  },
   'groups:get': () => groups.get(),
   'groups:set': ({ keys, group }) => groups.set(keys, group),
   'groups:restore': (previous) => groups.restore(previous),
@@ -140,7 +194,8 @@ const handlers = {
     const file = await openDialog({ title: 'Restore a program backup', multiple: false, filters: [{ name: 'SweepUninstall program backup', extensions: ['swpkg'] }] });
     return typeof file === 'string' ? file : null;
   },
-  'transfer:export': ({ program, items, file }) => transfer.exportProgram(program, items, file),
+  'transfer:export': ({ program, items, file, contents }) => transfer.exportProgram(program, items, file, contents),
+  'transfer:classify': (items) => items.map((i) => transfer.isSettings(i)),
   'transfer:read': (file) => transfer.read(file),
   'transfer:restore': ({ file, numbers }) => transfer.restore(file, numbers),
   'transfer:undo': (id) => transfer.undo(id),
@@ -201,7 +256,12 @@ const recorders = {
     title: group ? `Put ${label || plural(keys.length, 'program')} in the group "${group}"` : `Took ${label || plural(keys.length, 'program')} out of ${keys.length === 1 ? 'its group' : 'their groups'}`,
     undo: { channel: 'groups:restore', arg: previous },
   }),
-  'transfer:export': ({ program }, out) => ({ type: 'Backup', title: `Backed up ${program.name}`, detail: out.file }),
+  'junk:cleanSystem': (_ids, results) =>
+    results.some((r) => r.ok) ? { type: 'Clean-up', title: `Windows clean-up: ${results.filter((r) => r.ok).map((r) => r.label).join(', ')}`, detail: 'Done by Windows itself; cannot be undone' } : null,
+  'winget:upgrade': (id, r) => (r.ok ? { type: 'Update', title: `Updated ${id} with winget` } : null),
+  'winget:install': (id, r) => (r.ok ? { type: 'Install', title: `Reinstalled ${id} with winget` } : null),
+  'maintenance:apply': (_m, s) => ({ type: 'Settings', title: s.registered ? 'Scheduled weekly maintenance' : 'Turned off scheduled maintenance' }),
+  'transfer:export': ({ program, contents }, out) => ({ type: 'Backup', title: `Packaged ${program.name}${contents === 'program' ? ' (program only)' : contents === 'settings' ? ' (settings only)' : ''}`, detail: out.file }),
   'transfer:restore': (_arg, out) =>
     out.results.some((r) => r.ok) ? { type: 'Restore', title: `Restored ${out.name} from a program backup`, detail: `${out.results.filter((r) => r.ok).length} of ${out.results.length} items`, undo: { channel: 'transfer:undo', arg: out.id } } : null,
   'backups:resolveInterrupted': (action, out) =>
@@ -254,6 +314,9 @@ export async function initBackend() {
     snapshots.setRoot(path.join(data, 'snapshots')),
     groups.setRoot(path.join(data, 'groups')),
     transfer.setRoot(path.join(data, 'transfers')),
+    insights.setRoot(path.join(data, 'insights')),
+    archive.setRoot(path.join(data, 'archive')),
+    maintenance.setRoot(path.join(data, 'reports')),
   ]);
 }
 

@@ -16,6 +16,9 @@ export function JunkView({ filter, admin, onError, onStatus, onClean }) {
   const [cats, setCats] = useState(null);
   const [chosen, setChosen] = useState(new Set());
   const [open, setOpen] = useState(null);
+  // Windows' own clean-ups: permanent, so never selected by default.
+  const [system, setSystem] = useState(null);
+  const [chosenSys, setChosenSys] = useState(new Set());
 
   useEffect(() => {
     api
@@ -29,11 +32,16 @@ export function JunkView({ filter, admin, onError, onStatus, onClean }) {
         onError(e.message);
         setCats([]);
       });
+    api
+      .invoke('junk:scanSystem')
+      .then(setSystem)
+      .catch(() => setSystem([]));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const picked = (cats || []).filter((c) => chosen.has(c.id));
   const total = picked.reduce((n, c) => n + c.bytes, 0);
   const count = picked.reduce((n, c) => n + c.items.length, 0);
+  const sysPicked = (system || []).filter((c) => chosenSys.has(c.id));
 
   useEffect(() => {
     if (!cats) return onStatus('Scanning for junk files');
@@ -60,8 +68,9 @@ export function JunkView({ filter, admin, onError, onStatus, onClean }) {
       <div className="debloat-bar">
         <span className="legend">Temporary files, crash dumps, error reports and caches that Windows and programs recreate when needed. The registry is not touched.</span>
         <span className="debloat-actions">
-          <button className="restart-explorer" disabled={!count} onClick={() => onClean(cleanupItems(picked), picked, total)}>
+          <button className="restart-explorer" disabled={!count && !sysPicked.length} onClick={() => onClean(cleanupItems(picked), picked, total, sysPicked)}>
             Clean {count ? `${formatBytes(total)}` : 'Selected'}
+            {sysPicked.length ? ` + ${sysPicked.length} Windows clean-up${sysPicked.length === 1 ? '' : 's'}` : ''}
           </button>
         </span>
       </div>
@@ -108,6 +117,43 @@ export function JunkView({ filter, admin, onError, onStatus, onClean }) {
                 </div>
               )}
             </div>
+          );
+        })}
+      </section>
+      <section className="tweak-group">
+        <div className="tweak-group-head">
+          <span>Windows clean-up · permanent</span>
+          <span className="muted">done by Windows itself; cannot be undone</span>
+        </div>
+        {!system && <div className="list-empty">Checking Windows clean-up options…</div>}
+        {(system || []).map((c) => {
+          const usable = c.present && admin !== false;
+          return (
+            <label key={c.id} className={`tweak junk-row system ${chosenSys.has(c.id) ? 'on' : 'off'} ${usable ? '' : 'empty'}`}>
+              <input
+                type="checkbox"
+                checked={chosenSys.has(c.id)}
+                disabled={!usable}
+                onChange={() =>
+                  setChosenSys((s) => {
+                    const n = new Set(s);
+                    n.has(c.id) ? n.delete(c.id) : n.add(c.id);
+                    return n;
+                  })
+                }
+              />
+              <span className="tweak-text">
+                <span className="tweak-title">{c.label}</span>
+                <span className="tweak-detail">{c.detail}</span>
+              </span>
+              <span className="tweak-tags">
+                <span className="junk-size">{!c.present ? 'Nothing to clean' : c.bytes != null ? formatBytes(c.bytes) : c.note}</span>
+                <span className="fx fx-permanent">Permanent</span>
+                <span className={`fx fx-admin ${admin === false ? 'warn' : ''}`} title={admin === false ? 'Restart as Administrator to use this' : undefined}>
+                  Admin
+                </span>
+              </span>
+            </label>
           );
         })}
       </section>

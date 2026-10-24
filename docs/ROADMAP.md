@@ -37,6 +37,19 @@ Windows or another installed program still needs.
 - **Backup limits.** Age and size limits that always keep each program's newest backup.
 - **Command log.** One line for every command SweepUninstall runs, kept for 14 days.
 
+## Added after 0.6.0 (second batch)
+
+- **Program insights.** Signature check, programs installed together, possible bundled offers and size growth, with filters.
+- **Who owns this?** Which program a file, folder or registry key belongs to.
+- **Orphan finder.** Leftovers of programs that are no longer installed, never pre-selected.
+- **winget.** Program updates, exporting the program list for a new PC, and reinstalling from the archive.
+- **Uninstall Archive.** A permanent record of removed programs and their backups.
+- **Always running.** Start-up delays measured by Windows, inbound firewall rules, signatures and updaters in Startup & Services.
+- **Scheduled maintenance.** A weekly snapshot, junk clean-up and backup limits.
+- **Program migration.** Packages with or without your settings, or settings only.
+- **Windows clean-up.** WinSxS, Windows.old, Windows Update clean-up, demo content, older restore points and leftover Store app data.
+- **Display.** Larger text and grid lines.
+
 ## Watching installations
 
 - Ignore changes made by unrelated processes while monitoring, such as browsers and Windows Update.
@@ -93,5 +106,6 @@ Windows or another installed program still needs.
 - Program details: publisher site, signature, size breakdown and when the program was last run.
 - Sort and filter by when programs were last used, to spot ones to remove.
 - Command-line uninstall, leftover scan and junk cleaning for scripts and IT use.
+- Driver store clean-up of old driver versions, with a backup.
 - Export uninstall, scan and comparison reports as HTML, CSV or JSON.
 - Optional notifications of new SweepUninstall releases, through the GitHub API.

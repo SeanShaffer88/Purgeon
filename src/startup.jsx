@@ -35,8 +35,15 @@ const simple = (s) => (s || '').toLowerCase().replace(/\.lnk$/, '').replace(/[^a
 // "Discord" owned by "Discord" or "Zoom Updater" by "Zoom Workplace": only the second is worth showing.
 const sameName = (owner, name) => simple(owner).startsWith(simple(name)) || simple(name).startsWith(simple(owner));
 
-export function StartupView({ filter, admin, programs, onError, onStatus }) {
+const baseName = (p) => (p || '').split('\\').pop().toLowerCase();
+const secs = (ms) => `${(ms / 1000).toFixed(1)} s`;
+
+export function StartupView({ filter, admin, programs, onError, onStatus, onRemoveRule }) {
   const [entries, setEntries] = useState(null);
+  // Extra detail loaded after the list: measured boot delays, signatures, inbound firewall rules.
+  const [boot, setBoot] = useState(null);
+  const [sigs, setSigs] = useState({});
+  const [inbound, setInbound] = useState(null);
   const [working, setWorking] = useState(new Set());
   const [pending, setPending] = useState({ signin: new Set(), reboot: new Set() });
 
@@ -50,7 +57,27 @@ export function StartupView({ filter, admin, programs, onError, onStatus }) {
   };
   useEffect(() => {
     load();
+    api.invoke('running:bootImpact').then(setBoot).catch(() => setBoot({ available: false, boots: [], impact: {} }));
+    api.invoke('running:inbound').then(setInbound).catch(() => setInbound([]));
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!entries) return;
+    const files = [...entries.map((e) => exeOf(e.command)), ...(inbound || []).map((r) => r.program.toLowerCase())].filter((f) => /\.exe$/.test(f));
+    api.invoke('files:signatures', [...new Set(files)]).then(setSigs).catch(() => {});
+  }, [entries, inbound]);
+  const impactOf = (e) => boot?.impact?.[e.type === 'service' ? (e.serviceName || '').toLowerCase() : baseName(exeOf(e.command))] || null;
+  const sigOf = (file) => sigs[(file || '').toLowerCase()] || null;
+  const SigTag = ({ file }) => {
+    const s = sigOf(file);
+    if (!s) return null;
+    return s.status === 'Valid' ? (
+      <span className="fx fx-signed" title={`Signed by ${s.signer}`}>Signed</span>
+    ) : (
+      <span className="fx fx-unsigned" title={s.status === 'NotSigned' ? 'This program is not digitally signed' : `Signature problem: ${s.status}`}>
+        {s.status === 'NotSigned' ? 'Unsigned' : 'Bad signature'}
+      </span>
+    );
+  };
 
   useEffect(() => {
     if (!entries) return onStatus('Reading startup entries');
@@ -103,6 +130,10 @@ export function StartupView({ filter, admin, programs, onError, onStatus }) {
   }, [entries, filter, programs]);
 
   if (!entries) return <div className="list-empty">Reading startup entries…</div>;
+  const q = filter.trim().toLowerCase();
+  const rules = (inbound || []).filter((r) => !q || `${r.display} ${r.program}`.toLowerCase().includes(q));
+  const avgBoot = boot?.boots?.length ? boot.boots.reduce((n, b) => n + b.mainPathMs, 0) / boot.boots.length : 0;
+  const unsigned = Object.values(sigs).filter((s) => s.status !== 'Valid').length;
 
   return (
     <div className="debloat">
@@ -110,6 +141,12 @@ export function StartupView({ filter, admin, programs, onError, onStatus }) {
         <span className="legend">
           <span className="pill on">ENABLED</span> starts with Windows
           <span className="pill off">DISABLED</span> kept, but doesn't start
+        </span>
+        <span className="running-summary">
+          {entries.filter((e) => e.enabled && (e.type === 'run' || e.type === 'folder')).length} start with Windows · {entries.filter((e) => e.type === 'service' && e.enabled).length} automatic services ·{' '}
+          {entries.filter((e) => e.type === 'task' && e.enabled).length} tasks · {(inbound || []).length} accept connections
+          {unsigned ? ` · ${unsigned} unsigned` : ''}
+          {avgBoot ? ` · start-up takes about ${secs(avgBoot)} (last ${boot.boots.length} slow boots)` : boot && !boot.available ? ' · start-up timings need administrator rights' : ''}
         </span>
         <span className="debloat-actions">
           {pending.signin.size > 0 && <span className="pending-signin">{pending.signin.size} change{pending.signin.size > 1 ? 's' : ''} apply at next sign-in</span>}
@@ -155,6 +192,13 @@ export function StartupView({ filter, admin, programs, onError, onStatus }) {
                 <span className="tweak-tags">
                   <span className={`fx ${fx.className}`}>{fx.label}</span>
                   <span className="tag-row">
+                    {impactOf(e) && (
+                      <span className="fx fx-impact" title={`Windows measured it slowing start-up ${impactOf(e).times} time${impactOf(e).times === 1 ? '' : 's'}`}>
+                        +{secs(impactOf(e).avgMs)} at start-up
+                      </span>
+                    )}
+                    {/updat/i.test(`${e.name} ${e.command}`) && <span className="fx fx-updater">Updater</span>}
+                    <SigTag file={exeOf(e.command)} />
                     {e.windows && <span className="fx fx-windows">Windows</span>}
                     {e.admin && <span className="fx fx-admin">Admin</span>}
                   </span>
@@ -164,6 +208,40 @@ export function StartupView({ filter, admin, programs, onError, onStatus }) {
           })}
         </section>
       ))}
+      {rules.length > 0 && (
+        <section className="tweak-group">
+          <div className="tweak-group-head">
+            <span>Programs accepting incoming connections</span>
+            <span className="muted">{rules.length} programs · {rules.reduce((n, r) => n + r.names.length, 0)} firewall rules</span>
+          </div>
+          {rules.map((r) => {
+            const owner = ownerOf({ command: `"${r.program}"` }, programs);
+            return (
+              <div key={r.program} className="tweak inbound">
+                <span className="pill on">{r.names.length > 1 ? `${r.names.length} RULES` : 'ALLOWED'}</span>
+                <span className="tweak-text">
+                  <span className="tweak-title">
+                    {r.display}
+                    {owner && !sameName(owner, r.display) && <span className="owner"> · {owner}</span>}
+                  </span>
+                  <span className="tweak-detail">
+                    {r.profile} · {r.program}
+                    {r.exists ? '' : ' · program no longer exists'}
+                  </span>
+                </span>
+                <span className="tweak-tags">
+                  <button className="link" onClick={() => onRemoveRule(r)} title="Removes the rule, after backing it up">
+                    Remove rule…
+                  </button>
+                  <span className="tag-row">
+                    <SigTag file={r.program} />
+                  </span>
+                </span>
+              </div>
+            );
+          })}
+        </section>
+      )}
     </div>
   );
 }

@@ -6,9 +6,11 @@ import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
 
+// Like the Rust core, without a PSModulePath inherited from PowerShell 7.
+const { PSModulePath, ...childEnv } = process.env;
 const run = (file, args, input) =>
   new Promise((resolve) => {
-    const child = execFile(file, args, { maxBuffer: 512 * 1024 * 1024, windowsHide: true }, (err, stdout, stderr) =>
+    const child = execFile(file, args, { maxBuffer: 512 * 1024 * 1024, windowsHide: true, env: childEnv }, (err, stdout, stderr) =>
       resolve({ ok: !err, code: err ? (typeof err.code === 'number' ? err.code : -1) : 0, stdout, stderr: stderr || (err && !stderr ? err.message : '') })
     );
     if (input !== undefined && input !== null) child.stdin.write(input);

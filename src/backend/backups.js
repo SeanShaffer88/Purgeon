@@ -1,12 +1,12 @@
 // Backs up and removes leftover items, and restores backups.
 // Registry keys are exported to .reg files, values are recorded with their type and data,
 // and files go to the Recycle Bin, so every removal can be undone.
-import { sys } from './sys.js';
+import { sys, env } from './sys.js';
 import * as path from './winpath.js';
 import { reg, runPS, runPSJson, psq, execFile } from './shell.js';
 import { isProtected, isProtectedKey } from './paths.js';
 import { regAddArgs } from './snapshots.js';
-import { isJunkPath } from './junk.js';
+import { isJunkPath, installedFamilies } from './junk.js';
 import { readState, guardReason } from './safety.js';
 
 let backupRoot = '';
@@ -318,8 +318,19 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
 
   // Junk files: only allowed inside the known junk folders (see junk.js), moved to the Recycle Bin in one batch.
   const junk = items.filter((i) => i.kind === 'junk');
-  const allowed = junk.filter((i) => isJunkPath(i.path));
+  let allowed = junk.filter((i) => isJunkPath(i.path));
   for (const item of junk.filter((i) => !isJunkPath(i.path))) log(item, false, 'Not in a junk folder, skipped');
+  // A Store app's data folder goes only while that app is not installed (checked again now).
+  const packages = env('LOCALAPPDATA') ? path.join(env('LOCALAPPDATA'), 'Packages').toLowerCase() + '\\' : null;
+  if (packages && allowed.some((i) => i.path.toLowerCase().startsWith(packages))) {
+    const families = await installedFamilies().catch(() => null);
+    allowed = allowed.filter((i) => {
+      if (!i.path.toLowerCase().startsWith(packages)) return true;
+      const live = !families || families.has(path.basename(i.path).toLowerCase());
+      if (live) log(i, false, families ? 'The app is installed, skipped' : 'Could not check the installed apps, skipped');
+      return !live;
+    });
+  }
   const errors = sys.trashMany ? await sys.trashMany(allowed.map((i) => i.path)) : await Promise.all(allowed.map((i) => trashItem(i.path).then(() => '', (e) => String(e?.message || e))));
   allowed.forEach((item, i) => {
     if (!errors[i]) {
@@ -413,7 +424,9 @@ async function list() {
 async function restoreManyFromRecycleBin(originals) {
   if (!originals.length) return {};
   const out = await runPS(
-    `$wanted = @([Console]::In.ReadToEnd() | ConvertFrom-Json)
+    `# Windows PowerShell passes a parsed JSON array on as one object; assigning it first unrolls it.
+    $wanted = [Console]::In.ReadToEnd() | ConvertFrom-Json
+    $wanted = @($wanted)
     $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
     $index = @{}
     foreach ($root in @($wanted | ForEach-Object { [IO.Path]::GetPathRoot([string]$_) } | Sort-Object -Unique)) {

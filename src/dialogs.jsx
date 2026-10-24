@@ -336,6 +336,10 @@ export function PropertiesDialog({ program, onClose }) {
         ['Package', program.store ? program.key : ''],
         ['Platform', program.arch],
         ['Website', program.urlInfo || program.helpLink],
+        ['Signature', signatureText(program.insight)],
+        ['Installed together with', program.insight?.together?.join(', ')],
+        ['Bundled-offer check', program.insight?.offer ? 'Its name matches a type of program often installed as a bundled offer' : ''],
+        ['Size history', sizeText(program.sizes)],
       ];
   return (
     <Dialog title={`Properties – ${program.name}`} onClose={onClose} width={600} buttons={<button className="primary" onClick={onClose}>OK</button>}>
@@ -366,6 +370,16 @@ export function PropertiesDialog({ program, onClose }) {
     </Dialog>
   );
 }
+
+export const signatureText = (i) =>
+  !i?.signature ? '' : i.signature === 'Valid' ? `Signed by ${i.signer || 'a trusted publisher'}` : i.signature === 'NotSigned' ? 'Not signed' : `Signature problem: ${i.signature}${i.signer ? ` (${i.signer})` : ''}`;
+const sizeText = (h) =>
+  !h || h.length < 2
+    ? ''
+    : h
+        .slice(-6)
+        .map(([d, kb]) => `${d}: ${kb < 1048576 ? `${(kb / 1024).toFixed(1)} MB` : `${(kb / 1048576).toFixed(2)} GB`}`)
+        .join('   ');
 
 // Tools › Monitor an Installation: before snapshot → user installs → after snapshot → diff.
 export function MonitorWizard({ resume, onClose, onRecorded }) {

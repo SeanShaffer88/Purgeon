@@ -35,7 +35,9 @@ async fn run_ps(script: String, input: Option<String>) -> Result<String, String>
     tauri::async_runtime::spawn_blocking(move || {
         let wrapped = format!("$ProgressPreference='SilentlyContinue';[Console]::OutputEncoding=[Text.Encoding]::UTF8;{script}");
         let utf16: Vec<u8> = wrapped.encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
+        // A PSModulePath inherited from PowerShell 7 stops Windows PowerShell loading its own modules.
         let mut child = Command::new("powershell.exe")
+            .env_remove("PSModulePath")
             .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", &STANDARD.encode(utf16)])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
@@ -276,6 +278,33 @@ fn append_text(path: String, contents: String) -> Result<(), String> {
     }
     fs::OpenOptions::new().create(true).append(true).open(&path).and_then(|mut f| f.write_all(contents.as_bytes())).map_err(|e| e.to_string())
 }
+/// When each uninstall entry was last written (ms since 1970), keyed like the program list
+/// ("HKLM\SOFTWARE\...\Uninstall\X"). Programs written within a minute or two of each other were
+/// usually installed together.
+#[tauri::command]
+fn uninstall_key_times() -> std::collections::HashMap<String, f64> {
+    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ};
+    use winreg::RegKey;
+    let mut out = std::collections::HashMap::new();
+    let roots = [
+        (HKEY_LOCAL_MACHINE, "HKLM", "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall"),
+        (HKEY_LOCAL_MACHINE, "HKLM", "SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall"),
+        (HKEY_CURRENT_USER, "HKCU", "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall"),
+    ];
+    for (hive, label, path) in roots {
+        let Ok(root) = RegKey::predef(hive).open_subkey_with_flags(path, KEY_READ) else { continue };
+        for name in root.enum_keys().flatten() {
+            let Ok(key) = root.open_subkey_with_flags(&name, KEY_READ) else { continue };
+            let Ok(info) = key.query_info() else { continue };
+            let ft = &info.last_write_time;
+            let ticks = ((ft.dwHighDateTime as u64) << 32) | ft.dwLowDateTime as u64;
+            if ticks > 116_444_736_000_000_000 {
+                out.insert(format!("{label}\\{path}\\{name}"), ((ticks - 116_444_736_000_000_000) / 10_000) as f64);
+            }
+        }
+    }
+    out
+}
 /// Moves several items to the Recycle Bin; one entry per path, empty when it worked.
 #[tauri::command]
 async fn move_many_to_trash(paths: Vec<String>) -> Vec<String> {
@@ -441,7 +470,7 @@ fn portable_dir() -> Option<PathBuf> {
 /// Command-line requests (--snapshot, --compare, --list-snapshots, --help) run without a window.
 fn cli_args() -> Vec<String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if args.iter().any(|a| matches!(a.to_lowercase().as_str(), "--snapshot" | "--compare" | "--list-snapshots" | "--monitor" | "--help" | "-h" | "/?")) {
+    if args.iter().any(|a| matches!(a.to_lowercase().as_str(), "--snapshot" | "--compare" | "--list-snapshots" | "--monitor" | "--maintenance" | "--help" | "-h" | "/?")) {
         args
     } else {
         vec![]
@@ -543,7 +572,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             run_ps, exec, run_command_line, launch, read_dir, stat, exists, read_text, write_text, make_dir, remove_path, move_to_trash, move_many_to_trash, list_junk, walk, folder_size, take_snapshot,
-            compare_snapshots, snapshot_subtree, sys_info, quit, cli_print, track_start, track_launch, track_running, track_stop, wait_process, sha256_files, append_text
+            compare_snapshots, snapshot_subtree, sys_info, quit, cli_print, track_start, track_launch, track_running, track_stop, wait_process, sha256_files, append_text, uninstall_key_times
         ])
         .run(tauri::generate_context!())
         .expect("error while running SweepUninstall");

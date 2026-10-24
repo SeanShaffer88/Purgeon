@@ -660,3 +660,73 @@ test('the same folder written with and without a trailing backslash is listed on
   ]);
   assert.deepEqual(out.map((i) => [i.path, i.score]), [['C:\\Program Files\\Foo', 100]]);
 });
+
+import { parseTable } from '../src/backend/winget.js';
+import { installedTogether, looksLikeOffer, growth } from '../src/backend/insights.js';
+import { isSettings } from '../src/backend/transfer.js';
+
+test('winget tables are read by column, ignoring progress lines and totals', () => {
+  const text = '   - \r   \\ \r\nName           Id                        Version        Available      Source\r\n-----------------------------------------------------------------------------\r\nBattle.net     Blizzard.BattleNet        Unknown        2.0.0.4232     winget\r\nGit            Git.Git                   2.55.0.5       2.56.0.3       winget\r\n2 upgrades available.\r\n';
+  assert.deepEqual(parseTable(text), [
+    { name: 'Battle.net', id: 'Blizzard.BattleNet', version: 'Unknown', available: '2.0.0.4232', source: 'winget' },
+    { name: 'Git', id: 'Git.Git', version: '2.55.0.5', available: '2.56.0.3', source: 'winget' },
+  ]);
+  assert.deepEqual(parseTable('No installed package found matching input criteria.'), []);
+});
+
+test('programs from different publishers written within two minutes count as installed together', () => {
+  const t = Date.parse('2026-10-01T10:00:00Z');
+  const programs = [
+    { key: 'a', name: 'Free Video Converter', publisher: 'Acme' },
+    { key: 'b', name: 'Super Search Toolbar', publisher: 'Offers Inc' },
+    { key: 'c', name: 'Acme Helper', publisher: 'Acme' },
+    { key: 'd', name: 'Microsoft Visual C++ 2015-2022 Redistributable (x64)', publisher: 'Microsoft Corporation' },
+    { key: 'e', name: 'Unrelated', publisher: 'Other' },
+  ];
+  const times = { a: t, b: t + 60000, c: t + 30000, d: t + 10000, e: t + 3600000 };
+  const together = installedTogether(programs, times);
+  assert.deepEqual(together.get('a'), ['Super Search Toolbar'], 'same publisher and runtimes are not offers');
+  assert.deepEqual(together.get('b'), ['Free Video Converter', 'Acme Helper']);
+  assert.equal(together.has('e'), false);
+  assert.equal(together.has('d'), false);
+  assert.ok(looksLikeOffer('Super Search Toolbar') && looksLikeOffer('PC Optimizer Pro') && looksLikeOffer('Driver Updater'));
+  assert.ok(!looksLikeOffer('OBS Studio') && !looksLikeOffer('Notepad++') && !looksLikeOffer('Realtek Audio Driver'));
+});
+
+test('size growth needs a fifth more and at least 50 MB within 90 days', () => {
+  assert.deepEqual(growth([['2026-08-01', 100000], ['2026-10-20', 200000]], '2026-10-24'), { fromKB: 100000, toKB: 200000, since: '2026-08-01' });
+  assert.equal(growth([['2026-08-01', 1000000], ['2026-10-20', 1060000]], '2026-10-24'), null, 'only 6% bigger');
+  assert.equal(growth([['2026-08-01', 1000], ['2026-10-20', 2000]], '2026-10-24'), null, 'doubled but tiny');
+  assert.equal(growth([['2026-10-20', 2000]], '2026-10-24'), null);
+});
+
+test('migration tells the program part from the user settings', () => {
+  const profile = 'C:\\Users\\x';
+  const local = 'C:\\Users\\x\\AppData\\Local';
+  const s = (kind, p) => isSettings({ kind, path: p }, profile, local);
+  assert.equal(s('dir', 'C:\\Program Files\\Foo'), false);
+  assert.equal(s('dir', 'C:\\Users\\x\\AppData\\Roaming\\Foo'), true);
+  assert.equal(s('dir', 'C:\\Users\\x\\AppData\\Local\\Programs\\Foo'), false, 'a per-user install is the program');
+  assert.equal(s('file', 'C:\\Users\\x\\Desktop\\Foo.lnk'), false, 'shortcuts belong with the program');
+  assert.equal(s('dir', 'C:\\Users\\x\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo'), false);
+  assert.equal(s('key', 'HKEY_CURRENT_USER\\Software\\Foo'), true);
+  assert.equal(s('key', 'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Foo'), false);
+  assert.equal(s('key', 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Foo'), false);
+});
+
+import * as maintenance from '../src/backend/maintenance.js';
+import * as history from '../src/backend/history.js';
+
+test('a maintenance run writes a report and records itself, and rejects bad schedules', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-maint-'));
+  await maintenance.setRoot(path.join(root, 'reports'));
+  await history.setRoot(path.join(root, 'history'));
+  await backups.setRoot(path.join(root, 'backups'));
+  const out = await maintenance.run({ snapshot: false, junk: [] }, {});
+  assert.ok(fs.existsSync(out.report));
+  assert.match(fs.readFileSync(out.report, 'utf8'), /SweepUninstall maintenance/);
+  assert.equal((await history.list())[0].title, 'Weekly maintenance ran');
+  await assert.rejects(() => maintenance.apply({ enabled: true, day: 'Someday', time: '10:00' }), /Choose a day/);
+  await assert.rejects(() => maintenance.apply({ enabled: true, day: 'Monday', time: '25:00' }), /Choose a day/);
+  fs.rmSync(root, { recursive: true, force: true });
+});

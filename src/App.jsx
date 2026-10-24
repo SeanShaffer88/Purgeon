@@ -8,6 +8,7 @@ import { StartupView } from './startup.jsx';
 import { JunkView, formatBytes } from './junk.jsx';
 import { GroupDialog } from './groups.jsx';
 import { ProgramBackupDialog, ProgramRestoreDialog } from './transfer.jsx';
+import { WhoOwnsDialog, UpdatesDialog, MaintenanceDialog } from './tools.jsx';
 
 const api = window.api;
 
@@ -22,7 +23,16 @@ const VIEWS = {
   startup: { label: 'Startup & Services', noun: 'entries', cols: [], custom: true, button: true },
   debloat: { label: 'Debloat Windows', noun: 'tweaks', cols: [], button: true, custom: true },
   junk: { label: 'Junk Files', noun: 'categories', cols: [], button: true, custom: true },
+  archive: { label: 'Uninstall Archive', noun: 'removed programs', cols: [['name', 'Removed Program'], ['size', 'How'], ['date', 'Removed On']], button: true },
 };
+
+// Group-picker entries that filter by insight rather than by group.
+const INSIGHT_FILTERS = [
+  ['\u0001offer', 'Possible bundled offers', (i) => i?.offer],
+  ['\u0001together', 'Installed together with another', (i) => i?.together],
+  ['\u0001unsigned', 'Unsigned or bad signature', (i) => i?.signature && i.signature !== 'Valid'],
+  ['\u0001growing', 'Growing in size', (i) => i?.growth],
+];
 
 // Group filter values besides a group's name.
 const ALL_GROUPS = '';
@@ -51,10 +61,44 @@ function toRow(view, r) {
     const n = r.stats.dirs + r.stats.files + r.stats.keys + r.stats.values;
     return { ...r, key: r.id, sizeText: n.toLocaleString(), sortSize: n, date: localTime(r.created), sortDate: r.created };
   }
+  if (view === 'archive') {
+    const how = { uninstalled: 'Uninstalled', forced: 'Force removed', store: 'Store app removed' }[r.how] || r.how;
+    return { ...r, key: r.id, name: r.version ? `${r.name} ${r.version}` : r.name, sizeText: how, sortSize: how, date: localTime(r.removed), sortDate: r.removed };
+  }
   if (view === 'history') {
     return { ...r, key: r.id, name: r.undone ? `${r.title}  (undone)` : r.title, sizeText: r.type, sortSize: r.type, date: localTime(r.time), sortDate: r.time };
   }
   return { ...r, sizeText: formatSize(r.sizeKB), sortSize: r.sizeKB || 0, date: r.installDate };
+}
+
+// Small tags after a program's name for what the insights found.
+function InsightTags({ i }) {
+  if (!i) return null;
+  return (
+    <>
+      {i.signature && i.signature !== 'Valid' && (
+        <span className="insight-tag bad" title={i.signature === 'NotSigned' ? 'Its program file is not digitally signed' : `Signature problem: ${i.signature}`}>
+          {i.signature === 'NotSigned' ? 'unsigned' : 'bad signature'}
+        </span>
+      )}
+      {i.offer && (
+        <span className="insight-tag offer" title="Its name matches a type of program often installed as a bundled offer">
+          possible offer
+        </span>
+      )}
+      {i.together && (
+        <span className="insight-tag together" title={`Installed or updated at the same time as: ${i.together.join(', ')}`}>
+          installed with {i.together[0]}
+          {i.together.length > 1 ? ` +${i.together.length - 1}` : ''}
+        </span>
+      )}
+      {i.growth && (
+        <span className="insight-tag growing" title={`Grew from ${(i.growth.fromKB / 1024).toFixed(0)} MB to ${(i.growth.toKB / 1024).toFixed(0)} MB since ${i.growth.since}`}>
+          growing
+        </span>
+      )}
+    </>
+  );
 }
 
 // The menu bar. The shortcuts shown here are handled by the keydown listener in App.
@@ -68,7 +112,7 @@ const MENUS = [
       ['analyze', 'Analyze Leftovers...', 'Ctrl+L'],
       ['removeEntry', 'Remove Entry...'],
       ['setGroup', 'Set Group...', 'Ctrl+G'],
-      ['backupProgram', 'Back Up Program...'],
+      ['backupProgram', 'Migrate / Back Up Program...'],
       null,
       ['registry', 'Registry Entry'],
       ['folder', 'Installation Folder'],
@@ -86,6 +130,7 @@ const MENUS = [
       ['view:debloat', 'Debloat Windows', 'Ctrl+5'],
       ['view:startup', 'Startup & Services', 'Ctrl+6'],
       ['view:junk', 'Junk Files', 'Ctrl+8'],
+      ['view:archive', 'Uninstall Archive', 'Ctrl+9'],
       null,
       ['find', 'Find...', 'Ctrl+F'],
       ['refresh', 'Refresh', 'F5'],
@@ -93,9 +138,11 @@ const MENUS = [
       ['zoomIn', 'Zoom In', 'Ctrl++'],
       ['zoomOut', 'Zoom Out', 'Ctrl+-'],
       ['zoomReset', 'Reset Zoom', 'Ctrl+0'],
+      null,
+      ['toggleGrid', 'Grid Lines'],
     ],
   ],
-  ['Tools', [['monitor', 'Monitor an Installation...', 'Ctrl+M'], ['view:backups', 'Backups', 'Ctrl+4'], ['view:history', 'Change History', 'Ctrl+H'], null, ['view:snapshots', 'Snapshots', 'Ctrl+7'], ['takeSnapshot', 'Take a Snapshot...'], null, ['restoreProgram', 'Restore a Program Backup...'], null, ['view:junk', 'Junk Files', 'Ctrl+8'], null, ['toggleRestore', 'Create Restore Points'], ['toggleSilent', 'Silent Uninstall When Possible'], ['toggleSafe', 'Safe Mode'], null, ['backupSettings', 'Backup Settings...'], ['openLog', 'Open Command Log']]],
+  ['Tools', [['monitor', 'Monitor an Installation...', 'Ctrl+M'], ['view:backups', 'Backups', 'Ctrl+4'], ['view:history', 'Change History', 'Ctrl+H'], null, ['view:snapshots', 'Snapshots', 'Ctrl+7'], ['takeSnapshot', 'Take a Snapshot...'], null, ['restoreProgram', 'Restore a Program Backup...'], null, ['whoOwns', 'Who Owns This...'], ['orphans', 'Find Orphaned Leftovers...'], ['view:archive', 'Uninstall Archive', 'Ctrl+9'], null, ['updates', 'Program Updates (winget)...'], ['exportWinget', 'Export Program List (winget)...'], null, ['maintenance', 'Scheduled Maintenance...'], null, ['view:junk', 'Junk Files', 'Ctrl+8'], null, ['toggleRestore', 'Create Restore Points'], ['toggleSilent', 'Silent Uninstall When Possible'], ['toggleSafe', 'Safe Mode'], null, ['backupSettings', 'Backup Settings...'], ['openLog', 'Open Command Log']]],
   ['Help', [['about', 'About']]],
 ];
 
@@ -169,10 +216,14 @@ export default function App() {
   const [restoreOn, setRestoreOn] = useState(true);
   const [silentOn, setSilentOn] = useState(false);
   const [safeOn, setSafeOn] = useState(false);
+  const [gridOn, setGridOn] = useState(true);
   const [zoom, setZoom] = useState(1);
   // Program groups ({ programKey: group }) and the group the program lists are filtered to.
   const [groups, setGroups] = useState({});
   const [groupFilter, setGroupFilter] = useState(ALL_GROUPS);
+  // Per-program insights (signature, installed together, offers, growth), loaded after the list.
+  const [insight, setInsight] = useState({});
+  const sizeTimer = useRef(null);
   const groupNames = useMemo(() => [...new Set(Object.values(groups))].sort((a, b) => a.localeCompare(b)), [groups]);
   const debloatGatePassed = useRef(false);
   const searchRef = useRef(null);
@@ -196,10 +247,12 @@ export default function App() {
       else if (v === 'backups') data = await api.invoke('backups:list');
       else if (v === 'history') data = await api.invoke('history:list');
       else if (v === 'snapshots') data = await api.invoke('snapshots:list');
+      else if (v === 'archive') data = await api.invoke('archive:list');
       else data = await api.invoke('programs:list', v);
       if (v === 'desktop') {
         desktopCache.current = data;
         api.invoke('programs:measure', data).catch(() => {});
+        api.invoke('programs:insights', data).then(setInsight).catch(() => {});
       }
       setRows(data.map((r) => toRow(v, r)));
     } catch (e) {
@@ -228,6 +281,7 @@ export default function App() {
       setRestoreOn(s.createRestorePoints);
       setSilentOn(!!s.silentUninstall);
       setSafeOn(!!s.safeMode);
+      setGridOn(s.gridLines !== false);
       api.invoke('backups:prune').catch(() => {});
       setZoom(s.zoom || 1);
       applyZoom(s.zoom || 1);
@@ -258,7 +312,9 @@ export default function App() {
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
     const programs = view === 'desktop' || view === 'store';
-    const inGroup = (r) => !programs || groupFilter === ALL_GROUPS || (groupFilter === UNGROUPED ? !groups[r.key] : groups[r.key] === groupFilter);
+    const insightFilter = INSIGHT_FILTERS.find(([id]) => id === groupFilter);
+    const inGroup = (r) =>
+      !programs || groupFilter === ALL_GROUPS || (insightFilter ? !!insightFilter[2](insight[r.key]) : groupFilter === UNGROUPED ? !groups[r.key] : groups[r.key] === groupFilter);
     const list = rows.filter((r) => inGroup(r) && (!q || `${r.name} ${r.publisher || ''} ${(programs && groups[r.key]) || ''}`.toLowerCase().includes(q)));
     const val = (r) => (sort.col === 'size' ? r.sortSize : sort.col === 'date' && r.sortDate ? r.sortDate : (r[sort.col] || '').toString().toLowerCase());
     return [...list].sort((a, b) => {
@@ -266,7 +322,7 @@ export default function App() {
       const y = val(b);
       return (x < y ? -1 : x > y ? 1 : 0) * sort.dir;
     });
-  }, [rows, filter, sort, groups, groupFilter, view]);
+  }, [rows, filter, sort, groups, groupFilter, view, insight]);
 
   const current = visible.find((r) => r.key === selected) || null;
   const markedRows = visible.filter((r) => marked.has(r.key));
@@ -404,6 +460,7 @@ export default function App() {
     setBusy('Backing up and removing selected items…');
     try {
       const { results, backupId } = await api.invoke('items:remove', { title, items, owners });
+      if (backupId && owners.length) api.invoke('archive:attachBackup', { keys: owners, backupId }).catch(() => {});
       setModal({
         type: 'results',
         title: 'Removal Report',
@@ -428,7 +485,13 @@ export default function App() {
       heading,
       items,
       owners: [p.key],
-      onRemove: (sel) => removeWithBackup(p.name, sel, p.location, [p.key]),
+      onRemove: async (sel) => {
+        // A force removal that deletes the uninstall entry removes the program: record it in the archive.
+        if (/^Force Removal/.test(title) && sel.some((i) => i.kind === 'key' && i.path.toLowerCase().endsWith(p.key.split('\\').pop().toLowerCase()))) {
+          await api.invoke('archive:add', { program: p, how: 'forced' }).catch(() => {});
+        }
+        return removeWithBackup(p.name, sel, p.location, [p.key]);
+      },
     });
 
   const scanFor = async (p, title, headingFn) => {
@@ -581,13 +644,94 @@ export default function App() {
 
   // ---- junk files and groups -----------------------------------------------
 
-  const cleanJunk = async (items, categories, bytes) => {
-    const ok = await api.invoke('dialog:confirm', {
-      message: `Clean ${formatBytes(bytes)} of junk files?`,
-      detail: `${categories.map((c) => `• ${c.label}: ${formatBytes(c.bytes)}`).join('\n')}\n\n${items.length.toLocaleString()} items go to the Recycle Bin. You can undo this from Tools › Change History until the Recycle Bin is emptied.`,
+  const cleanJunk = async (items, categories, bytes, system = []) => {
+    if (items.length) {
+      const ok = await api.invoke('dialog:confirm', {
+        message: `Clean ${formatBytes(bytes)} of junk files?`,
+        detail: `${categories.map((c) => `• ${c.label}: ${formatBytes(c.bytes)}`).join('\n')}\n\n${items.length.toLocaleString()} items go to the Recycle Bin. You can undo this from Tools › Change History until the Recycle Bin is emptied.`,
+      });
+      if (!ok) return;
+      await removeWithBackup(`Junk files (${categories.map((c) => c.label).join(', ')})`, items);
+    }
+    if (!system.length) return;
+    // Windows' own clean-ups are permanent, so they get their own, explicit confirmation.
+    const go = await api.invoke('dialog:confirm', {
+      message: `Run ${system.length} permanent Windows clean-up${system.length === 1 ? '' : 's'}?`,
+      detail: `${system.map((c) => `• ${c.label}: ${c.detail}`).join('\n')}\n\nWindows does these itself. They cannot be undone, and some take several minutes.`,
     });
-    if (!ok) return;
-    removeWithBackup(`Junk files (${categories.map((c) => c.label).join(', ')})`, items);
+    if (!go) return;
+    setModal(null);
+    setBusy(`Running Windows clean-up…\nThis can take several minutes.`);
+    try {
+      const results = await api.invoke('junk:cleanSystem', system.map((c) => c.id));
+      setModal({
+        type: 'results',
+        title: 'Windows Clean-up Report',
+        results: results.map((r) => ({ kind: 'junk', path: r.label, ok: r.ok, detail: `${r.detail}${r.freed ? ` · ${formatBytes(r.freed)} freed` : ''}` })),
+      });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+      load();
+    }
+  };
+
+  // ---- tools: who owns, orphans, updates, maintenance ----------------------------
+
+  const findOrphans = async () => {
+    setBusy('Looking for leftovers of programs that are no longer installed…\nThis can take a minute.');
+    try {
+      const items = await api.invoke('orphans:scan');
+      setModal({
+        type: 'leftovers',
+        title: 'Orphaned Leftovers',
+        heading: `${items.length} folders, registry keys and services match no installed program. Nothing is selected: check each one (Tools › Who Owns This helps) before removing it.`,
+        items,
+        owners: [],
+        onRemove: (sel) => removeWithBackup('Orphaned leftovers', sel),
+      });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  };
+  const runUpdates = async (list) => {
+    setModal(null);
+    const go = await confirmWithRestore(`Update ${list.length} program${list.length === 1 ? '' : 's'}?`, `${list.map((u) => `• ${u.name}: ${u.version} → ${u.available}`).join('\n')}\n\nwinget updates them one after another, silently.`);
+    if (!go.ok) return;
+    if (go.checked) await makeRestorePoint(`SweepUninstall: before updating ${list.length} programs`, 'install');
+    const results = [];
+    for (const [i, u] of list.entries()) {
+      setBusy(`Updating ${i + 1} of ${list.length}: ${u.name}…`);
+      const r = await api.invoke('winget:upgrade', u.id).catch((e) => ({ ok: false, detail: e.message }));
+      results.push({ kind: 'file', path: `${u.name} ${u.available}`, ok: r.ok, detail: r.detail });
+    }
+    setBusy('');
+    setModal({ type: 'results', title: 'Update Report', results });
+    load();
+  };
+  const exportWinget = async () => {
+    setBusy('Exporting the program list with winget…');
+    try {
+      const out = await api.invoke('winget:export');
+      if (out) setNotice({ tone: 'ok', text: `${out.packages} programs exported to ${out.file}. On another PC, run: winget import -i "${out.file.split('\\').pop()}"` });
+    } catch (e) {
+      setError(`winget could not export the list: ${e.message}`);
+    } finally {
+      setBusy('');
+    }
+  };
+  const openMaintenance = async () => {
+    setBusy('Reading the maintenance schedule…');
+    try {
+      const [s, status, cats] = await Promise.all([api.invoke('settings:get'), api.invoke('maintenance:status'), api.invoke('junk:scan').catch(() => [])]);
+      const defaults = { enabled: false, day: 'Sunday', time: '10:00', snapshot: true, junk: ['usertemp', 'dumps', 'wer', 'thumbs', 'shaders'] };
+      setModal({ type: 'maintenance', settings: { ...defaults, ...(s.maintenance || {}) }, status, categories: cats.map((c) => ({ id: c.id, label: c.label })) });
+    } finally {
+      setBusy('');
+    }
   };
 
   const openGroupDialog = (list) => list.length && setModal({ type: 'group', programs: list });
@@ -610,20 +754,21 @@ export default function App() {
     setBusy(`Finding ${p.name}'s files and settings…`);
     try {
       const items = await api.invoke('program:scan', p);
-      setModal({ type: 'backupProgram', program: p, items: items.filter((i) => ['dir', 'file', 'key', 'value'].includes(i.kind)) });
+      const wanted = items.filter((i) => ['dir', 'file', 'key', 'value'].includes(i.kind));
+      setModal({ type: 'backupProgram', program: p, items: wanted, settings: await api.invoke('transfer:classify', wanted) });
     } catch (e) {
       setError(e.message);
     } finally {
       setBusy('');
     }
   };
-  const saveProgramBackup = async (p, items) => {
+  const saveProgramBackup = async (p, items, contents) => {
     const file = await api.invoke('transfer:pickSave', p);
     if (!file) return;
     setModal(null);
     setBusy(`Backing up ${p.name}…\nLarge programs can take a few minutes.`);
     try {
-      const out = await api.invoke('transfer:export', { program: p, items, file });
+      const out = await api.invoke('transfer:export', { program: p, items, file, contents });
       const files = out.items.reduce((n, i) => n + (i.files || 0), 0);
       const skipped = out.items.reduce((n, i) => n + (i.skipped || 0), 0);
       const bytes = out.items.reduce((n, i) => n + (i.bytes || 0), 0);
@@ -690,6 +835,7 @@ export default function App() {
     },
     uninstall: async (p) => {
       if (view === 'history') return actions.undoChange(p);
+      if (view === 'archive') return actions.deleteRecord(p);
       if (view === 'snapshots') return actions.deleteSnapshot(p);
       if (view === 'monitored') return uninstallMonitored(p);
       if (view === 'backups') return actions.deleteBackup(p);
@@ -749,7 +895,48 @@ export default function App() {
       if (r) setError(`${p.name}: install folder is unknown or missing.`);
     },
     search: (p) => api.invoke('program:search', p.name),
-    properties: (p) => (view === 'backups' ? setModal({ type: 'results', title: `Backup – ${p.name}`, results: p.entries.map((e) => ({ ...e, ok: true, detail: e.kind === 'key' ? 'Exported .reg' : e.recycled ? 'In Recycle Bin' : '' })) }) : setModal({ type: 'properties', program: p })),
+    properties: async (p) => {
+      if (view === 'backups') return setModal({ type: 'results', title: `Backup – ${p.name}`, results: p.entries.map((e) => ({ ...e, ok: true, detail: e.kind === 'key' ? 'Exported .reg' : e.recycled ? 'In Recycle Bin' : '' })) });
+      const sizes = view === 'desktop' ? (await api.invoke('programs:sizeHistory').catch(() => ({})))[p.key] : null;
+      setModal({ type: 'properties', program: { ...p, insight: insight[p.key], sizes } });
+    },
+    reinstall: async (p) => {
+      if (view !== 'archive') return;
+      setBusy(`Looking up ${p.name} in winget…`);
+      let id = p.wingetId;
+      try {
+        if (!id && (await api.invoke('winget:available'))) id = await api.invoke('winget:find', p.name.replace(/\s+\d[\w.\-]*$/, ''));
+      } finally {
+        setBusy('');
+      }
+      if (!id) return setNotice({ tone: 'warn', text: `winget has no package named "${p.name}".${p.url ? ' Use Publisher Website instead.' : ''}` });
+      await api.invoke('archive:setPackage', { id: p.id, wingetId: id });
+      if (!(await api.invoke('dialog:confirm', { message: `Reinstall ${p.name}?`, detail: `winget installs the package "${id}". Its installer may show its own window. Installing accepts the package's license terms.` }))) return;
+      setBusy(`Installing ${id}…`);
+      try {
+        const r = await api.invoke('winget:install', id);
+        setNotice({ tone: r.ok ? 'ok' : 'warn', text: r.ok ? `${p.name} was reinstalled.` : `winget could not install ${id}: ${r.detail}` });
+      } finally {
+        setBusy('');
+      }
+    },
+    openSite: (p) => (p.url ? api.invoke('open:url', p.url).catch((e) => setError(e.message)) : setNotice({ tone: 'warn', text: 'No website was recorded for this program.' })),
+    restoreRemoval: async (p) => {
+      if (!p.backups?.length) return setNotice({ tone: 'warn', text: 'No removal backup is linked to this entry.' });
+      if (!(await api.invoke('dialog:confirm', { message: `Put back what was removed for ${p.name}?`, detail: 'Its leftover files and settings are restored from the removal backup. This does not reinstall the program itself.' }))) return;
+      setBusy('Restoring…');
+      try {
+        const results = (await Promise.all(p.backups.map((b) => api.invoke('backups:restore', b).catch((e) => [{ kind: 'file', path: b, ok: false, detail: e.message }])))).flat();
+        setModal({ type: 'results', title: 'Restore Report', results });
+      } finally {
+        setBusy('');
+      }
+    },
+    deleteRecord: async (p) => {
+      if (!(await api.invoke('dialog:confirm', { message: `Delete ${p.name} from the archive?`, detail: 'Only this record is deleted. Backups stay in Tools › Backups.' }))) return;
+      await api.invoke('archive:remove', p.id);
+      load();
+    },
     restore: async (p) => {
       if (!(await api.invoke('dialog:confirm', { message: `Restore the backup of ${p.name}?`, detail: 'Registry keys and values are re-imported. Files must be restored from the Recycle Bin.' }))) return;
       setBusy('Restoring…');
@@ -767,6 +954,11 @@ export default function App() {
   const global = {
     takeSnapshot: () => setModal({ type: 'takeSnapshot' }),
     restoreProgram: () => restoreProgramBackup(),
+    whoOwns: () => setModal({ type: 'whoOwns' }),
+    orphans: () => findOrphans(),
+    updates: () => setModal({ type: 'updates' }),
+    exportWinget: () => exportWinget(),
+    maintenance: () => openMaintenance(),
     compareSelected: () => {
       if (view !== 'snapshots' || markedRows.length !== 2) return setNotice({ tone: 'warn', text: 'Select exactly two snapshots (Ctrl+click) to compare them.' });
       runCompare(markedRows[0], markedRows[1]);
@@ -790,6 +982,10 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     zoomIn: () => changeZoom(1),
     zoomOut: () => changeZoom(-1),
     zoomReset: () => changeZoom(0),
+    toggleGrid: async () => {
+      const s = await api.invoke('settings:set', { gridLines: !gridOn });
+      setGridOn(s.gridLines !== false);
+    },
     toggleSafe: async () => {
       const s = await api.invoke('settings:set', { safeMode: !safeOn });
       setSafeOn(s.safeMode);
@@ -807,6 +1003,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       setRestoreOn(s.createRestorePoints);
       setSilentOn(!!s.silentUninstall);
       setSafeOn(!!s.safeMode);
+      setGridOn(s.gridLines !== false);
       api.invoke('backups:prune').catch(() => {});
       setNotice({ tone: 'ok', text: s.createRestorePoints ? 'Restore points are on: confirmations offer to create one first.' : 'Restore points are off: the checkbox starts unticked.' });
     },
@@ -830,7 +1027,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       let action = null;
-      if (e.ctrlKey && !e.altKey && /^[1-8]$/.test(key)) action = `view:${['desktop', 'store', 'monitored', 'backups', 'debloat', 'startup', 'snapshots', 'junk'][Number(key) - 1]}`;
+      if (e.ctrlKey && !e.altKey && /^[1-9]$/.test(key)) action = `view:${['desktop', 'store', 'monitored', 'backups', 'debloat', 'startup', 'snapshots', 'junk', 'archive'][Number(key) - 1]}`;
       else if (e.ctrlKey && key === 'g') action = 'setGroup';
       else if (e.ctrlKey && key === 'f') action = 'find';
       else if (e.ctrlKey && key === 's') action = 'export';
@@ -859,6 +1056,9 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     () =>
       api.onMeasured((m) => {
         const merge = (p) => (p.key === m.key ? { ...p, ...m } : p);
+        // Sizes measured this session go into the size history once the measuring settles.
+        clearTimeout(sizeTimer.current);
+        sizeTimer.current = setTimeout(() => api.invoke('programs:recordSizes', desktopCache.current).catch(() => {}), 15000);
         desktopCache.current = desktopCache.current.map(merge);
         setRows((rs) => rs.map((r) => (r.key === m.key ? toRow('desktop', merge(r)) : r)));
       }),
@@ -898,6 +1098,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     ? [['uninstall', `Uninstall ${markedRows.length} Programs...`, 'Del'], ['setGroup', `Set Group for ${markedRows.length} Programs...`, 'Ctrl+G'], null, ['clearSelection', 'Clear Selection']]
     : view === 'history'
       ? [['undoChange', 'Undo This Change', 'Del']]
+    : view === 'archive'
+      ? [['reinstall', 'Reinstall with winget...'], ['openSite', 'Publisher Website'], ['restoreRemoval', 'Put Back Removed Leftovers...'], null, ['deleteRecord', 'Delete From Archive', 'Del']]
     : view === 'snapshots'
       ? [['compareNow', 'Compare with Now'], ['compareSelected', 'Compare the Two Selected'], null, ['deleteSnapshot', 'Delete Snapshot', 'Del']]
     : view === 'backups'
@@ -912,7 +1114,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               ['analyze', 'Analyze Leftovers...', 'Ctrl+L'],
               ['removeEntry', 'Remove Entry...'],
               ['setGroup', 'Set Group...', 'Ctrl+G'],
-              ['backupProgram', 'Back Up Program...'],
+              ['backupProgram', 'Migrate / Back Up Program...'],
               null,
               ['registry', 'Registry Entry'],
               ['folder', 'Installation Folder'],
@@ -926,8 +1128,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
   const cellFor = (r, c) => (c === 'size' ? r.sizeText : c === 'date' ? r.date : r[c]);
 
   return (
-    <div className="app" onClick={() => menu && setMenu(null)}>
-      <MenuBar onAction={dispatch} checked={{ toggleRestore: restoreOn, toggleSilent: silentOn, toggleSafe: safeOn }} />
+    <div className={`app ${gridOn ? 'grid' : ''}`} onClick={() => menu && setMenu(null)}>
+      <MenuBar onAction={dispatch} checked={{ toggleRestore: restoreOn, toggleSilent: silentOn, toggleSafe: safeOn, toggleGrid: gridOn }} />
       {/* Two rows of four equal columns, so the buttons line up and fill the width. */}
       <div className="toolbar toolbar-grid">
         <select
@@ -987,6 +1189,15 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             </option>
           ))}
           <option value={UNGROUPED}>Ungrouped</option>
+          {view === 'desktop' && (
+            <optgroup label="Insights">
+              {INSIGHT_FILTERS.map(([id, label, test]) => (
+                <option key={id} value={id}>
+                  {label} ({rows.filter((r) => test(insight[r.key])).length})
+                </option>
+              ))}
+            </optgroup>
+          )}
         </select>
       </div>
       {view === 'snapshots' && (
@@ -1020,7 +1231,18 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {view === 'debloat' ? (
         <DebloatView key={customKey} filter={filter} admin={admin} onError={setError} onStatus={setCustomStatus} beforeChange={beforeDebloatChange} />
       ) : view === 'startup' ? (
-        <StartupView key={customKey} filter={filter} admin={admin} programs={desktopCache.current} onError={setError} onStatus={setCustomStatus} />
+        <StartupView
+          key={customKey}
+          filter={filter}
+          admin={admin}
+          programs={desktopCache.current}
+          onError={setError}
+          onStatus={setCustomStatus}
+          onRemoveRule={async (r) => {
+            if (!(await api.invoke('dialog:confirm', { message: `Remove ${r.names.length === 1 ? 'the firewall rule' : `${r.names.length} firewall rules`} for "${r.display}"?`, detail: `${r.program} will no longer accept incoming connections through ${r.names.length === 1 ? 'this rule' : 'these rules'}. Each rule is backed up first and can be restored from Change History.` }))) return;
+            removeWithBackup(`Firewall rules for ${r.display}`, r.names.map((n) => ({ kind: 'firewall', path: n, name: r.display, confidence: 'high', reason: 'Inbound rule' })));
+          }}
+        />
       ) : view === 'junk' ? (
         <JunkView key={customKey} filter={filter} admin={admin} onError={setError} onStatus={setCustomStatus} onClean={cleanJunk} />
       ) : (
@@ -1037,7 +1259,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           <div className="list-empty">Loading…</div>
         ) : visible.length === 0 ? (
           <div className="list-empty">
-            {filter ? 'No matches.' : view === 'monitored' ? 'No monitored programs yet. Use Tools › Monitor an Installation.' : view === 'backups' ? 'No backups yet.' : view === 'history' ? 'No changes yet. Everything SweepUninstall changes will be listed here.' : 'Nothing found.'}
+            {filter ? 'No matches.' : view === 'archive' ? 'No programs removed yet. Every program you uninstall is recorded here.' : view === 'monitored' ? 'No monitored programs yet. Use Tools › Monitor an Installation.' : view === 'backups' ? 'No backups yet.' : view === 'history' ? 'No changes yet. Everything SweepUninstall changes will be listed here.' : 'Nothing found.'}
           </div>
         ) : (
           visible.map((r, idx) => (
@@ -1046,7 +1268,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               data-idx={idx}
               className={`row ${marked.has(r.key) ? 'selected' : ''} ${r.key === selected ? 'focused' : ''} ${r.arch === 'user' ? 'user' : ''}`}
               onMouseDown={(e) => e.button === 0 && selectRow(r.key, { ctrl: multi && e.ctrlKey, shift: multi && e.shiftKey })}
-              onDoubleClick={(e) => !e.ctrlKey && !e.shiftKey && dispatch(view === 'backups' ? 'restore' : view === 'history' ? 'undoChange' : view === 'snapshots' ? 'compareNow' : 'uninstall')}
+              onDoubleClick={(e) => !e.ctrlKey && !e.shiftKey && dispatch(view === 'backups' ? 'restore' : view === 'history' ? 'undoChange' : view === 'snapshots' ? 'compareNow' : view === 'archive' ? 'reinstall' : 'uninstall')}
               onContextMenu={(e) => {
                 e.preventDefault();
                 if (!marked.has(r.key)) selectRow(r.key);
@@ -1073,6 +1295,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
                     {id === 'size' && r.sizeTruncated ? '+' : ''}
                   </span>
                   {id === 'name' && batchable && groups[r.key] && <span className="group-tag">{groups[r.key]}</span>}
+                  {id === 'name' && view === 'desktop' && <InsightTags i={insight[r.key]} />}
                 </div>
               ))}
             </div>
@@ -1174,7 +1397,36 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {modal?.type === 'group' && (
         <GroupDialog programs={modal.programs} current={groups[modal.programs[0].key] || ''} grouped={modal.programs.some((p) => groups[p.key])} names={groupNames} onSave={(g) => saveGroup(modal.programs, g)} onClose={() => setModal(null)} />
       )}
-      {modal?.type === 'backupProgram' && <ProgramBackupDialog {...modal} onSave={(items) => saveProgramBackup(modal.program, items)} onClose={() => setModal(null)} />}
+      {modal?.type === 'whoOwns' && <WhoOwnsDialog initial={modal.target} onClose={() => setModal(null)} />}
+      {modal?.type === 'updates' && <UpdatesDialog onUpdate={runUpdates} onClose={() => setModal(null)} />}
+      {modal?.type === 'maintenance' && (
+        <MaintenanceDialog
+          {...modal}
+          onSave={async (m) => {
+            setModal(null);
+            try {
+              const st = await api.invoke('maintenance:apply', m);
+              setNotice({ tone: 'ok', text: st.registered ? `Weekly maintenance scheduled: ${m.day} at ${m.time}.` : 'Scheduled maintenance is off.' });
+            } catch (e) {
+              setError(/access is denied|0x80070005/i.test(e.message) ? 'Scheduling needs administrator rights. Use File › Restart as Administrator.' : e.message);
+            }
+          }}
+          onRunNow={async () => {
+            setModal(null);
+            setBusy('Running maintenance…');
+            try {
+              const out = await api.invoke('maintenance:runNow');
+              setModal({ type: 'results', title: 'Maintenance Report', results: out.lines.slice(2).map((l) => ({ kind: 'file', path: l, ok: !/failed/i.test(l), detail: '' })), note: `Saved to ${out.report}` });
+            } catch (e) {
+              setError(e.message);
+            } finally {
+              setBusy('');
+            }
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'backupProgram' && <ProgramBackupDialog {...modal} onSave={(items, contents) => saveProgramBackup(modal.program, items, contents)} onClose={() => setModal(null)} />}
       {modal?.type === 'restoreProgram' && <ProgramRestoreDialog backup={modal.backup} onRestore={(numbers) => runProgramRestore(modal.backup, numbers)} onClose={() => setModal(null)} />}
       {modal?.type === 'takeSnapshot' && <TakeSnapshotDialog onTake={takeSnapshot} onClose={() => setModal(null)} />}
       {modal?.type === 'compare' && (

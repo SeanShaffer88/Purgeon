@@ -32,6 +32,7 @@ export async function createTauriSys() {
     waitProcess: (pid, timeoutMs) => invoke('wait_process', { pid, timeoutMs }),
     sha256Files: (paths) => invoke('sha256_files', { paths }),
     appendText: (path, contents) => invoke('append_text', { path, contents }),
+    uninstallKeyTimes: () => invoke('uninstall_key_times'),
     quit: (code = 0) => invoke('quit', { code }),
   };
 }
