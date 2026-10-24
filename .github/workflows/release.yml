@@ -36,6 +36,7 @@ jobs:
           name: SweepUninstall-windows
           path: |
             release/*.exe
+            release/*.zip
             release/*.blockmap
             release/latest.yml
 
@@ -47,3 +48,4 @@ jobs:
           files: |
             release/SweepUninstall-Setup-*.exe
             release/SweepUninstall-Portable-*.exe
+            release/SweepUninstall-Portable-*.zip

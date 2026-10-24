@@ -1,7 +1,7 @@
 {
   "name": "sweepuninstall",
   "productName": "SweepUninstall",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Windows uninstaller with leftover scanning, install monitoring and backups",
   "author": "Sean Shaffer",
   "license": "MIT",
@@ -42,10 +42,12 @@
     },
     "win": {
       "icon": "build/icon.png",
+      "artifactName": "SweepUninstall-Portable-${version}-win-${arch}.${ext}",
       "requestedExecutionLevel": "requireAdministrator",
       "target": [
         { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] }
+        { "target": "portable", "arch": ["x64"] },
+        { "target": "zip", "arch": ["x64"] }
       ]
     },
     "nsis": {

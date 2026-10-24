@@ -121,6 +121,7 @@ Get the latest version from [Releases](https://github.com/SeanShaffer88/SweepUni
 
 - **`SweepUninstall-Setup-<version>.exe`** installs for all users, with Start Menu and desktop shortcuts. You can remove it later from Settings › Apps.
 - **`SweepUninstall-Portable-<version>.exe`** is a single exe that runs without installing.
+- **`SweepUninstall-Portable-<version>-win-x64.zip`** is the same portable app as a folder. Unzip it anywhere and run `SweepUninstall.exe`. It starts faster than the single exe because it doesn't unpack itself on each launch.
 
 Both ask for administrator rights when they start, because removing programs installed for all users, creating restore points and machine-wide debloat tweaks all need them.
 
