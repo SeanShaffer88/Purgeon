@@ -71,7 +71,7 @@ async function removeItems({ title, items, trashItem }) {
       if (-not $t) { 'GONE'; return }
       Export-ScheduledTask -TaskName $t.TaskName -TaskPath $t.TaskPath | Set-Content -LiteralPath ${psq(file)} -Encoding Unicode
       Unregister-ScheduledTask -TaskName $t.TaskName -TaskPath $t.TaskPath -Confirm:$false -ErrorAction Stop
-      'OK'`).catch((e) => `ERR ${e.message}`);
+      if (Get-ScheduledTask -TaskName $t.TaskName -TaskPath $t.TaskPath -ErrorAction SilentlyContinue) { 'ERR Task is still registered' } else { 'OK' }`).catch((e) => `ERR ${e.message}`);
     if (/^GONE/.test(out.trim())) log(item, true, 'Already gone');
     else if (/^OK/.test(out.trim())) {
       manifest.entries.push({ kind: 'task', path: item.path, file: path.basename(file) });
@@ -91,7 +91,7 @@ async function removeItems({ title, items, trashItem }) {
         Profile = [string]$r.Profile; Enabled = [string]$r.Enabled; Program = $a.Program; Protocol = [string]$p.Protocol
         LocalPort = @($p.LocalPort); RemotePort = @($p.RemotePort) } | ConvertTo-Json -Compress | Set-Content -LiteralPath ${psq(file)} -Encoding UTF8
       Remove-NetFirewallRule -Name ${psq(item.path)} -ErrorAction Stop
-      'OK'`).catch((e) => `ERR ${e.message}`);
+      if (Get-NetFirewallRule -Name ${psq(item.path)} -ErrorAction SilentlyContinue) { 'ERR Firewall rule is still present' } else { 'OK' }`).catch((e) => `ERR ${e.message}`);
     if (/^GONE/.test(out.trim())) log(item, true, 'Already gone');
     else if (/^OK/.test(out.trim())) {
       manifest.entries.push({ kind: 'firewall', path: item.path, name: item.name, file: path.basename(file) });
@@ -179,19 +179,24 @@ async function restore(id) {
       results.push({ ...e, ok: r.ok, detail: r.ok ? 'Service restored; restart Windows to start it' : r.stderr });
     } else if (e.kind === 'task') {
       const split = e.path.lastIndexOf('\\') + 1;
-      const out = await runPS(
-        `Register-ScheduledTask -Xml (Get-Content -LiteralPath ${psq(path.join(dir, e.file))} -Raw) -TaskName ${psq(e.path.slice(split))} -TaskPath ${psq(e.path.slice(0, split))} -Force -ErrorAction Stop | Out-Null; 'OK'`
+      // Success is confirmed by finding the task again, not by the command merely finishing.
+      const out = await runPS(`
+        $ErrorActionPreference = 'Stop'
+        Register-ScheduledTask -Xml (Get-Content -LiteralPath ${psq(path.join(dir, e.file))} -Raw) -TaskName ${psq(e.path.slice(split))} -TaskPath ${psq(e.path.slice(0, split))} -Force | Out-Null
+        if (Get-ScheduledTask -TaskName ${psq(e.path.slice(split))} -TaskPath ${psq(e.path.slice(0, split))} -ErrorAction SilentlyContinue) { 'OK' } else { 'Task was not recreated' }`
       ).catch((err) => err.message);
       results.push({ ...e, ok: /^OK/.test(out.trim()), detail: /^OK/.test(out.trim()) ? 'Task restored' : out.trim() });
     } else if (e.kind === 'firewall') {
       const out = await runPS(`
+        $ErrorActionPreference = 'Stop'
         $r = Get-Content -LiteralPath ${psq(path.join(dir, e.file))} -Raw | ConvertFrom-Json
         $params = @{ Name = $r.Name; DisplayName = $r.DisplayName; Direction = $r.Direction; Action = $r.Action; Enabled = $r.Enabled; Profile = ($r.Profile -split ',\\s*') }
         if ($r.Program -and $r.Program -ne 'Any') { $params.Program = $r.Program }
         if ($r.Protocol -and $r.Protocol -ne 'Any') { $params.Protocol = $r.Protocol
           if (@($r.LocalPort) -notcontains 'Any') { $params.LocalPort = @($r.LocalPort) }
           if (@($r.RemotePort) -notcontains 'Any') { $params.RemotePort = @($r.RemotePort) } }
-        New-NetFirewallRule @args -ErrorAction Stop | Out-Null; 'OK'`).catch((err) => err.message);
+        New-NetFirewallRule @params | Out-Null
+        if (Get-NetFirewallRule -Name $r.Name -ErrorAction SilentlyContinue) { 'OK' } else { 'Firewall rule was not recreated' }`).catch((err) => err.message);
       results.push({ ...e, ok: /^OK/.test(out.trim()), detail: /^OK/.test(out.trim()) ? 'Firewall rule restored' : out.trim() });
     } else if (e.recycled) {
       results.push({ ...e, ok: false, detail: 'Restore from the Recycle Bin' });

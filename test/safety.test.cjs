@@ -188,3 +188,12 @@ test('StartupApproved flags are read like Task Manager', () => {
   assert.equal(approvedEnabled('030000000000000000000000'), false);
   assert.equal(approvedEnabled('07000000a1b2c3d4e5f60708'), false);
 });
+
+test('PowerShell snippets never use the automatic $args variable', () => {
+  // `$args`/`@args` silently splat an empty list in a script block: a restore once ran
+  // New-NetFirewallRule with no settings and still reported success.
+  for (const f of fs.readdirSync(path.join(__dirname, '..', 'electron')).filter((n) => n.endsWith('.cjs'))) {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'electron', f), 'utf8');
+    assert.ok(!/[@$]args\b/.test(src), `${f} uses $args/@args inside PowerShell`);
+  }
+});
