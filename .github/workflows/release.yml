@@ -1,4 +1,4 @@
-# Builds the Windows installer, portable exe and portable zip. Pushing a tag like v0.4.0
+# Builds the Windows installer and the portable exe. Pushing a tag like v0.4.0
 # publishes them as a GitHub Release; every push to main and every pull request just checks the build.
 name: Build
 
@@ -43,7 +43,6 @@ jobs:
           New-Item -ItemType Directory -Force release | Out-Null
           Copy-Item "src-tauri/target/release/bundle/nsis/SweepUninstall_${version}_x64-setup.exe" "release/SweepUninstall-Setup-$version.exe"
           Copy-Item "src-tauri/target/release/sweepuninstall.exe" "release/SweepUninstall-Portable-$version.exe"
-          Compress-Archive -Path "release/SweepUninstall-Portable-$version.exe" -DestinationPath "release/SweepUninstall-Portable-$version-win-x64.zip"
           Get-ChildItem release | Format-Table Name, Length
 
       - name: Upload build artifacts
@@ -60,4 +59,3 @@ jobs:
           files: |
             release/SweepUninstall-Setup-*.exe
             release/SweepUninstall-Portable-*.exe
-            release/SweepUninstall-Portable-*.zip

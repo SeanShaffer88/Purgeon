@@ -10,6 +10,8 @@ It has a compact single-list window with a dark terminal theme. It is built with
 ## Features
 
 **Program list**
+- The top toolbar switches between Desktop Programs and Windows Store Apps, opens **Debloat Windows**, and has the search box.
+- A second toolbar opens **Startup & Services** and **Monitored Programs**; clicking an active button again returns to the program list. **Backups** is in the Tools menu.
 - Desktop programs from all three registry uninstall locations (64-bit, 32-bit and per-user), with icons, size and install date
 - When a program doesn't report its size or install date, SweepUninstall measures its folder in the background. Measured values are shown in italics; hover one to see which folder it came from.
 - Windows Store apps
@@ -50,7 +52,7 @@ It has a compact single-list window with a dark terminal theme. It is built with
 
 **Installation monitor**
 - **Tools › Monitor an Installation** takes a snapshot of the file system and registry, runs your installer, takes a second snapshot and records every folder, file, registry key, startup entry and service that was added.
-- Monitored programs appear under **View › Monitored Programs**. Uninstalling one removes exactly what its installation created.
+- Monitored programs appear under the **Monitored Programs** button in the second toolbar (or `Ctrl+3`). Uninstalling one removes exactly what its installation created.
 
 **Debloat Windows**
 - The **Debloat Windows** button next to the view picker (or `Ctrl+5`) lists 26 safe, reversible tweaks in five groups: Privacy & telemetry, Start/search/taskbar, Ads & suggestions, Explorer & UI, and Windows Update.
@@ -60,7 +62,7 @@ It has a compact single-list window with a dark terminal theme. It is built with
 - Only options that are safe and widely recommended are included: no service removal, no app removal, and no security features turned off.
 
 **Startup & Services**
-- **View › Startup & Services** (`Ctrl+6`) lists everything that starts with Windows:
+- The **Startup & Services** button in the second toolbar (or `Ctrl+6`) lists everything that starts with Windows:
   - Run entries and Startup-folder shortcuts
   - scheduled tasks outside Windows' own `\Microsoft\` folder
   - third-party services that start automatically
@@ -78,7 +80,7 @@ It has a compact single-list window with a dark terminal theme. It is built with
   - Firewall rules are saved with their settings.
   - Services have their definition exported.
   - Files go to the Recycle Bin.
-- **View › Backups** restores registry entries, tasks, firewall rules and services from any removal.
+- **Tools › Backups** (`Ctrl+4`) restores registry entries, tasks, firewall rules and services from any removal.
 
 **Safety**
 - An automated test suite runs on every build and blocks a release if it fails. It covers name matching, the protected-folder guard, snapshot comparison, debloat reversibility, match scores and the startup switches.
@@ -101,9 +103,9 @@ It has a compact single-list window with a dark terminal theme. It is built with
 | --- | --- |
 | ![Three programs selected](docs/screenshots/multi-select.png) | ![Combined leftover list after a batch uninstall](docs/screenshots/batch-uninstall.png) |
 
-| Startup & Services |
-| --- |
-| ![Startup and services manager](docs/screenshots/startup.png) |
+| Startup & Services | Monitored Programs |
+| --- | --- |
+| ![Startup and services manager](docs/screenshots/startup.png) | ![Monitored programs](docs/screenshots/monitored.png) |
 
 | Installation monitor | Windows Store apps |
 | --- | --- |
@@ -121,9 +123,8 @@ Get the latest version from [Releases](https://github.com/SeanShaffer88/SweepUni
 
 - **`SweepUninstall-Setup-<version>.exe`** (about 1.2 MB) installs for all users, with a Start Menu shortcut. You can remove it later from Settings › Apps.
 - **`SweepUninstall-Portable-<version>.exe`** (about 3.3 MB) is the whole app as one exe that runs without installing.
-- **`SweepUninstall-Portable-<version>-win-x64.zip`** is the same portable exe, zipped.
 
-All of them ask for administrator rights when they start, because removing programs installed for all users, creating restore points and machine-wide debloat tweaks all need them.
+Both ask for administrator rights when they start, because removing programs installed for all users, creating restore points and machine-wide debloat tweaks all need them.
 
 SweepUninstall uses the Microsoft Edge WebView2 runtime, which is part of Windows 10 and 11. If it's missing, the installer downloads it.
 
@@ -152,7 +153,7 @@ npm run dist
 
 The app exe is written to `src-tauri/target/release/sweepuninstall.exe`, and the installer to `src-tauri/target/release/bundle/nsis/`.
 
-Pushing a tag like `v0.4.0` makes GitHub Actions run the tests, build the installer, the portable exe and the zip, and publish them as a GitHub Release.
+Pushing a tag like `v0.4.0` makes GitHub Actions run the tests, build the installer and the portable exe, and publish both as a GitHub Release.
 
 ### Run the tests
 
@@ -171,7 +172,9 @@ npm test
 | `Ctrl+L` | Analyze leftovers |
 | `Alt+Enter` / `Enter` | Properties |
 | `Ctrl+F` | Search |
-| `Ctrl+1` to `Ctrl+4` | Desktop programs, Store apps, Monitored programs, Backups |
+| `Ctrl+1` / `Ctrl+2` | Desktop programs / Windows Store apps |
+| `Ctrl+3` | Monitored programs |
+| `Ctrl+4` | Backups |
 | `Ctrl+5` | Debloat Windows |
 | `Ctrl+6` | Startup & Services |
 | `Ctrl+M` | Monitor an installation |

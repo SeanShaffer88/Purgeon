@@ -209,7 +209,7 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove }) {
           ])}
         </div>
       )}
-      <p className="footnote">Everything you delete is backed up first. Registry entries can be restored from View › Backups, and files go to the Recycle Bin.</p>
+      <p className="footnote">Everything you delete is backed up first. Registry entries can be restored from Tools › Backups, and files go to the Recycle Bin.</p>
     </Dialog>
   );
 }

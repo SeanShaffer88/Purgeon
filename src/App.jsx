@@ -9,10 +9,10 @@ const api = window.api;
 const VIEWS = {
   desktop: { label: 'Desktop Programs', noun: 'programs', cols: [['name', 'Name'], ['size', 'Size'], ['date', 'Installed On']] },
   store: { label: 'Windows Store Apps', noun: 'apps', cols: [['name', 'Name'], ['version', 'Version'], ['publisher', 'Publisher']] },
-  monitored: { label: 'Monitored Programs', noun: 'monitored programs', cols: [['name', 'Name'], ['size', 'Changes'], ['date', 'Monitored On']] },
-  backups: { label: 'Backups', noun: 'backups', cols: [['name', 'Removed'], ['size', 'Entries'], ['date', 'Backed Up On']] },
-  startup: { label: 'Startup & Services', noun: 'entries', cols: [], custom: true },
-  // Reached through its own toolbar button, not the view picker.
+  // Views below are opened from toolbar buttons or the Tools menu, not the view picker.
+  monitored: { label: 'Monitored Programs', noun: 'monitored programs', cols: [['name', 'Name'], ['size', 'Changes'], ['date', 'Monitored On']], button: true },
+  backups: { label: 'Backups', noun: 'backups', cols: [['name', 'Removed'], ['size', 'Entries'], ['date', 'Backed Up On']], button: true },
+  startup: { label: 'Startup & Services', noun: 'entries', cols: [], custom: true, button: true },
   debloat: { label: 'Debloat Windows', noun: 'tweaks', cols: [], button: true, custom: true },
 };
 
@@ -56,7 +56,6 @@ const MENUS = [
       ['view:desktop', 'Desktop Programs', 'Ctrl+1'],
       ['view:store', 'Windows Store Apps', 'Ctrl+2'],
       ['view:monitored', 'Monitored Programs', 'Ctrl+3'],
-      ['view:backups', 'Backups', 'Ctrl+4'],
       ['view:debloat', 'Debloat Windows', 'Ctrl+5'],
       ['view:startup', 'Startup & Services', 'Ctrl+6'],
       null,
@@ -64,7 +63,7 @@ const MENUS = [
       ['refresh', 'Refresh', 'F5'],
     ],
   ],
-  ['Tools', [['monitor', 'Monitor an Installation...', 'Ctrl+M'], null, ['toggleRestore', 'Create Restore Points']]],
+  ['Tools', [['monitor', 'Monitor an Installation...', 'Ctrl+M'], ['view:backups', 'Backups', 'Ctrl+4'], null, ['toggleRestore', 'Create Restore Points']]],
   ['Help', [['about', 'About']]],
 ];
 
@@ -144,7 +143,9 @@ export default function App() {
   // Debloat and Startup views load their own data; their status text and remount key live here.
   const [customStatus, setCustomStatus] = useState('');
   const [customKey, setCustomKey] = useState(0);
-  if (view !== 'debloat') lastListView.current = view;
+  // The program list to go back to when a toolbar view is closed.
+  if (!VIEWS[view].button) lastListView.current = view;
+  const toggleView = (v) => setView(view === v ? lastListView.current : v);
 
   const load = useCallback(async (v = view) => {
     if (VIEWS[v].custom) return setCustomKey((k) => k + 1);
@@ -283,7 +284,7 @@ export default function App() {
     setBusy('Backing up and removing selected items…');
     try {
       const { results } = await api.invoke('items:remove', { title, items });
-      setModal({ type: 'results', title: 'Removal Report', results, note: 'A backup was saved. To undo, go to View › Backups.' });
+      setModal({ type: 'results', title: 'Removal Report', results, note: 'A backup was saved. To undo, go to Tools › Backups.' });
       return true;
     } catch (e) {
       setError(e.message);
@@ -591,10 +592,10 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       <div className="toolbar">
         <div className="toolbar-left">
           <select
-            className={`view-picker ${view === 'debloat' ? 'inactive' : ''}`}
-            value={view === 'debloat' ? lastListView.current : view}
+            className={`view-picker ${VIEWS[view].button ? 'inactive' : ''}`}
+            value={VIEWS[view].button ? lastListView.current : view}
             onChange={(e) => setView(e.target.value)}
-            onClick={() => view === 'debloat' && setView(lastListView.current)}
+            onClick={() => VIEWS[view].button && setView(lastListView.current)}
             aria-label="View"
           >
             {Object.entries(VIEWS)
@@ -607,7 +608,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           </select>
           <button
             className={`debloat-button ${view === 'debloat' ? 'active' : ''}`}
-            onClick={() => setView(view === 'debloat' ? lastListView.current : 'debloat')}
+            onClick={() => toggleView('debloat')}
             aria-pressed={view === 'debloat'}
             title="Safe, reversible tweaks that remove Windows ads, telemetry and clutter (Ctrl+5)"
           >
@@ -622,6 +623,17 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             </button>
           )}
         </div>
+      </div>
+      <div className="toolbar toolbar2" role="toolbar" aria-label="Tools">
+        {[
+          ['startup', 'Startup & Services', 'Programs, tasks and services that start with Windows (Ctrl+6)'],
+          ['monitored', 'Monitored Programs', 'Programs recorded with Tools › Monitor an Installation (Ctrl+3)'],
+        ].map(([id, label, title]) => (
+          <button key={id} className={`tool-button ${view === id ? 'active' : ''}`} onClick={() => toggleView(id)} aria-pressed={view === id} title={title}>
+            {label}
+          </button>
+        ))}
+        {view === 'backups' && <span className="toolbar-note">Backups · open from Tools › Backups</span>}
       </div>
 
       {error && (
