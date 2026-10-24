@@ -247,3 +247,47 @@ test('merge never offers protected keys or folders', () => {
   ]);
   assert.deepEqual(out.map((i) => i.path), ['HKEY_CURRENT_USER\\Software\\OBS Studio']);
 });
+
+import { regAddArgs, revertible } from '../src/backend/snapshots.js';
+
+test('snapshot data converts to exact reg.exe arguments', () => {
+  assert.deepEqual(regAddArgs('HKCU\\Software\\Foo', 'Path', 1, 'C:\\\\Apps\\\\Foo'), ['add', 'HKCU\\Software\\Foo', '/v', 'Path', '/t', 'REG_SZ', '/d', 'C:\\Apps\\Foo', '/f']);
+  assert.deepEqual(regAddArgs('HKCU\\Software\\Foo', '', 1, 'x'), ['add', 'HKCU\\Software\\Foo', '/ve', '/t', 'REG_SZ', '/d', 'x', '/f'], 'default value');
+  assert.deepEqual(regAddArgs('K', 'N', 4, '42').slice(4), ['/t', 'REG_DWORD', '/d', '42', '/f']);
+  assert.deepEqual(regAddArgs('K', 'N', 7, 'a\\0b').slice(4), ['/t', 'REG_MULTI_SZ', '/d', 'a\\0b', '/f'], 'multi-string keeps the \\0 separator');
+  assert.deepEqual(regAddArgs('K', 'N', 3, '00ff10').slice(4), ['/t', 'REG_BINARY', '/d', '00ff10', '/f']);
+  assert.equal(regAddArgs('K', 'N', 3, '#0123456789abcdef'), null, 'hashed (too large) data is never written');
+  assert.equal(regAddArgs('K', 'N', 9, 'ab'), null, 'unusual value types are never written');
+  assert.ok(revertible(11, '18446744073709551615'));
+  assert.ok(!revertible(1, null));
+});
+
+import { recordItems } from '../src/backend/monitor.js';
+
+test('installation recordings remove what was added and put back what was changed', () => {
+  const items = recordItems({
+    added: [
+      { kind: 'dir', path: 'C:\\Program Files\\Foo' },
+      { kind: 'key', path: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Foo' },
+      { kind: 'key', path: 'HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\FooSvc' },
+      { kind: 'key', path: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes\\.foo' },
+      { kind: 'value', path: 'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run', name: 'Foo' },
+      { kind: 'dir', path: process.env.SystemRoot || 'C:\\Windows' },
+    ],
+    changed: [
+      { kind: 'value', path: 'HKEY_CURRENT_USER\\Software\\Classes\\.txt', name: '', valueType: 1, before: 'txtfile', after: 'Foo.Document' },
+      { kind: 'value', path: 'HKEY_CURRENT_USER\\Software\\X', name: 'Big', valueType: 3, before: '#00ff', after: '#11ff' },
+      { kind: 'file', path: 'C:\\Windows\\win.ini' },
+    ],
+    removed: [],
+  });
+  const kinds = items.map((i) => `${i.kind}:${i.path}${i.name !== undefined ? `|${i.name}` : ''}`);
+  assert.deepEqual(kinds, [
+    'dir:C:\\Program Files\\Foo',
+    'key:HKEY_LOCAL_MACHINE\\SOFTWARE\\Foo',
+    'service:FooSvc',
+    'value:HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run|Foo',
+    'setvalue:HKEY_CURRENT_USER\\Software\\Classes\\.txt|',
+  ]);
+  assert.equal(items.find((i) => i.kind === 'setvalue').data, 'txtfile', 'the file association goes back to what it was');
+});

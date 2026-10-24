@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog } from './dialogs.jsx';
 import { setConfirmUI } from './backend/api.js';
 import { applyZoom, nextStep } from './zoom.js';
+import { TakeSnapshotDialog, ComparisonDialog, comparisonHtml } from './snapshots.jsx';
 import { DebloatView } from './debloat.jsx';
 import { StartupView } from './startup.jsx';
 
@@ -13,6 +14,7 @@ const VIEWS = {
   // Views below are opened from toolbar buttons or the Tools menu, not the view picker.
   monitored: { label: 'Monitored Programs', noun: 'monitored programs', cols: [['name', 'Name'], ['size', 'Changes'], ['date', 'Monitored On']], button: true },
   backups: { label: 'Backups', noun: 'backups', cols: [['name', 'Removed'], ['size', 'Entries'], ['date', 'Backed Up On']], button: true },
+  snapshots: { label: 'Snapshots', noun: 'snapshots', cols: [['name', 'Snapshot'], ['size', 'Entries'], ['date', 'Taken On']], button: true },
   history: { label: 'Change History', noun: 'changes', cols: [['name', 'Change'], ['size', 'Type'], ['date', 'When']], button: true },
   startup: { label: 'Startup & Services', noun: 'entries', cols: [], custom: true, button: true },
   debloat: { label: 'Debloat Windows', noun: 'tweaks', cols: [], button: true, custom: true },
@@ -25,16 +27,24 @@ const formatSize = (kb) => {
   return `${(kb / 1024 / 1024).toFixed(2)} GB`;
 };
 
+// "2026-10-24 14:05" in local time.
+const localTime = (iso) => {
+  const t = new Date(iso);
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')} ${t.toTimeString().slice(0, 5)}`;
+};
+
 const normKey = (k) => (k || '').replace(/^HKEY_LOCAL_MACHINE\\/i, 'HKLM\\').replace(/^HKEY_CURRENT_USER\\/i, 'HKCU\\').toLowerCase();
 
 // Shape every view's records into one row type for the list.
 function toRow(view, r) {
   if (view === 'monitored') return { ...r, key: r.id, sizeText: `${r.items.length} items`, sortSize: r.items.length, date: r.finished.slice(0, 10) };
   if (view === 'backups') return { ...r, key: r.id, name: r.title, sizeText: `${r.entries.length}`, sortSize: r.entries.length, date: r.created.slice(0, 10) };
+  if (view === 'snapshots') {
+    const n = r.stats.dirs + r.stats.files + r.stats.keys + r.stats.values;
+    return { ...r, key: r.id, sizeText: n.toLocaleString(), sortSize: n, date: localTime(r.created), sortDate: r.created };
+  }
   if (view === 'history') {
-    const t = new Date(r.time);
-    const when = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')} ${t.toTimeString().slice(0, 5)}`;
-    return { ...r, key: r.id, name: r.undone ? `${r.title}  (undone)` : r.title, sizeText: r.type, sortSize: r.type, date: when, sortDate: r.time };
+    return { ...r, key: r.id, name: r.undone ? `${r.title}  (undone)` : r.title, sizeText: r.type, sortSize: r.type, date: localTime(r.time), sortDate: r.time };
   }
   return { ...r, sizeText: formatSize(r.sizeKB), sortSize: r.sizeKB || 0, date: r.installDate };
 }
@@ -74,7 +84,7 @@ const MENUS = [
       ['zoomReset', 'Reset Zoom', 'Ctrl+0'],
     ],
   ],
-  ['Tools', [['monitor', 'Monitor an Installation...', 'Ctrl+M'], ['view:backups', 'Backups', 'Ctrl+4'], ['view:history', 'Change History', 'Ctrl+H'], null, ['toggleRestore', 'Create Restore Points']]],
+  ['Tools', [['monitor', 'Monitor an Installation...', 'Ctrl+M'], ['view:backups', 'Backups', 'Ctrl+4'], ['view:history', 'Change History', 'Ctrl+H'], null, ['view:snapshots', 'Snapshots', 'Ctrl+7'], ['takeSnapshot', 'Take a Snapshot...'], null, ['toggleRestore', 'Create Restore Points']]],
   ['Help', [['about', 'About']]],
 ];
 
@@ -168,6 +178,7 @@ export default function App() {
       if (v === 'monitored') data = await api.invoke('monitor:list');
       else if (v === 'backups') data = await api.invoke('backups:list');
       else if (v === 'history') data = await api.invoke('history:list');
+      else if (v === 'snapshots') data = await api.invoke('snapshots:list');
       else data = await api.invoke('programs:list', v);
       if (v === 'desktop') {
         desktopCache.current = data;
@@ -235,6 +246,8 @@ export default function App() {
   const current = visible.find((r) => r.key === selected) || null;
   const markedRows = visible.filter((r) => marked.has(r.key));
   const batchable = view === 'desktop' || view === 'store';
+  // Lists where several rows can be selected: programs (batch uninstall) and snapshots (compare two).
+  const multi = batchable || view === 'snapshots';
   const isBatch = batchable && markedRows.length > 1;
 
   // ---- selection -----------------------------------------------------------
@@ -458,7 +471,65 @@ export default function App() {
     });
   };
 
+  // ---- snapshots -----------------------------------------------------------
+
+  const takeSnapshot = async (name, preset) => {
+    setModal(null);
+    setBusy(`Taking snapshot "${name}"…\nThis takes about ${{ quick: 'a few seconds', standard: '10–20 seconds', deep: 'a minute or more' }[preset]}.`);
+    try {
+      const meta = await api.invoke('snapshots:take', { name, preset });
+      const s = meta.stats;
+      setNotice({ tone: 'ok', text: `Snapshot "${meta.name}" taken: ${(s.dirs + s.files).toLocaleString()} files and folders, ${(s.keys + s.values).toLocaleString()} registry entries in ${(s.ms / 1000).toFixed(1)} s.` });
+      if (view !== 'snapshots') setView('snapshots');
+      else load();
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  // Compares `before` with `after`, or with the system now when `after` is null.
+  const runCompare = async (before, after) => {
+    const [a, b] = after && after.created < before.created ? [after, before] : [before, after];
+    setBusy(b ? `Comparing "${a.name}" with "${b.name}"…` : `Comparing "${a.name}" with the system now…\nA fresh snapshot is taken first.`);
+    try {
+      const comparison = await api.invoke('snapshots:compare', { before: a.id, after: b ? b.id : 'now' });
+      setModal({ type: 'compare', comparison, beforeName: a.name, afterName: b ? b.name : 'Now' });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const cleanupComparison = async (comparison, beforeName, chosen) => {
+    const go = await confirmWithRestore(
+      `Clean up ${chosen.length} selected difference${chosen.length === 1 ? '' : 's'}?`,
+      'Added items are removed, and changed or removed registry values and keys are put back from the earlier snapshot. Everything is backed up first and can be undone.'
+    );
+    if (!go.ok) return;
+    if (go.checked) await makeRestorePoint(`SweepUninstall: before cleaning up changes since ${beforeName}`, 'settings');
+    setBusy('Preparing the cleanup…');
+    let items;
+    try {
+      items = await api.invoke('snapshots:cleanupItems', { before: comparison.beforeId, selected: chosen });
+    } catch (e) {
+      setBusy('');
+      return setError(e.message);
+    }
+    setBusy('');
+    removeWithBackup(`Cleanup since ${beforeName}`, items);
+  };
+
   const actions = {
+    compareNow: (p) => view === 'snapshots' && runCompare(p, null),
+    deleteSnapshot: async (p) => {
+      if (view !== 'snapshots') return;
+      if (!(await api.invoke('dialog:confirm', { message: `Delete the snapshot "${p.name}"?`, detail: 'The snapshot file is deleted. Your files and settings are not affected.' }))) return;
+      await api.invoke('snapshots:remove', p.id);
+      load();
+    },
     undoChange: async (p) => {
       if (view !== 'history') return;
       if (p.undone) return setNotice({ tone: 'warn', text: 'This change was already undone.' });
@@ -473,6 +544,7 @@ export default function App() {
     },
     uninstall: async (p) => {
       if (view === 'history') return actions.undoChange(p);
+      if (view === 'snapshots') return actions.deleteSnapshot(p);
       if (view === 'monitored') return uninstallMonitored(p);
       if (view === 'backups') return actions.deleteBackup(p);
       const go = await confirmWithRestore(`Uninstall ${p.name}?`, p.store ? 'The app package will be removed.' : "The program's own uninstaller will run first, then SweepUninstall scans for leftovers.");
@@ -541,6 +613,11 @@ export default function App() {
   };
 
   const global = {
+    takeSnapshot: () => setModal({ type: 'takeSnapshot' }),
+    compareSelected: () => {
+      if (view !== 'snapshots' || markedRows.length !== 2) return setNotice({ tone: 'warn', text: 'Select exactly two snapshots (Ctrl+click) to compare them.' });
+      runCompare(markedRows[0], markedRows[1]);
+    },
     export: () => {
       const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
       const html = `<!doctype html><meta charset="utf-8"><title>${VIEWS[view].label}</title>
@@ -584,7 +661,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       let action = null;
-      if (e.ctrlKey && !e.altKey && /^[1-6]$/.test(key)) action = `view:${['desktop', 'store', 'monitored', 'backups', 'debloat', 'startup'][Number(key) - 1]}`;
+      if (e.ctrlKey && !e.altKey && /^[1-7]$/.test(key)) action = `view:${['desktop', 'store', 'monitored', 'backups', 'debloat', 'startup', 'snapshots'][Number(key) - 1]}`;
       else if (e.ctrlKey && key === 'f') action = 'find';
       else if (e.ctrlKey && key === 's') action = 'export';
       else if (e.ctrlKey && key === 'm') action = 'monitor';
@@ -633,7 +710,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     else if (e.key === 'Enter') return dispatch(view === 'backups' ? 'restore' : 'properties');
     else if (e.ctrlKey && e.key.toLowerCase() === 'a') {
       e.preventDefault();
-      if (batchable) setMarked(new Set(visible.map((r) => r.key)));
+      if (multi) setMarked(new Set(visible.map((r) => r.key)));
       return;
     } else if (e.key.length === 1 && /\S/.test(e.key) && !e.ctrlKey && !e.altKey) {
       const ch = e.key.toLowerCase();
@@ -643,7 +720,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       return;
     } else return;
     e.preventDefault();
-    selectRow(visible[next].key, { shift: e.shiftKey && batchable });
+    selectRow(visible[next].key, { shift: e.shiftKey && multi });
     listRef.current?.querySelector(`[data-idx="${next}"]`)?.scrollIntoView({ block: 'nearest' });
   };
 
@@ -651,6 +728,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     ? [['uninstall', `Uninstall ${markedRows.length} Programs...`, 'Del'], null, ['clearSelection', 'Clear Selection']]
     : view === 'history'
       ? [['undoChange', 'Undo This Change', 'Del']]
+    : view === 'snapshots'
+      ? [['compareNow', 'Compare with Now'], ['compareSelected', 'Compare the Two Selected'], null, ['deleteSnapshot', 'Delete Snapshot', 'Del']]
     : view === 'backups'
       ? [['restore', 'Restore'], ['properties', 'Show Contents'], null, ['deleteBackup', 'Delete Backup']]
       : view === 'monitored'
@@ -702,6 +781,14 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           >
             Debloat Windows
           </button>
+          <button
+            className={`debloat-button ${view === 'startup' ? 'active' : ''}`}
+            onClick={() => toggleView('startup')}
+            aria-pressed={view === 'startup'}
+            title="Programs, tasks and services that start with Windows (Ctrl+6)"
+          >
+            Startup &amp; Services
+          </button>
         </div>
         <div className="search">
           <input ref={searchRef} value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search" onKeyDown={(e) => e.key === 'Escape' && setFilter('')} />
@@ -714,14 +801,21 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       </div>
       <div className="toolbar toolbar2" role="toolbar" aria-label="Tools">
         {[
-          ['startup', 'Startup & Services', 'Programs, tasks and services that start with Windows (Ctrl+6)'],
           ['monitored', 'Monitored Programs', 'Programs recorded with Tools › Monitor an Installation (Ctrl+3)'],
+          ['snapshots', 'Snapshots', 'Take snapshots and compare them to see what changed (Ctrl+7)'],
         ].map(([id, label, title]) => (
           <button key={id} className={`tool-button ${view === id ? 'active' : ''}`} onClick={() => toggleView(id)} aria-pressed={view === id} title={title}>
             {label}
           </button>
         ))}
         {view === 'backups' && <span className="toolbar-note">Backups · Tools › Backups</span>}
+        {view === 'snapshots' && (
+          <span className="tool-actions">
+            <button className="tool-button" onClick={() => dispatch('takeSnapshot')}>Take Snapshot</button>
+            <button className="tool-button" disabled={!current} onClick={() => dispatch('compareNow')}>Compare with Now</button>
+            <button className="tool-button" disabled={markedRows.length !== 2} onClick={() => dispatch('compareSelected')}>Compare Selected</button>
+          </span>
+        )}
         {view === 'history' && <span className="toolbar-note">Change History · double-click a change to undo it</span>}
       </div>
 
@@ -766,8 +860,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               key={r.key}
               data-idx={idx}
               className={`row ${marked.has(r.key) ? 'selected' : ''} ${r.key === selected ? 'focused' : ''} ${r.arch === 'user' ? 'user' : ''}`}
-              onMouseDown={(e) => e.button === 0 && selectRow(r.key, { ctrl: batchable && e.ctrlKey, shift: batchable && e.shiftKey })}
-              onDoubleClick={(e) => !e.ctrlKey && !e.shiftKey && dispatch(view === 'backups' ? 'restore' : view === 'history' ? 'undoChange' : 'uninstall')}
+              onMouseDown={(e) => e.button === 0 && selectRow(r.key, { ctrl: multi && e.ctrlKey, shift: multi && e.shiftKey })}
+              onDoubleClick={(e) => !e.ctrlKey && !e.shiftKey && dispatch(view === 'backups' ? 'restore' : view === 'history' ? 'undoChange' : view === 'snapshots' ? 'compareNow' : 'uninstall')}
               onContextMenu={(e) => {
                 e.preventDefault();
                 if (!marked.has(r.key)) selectRow(r.key);
@@ -852,6 +946,18 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {modal?.type === 'results' && <ResultsDialog {...modal} onClose={() => setModal(null)} />}
       {modal?.type === 'properties' && <PropertiesDialog program={modal.program} onClose={() => setModal(null)} />}
       {modal?.type === 'about' && <AboutDialog onClose={() => setModal(null)} />}
+      {modal?.type === 'takeSnapshot' && <TakeSnapshotDialog onTake={takeSnapshot} onClose={() => setModal(null)} />}
+      {modal?.type === 'compare' && (
+        <ComparisonDialog
+          {...modal}
+          onClose={() => setModal(null)}
+          onExport={(all) => api.invoke('export:html', { title: 'Export Comparison', fileName: 'snapshot-comparison.html', html: comparisonHtml(all, modal.beforeName, modal.afterName) })}
+          onCleanup={(chosen) => {
+            setModal(null);
+            cleanupComparison(modal.comparison, modal.beforeName, chosen);
+          }}
+        />
+      )}
       {modal?.type === 'monitor' && (
         <MonitorWizard
           resume={modal.resume}

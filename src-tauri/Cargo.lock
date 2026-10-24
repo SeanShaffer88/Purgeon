@@ -2917,12 +2917,14 @@ name = "sweepuninstall"
 version = "0.4.1"
 dependencies = [
  "base64 0.22.1",
+ "flate2",
  "serde",
  "serde_json",
  "tauri",
  "tauri-build",
  "tauri-plugin-dialog",
  "trash",
+ "winreg",
 ]
 
 [[package]]

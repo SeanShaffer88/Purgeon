@@ -377,4 +377,27 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .toolbar-note { margin-left: auto; color: var(--muted); }
 
 /* Change History shows date and time */
-.list.view-history .col-date { width: 150px; }
+.list.view-history .col-date, .list.view-snapshots .col-date { width: 150px; }
+
+/* snapshots */
+.preset-row { display: flex; gap: 8px; margin-top: 4px; }
+.preset { flex: 1; display: flex; flex-direction: column; gap: 2px; padding: 8px; border: 1px solid var(--border-strong); cursor: pointer; color: var(--text); }
+.preset input { display: none; }
+.preset.on { border-color: var(--green); background: var(--green-dim); }
+.preset.on b { color: var(--green); }
+.compare-tabs { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; flex-wrap: wrap; }
+.compare-tab { border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); padding: 3px 10px; cursor: pointer; }
+.compare-tab .count { color: var(--muted); margin-left: 4px; }
+.compare-tab.on.added { border-color: var(--green); color: var(--green); background: var(--green-dim); }
+.compare-tab.on.removed { border-color: var(--red); color: var(--red); background: #2a1212; }
+.compare-tab.on.changed { border-color: var(--amber); color: var(--amber); background: #241d0c; }
+.compare-filters { margin-left: auto; display: flex; align-items: center; gap: 10px; color: var(--muted); }
+.compare-filters label { display: flex; align-items: center; gap: 4px; cursor: pointer; }
+.compare-search { width: 150px; padding: 2px 6px; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); outline: none; }
+.compare-list { max-height: 50vh; }
+.compare-row { padding-left: 8px; }
+.compare-row.info { opacity: 0.7; }
+.compare-extra { flex: none; max-width: 45%; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 8px; }
+.show-more { display: block; margin: 6px auto; }
+.kind-setvalue, .kind-createkey { background: var(--violet); }
+.tool-actions { margin-left: auto; display: flex; gap: 6px; }

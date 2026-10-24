@@ -5,6 +5,7 @@ import { sys } from './sys.js';
 import * as path from './winpath.js';
 import { reg, runPS, runPSJson, psq, execFile } from './shell.js';
 import { isProtected, isProtectedKey } from './paths.js';
+import { regAddArgs } from './snapshots.js';
 
 let backupRoot = '';
 const setRoot = async (dir) => {
@@ -148,6 +149,32 @@ async function removeItems({ title, items, trashItem = (p) => sys.trash(p) }) {
     log(item, r.ok, r.ok ? 'Key deleted' : r.stderr);
   }
 
+  // Recreated keys (from a snapshot cleanup): only created when missing, so undo removes only ours.
+  for (const item of items.filter((i) => i.kind === 'createkey')) {
+    if ((await reg(['query', item.path])).ok) {
+      log(item, true, 'Already exists');
+      continue;
+    }
+    const r = await reg(['add', item.path, '/f']);
+    if (r.ok) manifest.entries.push({ kind: 'newkey', path: item.path });
+    log(item, r.ok, r.ok ? 'Key recreated' : r.stderr);
+  }
+
+  // Values written back from a snapshot. The current value (or its absence) is recorded first.
+  const toSet = items.filter((i) => i.kind === 'setvalue');
+  const current = await readValues(toSet).catch(() => []);
+  for (const item of toSet) {
+    const args = regAddArgs(item.path, item.name, item.valueType, item.data);
+    if (!args) {
+      log(item, false, 'This value type cannot be written back');
+      continue;
+    }
+    const was = current.find((c) => c.path === item.path && c.name === item.name);
+    const r = await reg(args);
+    if (r.ok) manifest.entries.push(was ? { kind: 'value', ...was } : { kind: 'newvalue', path: item.path, name: item.name });
+    log(item, r.ok, r.ok ? (was ? 'Earlier value put back' : 'Value recreated') : r.stderr);
+  }
+
   for (const item of items.filter((i) => i.kind === 'dir' || i.kind === 'file')) {
     if (isProtected(item.path)) {
       log(item, false, 'Protected location, skipped');
@@ -225,6 +252,15 @@ async function restore(id) {
     if (e.kind === 'key') {
       const r = await reg(['import', path.join(dir, e.file)]);
       results.push({ ...e, ok: r.ok, detail: r.ok ? 'Key restored' : r.stderr });
+    } else if (e.kind === 'newvalue') {
+      let r = await reg(['delete', e.path, ...(e.name ? ['/v', e.name] : ['/ve']), '/f']);
+      if (!r.ok && /unable to find/i.test(r.stderr)) r = { ok: true };
+      results.push({ ...e, kind: 'value', ok: r.ok, detail: r.ok ? 'Recreated value removed again' : r.stderr });
+    } else if (e.kind === 'newkey') {
+      // Only keys SweepUninstall itself created are removed again, and never a protected one.
+      let r = isProtectedKey(e.path) ? { ok: false, stderr: 'Protected Windows key, left in place' } : await reg(['delete', e.path, '/f']);
+      if (!r.ok && /unable to find/i.test(r.stderr)) r = { ok: true };
+      results.push({ ...e, kind: 'key', ok: r.ok, detail: r.ok ? 'Recreated key removed again' : r.stderr });
     } else if (e.kind === 'value') {
       const r = await reg(['add', e.path, '/v', e.name, '/t', REG_TYPE[e.valueKind] || 'REG_SZ', '/d', e.data, '/f']);
       results.push({ ...e, ok: r.ok, detail: r.ok ? 'Value restored' : r.stderr });

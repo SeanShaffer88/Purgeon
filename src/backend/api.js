@@ -11,6 +11,7 @@ import * as restore from './restore.js';
 import * as measure from './measure.js';
 import * as startup from './startup.js';
 import * as history from './history.js';
+import * as snapshots from './snapshots.js';
 
 const DEFAULT_SETTINGS = { createRestorePoints: true };
 const settingsFile = () => path.join(sys.info.dataDir, 'settings.json');
@@ -98,14 +99,20 @@ const handlers = {
   'backups:list': () => backups.list(),
   'backups:restore': (id) => backups.restore(id),
   'backups:remove': (id) => backups.remove(id),
+  'snapshots:list': () => snapshots.list(),
+  'snapshots:take': ({ name, preset }) => snapshots.take(name, preset),
+  'snapshots:remove': (id) => snapshots.remove(id),
+  'snapshots:rename': ({ id, name }) => snapshots.rename(id, name),
+  'snapshots:compare': ({ before, after }) => snapshots.compare(before, after),
+  'snapshots:cleanupItems': ({ before, selected }) => snapshots.cleanupItems(before, selected),
   'startup:list': () => startup.list(),
   'startup:set': ({ entry, enable }) => startup.setEnabled(entry, enable),
   'debloat:list': () => debloat.list(),
   'debloat:set': ({ id, enable }) => debloat.set(id, enable),
   'debloat:restartExplorer': () => debloat.restartExplorer(),
-  'export:html': async ({ title, html }) => {
+  'export:html': async ({ title, html, fileName = 'installed-programs.html' }) => {
     const { save } = await import('@tauri-apps/plugin-dialog');
-    const file = await save({ title, defaultPath: 'installed-programs.html', filters: [{ name: 'HTML', extensions: ['html'] }] });
+    const file = await save({ title, defaultPath: fileName, filters: [{ name: 'HTML', extensions: ['html'] }] });
     if (!file) return null;
     await sys.writeText(file, html);
     await open(file);
@@ -145,6 +152,11 @@ const recorders = {
     title: `Restored the backup of ${String(id).replace(/^[^_]*_/, '').replace(/-/g, ' ') || 'removed items'}`,
     detail: `${results.filter((r) => r.ok).length} of ${results.length} entries restored`,
   }),
+  'snapshots:take': ({ preset }, meta) => ({
+    type: 'Snapshot',
+    title: `Took snapshot "${meta.name}"`,
+    detail: `${(meta.stats.dirs + meta.stats.files + meta.stats.keys + meta.stats.values).toLocaleString()} entries (${preset})`,
+  }),
   'monitor:finish': (_name, record) => ({ type: 'Monitor', title: `Recorded the installation of ${record.name}`, detail: plural(record.items.length, 'change') }),
 };
 for (const [channel, describe] of Object.entries(recorders)) {
@@ -181,6 +193,7 @@ export async function initBackend() {
     startup.setRoot(path.join(data, 'startup')),
     debloat.setRoot(path.join(data, 'debloat')),
     history.setRoot(path.join(data, 'history')),
+    snapshots.setRoot(path.join(data, 'snapshots')),
   ]);
 }
 

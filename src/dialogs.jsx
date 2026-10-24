@@ -85,7 +85,7 @@ export function Busy({ message, onStop }) {
 }
 
 const GROUPS = [
-  { id: 'registry', label: 'Registry', kinds: ['key', 'value'] },
+  { id: 'registry', label: 'Registry', kinds: ['key', 'value', 'createkey', 'setvalue'] },
   { id: 'files', label: 'Files and Folders', kinds: ['dir', 'file'] },
   { id: 'services', label: 'Services', kinds: ['service'] },
   { id: 'tasks', label: 'Scheduled Tasks', kinds: ['task'] },
@@ -101,7 +101,11 @@ const itemLabel = (i) =>
         ? `Task: ${i.path}`
         : i.kind === 'firewall'
           ? `Firewall: ${i.name || i.path}`
-          : i.path;
+          : i.kind === 'setvalue'
+            ? `Put back: ${i.path}  ›  ${i.name || '(default)'}`
+            : i.kind === 'createkey'
+              ? `Recreate: ${i.path}`
+              : i.path;
 
 export function LeftoversDialog({ title, heading, items, onClose, onRemove }) {
   const [checked, setChecked] = useState(() => new Set(items.map((it, idx) => (it.confidence === 'high' ? idx : -1)).filter((i) => i >= 0)));

@@ -11,6 +11,8 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use tauri::Manager;
 
+mod snapshot;
+
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(Serialize)]
@@ -239,6 +241,30 @@ async fn folder_size(path: String, max_entries: u64, max_ms: u64) -> FolderSize 
     .unwrap_or(FolderSize { bytes: 0, entries: 0, truncated: true })
 }
 
+/// Takes a snapshot of files/folders and registry keys/values into a compressed file.
+#[tauri::command]
+async fn take_snapshot(out: String, name: String, file_roots: Vec<String>, file_depth: u32, reg_roots: Vec<snapshot::RegRoot>, excludes: Vec<String>) -> Result<snapshot::SnapshotStats, String> {
+    tauri::async_runtime::spawn_blocking(move || snapshot::take(&out, &name, &file_roots, file_depth, &reg_roots, &excludes))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// Compares two snapshots: what was added, removed and changed from `before` to `after`.
+#[tauri::command]
+async fn compare_snapshots(before: String, after: String, limit: usize) -> Result<snapshot::Comparison, String> {
+    tauri::async_runtime::spawn_blocking(move || snapshot::compare(&before, &after, limit))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+/// All keys and values at or under `key` in a snapshot.
+#[tauri::command]
+async fn snapshot_subtree(path: String, key: String) -> Result<snapshot::Subtree, String> {
+    tauri::async_runtime::spawn_blocking(move || snapshot::subtree(&path, &key))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 #[derive(Serialize)]
 struct SysInfo {
     env: std::collections::HashMap<String, String>,
@@ -284,7 +310,7 @@ pub fn run() {
         })
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            run_ps, exec, run_command_line, launch, read_dir, stat, exists, read_text, write_text, make_dir, remove_path, move_to_trash, walk, folder_size, sys_info, quit
+            run_ps, exec, run_command_line, launch, read_dir, stat, exists, read_text, write_text, make_dir, remove_path, move_to_trash, walk, folder_size, take_snapshot, compare_snapshots, snapshot_subtree, sys_info, quit
         ])
         .run(tauri::generate_context!())
         .expect("error while running SweepUninstall");

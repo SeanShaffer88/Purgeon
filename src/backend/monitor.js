@@ -1,9 +1,10 @@
+// Installation monitoring: a snapshot before and after an installer runs, compared to record
+// what the installation added and which existing settings it changed, so the program can be
+// removed precisely later and those settings put back.
 import { sys } from './sys.js';
 import * as path from './winpath.js';
-// Installation monitoring: snapshot the file system and registry before and after an
-// installer runs, then record what was added so it can be removed precisely later.
-import { runPS } from './shell.js';
-import { fileRoots, shortcutRoots, isProtected, isProtectedKey } from './paths.js';
+import { isProtected, isProtectedKey } from './paths.js';
+import { capture, revertible } from './snapshots.js';
 
 let storeDir = '';
 const setRoot = async (dir) => {
@@ -11,61 +12,13 @@ const setRoot = async (dir) => {
   await sys.makeDir(path.join(storeDir, 'programs'));
 };
 const sessionFile = () => path.join(storeDir, 'session.json');
-
-// Directories to depth 3, files to depth 2 under every well-known root (walked natively).
-const snapshotFiles = () => sys.walk([...new Set([...fileRoots(), ...shortcutRoots()])], 3, 2);
-
-const SNAPSHOT_REGISTRY = `
-$out = New-Object System.Collections.Generic.List[string]
-function Walk([Microsoft.Win32.RegistryKey]$k, [string]$name, [int]$depth) {
-  if (-not $k) { return }
-  foreach ($s in $k.GetSubKeyNames()) {
-    $full = "$name\\$s"
-    $out.Add("K$full")
-    if ($depth -gt 1) {
-      try { $c = $k.OpenSubKey($s) } catch { $c = $null }
-      if ($c) { Walk $c $full ($depth - 1); $c.Close() }
-    }
-  }
-}
-function Values([Microsoft.Win32.RegistryKey]$k, [string]$name) {
-  if (-not $k) { return }
-  foreach ($v in $k.GetValueNames()) { $out.Add("V$name|$v") }
-}
-$LM = [Microsoft.Win32.Registry]::LocalMachine
-$CU = [Microsoft.Win32.Registry]::CurrentUser
-$targets = @(
-  @($LM, 'HKEY_LOCAL_MACHINE', 'SOFTWARE', 2),
-  @($LM, 'HKEY_LOCAL_MACHINE', 'SOFTWARE\\WOW6432Node', 2),
-  @($CU, 'HKEY_CURRENT_USER', 'Software', 2),
-  @($LM, 'HKEY_LOCAL_MACHINE', 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall', 1),
-  @($LM, 'HKEY_LOCAL_MACHINE', 'SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall', 1),
-  @($CU, 'HKEY_CURRENT_USER', 'Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall', 1),
-  @($LM, 'HKEY_LOCAL_MACHINE', 'SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths', 1),
-  @($LM, 'HKEY_LOCAL_MACHINE', 'SYSTEM\\CurrentControlSet\\Services', 1)
-)
-foreach ($t in $targets) {
-  $k = $t[0].OpenSubKey($t[2])
-  if ($k) { Walk $k "$($t[1])\\$($t[2])" $t[3]; $k.Close() }
-}
-foreach ($t in @(@($CU,'HKEY_CURRENT_USER','Software\\Microsoft\\Windows\\CurrentVersion\\Run'), @($LM,'HKEY_LOCAL_MACHINE','SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run'), @($LM,'HKEY_LOCAL_MACHINE','SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run'))) {
-  $k = $t[0].OpenSubKey($t[2]); if ($k) { Values $k "$($t[1])\\$($t[2])"; $k.Close() }
-}
-[string]::Join([char]10, $out)
-`;
-
-async function snapshot() {
-  const [files, registry] = await Promise.all([
-    snapshotFiles(),
-    runPS(SNAPSHOT_REGISTRY).then((s) => s.split(/\r?\n/).filter(Boolean)),
-  ]);
-  return [...files, ...registry];
-}
+const beforeFile = () => path.join(storeDir, 'session-before.snap');
+const afterFile = () => path.join(storeDir, 'session-after.snap');
 
 async function start(installer) {
-  const before = await snapshot();
-  await sys.writeText(sessionFile(), JSON.stringify({ started: new Date().toISOString(), installer, before }));
-  return { entries: before.length };
+  const stats = await capture(beforeFile(), 'Before installation', 'standard');
+  await sys.writeText(sessionFile(), JSON.stringify({ started: new Date().toISOString(), installer }));
+  return { entries: stats.dirs + stats.files + stats.keys + stats.values };
 }
 
 const status = async () => {
@@ -74,7 +27,11 @@ const status = async () => {
   return { started, installer };
 };
 
-const cancel = () => sys.removePath(sessionFile());
+const cancel = async () => {
+  await sys.removePath(sessionFile());
+  await sys.removePath(beforeFile());
+  await sys.removePath(afterFile());
+};
 
 // Keep only top-most added paths: if a folder was added, its children are implied.
 function collapse(paths) {
@@ -100,36 +57,37 @@ function collapse(paths) {
   return kept.sort((a, b) => a.localeCompare(b));
 }
 
+const SERVICE_KEY = /\\SYSTEM\\CurrentControlSet\\Services\\([^\\]+)$/i;
+
+// Turns a before/after comparison into the items an uninstall of the monitored program removes or puts back.
+function recordItems(comparison) {
+  const items = [];
+  for (const c of comparison.added) {
+    if (c.kind === 'dir' || c.kind === 'file') {
+      if (!isProtected(c.path)) items.push({ kind: c.kind, path: c.path, confidence: 'high', score: 100, reason: 'Created during installation' });
+    } else if (c.kind === 'key') {
+      const service = c.path.match(SERVICE_KEY);
+      if (service) items.push({ kind: 'service', path: service[1], confidence: 'high', score: 100, reason: 'Service created during installation' });
+      else if (!isProtectedKey(c.path)) items.push({ kind: 'key', path: c.path, confidence: 'high', score: 100, reason: 'Created during installation' });
+    } else if (c.kind === 'value' && !SERVICE_KEY.test(c.path)) {
+      items.push({ kind: 'value', path: c.path, name: c.name, confidence: 'high', score: 100, reason: 'Value added during installation' });
+    }
+  }
+  // Settings the installer changed or removed are put back to what they were before.
+  for (const c of [...comparison.changed, ...comparison.removed]) {
+    if (c.kind === 'value' && revertible(c.valueType, c.before)) {
+      items.push({ kind: 'setvalue', path: c.path, name: c.name, valueType: c.valueType, data: c.before, confidence: 'high', score: 90, reason: 'Changed during installation; put back the earlier value' });
+    }
+  }
+  return items;
+}
+
 async function finish(name) {
   const session = JSON.parse(await sys.readText(sessionFile()));
-  const before = new Set(session.before.map((s) => s.toLowerCase()));
-  const after = await snapshot();
-  const added = after.filter((s) => !before.has(s.toLowerCase()));
-
-  const pick = (prefix) => added.filter((s) => s[0] === prefix).map((s) => s.slice(1));
-  const fileItems = await Promise.all(
-    collapse([...pick('D'), ...pick('F')])
-      .filter((p) => !isProtected(p))
-      .map(async (p) => {
-        const st = await sys.stat(p).catch(() => null);
-        return { kind: st?.dir ? 'dir' : 'file', path: p, confidence: 'high', reason: 'Created during installation' };
-      })
-  );
-  // Services are kept (they become 'service' items); other protected keys are never recorded for removal.
-  const keyItems = collapse(pick('K').filter((p) => /\\SYSTEM\\CurrentControlSet\\Services\\[^\\]+$/i.test(p) || !isProtectedKey(p))).map((p) => {
-    if (/\\SYSTEM\\CurrentControlSet\\Services\\[^\\]+$/i.test(p)) {
-      return { kind: 'service', path: p.split('\\').pop(), confidence: 'high', reason: 'Service created during installation' };
-    }
-    return { kind: 'key', path: p, confidence: 'high', reason: 'Created during installation' };
-  });
-  const valueItems = pick('V').map((s) => {
-    const [key, valueName] = s.split('|');
-    return { kind: 'value', path: key, name: valueName, confidence: 'high', reason: 'Startup entry added' };
-  });
-
-  const uninstallKeys = keyItems
-    .filter((k) => k.kind === 'key' && /\\CurrentVersion\\Uninstall\\[^\\]+$/i.test(k.path))
-    .map((k) => k.path);
+  await capture(afterFile(), 'After installation', 'standard');
+  const comparison = await sys.compareSnapshots(beforeFile(), afterFile(), 100000);
+  const items = recordItems(comparison);
+  const uninstallKeys = items.filter((k) => k.kind === 'key' && /\\CurrentVersion\\Uninstall\\[^\\]+$/i.test(k.path)).map((k) => k.path);
 
   const record = {
     id: `${Date.now()}`,
@@ -138,7 +96,8 @@ async function finish(name) {
     started: session.started,
     finished: new Date().toISOString(),
     uninstallKeys,
-    items: [...keyItems, ...valueItems, ...fileItems],
+    items,
+    changedFiles: comparison.changed.filter((c) => c.kind === 'file').length,
   };
   await sys.writeText(path.join(storeDir, 'programs', `${record.id}.json`), JSON.stringify(record, null, 2));
   await cancel();
@@ -154,4 +113,4 @@ async function list() {
 
 const remove = (id) => sys.removePath(path.join(storeDir, 'programs', `${id}.json`));
 
-export { setRoot, start, status, cancel, finish, list, remove, collapse };
+export { setRoot, start, status, cancel, finish, list, remove, collapse, recordItems };

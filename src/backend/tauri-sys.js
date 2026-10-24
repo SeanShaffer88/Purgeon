@@ -19,6 +19,9 @@ export async function createTauriSys() {
     trash: (path) => invoke('move_to_trash', { path }),
     walk: (roots, maxDirDepth, maxFileDepth) => invoke('walk', { roots, maxDirDepth, maxFileDepth }),
     folderSize: (path, maxEntries, maxMs) => invoke('folder_size', { path, maxEntries, maxMs }),
+    takeSnapshot: (out, name, fileRoots, fileDepth, regRoots, excludes) => invoke('take_snapshot', { out, name, fileRoots, fileDepth, regRoots, excludes }),
+    compareSnapshots: (before, after, limit) => invoke('compare_snapshots', { before, after, limit }),
+    snapshotSubtree: (path, key) => invoke('snapshot_subtree', { path, key }),
     quit: () => invoke('quit'),
   };
 }
