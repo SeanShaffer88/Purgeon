@@ -1,247 +1,338 @@
 # SweepUninstall
 
 A Windows uninstaller that removes a program and then finds the files, folders, registry keys, startup entries and services it left behind.
-It can monitor installations, take snapshots of your system to compare before and after, find orphaned leftovers, migrate programs to another PC, clean junk files, update programs with winget, and manage everything that starts with Windows. Every change is backed up first and can be undone.
 
-It has a compact single-list window with a dark terminal theme. It is built with [Tauri](https://tauri.app/) and React on Windows' built-in WebView2, so the whole app is a **3.8 MB** exe in a **1.2 MB** installer.
+It can also:
+- monitor installations and compare before-and-after snapshots;
+- find leftovers of programs you removed long ago;
+- move programs to another PC;
+- clean junk files;
+- update programs with winget;
+- manage everything that runs with Windows.
+
+Every change is backed up first and can be undone.
+
+It has a compact single-list window with a dark terminal theme. It is built with [Tauri](https://tauri.app/) and React on Windows' built-in WebView2, so the whole app is a **3.8 MB** exe in a **1.4 MB** installer.
 
 ![SweepUninstall main window](docs/screenshots/main.png)
 
-## Features
+**Contents:**
+- [Program list](#program-list)
+- [Uninstall and leftover scan](#uninstall-and-leftover-scan)
+- [Batch uninstall](#batch-uninstall)
+- [Installation monitor](#installation-monitor)
+- [Snapshots](#snapshots)
+- [Program migration](#program-migration)
+- [Uninstall Archive](#uninstall-archive)
+- [Who owns this?](#who-owns-this)
+- [Orphaned leftovers](#orphaned-leftovers)
+- [Program updates](#program-updates)
+- [Junk Files](#junk-files)
+- [Startup & Services](#startup--services)
+- [Debloat Windows](#debloat-windows)
+- [Program groups](#program-groups)
+- [Scheduled maintenance](#scheduled-maintenance)
+- [Safety, backups and undo](#safety-backups-and-undo)
+- [Command line](#command-line)
+- [Download](#download)
 
-**Program list**
-- Two even toolbars sit under the menu bar:
-  - the top one switches between Desktop Programs and Windows Store Apps, opens **Debloat Windows** and **Startup & Services**, and has the search box;
-  - the second opens **Monitored Programs**, **Snapshots** and **Finding what belongs where**
-- **Tools › Who Owns This** tells you which installed program a file, folder or registry key belongs to, and how sure it is (its install folder, a monitored installation, or names along the path).
-- **Tools › Find Orphaned Leftovers** looks for folders, registry keys and services of programs that are no longer installed. Nothing is selected for you: Windows' own folders, anything a program still uses, anything used in the last 30 days and game saves in `AppData\LocalLow` are left out, and folders that contain programs are marked as possibly portable apps.
+Screenshots use demo data. QuickPDF Free, SearchBoost Toolbar and OldPhotoTool are made-up examples.
 
-**Program updates (winget)**
-- **Tools › Program Updates** lists newer versions available through the Windows Package Manager and updates the ones you choose, silently, one after another.
-- **Tools › Export Program List** saves your programs as a winget list; on a new PC, `winget import -i <file>` installs them all.
+## Program list
 
-**Junk Files**, and picks a program group.
-- Clicking an active button again returns to the program list. **Backups** and **Change History** are in the Tools menu.
-- Desktop programs from all three registry uninstall locations (64-bit, 32-bit and per-user), with icons, size and install date
-- When a program doesn't report its size or install date, SweepUninstall measures its folder in the background. Measured values are shown in italics; hover one to see which folder it came from.
-- Windows Store apps
-- Sort by any column, instant search, and type-to-jump
-- Programs installed only for the current user are shown in amber
-- Insight tags flag programs whose program file is **unsigned** or has a bad signature, programs **installed together with** another publisher's program (how bundled offers usually arrive), names typical of **possible bundled offers**, and programs that keep **growing** in size. The group list filters by each of these, and Properties shows the details and a size history.
+![Program insights: two programs installed together, one a possible bundled offer](docs/screenshots/insights.png)
 
-**Program groups**
-- Right-click a program (or several) and choose **Set Group** (Ctrl+G) to file it under a name such as Games, Work or Media. The group shows as a tag next to the program's name.
-- The group list in the second toolbar shows one group at a time, or only the programs that have no group. Searching also matches group names.
-- Group changes are recorded in Change History and can be undone.
+- **Lists:** desktop programs from all three registry uninstall locations (64-bit, 32-bit and per-user) with icons, size and install date, plus Windows Store apps. Programs installed only for the current user are shown in amber.
+- **Measured values:** when a program doesn't report its size or install date, SweepUninstall measures its folder in the background. Measured values are in italics; hover one to see which folder it came from.
+- **Finding programs:** sort by any column, search instantly, or type the first letters to jump.
+- **Insight tags** after a program's name show:
+  - **unsigned** or **bad signature**: the program's own file isn't digitally signed, or its signature is broken;
+  - **installed with …**: it was installed or updated within two minutes of a program from another publisher, which is how bundled offers usually arrive;
+  - **possible offer**: its name matches a type of program often installed as a bundled offer (toolbars, "PC optimizers", search helpers);
+  - **growing**: it grew by a fifth and at least 50 MB over the last 90 days.
+- **Filters and details:** the list in the second toolbar filters by each insight. **Properties** (`Alt+Enter`) shows the signer, what it was installed with, and its size history.
+- **Toolbars:** the top toolbar switches between Desktop Programs and Windows Store Apps and opens **Debloat Windows** and **Startup & Services**. The second toolbar opens **Monitored Programs**, **Snapshots** and **Junk Files**, and picks a group or insight. Click an active button again to return to the program list.
+- **Display:** the window fits your screen and respects Windows' display scale. Zoom with `Ctrl++` / `Ctrl+-` / `Ctrl+0`. **View › Grid Lines** (on by default) separates rows and columns.
 
-**Uninstall and leftover cleanup**
-- Runs the program's own uninstaller, then waits for it to finish. This includes Inno Setup and NSIS uninstallers that relaunch themselves from `%TEMP%`.
-- Recognises how a program was installed (Windows Installer, Inno Setup, NSIS, WiX bundle or InstallShield). Before uninstalling, it reads the exact list of files and settings the installer recorded: the Windows Installer package cached for the program, or the Inno Setup uninstall log. Those records disappear during the uninstall, and everything they list that is left behind is offered with a 95–100% match.
-- **Tools › Silent Uninstall When Possible** runs Windows Installer, Inno Setup, NSIS and WiX uninstallers without their windows, which is handy for batch uninstalls. Other uninstallers show their own window as usual; SweepUninstall never guesses switches for them.
-- The confirmation warns before you remove a shared runtime (Visual C++, .NET, Java, DirectX and others), a hardware driver, or a program that other installed programs registered a need for.
-- Scans for leftovers:
-  - the install folder
-  - folders named after the program or its publisher in Program Files, ProgramData and AppData
-  - Start Menu and desktop shortcuts that point into the install folder
-  - `Software` registry keys
-  - App Paths registrations
-  - startup Run entries
-  - services
-  - scheduled tasks that run the program or are named after it
-  - firewall rules for the program's executables
-  - Explorer right-click entries and shell extensions
-  - file types, URL handlers and "Open with" registrations
-  - data and cache folders named after the program's own executables
+![Windows Store apps](docs/screenshots/store-apps.png)
+
+## Uninstall and leftover scan
+
+![Leftover scan after uninstalling a program](docs/screenshots/leftovers.png)
+
+**Running the uninstaller**
+- SweepUninstall runs the program's own uninstaller and waits for it to finish, including Inno Setup and NSIS uninstallers that relaunch themselves from `%TEMP%`.
+- It recognises how the program was installed: Windows Installer, Inno Setup, NSIS, WiX bundle or InstallShield.
+- **Installer records:** before uninstalling, it reads the exact list of files and settings the installer recorded (the Windows Installer package cached for the program, or the Inno Setup uninstall log). Those records disappear during the uninstall. Anything they list that is left behind is offered with a 95–100% match.
+- **Tools › Silent Uninstall When Possible** runs Windows Installer, Inno Setup, NSIS and WiX uninstallers without their windows. Other uninstallers show their window as usual, because SweepUninstall never guesses switches.
+- **Dependency warnings:** the confirmation warns before you remove a shared runtime (Visual C++, .NET, Java, DirectX and others), a hardware driver, or a program that other installed programs registered a need for.
+
+**Then it scans for leftovers:**
+- the install folder;
+- folders named after the program or its publisher in Program Files, ProgramData and AppData;
+- Start Menu and desktop shortcuts;
+- `Software` registry keys, App Paths and startup Run entries;
+- services, scheduled tasks and firewall rules;
+- Explorer right-click entries, shell extensions, file types and URL handlers;
+- data and cache folders named after the program's own executables.
+
+**Choosing what to remove**
 - Every item gets a **match score** from 0 to 100%. Items scoring 70% or more start ticked; weaker guesses start unticked and are marked **check**.
-- Publisher folders count only when named exactly after the publisher, so removing Google Chrome never offers another Google product's folders.
-- **Force Removal** handles programs whose uninstaller is broken or missing.
-- **Analyze Leftovers** shows what belongs to a program without uninstalling it.
-- Running processes in the install folder are detected and can be closed before deleting.
+- Publisher folders count only when named exactly after the publisher, so removing one Google program never offers another's folders.
+- **Force Removal** (`Shift+Del`) handles programs whose uninstaller is broken or missing.
+- **Analyze Leftovers** (`Ctrl+L`) shows what belongs to a program without uninstalling it.
+- Running processes in the install folder are detected and can be closed first.
 
-**Batch uninstall**
-- Select several programs with `Ctrl+click`, `Shift+click`, `Shift+arrows` or `Ctrl+A`, then press `Del` or choose **Uninstall N Programs** from the right-click menu. This works for desktop programs and Store apps.
-- Each program's own uninstaller runs in turn. **Stop After This One** cancels the rest of the batch once the current uninstaller finishes.
-- Afterwards, one combined leftover list shows every program's files, folders, registry entries and services, grouped by program, with one **Delete Selected**.
-- The summary reports any uninstaller that failed or was cancelled, and any program that was skipped.
+![Right-click menu](docs/screenshots/context-menu.png)
 
-**Restore points**
-- Before an uninstall, a batch, a force removal, or your first Debloat change in a session, the confirmation offers **Create a restore point first** (ticked by default).
-- Creating a restore point needs administrator rights and System Protection turned on. Windows may also skip it if one was made in the last 24 hours. If no point is made, SweepUninstall shows a warning and continues.
-- **Tools › Create Restore Points** sets whether the checkbox starts ticked.
+## Batch uninstall
 
-**Installation monitor**
-- **Tools › Monitor an Installation** takes a snapshot of the file system and registry, runs your installer, takes a second snapshot and records every folder, file, registry key, registry value and service that was added.
-- When SweepUninstall runs as administrator, it also **tracks the installer live** with Windows' own event tracing. Every file and registry change made by the installer, the programs it starts and Windows Installer is recorded as it happens, at any depth, so changes deep inside existing folders and keys are caught too. Temporary files and Windows' own bookkeeping are left out.
-- It also records existing settings the installer changed, such as a file association or a Run entry it replaced. Uninstalling the program puts those settings back to what they were before.
-- Monitored programs appear under the **Monitored Programs** button (or `Ctrl+3`). Uninstalling one removes exactly what its installation created.
+![Three programs selected](docs/screenshots/multi-select.png)
 
-**Snapshots**
-- **Snapshots** (`Ctrl+7`) keeps named records of your files, folders and registry settings: Program Files, ProgramData, AppData, the Start Menu and desktops, plus the software and services parts of the registry. Temporary files and caches are left out.
-- Take one before installing or changing something, in three depths: **Quick** (a few seconds), **Standard** and **Deep**.
-- **Compare with Now** or **Compare Selected** (two snapshots) shows what was **added**, **removed** and **changed**, with old and new registry values side by side. You can filter by files or registry and search the results.
-- **Clean Up Selected** removes added items and puts changed or removed registry values and keys back from the earlier snapshot. Everything is backed up first and can be undone.
-- The **timeline** above the list shows your snapshots in order, ending at Now. Click one, then Ctrl+click a second to compare them, or click Now.
-- Comparisons can be exported to HTML.
+- **Selecting:** use `Ctrl+click`, `Shift+click`, `Shift+arrows` or `Ctrl+A`, then press `Del`. This works for desktop programs and Store apps.
+- **Confirmation:** it shows each program's installer type and any dependency warning.
+- **Running:** each uninstaller runs in turn, silently where possible. **Stop After This One** cancels the rest of the batch.
+- **Afterwards:** one combined leftover list shows every program's files, folders, registry entries and services, grouped by program.
 
-**Finding what belongs where**
-- **Tools › Who Owns This** tells you which installed program a file, folder or registry key belongs to, and how sure it is (its install folder, a monitored installation, or names along the path).
-- **Tools › Find Orphaned Leftovers** looks for folders, registry keys and services of programs that are no longer installed. Nothing is selected for you: Windows' own folders, anything a program still uses, anything used in the last 30 days and game saves in `AppData\LocalLow` are left out, and folders that contain programs are marked as possibly portable apps.
+![Combined leftover list after a batch uninstall](docs/screenshots/batch-uninstall.png)
 
-**Program updates (winget)**
-- **Tools › Program Updates** lists newer versions available through the Windows Package Manager and updates the ones you choose, silently, one after another.
-- **Tools › Export Program List** saves your programs as a winget list; on a new PC, `winget import -i <file>` installs them all.
+## Installation monitor
 
-**Junk Files**
-- **Finding what belongs where**
-- **Tools › Who Owns This** tells you which installed program a file, folder or registry key belongs to, and how sure it is (its install folder, a monitored installation, or names along the path).
-- **Tools › Find Orphaned Leftovers** looks for folders, registry keys and services of programs that are no longer installed. Nothing is selected for you: Windows' own folders, anything a program still uses, anything used in the last 30 days and game saves in `AppData\LocalLow` are left out, and folders that contain programs are marked as possibly portable apps.
+![Installation monitor](docs/screenshots/monitor.png)
 
-**Program updates (winget)**
-- **Tools › Program Updates** lists newer versions available through the Windows Package Manager and updates the ones you choose, silently, one after another.
-- **Tools › Export Program List** saves your programs as a winget list; on a new PC, `winget import -i <file>` installs them all.
+- **Tools › Monitor an Installation** (`Ctrl+M`) works in four steps:
+  1. takes a snapshot of the file system and registry;
+  2. runs your installer;
+  3. takes a second snapshot;
+  4. records every folder, file, registry key, registry value and service that was added.
+- **Live tracking:** run as administrator, it also follows the installer with Windows' own event tracing. It records every file and registry change by the installer, the programs it starts and Windows Installer, as it happens and at any depth. Temporary files and Windows' bookkeeping are left out.
+- **Changed settings:** existing settings the installer changed (a file association, a replaced Run entry) are recorded and put back when you uninstall.
+- **Monitored Programs** (`Ctrl+3`) lists the recordings. Uninstalling one removes exactly what its installation created.
+- **Command line:** `SweepUninstall --monitor "setup.exe"` records an installation without the window.
+
+![Monitored programs](docs/screenshots/monitored.png)
+
+## Snapshots
+
+![Saved snapshots with the timeline](docs/screenshots/snapshots.png)
+
+- **What a snapshot records:** **Snapshots** (`Ctrl+7`) keeps named records of Program Files, ProgramData, AppData, the Start Menu and desktops, and the software and services parts of the registry. Temporary files and caches are left out.
+- **Depths:** **Quick** (a few seconds), **Standard** or **Deep**.
+- **Timeline:** it shows your snapshots in order. Click one, then Ctrl+click a second to compare them, or click **Now**.
+- **Comparing:** a comparison shows what was **added**, **removed** and **changed**, with old and new registry values side by side. You can filter by files or registry, search, and export to HTML.
+- **Clean Up Selected** removes added items, and puts changed or removed registry values and keys back from the earlier snapshot. Everything is backed up and undoable, and **Dry Run** shows what it would do first.
+
+![Comparing a snapshot with the system now](docs/screenshots/snapshot-compare.png)
+
+## Program migration
+
+![Migrating a program with or without its settings](docs/screenshots/migrate.png)
+
+- **Packaging:** right-click a program and choose **Migrate / Back Up Program** to pack it into one `.swpkg` file. Choose one of:
+  - **Program and my settings**: everything, to carry on where you left off;
+  - **Program only**: a clean copy without your settings, history or sign-ins;
+  - **My settings only**: for a PC where the program is already installed.
+- **What counts as what:** each item is marked as part of the program (install folders, shortcuts, machine-wide settings, the uninstall entry) or as your settings (AppData, documents, per-user registry). Nothing on this PC changes.
+- **Restoring:** **Tools › Restore a Program Backup** restores it on any PC. Paths in the old user profile and the old user's registry settings are moved to the new user.
+- **Safety:** a restore never overwrites existing folders or files. Existing registry keys are saved before anything is merged into them, and the whole restore can be undone.
+- **Limits:**
+  - Services, scheduled tasks and drivers are not included.
+  - Programs installed by Windows Installer run after a restore, but need their installer to repair or update them later; the restore says so.
+
+## Uninstall Archive
+
+![Uninstall archive](docs/screenshots/archive.png)
+
+- **View › Uninstall Archive** (`Ctrl+9`) keeps a record of every program you removed: when, how (uninstalled, force removed, Store app) and its removal backups.
+- Right-click an entry to reinstall it with winget, open its website, or put back the leftovers that were removed.
+
+## Who owns this?
+
+![Who owns this lookup](docs/screenshots/who-owns.png)
+
+- **Tools › Who Owns This** tells you which installed program a file, folder or registry key belongs to, and how sure it is.
+- It checks install folders, uninstall entries, monitored installations, and names along the path.
+- Windows' and hardware vendors' shared folders are recognised as such.
+
+## Orphaned leftovers
+
+![Orphaned leftovers](docs/screenshots/orphans.png)
+
+**Tools › Find Orphaned Leftovers** looks for folders, registry keys and services of programs that are no longer installed. It is careful:
+- nothing is selected for you;
+- Windows' own folders, anything an installed program uses and anything used in the last 30 days are left out;
+- game saves in `AppData\LocalLow` are left out;
+- AppData folders are marked as possibly holding settings or saved games;
+- folders that contain programs are marked as possibly portable apps;
+- a registry key is only offered next to a leftover folder of the same name;
+- services whose program file no longer exists are offered too.
+
+**Dry Run** shows what a removal would do, item by item, without changing anything:
+
+![Dry run](docs/screenshots/dry-run.png)
+
+## Program updates
+
+![Program updates through winget](docs/screenshots/updates.png)
+
+- **Tools › Program Updates** lists newer versions available through winget (the Windows Package Manager). It updates the ones you choose, silently, one after another, with a restore point offered first.
+- **Tools › Export Program List** saves your programs as a winget list. On a new PC, `winget import -i <file>` installs them all.
+
+## Junk Files
+
+![Junk files by category](docs/screenshots/junk.png)
 
 **Junk Files** (`Ctrl+8`) finds files that Windows and programs recreate when needed, with their sizes:
-  - temporary files (yours and Windows'), keeping anything used in the last day
-  - crash dumps and Windows error reports
-  - the Explorer thumbnail cache and DirectX shader caches
-  - downloaded Windows Update files and the Delivery Optimization cache
-- Tick the categories to clean and click **Clean**. Expand a category to see its largest items.
-- Data folders of Microsoft Store apps that are no longer installed (checked again right before removal).
-- Cleaned items go to the Recycle Bin, so a cleanup can be undone from Change History. Files in use are skipped. The registry is never touched.
-- A separate **Windows clean-up** section uses Windows' own tools for **outdated WinSxS libraries** (DISM), the **previous Windows installation** (Windows.old), **Windows Update clean-up**, **Windows demo content** and **older system restore points** (the newest is always kept). These are permanent, so they are never selected for you, need administrator rights, and have their own confirmation.
+- temporary files (yours and Windows'), keeping anything used in the last day;
+- crash dumps and Windows error reports;
+- the Explorer thumbnail cache and DirectX shader caches;
+- downloaded Windows Update files and the Delivery Optimization cache;
+- data folders of Microsoft Store apps that are no longer installed (checked again right before removal).
 
-**Scheduled maintenance**
-- **Tools › Scheduled Maintenance** runs SweepUninstall once a week through Windows Task Scheduler: a Quick snapshot, the junk categories you choose (to the Recycle Bin) and your backup limits. It never uninstalls anything and never runs the permanent Windows clean-ups, and each run writes a short report and appears in Change History.
+**How cleaning works**
+- Cleaned items go to the Recycle Bin, so a clean-up can be undone.
+- Files in use are skipped, and the registry is never touched.
+- Only the contents of these known folders are ever cleaned.
 
-**Debloat Windows**
-- The **Debloat Windows** button next to the view picker (or `Ctrl+5`) lists 26 safe, reversible tweaks in five groups: Privacy & telemetry, Start/search/taskbar, Ads & suggestions, Explorer & UI, and Windows Update.
-- Each option is either **ENABLED** (green, the tweak is applied) or **DISABLED** (red, Windows default). Click an option to toggle it. Turning one off puts back exactly the value you had before SweepUninstall applied it (or Windows' default if it never changed it).
-- Each option says when it takes effect: **Applies immediately**, **Needs Explorer restart** or **Needs reboot**. A **Restart Explorer** button appears when an Explorer change is pending.
-- Machine-wide policies are tagged **Admin** and need SweepUninstall to run as administrator.
-- Only options that are safe and widely recommended are included: no service removal, no app removal, and no security features turned off.
+![Windows clean-up options](docs/screenshots/junk-windows.png)
 
-**Startup & Services**
-- The **Startup & Services** button in the second toolbar (or `Ctrl+6`) lists everything that starts with Windows:
-  - Run entries and Startup-folder shortcuts
-  - scheduled tasks outside Windows' own `\Microsoft\` folder
-  - third-party services that start automatically, but only ones that can actually be changed (Windows-protected services, and services that lock their own settings, are not listed)
-- Each entry shows **ENABLED** (green) or **DISABLED** (red), its publisher, its command, and which installed program it belongs to. Click to toggle.
-- It also shows **everything that runs in the background**: a summary line, programs accepting incoming connections (grouped from the firewall's inbound rules, each removable with a backup), whether each program is digitally signed, update agents, and how many seconds Windows measured each entry adding to start-up (with administrator rights).
-- Turning an entry off never deletes it:
-  - Run entries and shortcuts use Windows' own on/off switch, the same one Task Manager's Startup tab uses.
-  - Tasks are disabled.
-  - Services are switched from Automatic to Manual. They no longer start at boot but can still start when needed. Their original start mode is remembered and restored when you turn them back on.
-- Entries from Microsoft are tagged **Windows** and ask before being turned off. Each entry says when a change applies: **Next sign-in** or **Next restart**.
+**Windows clean-up** uses Windows' own tools for:
+- outdated WinSxS libraries (DISM);
+- the previous Windows installation (Windows.old);
+- Windows Update clean-up;
+- Windows demo content;
+- older system restore points (the newest is always kept).
 
-**Program migration and backup**
-- Right-click a program and choose **Migrate / Back Up Program** to pack it into one `.swpkg` file to install on another PC. Choose **Program and my settings**, **Program only** (a clean copy without your settings, history or sign-ins) or **My settings only** (for a PC where it is already installed). Nothing on your PC changes.
-- Each item is shown as part of the program (install folders, shortcuts, machine-wide settings, the uninstall entry) or your settings (AppData, documents, per-user registry).
-- **Tools › Restore a Program Backup** restores one on this or another PC. Paths in the old user profile are moved into yours, and the old user's registry settings into your own.
-- A restore never overwrites existing folders or files. Existing registry keys are saved before the backup is merged into them, and the whole restore can be undone from Change History.
-- Services, scheduled tasks and drivers are not included; if a program needs them, run its installer on the new PC first and then restore its settings. Programs installed by Windows Installer run after a restore, but need their installer to repair or update them; the restore says so.
+These are permanent. They are never selected for you, need administrator rights, and have their own confirmation.
 
-**Uninstall Archive**
-- **View › Uninstall Archive** (`Ctrl+9`) keeps a record of every program you removed: when, how, and its removal backups.
-- Right-click an entry to **reinstall it with winget**, open its website, or put back the leftovers that were removed.
+## Startup & Services
 
-**Backups and restore**
-- Before anything is deleted, it is backed up:
-  - Registry keys are exported to `.reg` files, and registry values are recorded with their type and data.
-  - Scheduled tasks are exported to XML.
-  - Firewall rules are saved with their settings.
-  - Services have their definition exported.
-  - Files go to the Recycle Bin.
-  - Registry values a cleanup puts back have their current value recorded first.
-- **Tools › Backup Settings** can remove backups older than a number of days or beyond a total size. The newest backup of each program is always kept. By default, nothing is removed.
-- **Tools › Backups** (`Ctrl+4`) restores any removal: registry entries, tasks, firewall rules, services, and files, which are moved back out of the Recycle Bin automatically.
+![Startup and services](docs/screenshots/startup.png)
 
-**Change History and undo**
-- **Tools › Change History** (`Ctrl+H`) lists every change SweepUninstall makes: removals and cleanups, debloat tweaks, startup and service changes, group changes, snapshots, uninstalls, restores and restore points.
-- Double-click a change (or press `Del`) to undo it. Undone changes stay listed and are marked **(undone)**.
-- After a removal, the report has an **Undo** button that puts everything back at once.
-- An uninstaller run can't be undone directly; reinstall the program or use the restore point made before it.
+**Startup & Services** (`Ctrl+6`) shows everything that runs without you starting it:
+- Run entries and Startup-folder shortcuts;
+- scheduled tasks outside Windows' own `\Microsoft\` folder;
+- third-party services that start automatically (only ones that can actually be changed);
+- programs allowed to accept incoming connections through the firewall, each removable with a backup.
 
-**Safety**
-- An automated test suite runs on every build and blocks a release if it fails. It covers name matching, the protected-folder guard, snapshot comparison, debloat reversibility, match scores and the startup switches.
-- SweepUninstall never offers drive roots, relative paths, the Windows folder, your profile folder, install roots, or folders with generic names such as `Microsoft` or `Common Files`.
-- It refuses to delete registry keys that Windows depends on (hive roots, `HKLM\SYSTEM`, Windows' own keys under `SOFTWARE\Microsoft`, file-extension keys and shared shell keys), even when told to.
-- It never deletes Windows' own services (protected ones, or ones whose program is in the Windows folder) or scheduled tasks under `\Microsoft\`.
-- **Right before deleting**, SweepUninstall checks again. It skips anything another installed program still uses: a folder holding another program's install folder, a file inside one, another program's uninstall entry, or a file Windows counts as shared by several programs (SharedDLLs). If this check can't run, nothing is deleted.
-- A folder or file that changed after the scan (something is still writing to it) is skipped; scan again to include it.
-- **Dry Run** (in the leftover list and the snapshot comparison) shows exactly what a removal would do to each selected item, with nothing changed, and can export that plan to HTML.
-- **Tools › Safe Mode** offers only items with a 90%+ match, and never services, scheduled tasks or firewall rules. Everything else is still shown, but can't be selected.
-- Removals are **crash-safe**: each item is written to the backup before the next one is removed. If SweepUninstall stops halfway (a crash or power cut), it offers on the next start to roll back, finish or leave the removal.
-- Every backup is sealed with SHA-256 fingerprints. A backup that was changed afterwards is not restored.
-- **Tools › Open Command Log** shows one line for every command SweepUninstall ran (PowerShell, reg.exe, sc.exe, uninstallers, Recycle Bin moves), with its timing and result. Logs are kept for 14 days.
-- Only services whose settings can actually be changed are offered in Startup & Services.
-- Junk cleaning only ever touches the contents of the known junk folders listed above, never the folders themselves or anything outside them.
+**For each entry it shows** its publisher, its command, the installed program it belongs to, whether it is digitally signed, whether it is an updater, and how many seconds Windows measured it adding to start-up (with administrator rights).
 
-**Display**
-- The window opens at a size that fits your screen, and very large screens get a little extra zoom automatically. Windows' display scale setting is respected.
-- `Ctrl++` / `Ctrl+-` / `Ctrl+0` (or View › Zoom) change the zoom; your choice is remembered.
-- **View › Grid Lines** (on by default) draws lines between rows and columns.
+**Turning an entry off never deletes it:**
+- Run entries and shortcuts use Windows' own switch, the same one Task Manager uses.
+- Tasks are disabled.
+- Services are set from Automatic to Manual, and their original mode is remembered.
 
-**Also**
-- Remove a stale uninstall entry
-- Open a program's key in Regedit or open its install folder
-- Search for a program online
-- Show properties, including the uninstall command and registry key
-- Export the list to HTML
+Entries from Microsoft are tagged **Windows** and ask before being turned off.
 
-## Screenshots
+## Debloat Windows
 
-| Leftover scan | Context menu |
-| --- | --- |
-| ![Leftover scan](docs/screenshots/leftovers.png) | ![Context menu](docs/screenshots/context-menu.png) |
+![Debloat Windows, privacy and taskbar tweaks](docs/screenshots/debloat-top.png)
 
-| Multi-select | Batch uninstall leftovers |
-| --- | --- |
-| ![Three programs selected](docs/screenshots/multi-select.png) | ![Combined leftover list after a batch uninstall](docs/screenshots/batch-uninstall.png) |
+- **Tweaks:** **Debloat Windows** (`Ctrl+5`) lists 26 safe, reversible tweaks in five groups: Privacy & telemetry, Start/search/taskbar, Ads & suggestions, Explorer & UI, and Windows Update.
+- **On and off:** each is either **ENABLED** (green, applied) or **DISABLED** (red, Windows default). Turning one off puts back exactly the value you had before.
+- **Timing:** each says when it takes effect: **Applies immediately**, **Needs Explorer restart** or **Needs reboot**.
+- **What's left out:** no service removal, no app removal, and no security features turned off. Machine-wide policies are tagged **Admin**.
 
-| Startup & Services | Monitored Programs |
-| --- | --- |
-| ![Startup and services manager](docs/screenshots/startup.png) | ![Monitored programs](docs/screenshots/monitored.png) |
+![Debloat Windows, Explorer and Windows Update tweaks](docs/screenshots/debloat-bottom.png)
 
-| Installation monitor | Windows Store apps |
-| --- | --- |
-| ![Installation monitor](docs/screenshots/monitor.png) | ![Windows Store apps](docs/screenshots/store-apps.png) |
+## Program groups
 
-| Snapshots | Snapshot comparison |
-| --- | --- |
-| ![Saved snapshots](docs/screenshots/snapshots.png) | ![Comparing a snapshot with the system now](docs/screenshots/snapshot-compare.png) |
+![Program list filtered to one group](docs/screenshots/groups.png)
 
-| Junk Files | Program groups |
-| --- | --- |
-| ![Junk files by category](docs/screenshots/junk.png) | ![Program list filtered to one group](docs/screenshots/groups.png) |
+- **Setting a group:** right-click programs and choose **Set Group** (`Ctrl+G`) to file them under a name such as Games, Work or Media. The group shows as a tag.
+- **Filtering:** the group list shows one group at a time, or only ungrouped programs, and searching matches group names.
+- **Undo:** group changes can be undone from Change History.
 
-| Migrate a program | Uninstall Archive |
-| --- | --- |
-| ![Migrating a program with or without its settings](docs/screenshots/migrate.png) | ![Uninstall archive](docs/screenshots/archive.png) |
+## Scheduled maintenance
 
-**Windows clean-up in Junk Files**
+![Scheduled maintenance](docs/screenshots/maintenance.png)
 
-![Windows clean-up options in Junk Files](docs/screenshots/junk-windows.png)
+**Tools › Scheduled Maintenance** runs SweepUninstall once a week through Windows Task Scheduler. Each run:
+- takes a Quick snapshot;
+- cleans the junk categories you choose, to the Recycle Bin;
+- applies your backup limits.
 
-| Debloat Windows | Debloat Windows (Explorer and Windows Update) |
-| --- | --- |
-| ![Debloat Windows, privacy and taskbar tweaks](docs/screenshots/debloat-top.png) | ![Debloat Windows, Explorer and Windows Update tweaks](docs/screenshots/debloat-bottom.png) |
+It never uninstalls anything and never runs the permanent Windows clean-ups. Each run writes a short report and appears in Change History.
 
-Screenshots use demo data.
+## Safety, backups and undo
+
+**Everything is backed up before it changes:**
+- registry keys are exported to `.reg` files, and values are recorded with their type and data;
+- scheduled tasks are exported to XML, and firewall rules and service definitions are saved;
+- files go to the Recycle Bin.
+
+**Undo:** **Tools › Change History** (`Ctrl+H`) lists every change and undoes it with a double-click. **Tools › Backups** (`Ctrl+4`) restores any removal. After a removal, the report has an **Undo** button.
+
+**Checks before anything is deleted:**
+- SweepUninstall never offers drive roots, the Windows folder, your profile folder, install roots, or generic folders such as `Microsoft` or `Common Files`.
+- It refuses to delete registry keys Windows depends on, Windows' own services, and scheduled tasks under `\Microsoft\`.
+- **Right before deleting** it checks again, and skips anything another installed program still uses, any file Windows counts as shared, and anything that changed after the scan. If that check can't run, nothing is deleted.
+
+**Seeing and limiting what happens:**
+- **Dry Run** shows exactly what a removal would do, and **Tools › Safe Mode** offers only near-certain matches.
+- **Restore points:** before an uninstall, a batch or the first Debloat change, the confirmation offers to create one (**Tools › Create Restore Points** sets the default).
+- **Crash-safe removals:** each item is in the backup before the next one is removed. After a crash or power cut, the next start offers to roll back, finish or leave the removal.
+- **Fingerprinted backups:** backups are sealed with SHA-256 fingerprints, and a changed backup is not restored. **Tools › Backup Settings** can limit backups by age or size, always keeping each program's newest.
+- **Command log:** **Tools › Open Command Log** shows every command SweepUninstall ran, with its result, for 14 days.
+- **Tests:** an automated safety test suite runs on every build and blocks a release if it fails.
+
+## Command line
+
+```bash
+SweepUninstall --snapshot "Before installing X" --preset quick
+SweepUninstall --compare "Before installing X" now --report changes.html
+SweepUninstall --list-snapshots
+SweepUninstall --monitor "C:\Downloads\setup.exe" --name "Foo Editor"
+SweepUninstall --maintenance
+SweepUninstall --help
+```
+
+**Options:**
+- `--preset` is `quick`, `standard` (the default) or `deep`.
+- A snapshot is named by its id, its name, or `latest`. Compare two snapshots, or one with `now`.
+- `--report` saves a comparison as HTML, JSON or plain text, depending on the file extension.
+- `--monitor` runs an installer, waits for it and saves the recording under Monitored Programs, with live tracking as administrator.
+- `--maintenance` runs the weekly maintenance set up in Tools › Scheduled Maintenance.
+
+The exit code is 0 on success and 1 on an error. Run from an administrator terminal to see the output there.
 
 ## Download
 
 Get the latest version from [Releases](https://github.com/SeanShaffer88/SweepUninstall/releases/latest). It runs on Windows 10 and 11 (64-bit).
 
-- **`SweepUninstall-Setup-<version>.exe`** (about 1.2 MB) installs for all users, with a Start Menu shortcut. You can remove it later from Settings › Apps.
-- **`SweepUninstall-Portable-<version>.exe`** (about 3.8 MB) is the whole app as one exe that runs without installing. It keeps its settings, backups, snapshots and browser data in a `SweepUninstall Data` folder next to the exe, so you can carry it on a USB drive. Any copy whose file name contains `portable`, or that has a file named `portable` next to it, works this way.
+- **`SweepUninstall-Setup-<version>.exe`** (about 1.4 MB) installs for all users, with a Start Menu shortcut.
+- **`SweepUninstall-Portable-<version>.exe`** (about 3.8 MB) runs without installing. It keeps its settings, backups, snapshots and browser data in a `SweepUninstall Data` folder next to the exe, so you can carry it on a USB drive. Any copy whose file name contains `portable`, or that has a file named `portable` next to it, works this way.
 
-Both ask for administrator rights when they start, because removing programs installed for all users, creating restore points and machine-wide debloat tweaks all need them.
+**Requirements and notes:**
+- **Administrator rights:** both ask for them when they start. Removing programs installed for all users, creating restore points, machine-wide tweaks and live install tracking all need them.
+- **WebView2:** SweepUninstall uses the Microsoft Edge WebView2 runtime, which is part of Windows 10 and 11. The installer downloads it if it's missing.
+- **Lightweight:** while idle, SweepUninstall uses about 125–135 MB of memory, counting WebView2's helper processes.
+- **SmartScreen:** the exes are not code-signed yet, so Windows SmartScreen may show "Windows protected your PC". Click **More info › Run anyway**.
 
-SweepUninstall uses the Microsoft Edge WebView2 runtime, which is part of Windows 10 and 11. If it's missing, the installer downloads it.
+## Keyboard shortcuts
 
-**Lightweight:** while idle, SweepUninstall uses about 125–135 MB of private memory, counting all of WebView2's helper processes. GPU acceleration is turned off because a list window doesn't need it. Before version 0.4.0, SweepUninstall was built on Electron: a 357 MB install folder, a 116 MB installer, and about 250 MB of memory.
-
-The exes are not code-signed yet, so Windows SmartScreen may show "Windows protected your PC". Click **More info › Run anyway** to start it.
+| Key | Action |
+| --- | --- |
+| `Del` | Uninstall (all selected programs when several are selected) |
+| `Shift+Del` | Force removal |
+| `Ctrl+L` | Analyze leftovers |
+| `Ctrl+click` / `Shift+click` / `Shift+arrows` / `Ctrl+A` | Select several programs |
+| `Alt+Enter` / `Enter` | Properties |
+| `Ctrl+F` | Search |
+| `Ctrl+G` | Set group |
+| `Ctrl+1` / `Ctrl+2` | Desktop programs / Windows Store apps |
+| `Ctrl+3` | Monitored Programs |
+| `Ctrl+4` | Backups |
+| `Ctrl+5` | Debloat Windows |
+| `Ctrl+6` | Startup & Services |
+| `Ctrl+7` | Snapshots |
+| `Ctrl+8` | Junk Files |
+| `Ctrl+9` | Uninstall Archive |
+| `Ctrl+M` | Monitor an installation |
+| `Ctrl+H` | Change History |
+| `Ctrl++` / `Ctrl+-` / `Ctrl+0` | Zoom in / out / reset |
+| `Ctrl+S` | Export the list to HTML |
+| `F5` | Refresh |
 
 ## Run from source
 
@@ -254,111 +345,40 @@ npm install
 npm run dev
 ```
 
-`npm run dev` starts Vite and the app with live reload. Like the released app, it asks for administrator rights when it starts.
-
-### Build the installer
-
-```bash
-npm run dist
-```
-
-The app exe is written to `src-tauri/target/release/sweepuninstall.exe`, and the installer to `src-tauri/target/release/bundle/nsis/`.
-
-Pushing a tag like `v0.4.0` makes GitHub Actions run the tests, build the installer and the portable exe, and publish both as a GitHub Release.
-
-## Command line
-
-Snapshots can be taken and compared from a terminal, for scripts or scheduled checks. Nothing is shown on screen.
-
-```bash
-SweepUninstall --snapshot "Before installing X" --preset quick
-SweepUninstall --compare "Before installing X" now --report changes.html
-SweepUninstall --list-snapshots
-SweepUninstall --monitor "C:\Downloads\setup.exe" --name "Foo Editor"
-SweepUninstall --help
-```
-
-- `--preset` is `quick`, `standard` (the default) or `deep`.
-- A snapshot is named by its id, its name, or `latest`. Compare two snapshots, or one with `now`.
-- `--report` saves the comparison as HTML, JSON or plain text, depending on the file extension.
-- `--maintenance` runs the weekly maintenance you set up in Tools › Scheduled Maintenance.
-- `--monitor` records an installation: it runs the installer, waits for it to finish and saves the recording under Monitored Programs, with live tracking when run as administrator.
-- The exit code is 0 on success and 1 on an error. Because SweepUninstall asks for administrator rights, run it from an administrator terminal to see its output there.
-
-### Run the tests
-
-```bash
-npm test
-```
-
-## Keyboard shortcuts
-
-| Key | Action |
-| --- | --- |
-| `Del` | Uninstall (all selected programs when several are selected) |
-| `Ctrl+click` / `Shift+click` / `Shift+arrows` | Select several programs |
-| `Ctrl+A` | Select all listed programs |
-| `Shift+Del` | Force removal |
-| `Ctrl+L` | Analyze leftovers |
-| `Alt+Enter` / `Enter` | Properties |
-| `Ctrl+F` | Search |
-| `Ctrl+1` / `Ctrl+2` | Desktop programs / Windows Store apps |
-| `Ctrl+3` | Monitored programs |
-| `Ctrl+4` | Backups |
-| `Ctrl+5` | Debloat Windows |
-| `Ctrl+6` | Startup & Services |
-| `Ctrl+7` | Snapshots |
-| `Ctrl+8` | Junk Files |
-| `Ctrl+9` | Uninstall Archive |
-| `Ctrl+G` | Set group for the selected programs |
-| `Ctrl+M` | Monitor an installation |
-| `Ctrl+H` | Change History |
-| `Ctrl++` / `Ctrl+-` / `Ctrl+0` | Zoom in / out / reset |
-| `Ctrl+S` | Export to HTML |
-| `F5` | Refresh |
+`npm test` runs the safety tests and `npm run dist` builds the app and installer into `src-tauri/target/release/`. Pushing a tag like `v0.7.0` makes GitHub Actions run the tests and publish the installer and portable exe as a release.
 
 ## How it works
 
 | File | Role |
 | --- | --- |
-| `src-tauri/src/lib.rs` | Small Rust core: runs PowerShell and system tools, reads folders, measures sizes, lists junk folders, moves files to the Recycle Bin, portable mode and command-line output |
-| `src-tauri/src/tracker.rs` | Live installation tracking with Event Tracing for Windows |
+| `src-tauri/src/lib.rs` | Small Rust core: runs PowerShell and system tools, reads folders and sizes, Recycle Bin moves, hashing, portable mode and command-line output |
 | `src-tauri/src/snapshot.rs` | Snapshot engine: records files, folders, registry keys and values into a compressed file, and compares two snapshots |
-| `src/backend/programs.js` | Reads the Uninstall registry keys and `Get-AppxPackage`; extracts program icons |
-| `src/backend/leftovers.js` | Leftover scan of folders, shortcuts and registry, plus match scoring |
-| `src/backend/deepscan.js` | Scheduled tasks, firewall rules, shell extensions, file types and exe-named data folders |
-| `src/backend/measure.js` | Measures missing sizes and install dates from program folders |
-| `src/backend/startup.js` | Startup & Services: lists entries and turns them on or off without deleting them |
-| `src/backend/monitor.js` | Installation monitor: snapshots before and after an installer, turned into what to remove and what to put back |
-| `src/backend/snapshots.js` | Named snapshots, comparisons and cleanup of their differences |
-| `src/backend/installers.js` | Installer types, silent uninstall commands, and the files listed in Windows Installer packages and Inno Setup logs |
-| `src/backend/safety.js` | The check made right before deleting, and dependency warnings |
-| `src/backend/log.js` | The command log |
+| `src-tauri/src/tracker.rs` | Live installation tracking with Event Tracing for Windows |
+| `src/backend/programs.js` | Installed programs and Store apps, and their icons |
+| `src/backend/leftovers.js`, `deepscan.js` | Leftover scan and match scores |
+| `src/backend/installers.js` | Installer types, silent uninstall, and files listed by Windows Installer and Inno Setup |
+| `src/backend/backups.js` | Backup, removal, dry run, crash recovery, fingerprints, limits and restore |
+| `src/backend/safety.js` | The check right before deleting, and dependency warnings |
+| `src/backend/monitor.js`, `snapshots.js` | Installation monitor and snapshots |
+| `src/backend/transfer.js` | Program migration packages |
 | `src/backend/insights.js` | Signatures, programs installed together, bundled-offer names and size history |
 | `src/backend/owners.js` | Who owns a path or key, and the orphan finder |
-| `src/backend/winget.js` | Program updates, export and reinstall through winget |
-| `src/backend/archive.js` | The uninstall archive |
-| `src/backend/running.js` | Start-up delays from Windows' boot records, and inbound firewall rules |
-| `src/backend/maintenance.js` | Scheduled weekly maintenance |
-| `src/backend/transfer.js` | Program backup files and restoring them |
-| `src/backend/junk.js` | Junk file categories, scanning and the junk-folder guard |
-| `src/backend/groups.js` | Program groups |
-| `src/backend/history.js` | Change History and the request that undoes each change |
-| `src/cli.js` | Command-line snapshot and compare |
-| `src/backend/backups.js` | Backup (`reg export`, value capture, task and firewall export, Recycle Bin), removal, dry run, crash recovery, fingerprints, limits and restore |
-| `src/backend/debloat.js` | Debloat tweak catalog: reads, applies and reverts registry values |
-| `src/backend/restore.js` | Creates System Restore points with `Checkpoint-Computer` and explains why Windows skipped one |
-| `src/backend/paths.js` | Well-known install roots, plus guards that refuse to touch system folders |
-| `src/backend/api.js` | Answers the UI's requests by calling the modules above |
-| `src/*.jsx` | React UI |
-| `test/` | Safety tests (`node --test`), run against the same backend code through a Node.js version of the system layer |
+| `src/backend/winget.js`, `archive.js` | Program updates and the uninstall archive |
+| `src/backend/junk.js` | Junk files and Windows clean-up |
+| `src/backend/startup.js`, `running.js` | Startup & Services, boot delays and inbound firewall rules |
+| `src/backend/debloat.js`, `restore.js` | Debloat tweaks and restore points |
+| `src/backend/maintenance.js`, `log.js`, `history.js`, `groups.js` | Scheduled maintenance, command log, Change History and groups |
+| `src/backend/paths.js` | Install roots, and guards that refuse to touch system folders |
+| `src/*.jsx`, `src/cli.js` | React UI and the command line |
+| `test/` | Safety tests (`node --test`) against the same backend code |
 
 ## Limitations
 
-- Snapshots and the installation monitor record files and registry keys to a fixed depth (six levels for Standard, ten for Deep) under the usual install roots and the `Software` registry branches. A change below that depth is not captured. File contents are not stored, so changed or removed files are listed but can't be put back.
-- Changes made by other programs while monitoring is active, or between two snapshots, are listed too. Review the list before cleaning up.
-- Files can be restored only while they are still in the Recycle Bin. Junk files moved there still take space until it is emptied. A restored service comes back after a restart.
-- Measured sizes stop after 15 seconds or 300,000 files per folder. A "+" after the size means it is at least that large.
+- **Snapshot depth:** snapshots record to a fixed depth (six levels for Standard, ten for Deep); live tracking covers any depth during monitored installs.
+- **File contents:** snapshots don't store file contents, so changed files are listed but can't be put back.
+- **Other activity:** changes made by other programs during monitoring, or between snapshots, are listed too. Review before cleaning up.
+- **Recycle Bin:** files can be restored only while they are still in the Recycle Bin, and Junk Files moved there take space until it is emptied.
+- **Services:** a restored service comes back after a restart.
 
 ## Roadmap
 

@@ -149,10 +149,10 @@ export function StartupView({ filter, admin, programs, onError, onStatus, onRemo
           {avgBoot ? ` · start-up takes about ${secs(avgBoot)} (last ${boot.boots.length} slow boots)` : boot && !boot.available ? ' · start-up timings need administrator rights' : ''}
         </span>
         <span className="debloat-actions">
-          {pending.signin.size > 0 && <span className="pending-signin">{pending.signin.size} change{pending.signin.size > 1 ? 's' : ''} apply at next sign-in</span>}
+          {pending.signin.size > 0 && <span className="pending-signin">{pending.signin.size} change{pending.signin.size > 1 ? 's apply' : ' applies'} at next sign-in</span>}
           {pending.reboot.size > 0 && (
             <span className="pending-reboot">
-              {pending.reboot.size} service change{pending.reboot.size > 1 ? 's' : ''} apply after a restart
+              {pending.reboot.size} service change{pending.reboot.size > 1 ? 's apply' : ' applies'} after a restart
             </span>
           )}
         </span>
