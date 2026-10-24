@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog } from './dialogs.jsx';
+import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, planHtml } from './dialogs.jsx';
 import { setConfirmUI } from './backend/api.js';
 import { applyZoom, nextStep } from './zoom.js';
 import { TakeSnapshotDialog, ComparisonDialog, SnapshotTimeline, comparisonHtml } from './snapshots.jsx';
@@ -95,7 +95,7 @@ const MENUS = [
       ['zoomReset', 'Reset Zoom', 'Ctrl+0'],
     ],
   ],
-  ['Tools', [['monitor', 'Monitor an Installation...', 'Ctrl+M'], ['view:backups', 'Backups', 'Ctrl+4'], ['view:history', 'Change History', 'Ctrl+H'], null, ['view:snapshots', 'Snapshots', 'Ctrl+7'], ['takeSnapshot', 'Take a Snapshot...'], null, ['restoreProgram', 'Restore a Program Backup...'], null, ['view:junk', 'Junk Files', 'Ctrl+8'], null, ['toggleRestore', 'Create Restore Points'], ['toggleSilent', 'Silent Uninstall When Possible']]],
+  ['Tools', [['monitor', 'Monitor an Installation...', 'Ctrl+M'], ['view:backups', 'Backups', 'Ctrl+4'], ['view:history', 'Change History', 'Ctrl+H'], null, ['view:snapshots', 'Snapshots', 'Ctrl+7'], ['takeSnapshot', 'Take a Snapshot...'], null, ['restoreProgram', 'Restore a Program Backup...'], null, ['view:junk', 'Junk Files', 'Ctrl+8'], null, ['toggleRestore', 'Create Restore Points'], ['toggleSilent', 'Silent Uninstall When Possible'], ['toggleSafe', 'Safe Mode'], null, ['backupSettings', 'Backup Settings...'], ['openLog', 'Open Command Log']]],
   ['Help', [['about', 'About']]],
 ];
 
@@ -168,6 +168,7 @@ export default function App() {
   const [notice, setNotice] = useState(null);
   const [restoreOn, setRestoreOn] = useState(true);
   const [silentOn, setSilentOn] = useState(false);
+  const [safeOn, setSafeOn] = useState(false);
   const [zoom, setZoom] = useState(1);
   // Program groups ({ programKey: group }) and the group the program lists are filtered to.
   const [groups, setGroups] = useState({});
@@ -226,10 +227,14 @@ export default function App() {
     api.invoke('settings:get').then((s) => {
       setRestoreOn(s.createRestorePoints);
       setSilentOn(!!s.silentUninstall);
+      setSafeOn(!!s.safeMode);
+      api.invoke('backups:prune').catch(() => {});
       setZoom(s.zoom || 1);
       applyZoom(s.zoom || 1);
     });
     api.invoke('monitor:status').then((s) => s && setModal({ type: 'monitor', resume: s }));
+    // A removal cut off by a crash or power cut comes first.
+    api.invoke('backups:interrupted').then((p) => p && setModal({ type: 'interrupted', pending: p })).catch(() => {});
     api.invoke('groups:get').then(setGroups).catch(() => {});
   }, []);
 
@@ -422,6 +427,7 @@ export default function App() {
       title,
       heading,
       items,
+      owners: [p.key],
       onRemove: (sel) => removeWithBackup(p.name, sel, p.location, [p.key]),
     });
 
@@ -452,6 +458,7 @@ export default function App() {
       title: `Uninstall – ${rec.name}`,
       heading: `This installation created ${rec.items.length} items. Items already removed are skipped.`,
       items: rec.items,
+      owners: [...rec.uninstallKeys, registered?.key].filter(Boolean),
       onRemove: async (sel) => {
         if (await removeWithBackup(rec.name, sel, null, [...rec.uninstallKeys, registered?.key].filter(Boolean))) {
           await api.invoke('monitor:remove', rec.id);
@@ -516,6 +523,7 @@ export default function App() {
       title: `Batch Uninstall – ${list.length} programs`,
       heading,
       items,
+      owners: list.map((p) => p.key),
       onRemove: (sel) => removeWithBackup(`Batch uninstall (${list.length} programs)`, sel, ran.map((o) => o.p.location), list.map((p) => p.key)),
     });
   };
@@ -782,6 +790,13 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     zoomIn: () => changeZoom(1),
     zoomOut: () => changeZoom(-1),
     zoomReset: () => changeZoom(0),
+    toggleSafe: async () => {
+      const s = await api.invoke('settings:set', { safeMode: !safeOn });
+      setSafeOn(s.safeMode);
+      setNotice({ tone: 'ok', text: s.safeMode ? 'Safe mode is on: leftover lists offer only items with a 90%+ match, and never services, scheduled tasks or firewall rules.' : 'Safe mode is off: every finding can be selected.' });
+    },
+    backupSettings: async () => setModal({ type: 'backupSettings', settings: await api.invoke('settings:get') }),
+    openLog: () => api.invoke('log:open'),
     toggleSilent: async () => {
       const s = await api.invoke('settings:set', { silentUninstall: !silentOn });
       setSilentOn(s.silentUninstall);
@@ -791,6 +806,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       const s = await api.invoke('settings:set', { createRestorePoints: !restoreOn });
       setRestoreOn(s.createRestorePoints);
       setSilentOn(!!s.silentUninstall);
+      setSafeOn(!!s.safeMode);
+      api.invoke('backups:prune').catch(() => {});
       setNotice({ tone: 'ok', text: s.createRestorePoints ? 'Restore points are on: confirmations offer to create one first.' : 'Restore points are off: the checkbox starts unticked.' });
     },
   };
@@ -910,7 +927,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
 
   return (
     <div className="app" onClick={() => menu && setMenu(null)}>
-      <MenuBar onAction={dispatch} checked={{ toggleRestore: restoreOn, toggleSilent: silentOn }} />
+      <MenuBar onAction={dispatch} checked={{ toggleRestore: restoreOn, toggleSilent: silentOn, toggleSafe: safeOn }} />
       {/* Two rows of four equal columns, so the buttons line up and fill the width. */}
       <div className="toolbar toolbar-grid">
         <select
@@ -1111,7 +1128,46 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           }}
         />
       )}
-      {modal?.type === 'leftovers' && <LeftoversDialog {...modal} onClose={() => setModal(null)} />}
+      {modal?.type === 'leftovers' && (
+        <LeftoversDialog
+          {...modal}
+          safeMode={safeOn}
+          onDryRun={(sel) => api.invoke('backups:plan', { items: sel, owners: modal.owners || [] }).then((r) => r.results)}
+          onExportPlan={(results) => api.invoke('export:html', { title: 'Export Dry Run', fileName: 'dry-run.html', html: planHtml(modal.title, results) })}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'interrupted' && (
+        <InterruptedDialog
+          pending={modal.pending}
+          onChoose={async (action) => {
+            setModal(null);
+            setBusy(action === 'rollback' ? 'Rolling back the interrupted removal…' : action === 'finish' ? 'Finishing the interrupted removal…' : 'Saving…');
+            try {
+              const out = await api.invoke('backups:resolveInterrupted', action);
+              if (out.results.length) setModal({ type: 'results', title: action === 'rollback' ? 'Rollback Report' : 'Removal Report', results: out.results });
+            } catch (e) {
+              setError(e.message);
+            } finally {
+              setBusy('');
+              load();
+            }
+          }}
+        />
+      )}
+      {modal?.type === 'backupSettings' && (
+        <BackupSettingsDialog
+          settings={modal.settings}
+          onSave={async (patch) => {
+            setModal(null);
+            await api.invoke('settings:set', patch);
+            const removed = await api.invoke('backups:prune');
+            setNotice({ tone: 'ok', text: `Backup limits saved.${removed.length ? ` ${removed.length} old backup${removed.length === 1 ? ' was' : 's were'} removed.` : ''}` });
+            if (view === 'backups') load();
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
       {modal?.type === 'results' && <ResultsDialog {...modal} onClose={() => setModal(null)} />}
       {modal?.type === 'properties' && <PropertiesDialog program={modal.program} onClose={() => setModal(null)} />}
       {modal?.type === 'about' && <AboutDialog onClose={() => setModal(null)} />}
@@ -1126,6 +1182,11 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           {...modal}
           onClose={() => setModal(null)}
           onExport={(all) => api.invoke('export:html', { title: 'Export Comparison', fileName: 'snapshot-comparison.html', html: comparisonHtml(all, modal.beforeName, modal.afterName) })}
+          onDryRun={async (chosen) => {
+            const items = await api.invoke('snapshots:cleanupItems', { before: modal.comparison.beforeId, selected: chosen });
+            return (await api.invoke('backups:plan', { items, owners: [] })).results;
+          }}
+          onExportPlan={(results) => api.invoke('export:html', { title: 'Export Dry Run', fileName: 'dry-run.html', html: planHtml(`Cleanup since ${modal.beforeName}`, results) })}
           onCleanup={(chosen) => {
             setModal(null);
             cleanupComparison(modal.comparison, modal.beforeName, chosen);

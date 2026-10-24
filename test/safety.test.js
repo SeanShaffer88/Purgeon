@@ -5,6 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { setSys } from '../src/backend/sys.js';
 import { createNodeSys } from './node-sys.js';
@@ -513,4 +514,149 @@ test('removeItems applies the pre-delete check and refuses when it cannot run', 
   assert.ok(r2.results[0].ok);
   fs.rmSync(root, { recursive: true, force: true });
   fs.rmSync(target, { recursive: true, force: true });
+});
+
+import * as log from '../src/backend/log.js';
+
+const regq = (...a) => {
+  try {
+    return execFileSync('reg.exe', a, { stdio: 'pipe' }).toString();
+  } catch {
+    return null;
+  }
+};
+const noState = { programs: [], shared: [] };
+
+test('backups are sealed with fingerprints and tampering is refused', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-seal-'));
+  await backups.setRoot(root);
+  const K = 'HKCU\\Software\\SweepSealTest';
+  regq('add', K, '/v', 'A', '/t', 'REG_SZ', '/d', 'one', '/f');
+  const { backupId } = await backups.removeItems({ title: 'seal', items: [{ kind: 'key', path: 'HKEY_CURRENT_USER\\Software\\SweepSealTest' }], state: noState });
+  const mfile = path.join(root, backupId, 'manifest.json');
+  const m = JSON.parse(fs.readFileSync(mfile, 'utf8'));
+  assert.equal(m.complete, true);
+  assert.match(m.fingerprint, /^[0-9a-f]{64}$/);
+  assert.match(m.files['key-1.reg'], /^[0-9a-f]{64}$/);
+  assert.equal(fs.existsSync(path.join(root, 'pending.json')), false, 'the journal is cleared when the removal finishes');
+  // A changed backup file is not restored.
+  fs.appendFileSync(path.join(root, backupId, 'key-1.reg'), Buffer.from('\r\n\0', 'utf16le'));
+  const r1 = await backups.restore(backupId);
+  assert.equal(r1[0].ok, false);
+  assert.match(r1[0].detail, /changed after it was made/);
+  assert.equal(regq('query', K), null, 'nothing was imported');
+  // A changed manifest is refused outright.
+  fs.writeFileSync(mfile, fs.readFileSync(mfile, 'utf8').replace('SweepSealTest', 'SweepSealTesX'));
+  await assert.rejects(() => backups.restore(backupId), /changed after it was made/);
+  regq('delete', K, '/f');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('an interrupted removal can be rolled back, finished or left', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-crash-'));
+  await backups.setRoot(root);
+  const K1 = 'HKCU\\Software\\SweepCrashTest1';
+  const K2 = 'HKCU\\Software\\SweepCrashTest2';
+  regq('add', K1, '/v', 'A', '/t', 'REG_SZ', '/d', '1', '/f');
+  regq('add', K2, '/v', 'B', '/t', 'REG_SZ', '/d', '2', '/f');
+  const items = [{ kind: 'key', path: 'HKEY_CURRENT_USER\\Software\\SweepCrashTest1' }, { kind: 'key', path: 'HKEY_CURRENT_USER\\Software\\SweepCrashTest2' }];
+  // Simulate a crash after the first key: remove both, then put the journal back and drop the
+  // second entry from the manifest and registry state, as if the run stopped there.
+  const { backupId } = await backups.removeItems({ title: 'crash test', items, state: noState });
+  const mfile = path.join(root, backupId, 'manifest.json');
+  const m = JSON.parse(fs.readFileSync(mfile, 'utf8'));
+  m.entries = m.entries.slice(0, 1);
+  m.complete = false;
+  delete m.fingerprint;
+  delete m.files;
+  fs.writeFileSync(mfile, JSON.stringify(m));
+  regq('add', K2, '/v', 'B', '/t', 'REG_SZ', '/d', '2', '/f');
+  fs.writeFileSync(path.join(root, 'pending.json'), JSON.stringify({ id: backupId, title: 'crash test', owners: [], items, started: m.created }));
+
+  const p = await backups.interrupted();
+  assert.deepEqual([p.title, p.done, p.total], ['crash test', 1, 2]);
+  const rolled = await backups.resolveInterrupted('rollback');
+  assert.ok(rolled.results.every((r) => r.ok), JSON.stringify(rolled.results));
+  assert.ok(regq('query', K1, '/v', 'A'), 'the removed key is back');
+  assert.equal(await backups.interrupted(), null, 'the journal is cleared');
+  const sealed = JSON.parse(fs.readFileSync(mfile, 'utf8'));
+  assert.equal(sealed.complete, true, 'the partial backup is sealed');
+
+  fs.writeFileSync(path.join(root, 'pending.json'), JSON.stringify({ id: backupId, title: 'crash test', owners: [], items, started: m.created }));
+  const finished = await backups.resolveInterrupted('finish');
+  assert.ok(finished.backupId && regq('query', K1) === null && regq('query', K2) === null, 'finishing removes the rest');
+  regq('delete', K1, '/f');
+  regq('delete', K2, '/f');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('files changed since the scan are skipped, and a dry run changes nothing', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-seen-'));
+  await backups.setRoot(root);
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-seen-target-'));
+  fs.writeFileSync(path.join(target, 'a.txt'), 'a');
+  const seen = fs.statSync(target).mtimeMs - 60000; // the scan saw it a minute ago
+  const plan = await backups.planRemoval({ items: [{ kind: 'dir', path: target, seen }, { kind: 'dir', path: path.join(target, 'missing') }, { kind: 'dir', path: 'C:\\Windows\\System32' }], state: noState });
+  assert.deepEqual(plan.results.map((r) => r.detail), ['Changed since the scan, would be skipped', 'Already gone', 'Protected location, would be skipped']);
+  assert.ok(fs.existsSync(path.join(target, 'a.txt')), 'the dry run changed nothing');
+  const trashed = [];
+  const r = await backups.removeItems({ title: 't', items: [{ kind: 'dir', path: target, seen }], state: noState, trashItem: async (p) => trashed.push(p) });
+  assert.equal(trashed.length, 0);
+  assert.match(r.results[0].detail, /Changed since the scan/);
+  const r2 = await backups.removeItems({ title: 't', items: [{ kind: 'dir', path: target, seen: fs.statSync(target).mtimeMs }], state: noState, trashItem: async (p) => trashed.push(p) });
+  assert.equal(trashed.length, 1, 'unchanged since the scan: removed');
+  assert.ok(r2.results[0].ok);
+  fs.rmSync(root, { recursive: true, force: true });
+  fs.rmSync(target, { recursive: true, force: true });
+});
+
+test('backup limits remove old backups but keep the newest of each program', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-prune-'));
+  await backups.setRoot(root);
+  const now = Date.parse('2026-10-24T12:00:00Z');
+  const make = (id, title, daysAgo, complete = true) => {
+    fs.mkdirSync(path.join(root, id));
+    fs.writeFileSync(path.join(root, id, 'manifest.json'), JSON.stringify({ id, title, created: new Date(now - daysAgo * 86400000).toISOString(), complete, entries: [] }));
+  };
+  make('a-old', 'Foo', 100);
+  make('a-new', 'Foo', 50);
+  make('b-only', 'Bar', 200);
+  make('c-recent', 'Baz', 2);
+  make('c-old-unfinished', 'Baz', 120, false);
+  const removed = await backups.prune({ maxDays: 30 }, now);
+  assert.deepEqual(removed.sort(), ['a-old']);
+  assert.deepEqual(fs.readdirSync(root).sort(), ['a-new', 'b-only', 'c-old-unfinished', 'c-recent']);
+  assert.deepEqual(await backups.prune({}, now), [], 'no limits, nothing removed');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('the command log records each command with its outcome', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-log-'));
+  await log.setRoot(dir);
+  const target = {
+    exec: async () => ({ ok: true, code: 0 }),
+    runPS: async () => {
+      throw new Error('boom');
+    },
+    runCommandLine: async () => ({ ok: false, code: 3 }),
+  };
+  setSys({ ...nodeSys, appendText: nodeSys.appendText });
+  log.wrap(target);
+  await target.exec('reg.exe', ['query', 'HKCU\\Software\\X Y']);
+  await assert.rejects(() => target.runPS('Get-Item\n  -LiteralPath x', 'input'));
+  await target.runCommandLine('"C:\\X\\uninst.exe" /S');
+  await new Promise((r) => setTimeout(r, 700));
+  const text = fs.readFileSync(path.join(dir, fs.readdirSync(dir)[0]), 'utf8');
+  assert.match(text, /ok +\d+ms  reg\.exe query "HKCU\\Software\\X Y"/);
+  assert.match(text, /FAIL +\d+ms  PowerShell: Get-Item -LiteralPath x \[input 5 chars\]  -> boom/);
+  assert.match(text, /FAIL +\d+ms  Uninstall command: "C:\\X\\uninst\.exe" \/S  -> exit 3/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('the same folder written with and without a trailing backslash is listed once', () => {
+  const out = merge([
+    { kind: 'dir', path: 'C:\\Program Files\\Foo\\', confidence: 'high', reason: 'Install location' },
+    { kind: 'dir', path: 'C:\\Program Files\\Foo', confidence: 'high', reason: 'Folder named after program' },
+  ]);
+  assert.deepEqual(out.map((i) => [i.path, i.score]), [['C:\\Program Files\\Foo', 100]]);
 });

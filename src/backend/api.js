@@ -17,8 +17,9 @@ import * as groups from './groups.js';
 import * as installers from './installers.js';
 import * as safety from './safety.js';
 import * as transfer from './transfer.js';
+import * as log from './log.js';
 
-const DEFAULT_SETTINGS = { createRestorePoints: true, silentUninstall: false };
+const DEFAULT_SETTINGS = { createRestorePoints: true, silentUninstall: false, safeMode: false, backupMaxDays: 0, backupMaxMB: 0 };
 const settingsFile = () => path.join(sys.info.dataDir, 'settings.json');
 const readSettings = () =>
   sys
@@ -110,6 +111,14 @@ const handlers = {
   'monitor:list': () => monitor.list(),
   'monitor:remove': (id) => monitor.remove(id),
   'backups:list': () => backups.list(),
+  'backups:plan': ({ items, owners }) => backups.planRemoval({ items, owners }),
+  'backups:interrupted': () => backups.interrupted(),
+  'backups:resolveInterrupted': (action) => backups.resolveInterrupted(action),
+  'backups:prune': async () => {
+    const s = await readSettings();
+    return backups.prune({ maxDays: Number(s.backupMaxDays) || 0, maxMB: Number(s.backupMaxMB) || 0 });
+  },
+  'log:open': () => open(log.folder()),
   'backups:restore': (id) => backups.restore(id),
   'backups:remove': (id) => backups.remove(id),
   'snapshots:list': () => snapshots.list(),
@@ -195,6 +204,13 @@ const recorders = {
   'transfer:export': ({ program }, out) => ({ type: 'Backup', title: `Backed up ${program.name}`, detail: out.file }),
   'transfer:restore': (_arg, out) =>
     out.results.some((r) => r.ok) ? { type: 'Restore', title: `Restored ${out.name} from a program backup`, detail: `${out.results.filter((r) => r.ok).length} of ${out.results.length} items`, undo: { channel: 'transfer:undo', arg: out.id } } : null,
+  'backups:resolveInterrupted': (action, out) =>
+    action === 'rollback'
+      ? { type: 'Restore', title: 'Rolled back an interrupted removal', detail: `${out.results.filter((r) => r.ok).length} of ${out.results.length} entries restored` }
+      : action === 'finish' && out.backupId
+        ? { type: 'Removal', title: 'Finished an interrupted removal', detail: `Backup ${out.backupId}`, undo: { channel: 'backups:restore', arg: out.backupId } }
+        : null,
+  'backups:prune': (_arg, removed) => (removed.length ? { type: 'Backups', title: `Removed ${plural(removed.length, 'old backup')} under the backup limits` } : null),
   'monitor:finish': (_name, record) => ({ type: 'Monitor', title: `Recorded the installation of ${record.name}`, detail: plural(record.items.length, 'change') }),
 };
 for (const [channel, describe] of Object.entries(recorders)) {
@@ -225,6 +241,10 @@ export const setConfirmUI = (fn) => {
 export async function initBackend() {
   const data = sys.info.dataDir;
   await sys.makeDir(data);
+  // Every command SweepUninstall runs from here on is written to the command log.
+  await log.setRoot(path.join(data, 'logs'));
+  log.wrap(sys);
+  log.write(`---- SweepUninstall ${sys.info.exe} started`);
   await Promise.all([
     backups.setRoot(path.join(data, 'backups')),
     monitor.setRoot(path.join(data, 'monitor')),

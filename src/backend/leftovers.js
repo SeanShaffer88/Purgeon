@@ -218,7 +218,9 @@ function scoreFor(item) {
 // Merges findings: one entry per item, keeping the strongest score and reason.
 function merge(items) {
   const byId = new Map();
-  for (const raw of items) {
+  for (const found of items) {
+    // "C:\X\" and "C:\X" are the same folder; keys never end in a backslash either.
+    const raw = /.\\$/.test(found.path) ? { ...found, path: found.path.replace(/\\+$/, '') } : found;
     // Never offer a key whose deletion could harm Windows, nor a file in a protected folder.
     if (raw.kind === 'key' && isProtectedKey(raw.path)) continue;
     if ((raw.kind === 'dir' || raw.kind === 'file') && isProtected(raw.path)) continue;
@@ -242,7 +244,16 @@ async function scan(program, shortcutTargets) {
     scanDeep(program, { nameKey: nameKey(program.name), location }),
     listed,
   ]);
-  return merge([...registry, ...deep, ...files, ...fromInstaller]);
+  // Each folder and file remembers when it last changed, so a removal can skip anything that
+  // changed after the scan (a program writing to it means it is in use).
+  const items = merge([...registry, ...deep, ...files, ...fromInstaller]);
+  await Promise.all(
+    items.filter((i) => i.kind === 'dir' || i.kind === 'file').map(async (i) => {
+      const s = await sys.stat(i.path).catch(() => null);
+      if (s) i.seen = s.modified;
+    })
+  );
+  return items;
 }
 
 // Processes running from inside the install folder, so they can be closed before deletion.

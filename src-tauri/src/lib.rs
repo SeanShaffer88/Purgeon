@@ -242,6 +242,40 @@ async fn folder_size(path: String, max_entries: u64, max_ms: u64) -> FolderSize 
     .unwrap_or(FolderSize { bytes: 0, entries: 0, truncated: true })
 }
 
+/// SHA-256 of each file, as lowercase hex; empty for a file that cannot be read.
+#[tauri::command]
+async fn sha256_files(paths: Vec<String>) -> Vec<String> {
+    use sha2::{Digest, Sha256};
+    tauri::async_runtime::spawn_blocking(move || {
+        paths
+            .iter()
+            .map(|p| {
+                let Ok(mut f) = fs::File::open(p) else { return String::new() };
+                let mut h = Sha256::new();
+                let mut buf = vec![0u8; 64 * 1024];
+                loop {
+                    match std::io::Read::read(&mut f, &mut buf) {
+                        Ok(0) => break,
+                        Ok(n) => h.update(&buf[..n]),
+                        Err(_) => return String::new(),
+                    }
+                }
+                h.finalize().iter().map(|b| format!("{b:02x}")).collect()
+            })
+            .collect()
+    })
+    .await
+    .unwrap_or_default()
+}
+
+/// Appends text to a file (the command log), creating it and its folder if needed.
+#[tauri::command]
+fn append_text(path: String, contents: String) -> Result<(), String> {
+    if let Some(parent) = Path::new(&path).parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    fs::OpenOptions::new().create(true).append(true).open(&path).and_then(|mut f| f.write_all(contents.as_bytes())).map_err(|e| e.to_string())
+}
 /// Moves several items to the Recycle Bin; one entry per path, empty when it worked.
 #[tauri::command]
 async fn move_many_to_trash(paths: Vec<String>) -> Vec<String> {
@@ -509,7 +543,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             run_ps, exec, run_command_line, launch, read_dir, stat, exists, read_text, write_text, make_dir, remove_path, move_to_trash, move_many_to_trash, list_junk, walk, folder_size, take_snapshot,
-            compare_snapshots, snapshot_subtree, sys_info, quit, cli_print, track_start, track_launch, track_running, track_stop, wait_process
+            compare_snapshots, snapshot_subtree, sys_info, quit, cli_print, track_start, track_launch, track_running, track_stop, wait_process, sha256_files, append_text
         ])
         .run(tauri::generate_context!())
         .expect("error while running SweepUninstall");

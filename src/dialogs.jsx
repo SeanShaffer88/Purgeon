@@ -107,8 +107,51 @@ const itemLabel = (i) =>
               ? `Recreate: ${i.path}`
               : i.path;
 
-export function LeftoversDialog({ title, heading, items, onClose, onRemove }) {
-  const [checked, setChecked] = useState(() => new Set(items.map((it, idx) => (it.confidence === 'high' ? idx : -1)).filter((i) => i >= 0)));
+// Safe mode offers only near-certain matches and never services, tasks or firewall rules.
+export const safeAllowed = (it, safeMode) => !safeMode || ((typeof it.score === 'number' ? it.score : it.confidence === 'high' ? 80 : 40) >= 90 && !['service', 'task', 'firewall'].includes(it.kind));
+
+// A dry run's results: what would happen to each selected item, with nothing changed.
+export function PlanView({ results, onBack, onExport }) {
+  const skipped = results.filter((r) => !r.ok);
+  return (
+    <div className="plan">
+      <div className="plan-bar">
+        <b>Dry run · nothing was changed.</b>
+        <span className="muted">
+          {results.length - skipped.length} would be removed or put back{skipped.length ? `, ${skipped.length} would be skipped` : ''}.
+        </span>
+        <span className="plan-actions">
+          <button onClick={onExport}>Export Plan…</button>
+          <button onClick={onBack}>Back to the List</button>
+        </span>
+      </div>
+      <div className="tree">
+        {[...skipped, ...results.filter((r) => r.ok)].slice(0, 800).map((r, i) => (
+          <div key={i} className={`result ${r.ok ? 'ok' : 'fail'}`}>
+            <span className="mark">{r.ok ? '→' : '–'}</span>
+            <span className="path">{itemLabel(r)}</span>
+            <span className="muted">{r.detail}</span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+export function planHtml(title, results) {
+  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
+  return `<!doctype html><meta charset="utf-8"><title>Dry run</title>
+<style>body{font:13px Segoe UI,sans-serif;margin:24px}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:3px 8px;border-bottom:1px solid #ddd;vertical-align:top}th{background:#f3f3f3}.no{color:#a33}</style>
+<h1>Dry run: ${esc(title)}</h1><p>Exported ${new Date().toLocaleString()}. Nothing was changed.</p>
+<table><tr><th>Type</th><th>Item</th><th>What would happen</th></tr>${results.map((r) => `<tr class="${r.ok ? '' : 'no'}"><td>${esc(r.kind)}</td><td>${esc(itemLabel(r))}</td><td>${esc(r.detail)}</td></tr>`).join('')}</table>`;
+}
+
+export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDryRun, onExportPlan, safeMode = false }) {
+  const allowed = (it) => safeAllowed(it, safeMode);
+  const [checked, setChecked] = useState(() => new Set(items.map((it, idx) => (it.confidence === 'high' && allowed(it) ? idx : -1)).filter((i) => i >= 0)));
+  const [plan, setPlan] = useState(null);
+  const [planning, setPlanning] = useState(false);
+  const hidden = items.filter((it) => !allowed(it)).length;
   const [collapsed, setCollapsed] = useState(new Set());
   // Batch results carry `program`; those are grouped by program first, then by type.
   const programs = useMemo(() => [...new Set(items.map((it) => it.program || ''))], [items]);
@@ -136,8 +179,18 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove }) {
       const n = new Set(s);
       const all = g.rows.every(({ idx }) => n.has(idx));
       g.rows.forEach(({ idx }) => (all ? n.delete(idx) : n.add(idx)));
+      g.rows.forEach(({ idx }) => !allowed(items[idx]) && n.delete(idx));
       return n;
     });
+  const selected = () => items.filter((_, i) => checked.has(i));
+  const dryRun = async () => {
+    setPlanning(true);
+    try {
+      setPlan(await onDryRun(selected()));
+    } finally {
+      setPlanning(false);
+    }
+  };
 
   return (
     <Dialog
@@ -147,9 +200,14 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove }) {
       buttons={
         <>
           <span className="button-hint">{checked.size} of {items.length} selected</span>
-          <button onClick={() => setChecked(new Set(items.map((_, i) => i)))}>Select All</button>
+          <button onClick={() => setChecked(new Set(items.map((_, i) => i).filter((i) => allowed(items[i]))))}>Select All</button>
           <button onClick={() => setChecked(new Set())}>Select None</button>
-          <button className="primary" disabled={!checked.size} onClick={() => onRemove(items.filter((_, i) => checked.has(i)))}>
+          {onDryRun && (
+            <button disabled={!checked.size || planning} onClick={dryRun} title="Check what would happen, without changing anything">
+              {planning ? 'Checking…' : 'Dry Run'}
+            </button>
+          )}
+          <button className="primary" disabled={!checked.size} onClick={() => onRemove(selected())}>
             Delete Selected
           </button>
           <button onClick={onClose}>Close</button>
@@ -157,7 +215,10 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove }) {
       }
     >
       <p className="heading">{heading}</p>
-      {items.length === 0 ? (
+      {safeMode && hidden > 0 && <div className="safe-note">Safe mode: {hidden} lower-confidence item{hidden === 1 ? ' is' : 's are'} shown but can’t be selected. Turn it off in Tools › Safe Mode.</div>}
+      {plan ? (
+        <PlanView results={plan} onBack={() => setPlan(null)} onExport={() => onExportPlan(plan)} />
+      ) : items.length === 0 ? (
         <div className="empty-box">No leftovers found. Everything was removed cleanly.</div>
       ) : (
         <div className="tree">
@@ -197,8 +258,8 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove }) {
                 </div>
                 {open &&
                   g.rows.map(({ it, idx }) => (
-                    <label key={idx} className={`tree-item ${it.confidence === 'low' ? 'low' : ''}`} title={`${it.reason}${typeof it.score === 'number' ? ` · match ${it.score}%` : ''}`}>
-                      <input type="checkbox" checked={checked.has(idx)} onChange={() => toggle(idx)} />
+                    <label key={idx} className={`tree-item ${it.confidence === 'low' ? 'low' : ''} ${allowed(it) ? '' : 'locked'}`} title={`${it.reason}${typeof it.score === 'number' ? ` · match ${it.score}%` : ''}`}>
+                      <input type="checkbox" checked={checked.has(idx)} disabled={!allowed(it)} onChange={() => toggle(idx)} />
                       <span className={`kind kind-${it.kind}`} />
                       <span className="path">{itemLabel(it)}</span>
                       {it.confidence === 'low' && <span className="tag">check</span>}
@@ -422,6 +483,77 @@ export function AboutDialog({ onClose }) {
       <p>Uninstalls programs, then hunts down the leftover files, registry keys, startup entries and services they leave behind.</p>
       <p>It also monitors installations, compares system snapshots, cleans junk files and manages startup programs. Every change is backed up first and can be undone.</p>
       <p className="muted">An independent project, not affiliated with any other uninstaller.</p>
+    </Dialog>
+  );
+}
+
+// Shown on start when a removal was cut off (a crash or power cut) partway through.
+export function InterruptedDialog({ pending, onChoose }) {
+  return (
+    <Dialog
+      title="Interrupted Removal"
+      onClose={() => onChoose('keep')}
+      width={560}
+      buttons={
+        <>
+          <button className="primary" onClick={() => onChoose('rollback')}>
+            Roll Back
+          </button>
+          <button onClick={() => onChoose('finish')}>Finish Removal</button>
+          <button onClick={() => onChoose('keep')}>Leave As Is</button>
+        </>
+      }
+    >
+      <p className="heading">The removal “{pending.title}” did not finish.</p>
+      <p>
+        It was started {new Date(pending.started).toLocaleString()} and had removed {pending.done} of {pending.total} items when it stopped. Everything it removed was backed up first.
+      </p>
+      <ul className="choices">
+        <li>
+          <b>Roll Back</b> puts back what it removed (recommended).
+        </li>
+        <li>
+          <b>Finish Removal</b> removes the remaining items, with the same checks as before.
+        </li>
+        <li>
+          <b>Leave As Is</b> keeps things as they are; the backup stays in Tools › Backups.
+        </li>
+      </ul>
+    </Dialog>
+  );
+}
+
+// Limits for how long and how much backup data is kept. 0 means no limit.
+export function BackupSettingsDialog({ settings, onSave, onClose }) {
+  const [days, setDays] = useState(String(settings.backupMaxDays || 0));
+  const [mb, setMb] = useState(String(settings.backupMaxMB || 0));
+  const valid = /^\d{1,5}$/.test(days) && /^\d{1,7}$/.test(mb);
+  return (
+    <Dialog
+      title="Backup Settings"
+      onClose={onClose}
+      width={520}
+      buttons={
+        <>
+          <button className="primary" disabled={!valid} onClick={() => onSave({ backupMaxDays: Number(days), backupMaxMB: Number(mb) })}>
+            Save
+          </button>
+          <button onClick={onClose}>Cancel</button>
+        </>
+      }
+    >
+      <p className="heading">Old backups can be removed automatically. Use 0 to keep them all.</p>
+      <label className="field">
+        Remove backups older than (days)
+        <input inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value.trim())} />
+      </label>
+      <label className="field">
+        Keep backups under this total size (MB)
+        <input inputMode="numeric" value={mb} onChange={(e) => setMb(e.target.value.trim())} />
+      </label>
+      <p className="footnote">
+        The newest backup of each program is always kept, so the last removal of anything can still be undone. Once a backup is removed, Change History can no longer undo that change. Files in the Recycle Bin are not counted or touched.
+      </p>
     </Dialog>
   );
 }

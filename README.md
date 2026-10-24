@@ -116,6 +116,7 @@ It has a compact single-list window with a dark terminal theme. It is built with
   - Services have their definition exported.
   - Files go to the Recycle Bin.
   - Registry values a cleanup puts back have their current value recorded first.
+- **Tools › Backup Settings** can remove backups older than a number of days or beyond a total size. The newest backup of each program is always kept. By default, nothing is removed.
 - **Tools › Backups** (`Ctrl+4`) restores any removal: registry entries, tasks, firewall rules, services, and files, which are moved back out of the Recycle Bin automatically.
 
 **Change History and undo**
@@ -130,6 +131,12 @@ It has a compact single-list window with a dark terminal theme. It is built with
 - It refuses to delete registry keys that Windows depends on (hive roots, `HKLM\SYSTEM`, Windows' own keys under `SOFTWARE\Microsoft`, file-extension keys and shared shell keys), even when told to.
 - It never deletes Windows' own services (protected ones, or ones whose program is in the Windows folder) or scheduled tasks under `\Microsoft\`.
 - **Right before deleting**, SweepUninstall checks again. It skips anything another installed program still uses: a folder holding another program's install folder, a file inside one, another program's uninstall entry, or a file Windows counts as shared by several programs (SharedDLLs). If this check can't run, nothing is deleted.
+- A folder or file that changed after the scan (something is still writing to it) is skipped; scan again to include it.
+- **Dry Run** (in the leftover list and the snapshot comparison) shows exactly what a removal would do to each selected item, with nothing changed, and can export that plan to HTML.
+- **Tools › Safe Mode** offers only items with a 90%+ match, and never services, scheduled tasks or firewall rules. Everything else is still shown, but can't be selected.
+- Removals are **crash-safe**: each item is written to the backup before the next one is removed. If SweepUninstall stops halfway (a crash or power cut), it offers on the next start to roll back, finish or leave the removal.
+- Every backup is sealed with SHA-256 fingerprints. A backup that was changed afterwards is not restored.
+- **Tools › Open Command Log** shows one line for every command SweepUninstall ran (PowerShell, reg.exe, sc.exe, uninstallers, Recycle Bin moves), with its timing and result. Logs are kept for 14 days.
 - Only services whose settings can actually be changed are offered in Startup & Services.
 - Junk cleaning only ever touches the contents of the known junk folders listed above, never the folders themselves or anything outside them.
 
@@ -279,12 +286,13 @@ npm test
 | `src/backend/snapshots.js` | Named snapshots, comparisons and cleanup of their differences |
 | `src/backend/installers.js` | Installer types, silent uninstall commands, and the files listed in Windows Installer packages and Inno Setup logs |
 | `src/backend/safety.js` | The check made right before deleting, and dependency warnings |
+| `src/backend/log.js` | The command log |
 | `src/backend/transfer.js` | Program backup files and restoring them |
 | `src/backend/junk.js` | Junk file categories, scanning and the junk-folder guard |
 | `src/backend/groups.js` | Program groups |
 | `src/backend/history.js` | Change History and the request that undoes each change |
 | `src/cli.js` | Command-line snapshot and compare |
-| `src/backend/backups.js` | Backup (`reg export`, value capture, task and firewall export, Recycle Bin), removal and restore |
+| `src/backend/backups.js` | Backup (`reg export`, value capture, task and firewall export, Recycle Bin), removal, dry run, crash recovery, fingerprints, limits and restore |
 | `src/backend/debloat.js` | Debloat tweak catalog: reads, applies and reverts registry values |
 | `src/backend/restore.js` | Creates System Restore points with `Checkpoint-Computer` and explains why Windows skipped one |
 | `src/backend/paths.js` | Well-known install roots, plus guards that refuse to touch system folders |

@@ -3,6 +3,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { createHash } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
 
 const run = (file, args, input) =>
@@ -109,6 +110,8 @@ export function createNodeSys(dataDir = path.join(os.tmpdir(), 'sweepuninstall-t
     },
     folderSize: async (p, maxEntries, maxMs) => folderSize(p, maxEntries, maxMs),
     listJunk: async (root) => listJunk(root),
+    sha256Files: async (paths) => paths.map((p) => { try { return createHash('sha256').update(fs.readFileSync(p)).digest('hex'); } catch { return ''; } }),
+    appendText: async (p, s) => { fs.mkdirSync(path.dirname(p), { recursive: true }); fs.appendFileSync(p, s); },
     quit: async () => {},
   };
 }

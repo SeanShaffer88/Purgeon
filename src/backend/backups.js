@@ -39,40 +39,143 @@ async function readValues(values) {
 
 const REG_TYPE = { String: 'REG_SZ', ExpandString: 'REG_EXPAND_SZ', DWord: 'REG_DWORD', QWord: 'REG_QWORD', Binary: 'REG_BINARY', MultiString: 'REG_MULTI_SZ' };
 
+// ---- crash safety and fingerprints ------------------------------------------------
+// While a removal runs, pending.json names it and its manifest is saved after every item, so
+// if SweepUninstall stops halfway (a crash, a power cut) the removal can be rolled back or
+// finished on the next start. A finished backup is sealed with SHA-256 fingerprints of its
+// manifest and files; a restore refuses a backup that was changed afterwards.
+const pendingFile = () => path.join(backupRoot, 'pending.json');
+const manifestFile = (id) => path.join(backupRoot, id, 'manifest.json');
+
+async function sha256Text(text) {
+  const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+async function seal(dir, manifest) {
+  const names = [...new Set(manifest.entries.map((e) => e.file).filter(Boolean))];
+  const hashes = names.length ? await sys.sha256Files(names.map((n) => path.join(dir, n))) : [];
+  manifest.files = Object.fromEntries(names.map((n, i) => [n, hashes[i] || '']));
+  manifest.complete = true;
+  delete manifest.fingerprint;
+  manifest.fingerprint = await sha256Text(JSON.stringify(manifest));
+  await sys.writeText(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+}
+
+// Checks a backup before restoring it. Throws when the manifest was changed; returns the
+// names of backup files whose contents changed (those entries are not restored).
+async function verify(dir, manifest) {
+  if (!manifest.fingerprint) return new Set(); // made before fingerprints existed
+  const { fingerprint, ...rest } = manifest;
+  if ((await sha256Text(JSON.stringify(rest))) !== fingerprint) throw new Error('This backup was changed after it was made, so it is not restored.');
+  const names = Object.keys(manifest.files || {});
+  const now = names.length ? await sys.sha256Files(names.map((n) => path.join(dir, n))) : [];
+  return new Set(names.filter((n, i) => !manifest.files[n] || now[i] !== manifest.files[n]));
+}
+
+// ---- checks shared by removal and dry run ----------------------------------------
+
+// Never delete Windows' own services: protected ones, or ones whose program lives in the Windows folder.
+const serviceGuard = (name) =>
+  runPS(`
+      $s = Get-CimInstance Win32_Service -Filter ${psq(`Name='${String(name).replace(/'/g, "''")}'`)} -ErrorAction SilentlyContinue
+      if (-not $s) { 'GONE'; return }
+      $prot = (& sc.exe qprotection ${psq(name)} 2>$null | Out-String)
+      if ($prot -notmatch 'PROTECTION LEVEL:\\s*NONE') { 'PROTECTED'; return }
+      if ([string]$s.PathName -match ('^\\W*' + [regex]::Escape($env:SystemRoot) + '\\\\')) { 'WINDOWS'; return }
+      'OK'`)
+    .then((s) => s.trim())
+    .catch(() => 'ERR');
+
+// A file or folder whose modification time moved on since the scan is in use: leave it.
+async function changedSinceScan(item) {
+  if (typeof item.seen !== 'number') return false;
+  const s = await sys.stat(item.path).catch(() => null);
+  return !!s && s.modified > item.seen + 2000;
+}
+
+async function guardFor(items, owners, state) {
+  const guarded = items.some((i) => ['dir', 'file', 'key'].includes(i.kind));
+  const live = guarded ? state || (await readState().catch(() => null)) : null;
+  return (item) => (!guarded ? null : live ? guardReason(item, live, owners) : 'Could not check whether other programs use this, not deleted');
+}
+
+// What a removal would do, without changing anything: { results } like removeItems, where ok
+// means "would be removed or put back".
+async function planRemoval({ items, owners = [], state }) {
+  const results = [];
+  const log = (item, ok, detail) => results.push({ ...item, ok, detail });
+  const blocked = await guardFor(items, owners, state);
+  for (const item of items.filter((i) => i.kind === 'service')) {
+    const g = await serviceGuard(item.path);
+    log(item, g === 'OK', { OK: 'Would back up, stop and delete the service', GONE: 'Already gone', ERR: 'Could not check the service, would not be deleted' }[g] || 'Windows service, would be skipped');
+  }
+  const tasks = items.filter((i) => i.kind === 'task');
+  const firewall = items.filter((i) => i.kind === 'firewall');
+  const present = tasks.length || firewall.length
+    ? await runPSJson(
+        `$in = [Console]::In.ReadToEnd() | ConvertFrom-Json
+         $tasks = @(Get-ScheduledTask -ErrorAction SilentlyContinue | ForEach-Object { $_.TaskPath + $_.TaskName })
+         @(foreach ($i in $in) { if ($i.kind -eq 'task') { $tasks -contains $i.path } else { [bool](Get-NetFirewallRule -Name $i.path -ErrorAction SilentlyContinue) } }) | ConvertTo-Json -Compress`,
+        { input: JSON.stringify([...tasks, ...firewall].map((i) => ({ kind: i.kind, path: i.path }))) }
+      ).catch(() => [])
+    : [];
+  tasks.forEach((item, i) => (/^\\Microsoft\\/i.test(item.path) ? log(item, false, 'Windows task, would be skipped') : log(item, true, present[i] ? 'Would export and remove the task' : 'Already gone')));
+  firewall.forEach((item, i) => log(item, true, present[tasks.length + i] ? 'Would save and remove the firewall rule' : 'Already gone'));
+  const values = items.filter((i) => i.kind === 'value');
+  const captured = await readValues(values).catch(() => []);
+  for (const item of values) log(item, true, captured.some((c) => c.path === item.path && c.name === item.name) ? 'Would record and delete the value' : 'Already gone');
+  for (const item of items.filter((i) => i.kind === 'key')) {
+    if (isProtectedKey(item.path)) log(item, false, 'Protected Windows key, would be skipped');
+    else if (blocked(item)) log(item, false, `${blocked(item)}, would be skipped`);
+    else log(item, true, (await reg(['query', item.path])).ok ? 'Would export and delete the key' : 'Already gone');
+  }
+  for (const item of items.filter((i) => i.kind === 'createkey')) log(item, true, (await reg(['query', item.path])).ok ? 'Already exists' : 'Would recreate the key');
+  for (const item of items.filter((i) => i.kind === 'setvalue')) log(item, !!regAddArgs(item.path, item.name, item.valueType, item.data), regAddArgs(item.path, item.name, item.valueType, item.data) ? 'Would put back the earlier value' : 'This value type cannot be written back');
+  for (const item of items.filter((i) => i.kind === 'dir' || i.kind === 'file')) {
+    if (isProtected(item.path)) log(item, false, 'Protected location, would be skipped');
+    else if (!(await sys.exists(item.path))) log(item, true, 'Already gone');
+    else if (blocked(item)) log(item, false, `${blocked(item)}, would be skipped`);
+    else if (await changedSinceScan(item)) log(item, false, 'Changed since the scan, would be skipped');
+    else log(item, true, 'Would move to the Recycle Bin');
+  }
+  for (const item of items.filter((i) => i.kind === 'junk')) log(item, isJunkPath(item.path), isJunkPath(item.path) ? 'Would move to the Recycle Bin' : 'Not in a junk folder, would be skipped');
+  return { results };
+}
+
 // `owners`: uninstall keys of the programs being removed (see safety.js). `state` replaces the
 // live system state in tests.
 async function removeItems({ title, items, owners = [], state, trashItem = (p) => sys.trash(p) }) {
   const id = `${new Date().toISOString().replace(/[:.]/g, '-')}_${slug(title)}`;
   const dir = path.join(backupRoot, id);
   await sys.makeDir(dir);
-  const manifest = { id, title, created: new Date().toISOString(), entries: [] };
+  const manifest = { id, title, created: new Date().toISOString(), complete: false, entries: [] };
   const results = [];
   const log = (item, ok, detail) => results.push({ ...item, ok, detail });
+  const save = () => sys.writeText(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+  // Each removal is in the manifest before the next one starts.
+  const record = async (entry) => {
+    manifest.entries.push(entry);
+    await save();
+  };
+  await save();
+  await sys.writeText(pendingFile(), JSON.stringify({ id, title, owners, items, started: manifest.created }));
 
   // Last check before deleting: is anything still used by another installed program?
   // If the check itself cannot run, files, folders and keys are left alone.
-  const guarded = items.some((i) => ['dir', 'file', 'key'].includes(i.kind));
-  const live = guarded ? state || (await readState().catch(() => null)) : null;
-  const blocked = (item) => (!guarded ? null : live ? guardReason(item, live, owners) : 'Could not check whether other programs use this, not deleted');
+  const blocked = await guardFor(items, owners, state);
 
   // Services first, so their files are no longer locked. The service's registry definition is
   // exported first; importing it back recreates the service after a reboot.
   let s = 0;
   for (const item of items.filter((i) => i.kind === 'service')) {
-    // Never delete Windows' own services: protected ones, or ones whose program lives in the Windows folder.
-    const guard = await runPS(`
-      $s = Get-CimInstance Win32_Service -Filter ${psq(`Name='${String(item.path).replace(/'/g, "''")}'`)} -ErrorAction SilentlyContinue
-      if (-not $s) { 'GONE'; return }
-      $prot = (& sc.exe qprotection ${psq(item.path)} 2>$null | Out-String)
-      if ($prot -notmatch 'PROTECTION LEVEL:\\s*NONE') { 'PROTECTED'; return }
-      if ([string]$s.PathName -match ('^\\W*' + [regex]::Escape($env:SystemRoot) + '\\\\')) { 'WINDOWS'; return }
-      'OK'`).catch(() => 'ERR');
-    if (/^GONE/.test(guard.trim())) {
+    const guard = await serviceGuard(item.path);
+    if (guard === 'GONE') {
       log(item, true, 'Already gone');
       continue;
     }
-    if (!/^OK/.test(guard.trim())) {
-      log(item, false, /^ERR/.test(guard.trim()) ? 'Could not check the service, not deleted' : 'Windows service, skipped');
+    if (guard !== 'OK') {
+      log(item, false, guard === 'ERR' ? 'Could not check the service, not deleted' : 'Windows service, skipped');
       continue;
     }
     const file = path.join(dir, `service-${++s}.reg`);
@@ -83,7 +186,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
     }
     await runPS(`Stop-Service -Name ${psq(item.path)} -Force -ErrorAction SilentlyContinue`).catch(() => {});
     const r = await execFile('sc.exe', ['delete', item.path]);
-    if (r.ok) manifest.entries.push({ kind: 'service', path: item.path, file: path.basename(file) });
+    if (r.ok) await record({ kind: 'service', path: item.path, file: path.basename(file) });
     log(item, r.ok, r.ok ? 'Service deleted' : r.out);
   }
 
@@ -103,7 +206,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
       if (Get-ScheduledTask -TaskName $t.TaskName -TaskPath $t.TaskPath -ErrorAction SilentlyContinue) { 'ERR Task is still registered' } else { 'OK' }`).catch((e) => `ERR ${e.message}`);
     if (/^GONE/.test(out.trim())) log(item, true, 'Already gone');
     else if (/^OK/.test(out.trim())) {
-      manifest.entries.push({ kind: 'task', path: item.path, file: path.basename(file) });
+      await record({ kind: 'task', path: item.path, file: path.basename(file) });
       log(item, true, 'Task removed');
     } else log(item, false, out.trim().replace(/^ERR /, ''));
   }
@@ -123,7 +226,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
       if (Get-NetFirewallRule -Name ${psq(item.path)} -ErrorAction SilentlyContinue) { 'ERR Firewall rule is still present' } else { 'OK' }`).catch((e) => `ERR ${e.message}`);
     if (/^GONE/.test(out.trim())) log(item, true, 'Already gone');
     else if (/^OK/.test(out.trim())) {
-      manifest.entries.push({ kind: 'firewall', path: item.path, name: item.name, file: path.basename(file) });
+      await record({ kind: 'firewall', path: item.path, name: item.name, file: path.basename(file) });
       log(item, true, 'Firewall rule removed');
     } else log(item, false, out.trim().replace(/^ERR /, ''));
   }
@@ -137,7 +240,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
       continue;
     }
     const r = await reg(['delete', item.path, '/v', item.name, '/f']);
-    if (r.ok) manifest.entries.push({ kind: 'value', ...v });
+    if (r.ok) await record({ kind: 'value', ...v });
     log(item, r.ok, r.ok ? 'Value deleted' : r.stderr);
   }
 
@@ -159,7 +262,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
       continue;
     }
     const r = await reg(['delete', item.path, '/f']);
-    if (r.ok) manifest.entries.push({ kind: 'key', path: item.path, file: path.basename(file) });
+    if (r.ok) await record({ kind: 'key', path: item.path, file: path.basename(file) });
     else await sys.removePath(file);
     log(item, r.ok, r.ok ? 'Key deleted' : r.stderr);
   }
@@ -171,7 +274,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
       continue;
     }
     const r = await reg(['add', item.path, '/f']);
-    if (r.ok) manifest.entries.push({ kind: 'newkey', path: item.path });
+    if (r.ok) await record({ kind: 'newkey', path: item.path });
     log(item, r.ok, r.ok ? 'Key recreated' : r.stderr);
   }
 
@@ -186,7 +289,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
     }
     const was = current.find((c) => c.path === item.path && c.name === item.name);
     const r = await reg(args);
-    if (r.ok) manifest.entries.push(was ? { kind: 'value', ...was } : { kind: 'newvalue', path: item.path, name: item.name });
+    if (r.ok) await record(was ? { kind: 'value', ...was } : { kind: 'newvalue', path: item.path, name: item.name });
     log(item, r.ok, r.ok ? (was ? 'Earlier value put back' : 'Value recreated') : r.stderr);
   }
 
@@ -199,14 +302,14 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
       log(item, true, 'Already gone');
       continue;
     }
-    const why = blocked(item);
+    const why = blocked(item) || ((await changedSinceScan(item)) && 'Changed since the scan; scan again to include it');
     if (why) {
       log(item, false, `${why}, skipped`);
       continue;
     }
     try {
       await trashItem(item.path);
-      manifest.entries.push({ kind: item.kind, path: item.path, recycled: true });
+      await record({ kind: item.kind, path: item.path, recycled: true });
       log(item, true, 'Moved to Recycle Bin');
     } catch (e) {
       log(item, false, `Could not move to Recycle Bin: ${e?.message || e}`);
@@ -228,10 +331,66 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
   // Keep a backup only when something was actually removed.
   if (!manifest.entries.length) {
     await sys.removePath(dir);
+    await sys.removePath(pendingFile());
     return { backupId: null, results };
   }
-  await sys.writeText(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+  await seal(dir, manifest);
+  await sys.removePath(pendingFile());
   return { backupId: id, results };
+}
+
+// A removal that was cut off: { id, title, started, done, total } or null.
+async function interrupted() {
+  if (!(await sys.exists(pendingFile()))) return null;
+  const p = JSON.parse(await sys.readText(pendingFile()));
+  const m = await sys.readText(manifestFile(p.id)).then(JSON.parse).catch(() => null);
+  return { id: p.id, title: p.title, started: p.started, done: m?.entries.length || 0, total: p.items.length };
+}
+
+// Resolves an interrupted removal: 'rollback' restores what it removed, 'finish' removes the
+// rest, 'keep' leaves things as they are. Its backup is sealed either way.
+async function resolveInterrupted(action) {
+  const p = JSON.parse(await sys.readText(pendingFile()));
+  const dir = path.join(backupRoot, p.id);
+  const m = await sys.readText(manifestFile(p.id)).then(JSON.parse).catch(() => null);
+  if (m && m.entries.length) await seal(dir, m);
+  else await sys.removePath(dir);
+  await sys.removePath(pendingFile());
+  if (action === 'rollback' && m?.entries.length) return { action, results: await restore(p.id) };
+  if (action === 'finish') return { action, ...(await removeItems({ title: p.title, items: p.items, owners: p.owners })) };
+  return { action, results: [] };
+}
+
+// Deletes old backups beyond the limits (days, megabytes; 0 = no limit), oldest first, but
+// never the newest backup made for each title (each program), nor an unfinished one.
+async function prune({ maxDays = 0, maxMB = 0 } = {}, now = Date.now()) {
+  if (!maxDays && !maxMB) return [];
+  const all = await list(); // newest first
+  const newest = new Set();
+  const seenTitles = new Set();
+  for (const m of all) if (!seenTitles.has(m.title)) (seenTitles.add(m.title), newest.add(m.id));
+  const pending = await sys.readText(pendingFile()).then((t) => JSON.parse(t).id).catch(() => null);
+  const candidates = all.filter((m) => !newest.has(m.id) && m.id !== pending && m.complete !== false).reverse(); // oldest first
+  const removed = [];
+  for (const m of candidates) {
+    if (maxDays && now - new Date(m.created).getTime() > maxDays * 86400000) {
+      await remove(m.id);
+      removed.push(m.id);
+    }
+  }
+  if (maxMB) {
+    const sizes = new Map();
+    for (const m of all) if (!removed.includes(m.id)) sizes.set(m.id, (await sys.folderSize(path.join(backupRoot, m.id), 100000, 5000)).bytes);
+    let total = [...sizes.values()].reduce((a, b) => a + b, 0);
+    for (const m of candidates) {
+      if (total <= maxMB * 1048576) break;
+      if (removed.includes(m.id)) continue;
+      await remove(m.id);
+      removed.push(m.id);
+      total -= sizes.get(m.id) || 0;
+    }
+  }
+  return removed;
 }
 
 async function list() {
@@ -304,10 +463,16 @@ const restoreFromRecycleBin = async (original) => (await restoreManyFromRecycleB
 
 async function restore(id) {
   const dir = path.join(backupRoot, id);
+  if (!(await sys.exists(path.join(dir, 'manifest.json')))) throw new Error('This backup no longer exists. It may have been removed by the backup limits in Tools › Backup Settings.');
   const manifest = JSON.parse(await sys.readText(path.join(dir, 'manifest.json')));
+  const changed = await verify(dir, manifest);
   const results = [];
   const recycled = await restoreManyFromRecycleBin(manifest.entries.filter((e) => e.recycled).map((e) => e.path)).catch((err) => ({ error: `ERR ${err.message}` }));
   for (const e of manifest.entries) {
+    if (e.file && changed.has(e.file)) {
+      results.push({ ...e, ok: false, detail: 'Its backup file was changed after it was made, so it was not restored' });
+      continue;
+    }
     if (e.kind === 'key') {
       const r = await reg(['import', path.join(dir, e.file)]);
       results.push({ ...e, ok: r.ok, detail: r.ok ? 'Key restored' : r.stderr });
@@ -364,4 +529,4 @@ function remove(id) {
   return sys.removePath(path.join(backupRoot, id));
 }
 
-export { setRoot, removeItems, list, restore, remove, restoreFromRecycleBin };
+export { setRoot, removeItems, planRemoval, interrupted, resolveInterrupted, prune, list, restore, remove, restoreFromRecycleBin };

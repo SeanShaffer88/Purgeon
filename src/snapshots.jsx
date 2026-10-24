@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Dialog } from './dialogs.jsx';
+import { Dialog, PlanView } from './dialogs.jsx';
 import { PRESETS, revertible } from './backend/snapshots.js';
 
 const defaultName = () => {
@@ -87,7 +87,9 @@ function describe(c) {
 
 const PAGE = 400;
 
-export function ComparisonDialog({ comparison, beforeName, afterName, onCleanup, onExport, onClose }) {
+export function ComparisonDialog({ comparison, beforeName, afterName, onCleanup, onExport, onDryRun, onExportPlan, onClose }) {
+  const [plan, setPlan] = useState(null);
+  const [planning, setPlanning] = useState(false);
   const all = useMemo(() => {
     const out = {};
     for (const [g] of GROUPS) out[g] = comparison[g].map((c, i) => ({ ...c, group: g, id: `${g}:${i}` }));
@@ -132,6 +134,22 @@ export function ComparisonDialog({ comparison, beforeName, afterName, onCleanup,
           <button onClick={() => setMany(selectable, true)}>Select Shown</button>
           <button onClick={() => setSelected(new Set())}>Select None</button>
           <button onClick={() => onExport(all)}>Export…</button>
+          {onDryRun && (
+            <button
+              disabled={!chosen.length || planning}
+              title="Check what the cleanup would do, without changing anything"
+              onClick={async () => {
+                setPlanning(true);
+                try {
+                  setPlan(await onDryRun(chosen));
+                } finally {
+                  setPlanning(false);
+                }
+              }}
+            >
+              {planning ? 'Checking…' : 'Dry Run'}
+            </button>
+          )}
           <button className="primary" disabled={!chosen.length} onClick={() => onCleanup(chosen)}>
             Clean Up Selected
           </button>
@@ -156,7 +174,8 @@ export function ComparisonDialog({ comparison, beforeName, afterName, onCleanup,
         </span>
       </div>
       {comparison.truncated && <div className="error-box">This comparison is very large; only the first part of each list is shown.</div>}
-      <div className="tree compare-list">
+      {plan && <PlanView results={plan} onBack={() => setPlan(null)} onExport={() => onExportPlan(plan)} />}
+      <div className="tree compare-list" hidden={!!plan}>
         {rows.length === 0 && <div className="empty-box">No differences here.</div>}
         {rows.slice(0, shown).map((c) => {
           const [main, extra] = describe(c);

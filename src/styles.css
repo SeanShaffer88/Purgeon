@@ -471,3 +471,13 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 
 .monitor-mode { color: var(--muted); border-left: 2px solid var(--border-strong); padding-left: 8px; }
 .monitor-mode.on { color: var(--green); border-left-color: var(--green); }
+
+/* safety: dry run, safe mode, interrupted removal */
+.plan-bar { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 6px 0; }
+.plan-actions { margin-left: auto; display: flex; gap: 6px; }
+.plan .result .mark { color: var(--green); }
+.plan .result.fail .mark { color: var(--amber); }
+.safe-note { color: var(--cyan); border-left: 2px solid var(--cyan); padding: 2px 8px; margin-bottom: 6px; }
+.tree-item.locked { opacity: 0.45; }
+.choices { margin: 6px 0 0 18px; padding: 0; }
+.choices li { margin: 4px 0; }

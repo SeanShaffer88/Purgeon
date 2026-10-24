@@ -23,6 +23,7 @@ trash = "5"
 winreg = "0.56"
 flate2 = "1"
 ferrisetw = "1.2.0"
+sha2 = "0.11.1"
 
 # Small, lean release binary.
 [profile.release]

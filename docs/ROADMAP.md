@@ -26,6 +26,17 @@ Windows or another installed program still needs.
 - **Command-line install recording.** `--monitor "<installer>"` records an installation without the
   window.
 
+## Added after 0.6.0
+
+- **Changed since the scan.** Folders and files that changed after the scan are skipped.
+- **Dry run.** Shows exactly what a removal or cleanup would do, and exports the plan.
+- **Safe mode.** Offers only near-certain matches, and never services, tasks or firewall rules.
+- **Crash-safe removals.** Each item is in the backup before the next is removed. After a crash, the
+  removal can be rolled back, finished or left as it is.
+- **Fingerprinted backups.** A backup that was changed afterwards is not restored.
+- **Backup limits.** Age and size limits that always keep each program's newest backup.
+- **Command log.** One line for every command SweepUninstall runs, kept for 14 days.
+
 ## Watching installations
 
 - Ignore changes made by unrelated processes while monitoring, such as browsers and Windows Update.
@@ -75,16 +86,6 @@ Windows or another installed program still needs.
 - Find old installer files in Downloads for programs that are already installed.
 - Report large folders in AppData and ProgramData that belong to no installed program.
 - Find empty folders in Program Files and AppData, within the protection rules.
-
-## Safety
-
-- Re-scan each item just before deletion and skip anything that changed since the scan.
-- Fingerprint backups so a changed backup is never restored.
-- Size and age limits for backups that never remove the newest one for each program.
-- A safe mode that offers only high-confidence items, for less experienced users.
-- A dry run that shows exactly what a removal would do, and exports the plan.
-- A readable log of every command SweepUninstall ran.
-- After a crash during a removal, offer to finish it or roll it back on the next start.
 
 ## Ease of use
 

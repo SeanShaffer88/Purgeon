@@ -30,6 +30,8 @@ export async function createTauriSys() {
     trackRunning: () => invoke('track_running'),
     trackStop: () => invoke('track_stop'),
     waitProcess: (pid, timeoutMs) => invoke('wait_process', { pid, timeoutMs }),
+    sha256Files: (paths) => invoke('sha256_files', { paths }),
+    appendText: (path, contents) => invoke('append_text', { path, contents }),
     quit: (code = 0) => invoke('quit', { code }),
   };
 }
