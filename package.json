@@ -16,7 +16,8 @@
     "build": "vite build",
     "start": "vite build && electron .",
     "dev": "electron . --dev",
-    "dist": "vite build && electron-builder --win --publish never"
+    "dist": "vite build && electron-builder --win --publish never",
+    "test": "node --test \"test/*.test.cjs\""
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.2",

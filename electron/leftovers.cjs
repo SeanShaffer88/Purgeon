@@ -70,10 +70,12 @@ const under = (child, parent) => {
 
 function scanFiles(program, readShortcutLink) {
   const items = [];
-  const add = (kind, p, confidence, reason) => {
-    if (isProtected(p) || items.some((i) => under(p, i.path))) return;
-    for (let i = items.length - 1; i >= 0; i--) if (under(items[i].path, p)) items.splice(i, 1);
-    items.push({ kind, path: p, confidence, reason });
+  // A folder replaces the items inside it, except a `container` guess (a publisher folder):
+  // that one is offered alongside its children so an unticked guess never hides a ticked match.
+  const add = (kind, p, confidence, reason, { container = false } = {}) => {
+    if (isProtected(p) || items.some((i) => !i.container && under(p, i.path))) return;
+    if (!container) for (let i = items.length - 1; i >= 0; i--) if (under(items[i].path, p)) items.splice(i, 1);
+    items.push({ kind, path: p, confidence, reason, ...(container && { container }) });
   };
 
   const nk = nameKey(program.name);
@@ -92,7 +94,7 @@ function scanFiles(program, readShortcutLink) {
         const hit = children.filter((c) => nameMatches(c.name, nk));
         for (const c of hit) add('dir', path.join(full, c.name), 'high', `Folder under publisher "${d.name}"`);
         if (hit.length && hit.length === children.length) {
-          add('dir', full, 'low', 'Publisher folder (would be empty)');
+          add('dir', full, 'low', 'Publisher folder (would be empty)', { container: true });
         }
       }
     }
@@ -205,4 +207,4 @@ async function processesIn(location) {
   );
 }
 
-module.exports = { scan, processesIn, nameKey, under, exists };
+module.exports = { scan, processesIn, nameKey, under, exists, nameMatches, publisherKey, scanFiles };

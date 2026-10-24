@@ -29,4 +29,4 @@ function explain(reason) {
   return reason ? `No restore point was made: ${reason}` : 'Windows did not create a restore point.';
 }
 
-module.exports = { create };
+module.exports = { create, explain };

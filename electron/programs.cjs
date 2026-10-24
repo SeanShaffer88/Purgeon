@@ -97,4 +97,4 @@ function iconPathFor(p) {
   return null;
 }
 
-module.exports = { listDesktop, listStore, removeStoreApp, iconPathFor };
+module.exports = { listDesktop, listStore, removeStoreApp, iconPathFor, formatDate };

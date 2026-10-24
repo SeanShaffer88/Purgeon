@@ -24,6 +24,9 @@ jobs:
 
       - run: npm ci
 
+      - name: Safety tests
+        run: npm test
+
       - name: Build installer and portable exe
         run: npm run dist
 

@@ -110,4 +110,4 @@ async function restartExplorer() {
   `);
 }
 
-module.exports = { list, set, restartExplorer };
+module.exports = { list, set, restartExplorer, TWEAKS, needsAdmin };

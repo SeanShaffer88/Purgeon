@@ -178,4 +178,4 @@ function list() {
 
 const remove = (id) => fs.rmSync(path.join(storeDir, 'programs', `${id}.json`), { force: true });
 
-module.exports = { setRoot, start, status, cancel, finish, list, remove };
+module.exports = { setRoot, start, status, cancel, finish, list, remove, collapse };

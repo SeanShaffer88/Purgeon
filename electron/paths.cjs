@@ -39,7 +39,8 @@ const GENERIC = new Set(
 );
 
 function isProtected(p) {
-  if (!p) return true;
+  // Only full drive paths are allowed: "C:" or "foo" would otherwise resolve against the current folder.
+  if (!p || !/^[a-z]:[\\/]/i.test(p)) return true;
   const n = path.resolve(p).toLowerCase().replace(/[\\/]+$/, '');
   if (n.length <= 3) return true; // drive roots
   const blocked = [
