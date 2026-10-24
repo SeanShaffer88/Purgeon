@@ -43,7 +43,10 @@ button, input, select { font: inherit; color: inherit; }
 .menubar-item { position: relative; }
 .menubar-item > button { border: 0; background: none; padding: 3px 9px; cursor: default; color: var(--text); }
 .menubar-item > button:hover, .menubar-item > button.open { background: var(--green-dim); color: var(--green); }
-.dropdown { position: absolute; top: 100%; left: 0; }
+/* Menu-bar dropdowns reuse the context-menu look but hang under their menu title;
+   the doubled class outranks .context-menu's position: fixed further down. */
+.context-menu.dropdown { position: absolute; top: 100%; left: 0; }
+.context-menu button > span { white-space: nowrap; }
 
 .toolbar {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
