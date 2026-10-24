@@ -4,7 +4,7 @@ Planned enhancements, grouped by area. Each is meant to be built the same way as
 SweepUninstall: original code, every change backed up and undoable, and nothing offered that
 Windows or another installed program still needs.
 
-## Added since 0.5.0
+## Added in 0.6.0
 
 - **Live install tracking.** The installer and every process it starts, plus Windows Installer's
   `msiexec`, are followed with Event Tracing for Windows. Files and registry changes are recorded as
