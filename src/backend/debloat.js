@@ -2,7 +2,7 @@
 // "enabled" means every value holds its tweak value; disabling restores Windows' default
 // (deleting the value, or writing the documented default where one exists).
 // effect: 'immediate' | 'explorer' (needs an Explorer restart) | 'reboot'
-const { reg, runPS, runPSJson } = require('./shell.cjs');
+import { reg, runPS, runPSJson } from './shell.js';
 
 const ADV = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced';
 const CDM = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager';
@@ -110,4 +110,4 @@ async function restartExplorer() {
   `);
 }
 
-module.exports = { list, set, restartExplorer, TWEAKS, needsAdmin };
+export { list, set, restartExplorer, TWEAKS, needsAdmin };

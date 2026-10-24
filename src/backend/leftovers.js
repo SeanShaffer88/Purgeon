@@ -1,10 +1,10 @@
+import { sys } from './sys.js';
+import * as path from './winpath.js';
 // Heuristic analysis of what a program left on disk and in the registry.
 // Items: { kind: 'dir'|'file'|'key'|'value'|'service', path, name?, confidence: 'high'|'low', reason }
-const fs = require('fs');
-const path = require('path');
-const { runPSJson, psq } = require('./shell.cjs');
-const { fileRoots, shortcutRoots, GENERIC, isProtected } = require('./paths.cjs');
-const { scanDeep } = require('./deepscan.cjs');
+import { runPSJson, psq } from './shell.js';
+import { fileRoots, shortcutRoots, GENERIC, isProtected } from './paths.js';
+import { scanDeep } from './deepscan.js';
 
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -32,36 +32,29 @@ function nameMatches(candidate, key) {
   return false;
 }
 
-const listDirs = (dir) => {
-  try {
-    return fs.readdirSync(dir, { withFileTypes: true }).filter((d) => d.isDirectory() && !d.isSymbolicLink());
-  } catch {
-    return [];
-  }
-};
+const listDirs = async (dir) => (await sys.readDir(dir).catch(() => [])).filter((d) => d.dir && !d.link);
 
-function* walkFiles(dir, depth = 0) {
-  let entries = [];
-  try {
-    entries = fs.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const e of entries) {
+async function walkFiles(dir, depth = 0, out = []) {
+  for (const e of await sys.readDir(dir).catch(() => [])) {
     const full = path.join(dir, e.name);
-    if (e.isDirectory() && !e.isSymbolicLink() && depth < 4) yield* walkFiles(full, depth + 1);
-    else if (e.isFile()) yield full;
+    if (e.dir && !e.link && depth < 4) await walkFiles(full, depth + 1, out);
+    else if (e.file) out.push(full);
   }
+  return out;
 }
 
-const exists = (p) => {
-  try {
-    fs.accessSync(p);
-    return true;
-  } catch {
-    return false;
-  }
-};
+const exists = (p) => sys.exists(p).catch(() => false);
+
+// Target paths of .lnk shortcuts, resolved in one PowerShell call.
+async function resolveShortcuts(files) {
+  if (!files.length) return new Map();
+  const rows = await runPSJson(
+    `$in = [Console]::In.ReadToEnd() | ConvertFrom-Json; $sh = New-Object -ComObject WScript.Shell
+     @(foreach ($f in $in) { try { [pscustomobject]@{ f = $f; t = [string]$sh.CreateShortcut($f).TargetPath } } catch {} }) | ConvertTo-Json -Compress`,
+    { input: JSON.stringify(files) }
+  ).catch(() => []);
+  return new Map(rows.map((r) => [r.f, r.t]));
+}
 
 const under = (child, parent) => {
   const c = path.resolve(child).toLowerCase();
@@ -69,7 +62,7 @@ const under = (child, parent) => {
   return c === p || c.startsWith(p + '\\');
 };
 
-function scanFiles(program, readShortcutLink) {
+async function scanFiles(program, shortcutTargets = resolveShortcuts) {
   const items = [];
   // A folder replaces the items inside it, except a `container` guess (a publisher folder):
   // that one is offered alongside its children so an unticked guess never hides a ticked match.
@@ -89,15 +82,15 @@ function scanFiles(program, readShortcutLink) {
   };
   const location = (program.location || '').replace(/^"|"$/g, '').trim();
 
-  if (location && exists(location) && !isProtected(location)) add('dir', location, 'high', 'Install location');
+  if (location && (await exists(location)) && !isProtected(location)) add('dir', location, 'high', 'Install location');
 
   for (const root of fileRoots()) {
-    for (const d of listDirs(root)) {
+    for (const d of await listDirs(root)) {
       const full = path.join(root, d.name);
       if (nameMatches(d.name, nk)) {
         add('dir', full, 'high', `Folder named after program`);
       } else if (isPublisher(d.name)) {
-        const children = listDirs(full);
+        const children = await listDirs(full);
         const hit = children.filter((c) => nameMatches(c.name, nk));
         for (const c of hit) add('dir', path.join(full, c.name), 'high', `Folder under publisher "${d.name}"`);
         if (hit.length && hit.length === children.length) {
@@ -108,18 +101,15 @@ function scanFiles(program, readShortcutLink) {
   }
 
   for (const root of shortcutRoots()) {
-    for (const f of walkFiles(root)) {
-      if (!/\.(lnk|url)$/i.test(f)) continue;
-      let target = '';
-      if (f.toLowerCase().endsWith('.lnk')) {
-        try {
-          target = readShortcutLink(f).target || '';
-        } catch {}
-      }
+    const shortcuts = (await walkFiles(root)).filter((f) => /\.(lnk|url)$/i.test(f));
+    // Targets are only needed to match shortcuts into the install folder.
+    const targets = location ? await shortcutTargets(shortcuts.filter((f) => /\.lnk$/i.test(f))) : new Map();
+    for (const f of shortcuts) {
+      const target = targets.get(f) || '';
       if (location && target && under(target, location)) add('file', f, 'high', 'Shortcut to install folder');
       else if (nameMatches(path.basename(f, path.extname(f)), nk)) add('file', f, 'low', 'Shortcut named after program');
     }
-    for (const d of listDirs(root)) {
+    for (const d of await listDirs(root)) {
       if (nameMatches(d.name, nk)) add('dir', path.join(root, d.name), 'high', 'Start Menu folder');
       else if (isPublisher(d.name)) add('dir', path.join(root, d.name), 'low', 'Start Menu publisher folder', { container: true });
     }
@@ -237,10 +227,10 @@ function merge(items) {
   return [...byId.values()];
 }
 
-async function scan(program, readShortcutLink) {
+async function scan(program, shortcutTargets) {
   const location = (program.location || '').replace(/^"|"$/g, '').trim();
   const [files, registry, deep] = await Promise.all([
-    Promise.resolve().then(() => scanFiles(program, readShortcutLink)),
+    scanFiles(program, shortcutTargets),
     scanRegistry(program),
     scanDeep(program, { nameKey: nameKey(program.name), location }),
   ]);
@@ -255,4 +245,4 @@ async function processesIn(location) {
   );
 }
 
-module.exports = { scan, processesIn, nameKey, under, exists, nameMatches, publisherKey, scanFiles, scoreFor, merge, AUTO_TICK };
+export { scan, processesIn, nameKey, under, exists, nameMatches, publisherKey, scanFiles, scoreFor, merge, AUTO_TICK };

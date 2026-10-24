@@ -5,3 +5,5 @@ out/
 .DS_Store
 Thumbs.db
 release/
+src-tauri/target/
+src-tauri/gen/

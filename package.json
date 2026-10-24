@@ -1,7 +1,7 @@
 {
   "name": "sweepuninstall",
   "productName": "SweepUninstall",
-  "version": "0.3.1",
+  "version": "0.4.0",
   "description": "Windows uninstaller with leftover scanning, install monitoring and backups",
   "author": "Sean Shaffer",
   "license": "MIT",
@@ -10,55 +10,23 @@
     "url": "https://github.com/SeanShaffer88/SweepUninstall.git"
   },
   "homepage": "https://github.com/SeanShaffer88/SweepUninstall",
-  "main": "electron/main.cjs",
   "private": true,
+  "type": "module",
   "scripts": {
     "build": "vite build",
-    "start": "vite build && electron .",
-    "dev": "electron . --dev",
-    "dist": "vite build && electron-builder --win --publish never",
-    "test": "node --test \"test/*.test.cjs\""
+    "dev": "tauri dev",
+    "dist": "tauri build",
+    "test": "node --test \"test/*.test.js\""
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.12.4",
+    "@tauri-apps/plugin-dialog": "^2.8.3"
   },
   "devDependencies": {
+    "@tauri-apps/cli": "^2.12.4",
     "@vitejs/plugin-react": "^6.1.2",
-    "electron": "^45.0.0",
-    "electron-builder": "^26.18.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
     "vite": "^8.3.5"
-  },
-  "build": {
-    "appId": "com.seanshaffer.sweepuninstall",
-    "productName": "SweepUninstall",
-    "copyright": "Copyright © 2026 Sean Shaffer",
-    "files": [
-      "dist/**/*",
-      "electron/**/*",
-      "package.json"
-    ],
-    "directories": {
-      "output": "release",
-      "buildResources": "build"
-    },
-    "win": {
-      "icon": "build/icon.png",
-      "artifactName": "SweepUninstall-Portable-${version}-win-${arch}.${ext}",
-      "requestedExecutionLevel": "requireAdministrator",
-      "target": [
-        { "target": "nsis", "arch": ["x64"] },
-        { "target": "portable", "arch": ["x64"] },
-        { "target": "zip", "arch": ["x64"] }
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "perMachine": true,
-      "allowToChangeInstallationDirectory": true,
-      "createDesktopShortcut": true,
-      "artifactName": "SweepUninstall-Setup-${version}.${ext}"
-    },
-    "portable": {
-      "artifactName": "SweepUninstall-Portable-${version}.${ext}"
-    }
   }
 }

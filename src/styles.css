@@ -360,3 +360,7 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .pending-signin::before { content: '⟳ '; }
 .tag-row { display: flex; gap: 4px; }
 .fx-windows { color: var(--cyan); border-color: #2b5a60; }
+
+/* app-drawn confirmation dialog */
+.confirm-detail { white-space: pre-line; color: var(--text); margin: 0 0 10px; line-height: 1.5; }
+.confirm-check { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--text); cursor: pointer; }

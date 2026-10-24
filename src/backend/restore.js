@@ -1,7 +1,7 @@
 // System Restore points before risky changes. Creation is best effort: Windows skips it
 // when System Protection is off or a point was made recently (24h by default), and both
 // creating and listing points need administrator rights.
-const { runPSJson, psq } = require('./shell.cjs');
+import { runPSJson, psq } from './shell.js';
 
 const TYPES = { uninstall: 'APPLICATION_UNINSTALL', settings: 'MODIFY_SETTINGS' };
 
@@ -29,4 +29,4 @@ function explain(reason) {
   return reason ? `No restore point was made: ${reason}` : 'Windows did not create a restore point.';
 }
 
-module.exports = { create, explain };
+export { create, explain };

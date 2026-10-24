@@ -1,11 +1,11 @@
+import { sys, env } from './sys.js';
+import * as path from './winpath.js';
 // Startup manager: programs that start with Windows (Run keys, Startup folders), scheduled
 // tasks outside \Microsoft\, and third-party services. Turning an entry off never deletes it:
 // - Run keys and Startup folders use Windows' own StartupApproved switches (as Task Manager does)
 // - Scheduled tasks are disabled with Disable-ScheduledTask
 // - Services that start automatically are set to Manual; their original start mode is remembered
-const fs = require('fs');
-const path = require('path');
-const { runPS, runPSJson, reg, psq } = require('./shell.cjs');
+import { runPS, runPSJson, reg, psq, execFile } from './shell.js';
 
 const APPROVED = 'Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved';
 // Run-key locations and the StartupApproved key Windows uses for each.
@@ -15,23 +15,17 @@ const RUN_KEYS = [
   { id: 'hklm-run32', key: 'HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run', approved: `HKLM\\${APPROVED}\\Run32`, label: 'Run (all users, 32-bit)', admin: true },
 ];
 const STARTUP_FOLDERS = [
-  { id: 'user-folder', dir: () => path.join(process.env.APPDATA || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'), approved: `HKCU\\${APPROVED}\\StartupFolder`, label: 'Startup folder (current user)' },
-  { id: 'common-folder', dir: () => path.join(process.env.ProgramData || '', 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'), approved: `HKLM\\${APPROVED}\\StartupFolder`, label: 'Startup folder (all users)', admin: true },
+  { id: 'user-folder', dir: () => path.join(env('APPDATA'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'), approved: `HKCU\\${APPROVED}\\StartupFolder`, label: 'Startup folder (current user)' },
+  { id: 'common-folder', dir: () => path.join(env('ProgramData'), 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup'), approved: `HKLM\\${APPROVED}\\StartupFolder`, label: 'Startup folder (all users)', admin: true },
 ];
 
 let stateFile = '';
-const setRoot = (dir) => {
-  fs.mkdirSync(dir, { recursive: true });
+const setRoot = async (dir) => {
+  await sys.makeDir(dir);
   stateFile = path.join(dir, 'startup-state.json');
 };
-const readState = () => {
-  try {
-    return JSON.parse(fs.readFileSync(stateFile, 'utf8'));
-  } catch {
-    return { services: {} };
-  }
-};
-const writeState = (s) => fs.writeFileSync(stateFile, JSON.stringify(s, null, 2));
+const readState = () => sys.readText(stateFile).then(JSON.parse).catch(() => ({ services: {} }));
+const writeState = (s) => sys.writeText(stateFile, JSON.stringify(s, null, 2));
 
 // StartupApproved values are 12 bytes; an odd first byte means "disabled".
 const approvedEnabled = (hex) => !hex || parseInt(hex.slice(0, 2), 16) % 2 === 0;
@@ -91,7 +85,7 @@ foreach ($s in Get-CimInstance Win32_Service -ErrorAction SilentlyContinue) {
 `;
 
 async function list() {
-  const state = readState();
+  const state = await readState();
   const input = JSON.stringify({
     runKeys: RUN_KEYS.map(({ id, key, approved }) => ({ id, key: key.replace(/^HKCU/, 'HKEY_CURRENT_USER').replace(/^HKLM/, 'HKEY_LOCAL_MACHINE'), approved: approved.replace(/^HKCU/, 'HKEY_CURRENT_USER').replace(/^HKLM/, 'HKEY_LOCAL_MACHINE') })),
     folders: STARTUP_FOLDERS.map(({ id, dir, approved }) => ({ id, dir: dir(), approved: approved.replace(/^HKCU/, 'HKEY_CURRENT_USER').replace(/^HKLM/, 'HKEY_LOCAL_MACHINE') })),
@@ -141,7 +135,7 @@ async function setEnabled(entry, enable) {
     return;
   }
   if (entry.type === 'service') {
-    const state = readState();
+    const state = await readState();
     state.services = state.services || {};
     let mode;
     if (enable) {
@@ -151,15 +145,13 @@ async function setEnabled(entry, enable) {
       state.services[entry.serviceName] = delayed ? 'Automatic (delayed)' : 'Automatic';
       mode = 'demand';
     }
-    const r = await new Promise((res) =>
-      require('child_process').execFile('sc.exe', ['config', entry.serviceName, 'start=', mode], { windowsHide: true }, (e, out) => res({ ok: !e, out: String(out || (e && e.message)) }))
-    );
+    const r = await execFile('sc.exe', ['config', entry.serviceName, 'start=', mode]);
     if (!r.ok) throw new Error(denied(r.out.trim()));
     if (enable) delete state.services[entry.serviceName];
-    writeState(state);
+    await writeState(state);
     return;
   }
   throw new Error(`Unknown startup entry type ${entry.type}`);
 }
 
-module.exports = { setRoot, list, setEnabled, approvedEnabled };
+export { setRoot, list, setEnabled, approvedEnabled };

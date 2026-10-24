@@ -1,5 +1,5 @@
 // Enumerates installed desktop programs (registry Uninstall keys) and Store apps.
-const { runPSJson, runPS, psq } = require('./shell.cjs');
+import { runPSJson, runPS, psq } from './shell.js';
 
 const LIST_DESKTOP = `
 $roots = @(
@@ -97,4 +97,31 @@ function iconPathFor(p) {
   return null;
 }
 
-module.exports = { listDesktop, listStore, removeStoreApp, iconPathFor, formatDate };
+// 16x16 PNG icons for many programs in one PowerShell call: { [key]: dataURL }.
+async function iconsFor(programs) {
+  const wanted = programs.map((p) => ({ key: p.key, file: iconPathFor(p) })).filter((w) => w.file);
+  if (!wanted.length) return {};
+  const rows = await runPSJson(
+    `Add-Type -AssemblyName System.Drawing
+     $in = [Console]::In.ReadToEnd() | ConvertFrom-Json
+     $out = foreach ($w in $in) {
+       try {
+         if (-not (Test-Path -LiteralPath $w.file -PathType Leaf)) { continue }
+         $icon = if ($w.file -match '\\.ico$') { New-Object System.Drawing.Icon($w.file, 16, 16) } else { [System.Drawing.Icon]::ExtractAssociatedIcon($w.file) }
+         $bmp = New-Object System.Drawing.Bitmap 16, 16
+         $g = [System.Drawing.Graphics]::FromImage($bmp)
+         $g.InterpolationMode = 'HighQualityBicubic'
+         $g.DrawImage($icon.ToBitmap(), 0, 0, 16, 16)
+         $ms = New-Object System.IO.MemoryStream
+         $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
+         [pscustomobject]@{ key = $w.key; png = [Convert]::ToBase64String($ms.ToArray()) }
+         $g.Dispose(); $bmp.Dispose(); $icon.Dispose()
+       } catch {}
+     }
+     @($out) | ConvertTo-Json -Compress`,
+    { input: JSON.stringify(wanted) }
+  ).catch(() => []);
+  return Object.fromEntries(rows.map((r) => [r.key, `data:image/png;base64,${r.png}`]));
+}
+
+export { iconsFor, listDesktop, listStore, removeStoreApp, iconPathFor, formatDate };

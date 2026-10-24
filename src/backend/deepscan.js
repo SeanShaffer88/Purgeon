@@ -1,50 +1,38 @@
+import { sys, env } from './sys.js';
+import * as path from './winpath.js';
 // Deeper leftover detection: scheduled tasks, firewall rules, Explorer context-menu
 // entries and shell extensions, file associations, and app data folders named after the
 // program's own executables. Every item carries a 0-100 score of how sure the match is.
-const fs = require('fs');
-const path = require('path');
-const { runPSJson } = require('./shell.cjs');
-const { GENERIC, isProtected } = require('./paths.cjs');
+import { runPSJson } from './shell.js';
+import { GENERIC, isProtected } from './paths.js';
 
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
 // Executable names in the install folder (two levels deep), e.g. ["fooeditor", "foohelper"].
-function exeNames(location) {
+async function exeNames(location) {
   const names = new Set();
-  const walk = (dir, depth) => {
-    let entries = [];
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const e of entries) {
-      if (e.isDirectory() && !e.isSymbolicLink() && depth < 2) walk(path.join(dir, e.name), depth + 1);
-      else if (e.isFile() && /\.exe$/i.test(e.name) && !/^(unins\d*|uninstall|uninst|setup|update|updater|crashpad_handler|elevate)\.exe$/i.test(e.name)) {
+  const walk = async (dir, depth) => {
+    for (const e of await sys.readDir(dir).catch(() => [])) {
+      if (e.dir && !e.link && depth < 2) await walk(path.join(dir, e.name), depth + 1);
+      else if (e.file && /\.exe$/i.test(e.name) && !/^(unins\d*|uninstall|uninst|setup|update|updater|crashpad_handler|elevate)\.exe$/i.test(e.name)) {
         const base = path.basename(e.name, '.exe');
         if (norm(base).length >= 4 && !GENERIC.has(norm(base))) names.add(base);
       }
     }
   };
-  if (location && !isProtected(location)) walk(location, 0);
+  if (location && !isProtected(location)) await walk(location, 0);
   return [...names];
 }
 
 // App data and cache folders named exactly after one of the program's executables.
-function exeDataFolders(location, exes) {
-  const roots = [process.env.LOCALAPPDATA, process.env.APPDATA, process.env.LOCALAPPDATA && path.join(process.env.LOCALAPPDATA, '..', 'LocalLow'), process.env.TEMP].filter(Boolean);
+async function exeDataFolders(location, exes) {
+  const roots = [env('LOCALAPPDATA'), env('APPDATA'), env('LOCALAPPDATA') && path.join(env('LOCALAPPDATA'), '..', 'LocalLow'), env('TEMP')].filter(Boolean);
   const wanted = new Set(exes.map(norm));
   const items = [];
   for (const root of roots) {
-    let entries = [];
-    try {
-      entries = fs.readdirSync(root, { withFileTypes: true });
-    } catch {
-      continue;
-    }
-    for (const e of entries) {
-      const full = path.resolve(root, e.name);
-      if (e.isDirectory() && !e.isSymbolicLink() && wanted.has(norm(e.name)) && !isProtected(full) && !full.toLowerCase().startsWith((location || '?').toLowerCase())) {
+    for (const e of await sys.readDir(root).catch(() => [])) {
+      const full = path.join(root, e.name);
+      if (e.dir && !e.link && wanted.has(norm(e.name)) && !isProtected(full) && !full.toLowerCase().startsWith((location || '?').toLowerCase())) {
         items.push({ kind: 'dir', path: full, score: 70, reason: `Data folder named after ${e.name}.exe` });
       }
     }
@@ -122,10 +110,10 @@ foreach ($classes in 'HKEY_CURRENT_USER\\Software\\Classes','HKEY_LOCAL_MACHINE\
 
 async function scanDeep(program, { nameKey, location }) {
   const loc = location && !isProtected(location) ? location : '';
-  const exes = exeNames(loc);
+  const exes = await exeNames(loc);
   const input = JSON.stringify({ nameKey, location: loc, exes, generic: [...GENERIC] });
-  const [registry, folders] = await Promise.all([runPSJson(SCAN_DEEP, { input }).catch(() => []), Promise.resolve().then(() => exeDataFolders(loc, exes))]);
+  const [registry, folders] = await Promise.all([runPSJson(SCAN_DEEP, { input }).catch(() => []), exeDataFolders(loc, exes)]);
   return [...registry, ...folders];
 }
 
-module.exports = { scanDeep, exeNames, exeDataFolders };
+export { scanDeep, exeNames, exeDataFolders };

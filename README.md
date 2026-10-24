@@ -3,7 +3,7 @@
 A Windows uninstaller that removes a program and then finds the files, folders, registry keys, startup entries and services it left behind.
 You can also monitor an installation to record exactly what it changes, and every removal is backed up first.
 
-It has a compact single-list window with a dark terminal theme, built with Electron and React.
+It has a compact single-list window with a dark terminal theme. It is built with [Tauri](https://tauri.app/) and React on Windows' built-in WebView2, so the whole app is a **3.3 MB** exe in a **1.2 MB** installer.
 
 ![SweepUninstall main window](docs/screenshots/main.png)
 
@@ -119,28 +119,30 @@ Screenshots use demo data.
 
 Get the latest version from [Releases](https://github.com/SeanShaffer88/SweepUninstall/releases/latest). It runs on Windows 10 and 11 (64-bit).
 
-- **`SweepUninstall-Setup-<version>.exe`** installs for all users, with Start Menu and desktop shortcuts. You can remove it later from Settings › Apps.
-- **`SweepUninstall-Portable-<version>.exe`** is a single exe that runs without installing.
-- **`SweepUninstall-Portable-<version>-win-x64.zip`** is the same portable app as a folder. Unzip it anywhere and run `SweepUninstall.exe`. It starts faster than the single exe because it doesn't unpack itself on each launch.
+- **`SweepUninstall-Setup-<version>.exe`** (about 1.2 MB) installs for all users, with a Start Menu shortcut. You can remove it later from Settings › Apps.
+- **`SweepUninstall-Portable-<version>.exe`** (about 3.3 MB) is the whole app as one exe that runs without installing.
+- **`SweepUninstall-Portable-<version>-win-x64.zip`** is the same portable exe, zipped.
 
-Both ask for administrator rights when they start, because removing programs installed for all users, creating restore points and machine-wide debloat tweaks all need them.
+All of them ask for administrator rights when they start, because removing programs installed for all users, creating restore points and machine-wide debloat tweaks all need them.
+
+SweepUninstall uses the Microsoft Edge WebView2 runtime, which is part of Windows 10 and 11. If it's missing, the installer downloads it.
+
+**Lightweight:** while idle, SweepUninstall uses about 125–135 MB of private memory, counting all of WebView2's helper processes. GPU acceleration is turned off because a list window doesn't need it. Before version 0.4.0, SweepUninstall was built on Electron: a 357 MB install folder, a 116 MB installer, and about 250 MB of memory.
 
 The exes are not code-signed yet, so Windows SmartScreen may show "Windows protected your PC". Click **More info › Run anyway** to start it.
 
 ## Run from source
 
-Requirements: Windows 10 or 11, and [Node.js](https://nodejs.org/) 20 or later.
+Requirements: Windows 10 or 11, [Node.js](https://nodejs.org/) 20 or later, and [Rust](https://rustup.rs/) (stable).
 
 ```bash
 git clone https://github.com/SeanShaffer88/SweepUninstall.git
 cd SweepUninstall
 npm install
-npm start
+npm run dev
 ```
 
-`npm start` builds the React UI with Vite and launches Electron. `npm run dev` relaunches without rebuilding and adds DevTools to the View menu.
-
-When run from source, the app starts without administrator rights. Use **File › Restart as Administrator** or the link in the status bar.
+`npm run dev` starts Vite and the app with live reload. Like the released app, it asks for administrator rights when it starts.
 
 ### Build the installer
 
@@ -148,9 +150,9 @@ When run from source, the app starts without administrator rights. Use **File �
 npm run dist
 ```
 
-This writes the installer and the portable exe to `release/`. The NSIS installer builder can't handle very long folder paths, so build from a short path such as `C:\src\SweepUninstall`.
+The app exe is written to `src-tauri/target/release/sweepuninstall.exe`, and the installer to `src-tauri/target/release/bundle/nsis/`.
 
-Pushing a tag like `v0.2.0` makes GitHub Actions run the tests, build both exes and publish them as a GitHub Release.
+Pushing a tag like `v0.4.0` makes GitHub Actions run the tests, build the installer, the portable exe and the zip, and publish them as a GitHub Release.
 
 ### Run the tests
 
@@ -180,18 +182,20 @@ npm test
 
 | File | Role |
 | --- | --- |
-| `electron/programs.cjs` | Reads the Uninstall registry keys and `Get-AppxPackage` |
-| `electron/leftovers.cjs` | Leftover scan of folders, shortcuts and registry, plus match scoring |
-| `electron/deepscan.cjs` | Scheduled tasks, firewall rules, shell extensions, file types and exe-named data folders |
-| `electron/measure.cjs` | Measures missing sizes and install dates from program folders |
-| `electron/startup.cjs` | Startup & Services: lists entries and turns them on or off without deleting them |
-| `electron/monitor.cjs` | Before/after snapshots of file system and registry, and the diff |
-| `electron/backups.cjs` | Backup (`reg export`, value capture, Recycle Bin), removal and restore |
-| `electron/debloat.cjs` | Debloat tweak catalog: reads, applies and reverts registry values |
-| `electron/restore.cjs` | Creates System Restore points with `Checkpoint-Computer` and explains why Windows skipped one |
-| `electron/paths.cjs` | Well-known install roots, plus guards that refuse to touch system folders |
-| `src/` | React UI |
-| `test/` | Safety tests (`node --test`) |
+| `src-tauri/src/lib.rs` | Small Rust core: runs PowerShell and system tools, reads folders, measures sizes, walks snapshots, moves files to the Recycle Bin |
+| `src/backend/programs.js` | Reads the Uninstall registry keys and `Get-AppxPackage`; extracts program icons |
+| `src/backend/leftovers.js` | Leftover scan of folders, shortcuts and registry, plus match scoring |
+| `src/backend/deepscan.js` | Scheduled tasks, firewall rules, shell extensions, file types and exe-named data folders |
+| `src/backend/measure.js` | Measures missing sizes and install dates from program folders |
+| `src/backend/startup.js` | Startup & Services: lists entries and turns them on or off without deleting them |
+| `src/backend/monitor.js` | Before/after snapshots of file system and registry, and the diff |
+| `src/backend/backups.js` | Backup (`reg export`, value capture, task and firewall export, Recycle Bin), removal and restore |
+| `src/backend/debloat.js` | Debloat tweak catalog: reads, applies and reverts registry values |
+| `src/backend/restore.js` | Creates System Restore points with `Checkpoint-Computer` and explains why Windows skipped one |
+| `src/backend/paths.js` | Well-known install roots, plus guards that refuse to touch system folders |
+| `src/backend/api.js` | Answers the UI's requests by calling the modules above |
+| `src/*.jsx` | React UI |
+| `test/` | Safety tests (`node --test`), run against the same backend code through a Node.js version of the system layer |
 
 ## Limitations
 

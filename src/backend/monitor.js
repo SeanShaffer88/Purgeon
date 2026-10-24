@@ -1,41 +1,19 @@
+import { sys } from './sys.js';
+import * as path from './winpath.js';
 // Installation monitoring: snapshot the file system and registry before and after an
 // installer runs, then record what was added so it can be removed precisely later.
-const fs = require('fs');
-const path = require('path');
-const { runPS } = require('./shell.cjs');
-const { fileRoots, shortcutRoots, isProtected } = require('./paths.cjs');
+import { runPS } from './shell.js';
+import { fileRoots, shortcutRoots, isProtected } from './paths.js';
 
 let storeDir = '';
-const setRoot = (dir) => {
+const setRoot = async (dir) => {
   storeDir = dir;
-  fs.mkdirSync(path.join(storeDir, 'programs'), { recursive: true });
+  await sys.makeDir(path.join(storeDir, 'programs'));
 };
 const sessionFile = () => path.join(storeDir, 'session.json');
 
-// Directories to depth 3, files to depth 2 under every well-known root.
-function snapshotFiles() {
-  const out = [];
-  const walk = (dir, depth) => {
-    let entries;
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const e of entries) {
-      if (e.isSymbolicLink()) continue;
-      const full = path.join(dir, e.name);
-      if (e.isDirectory()) {
-        out.push('D' + full);
-        if (depth < 3) walk(full, depth + 1);
-      } else if (e.isFile() && depth <= 2) {
-        out.push('F' + full);
-      }
-    }
-  };
-  for (const root of [...new Set([...fileRoots(), ...shortcutRoots()])]) walk(root, 1);
-  return out;
-}
+// Directories to depth 3, files to depth 2 under every well-known root (walked natively).
+const snapshotFiles = () => sys.walk([...new Set([...fileRoots(), ...shortcutRoots()])], 3, 2);
 
 const SNAPSHOT_REGISTRY = `
 $out = New-Object System.Collections.Generic.List[string]
@@ -78,7 +56,7 @@ foreach ($t in @(@($CU,'HKEY_CURRENT_USER','Software\\Microsoft\\Windows\\Curren
 
 async function snapshot() {
   const [files, registry] = await Promise.all([
-    Promise.resolve().then(snapshotFiles),
+    snapshotFiles(),
     runPS(SNAPSHOT_REGISTRY).then((s) => s.split(/\r?\n/).filter(Boolean)),
   ]);
   return [...files, ...registry];
@@ -86,17 +64,17 @@ async function snapshot() {
 
 async function start(installer) {
   const before = await snapshot();
-  fs.writeFileSync(sessionFile(), JSON.stringify({ started: new Date().toISOString(), installer, before }));
+  await sys.writeText(sessionFile(), JSON.stringify({ started: new Date().toISOString(), installer, before }));
   return { entries: before.length };
 }
 
-const status = () => {
-  if (!fs.existsSync(sessionFile())) return null;
-  const { started, installer } = JSON.parse(fs.readFileSync(sessionFile(), 'utf8'));
+const status = async () => {
+  if (!(await sys.exists(sessionFile()))) return null;
+  const { started, installer } = JSON.parse(await sys.readText(sessionFile()));
   return { started, installer };
 };
 
-const cancel = () => fs.rmSync(sessionFile(), { force: true });
+const cancel = () => sys.removePath(sessionFile());
 
 // Keep only top-most added paths: if a folder was added, its children are implied.
 function collapse(paths) {
@@ -123,21 +101,20 @@ function collapse(paths) {
 }
 
 async function finish(name) {
-  const session = JSON.parse(fs.readFileSync(sessionFile(), 'utf8'));
+  const session = JSON.parse(await sys.readText(sessionFile()));
   const before = new Set(session.before.map((s) => s.toLowerCase()));
   const after = await snapshot();
   const added = after.filter((s) => !before.has(s.toLowerCase()));
 
   const pick = (prefix) => added.filter((s) => s[0] === prefix).map((s) => s.slice(1));
-  const fileItems = collapse([...pick('D'), ...pick('F')])
-    .filter((p) => !isProtected(p))
-    .map((p) => {
-      let kind = 'file';
-      try {
-        kind = fs.statSync(p).isDirectory() ? 'dir' : 'file';
-      } catch {}
-      return { kind, path: p, confidence: 'high', reason: 'Created during installation' };
-    });
+  const fileItems = await Promise.all(
+    collapse([...pick('D'), ...pick('F')])
+      .filter((p) => !isProtected(p))
+      .map(async (p) => {
+        const st = await sys.stat(p).catch(() => null);
+        return { kind: st?.dir ? 'dir' : 'file', path: p, confidence: 'high', reason: 'Created during installation' };
+      })
+  );
   const keyItems = collapse(pick('K')).map((p) => {
     if (/\\SYSTEM\\CurrentControlSet\\Services\\[^\\]+$/i.test(p)) {
       return { kind: 'service', path: p.split('\\').pop(), confidence: 'high', reason: 'Service created during installation' };
@@ -162,20 +139,18 @@ async function finish(name) {
     uninstallKeys,
     items: [...keyItems, ...valueItems, ...fileItems],
   };
-  fs.writeFileSync(path.join(storeDir, 'programs', `${record.id}.json`), JSON.stringify(record, null, 2));
-  cancel();
+  await sys.writeText(path.join(storeDir, 'programs', `${record.id}.json`), JSON.stringify(record, null, 2));
+  await cancel();
   return record;
 }
 
-function list() {
+async function list() {
   const dir = path.join(storeDir, 'programs');
-  return fs
-    .readdirSync(dir)
-    .filter((f) => f.endsWith('.json'))
-    .map((f) => JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const files = (await sys.readDir(dir).catch(() => [])).filter((f) => f.file && f.name.endsWith('.json'));
+  const records = await Promise.all(files.map(async (f) => JSON.parse(await sys.readText(path.join(dir, f.name)))));
+  return records.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-const remove = (id) => fs.rmSync(path.join(storeDir, 'programs', `${id}.json`), { force: true });
+const remove = (id) => sys.removePath(path.join(storeDir, 'programs', `${id}.json`));
 
-module.exports = { setRoot, start, status, cancel, finish, list, remove, collapse };
+export { setRoot, start, status, cancel, finish, list, remove, collapse };

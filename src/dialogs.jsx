@@ -26,6 +26,35 @@ export function Dialog({ title, onClose, children, buttons, width = 520 }) {
   );
 }
 
+// Yes/No question, optionally with a checkbox (such as "Create a restore point first").
+export function ConfirmDialog({ message, detail, checkboxLabel, checkboxChecked, onAnswer }) {
+  const [checked, setChecked] = useState(!!checkboxChecked);
+  return (
+    <Dialog
+      title="SweepUninstall"
+      onClose={() => onAnswer({ ok: false, checked })}
+      width={500}
+      buttons={
+        <>
+          <button className="primary" autoFocus onClick={() => onAnswer({ ok: true, checked })}>
+            Yes
+          </button>
+          <button onClick={() => onAnswer({ ok: false, checked })}>No</button>
+        </>
+      }
+    >
+      <p className="heading">{message}</p>
+      {detail && <p className="confirm-detail">{detail}</p>}
+      {checkboxLabel && (
+        <label className="confirm-check">
+          <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
+          {checkboxLabel}
+        </label>
+      )}
+    </Dialog>
+  );
+}
+
 export function Busy({ message, onStop }) {
   const [stopping, setStopping] = useState(false);
   return (

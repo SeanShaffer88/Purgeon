@@ -1,18 +1,26 @@
 // Safety tests for the logic that decides what gets deleted or changed.
 // Run with: npm test
-const test = require('node:test');
-const assert = require('node:assert/strict');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { setSys } from '../src/backend/sys.js';
+import { createNodeSys } from './node-sys.js';
+import * as winpath from '../src/backend/winpath.js';
+import { nameKey, nameMatches, publisherKey, under, scanFiles, scoreFor, merge, AUTO_TICK } from '../src/backend/leftovers.js';
+import { isProtected, GENERIC } from '../src/backend/paths.js';
+import { collapse } from '../src/backend/monitor.js';
+import { TWEAKS, needsAdmin } from '../src/backend/debloat.js';
+import { explain } from '../src/backend/restore.js';
+import { iconPathFor, formatDate } from '../src/backend/programs.js';
+import { programFolder, folderSize } from '../src/backend/measure.js';
+import { approvedEnabled } from '../src/backend/startup.js';
 
-const { nameKey, nameMatches, publisherKey, under, scanFiles } = require('../electron/leftovers.cjs');
-const { isProtected, GENERIC } = require('../electron/paths.cjs');
-const { collapse } = require('../electron/monitor.cjs');
-const { TWEAKS, needsAdmin } = require('../electron/debloat.cjs');
-const { explain } = require('../electron/restore.cjs');
-const { iconPathFor, formatDate } = require('../electron/programs.cjs');
-
+const here = path.dirname(fileURLToPath(import.meta.url));
+const nodeSys = createNodeSys();
+setSys(nodeSys);
 test('nameKey strips versions, architectures and punctuation', () => {
   assert.equal(nameKey('Foo Editor 3.2.1 (x64)'), 'fooeditor');
   assert.equal(nameKey('Notepad++ (64-bit x64)'), 'notepad');
@@ -99,17 +107,16 @@ test('icon paths and dates are parsed from registry strings', () => {
   assert.equal(formatDate(''), '');
 });
 
-test('scanFiles finds program folders and never offers protected or generic ones', (t) => {
+test('scanFiles finds program folders and never offers protected or generic ones', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-test-'));
-  const saved = {};
-  const env = { ProgramFiles: 'pf', 'ProgramFiles(x86)': 'pf86', ProgramData: 'pd', APPDATA: 'roaming', LOCALAPPDATA: 'local' };
-  for (const [k, v] of Object.entries(env)) {
-    saved[k] = process.env[k];
-    process.env[k] = path.join(root, v);
-    fs.mkdirSync(process.env[k], { recursive: true });
+  const env = { ...process.env };
+  for (const [k, v] of Object.entries({ ProgramFiles: 'pf', 'ProgramFiles(x86)': 'pf86', ProgramData: 'pd', APPDATA: 'roaming', LOCALAPPDATA: 'local' })) {
+    env[k] = path.join(root, v);
+    fs.mkdirSync(env[k], { recursive: true });
   }
+  setSys({ ...nodeSys, info: { ...nodeSys.info, env } });
   t.after(() => {
-    for (const [k, v] of Object.entries(saved)) v === undefined ? delete process.env[k] : (process.env[k] = v);
+    setSys(nodeSys);
     fs.rmSync(root, { recursive: true, force: true });
   });
   const mk = (...p) => fs.mkdirSync(path.join(root, ...p), { recursive: true });
@@ -123,7 +130,7 @@ test('scanFiles finds program folders and never offers protected or generic ones
   mk(startMenu, 'Foo Editor');
   mk(startMenu, 'Acme Studio Pro');
 
-  const items = scanFiles({ name: 'Foo Editor 2.1 (x64)', publisher: 'Acme Inc.', location: path.join(root, 'pf', 'Foo Editor') }, () => ({}));
+  const items = await scanFiles({ name: 'Foo Editor 2.1 (x64)', publisher: 'Acme Inc.', location: path.join(root, 'pf', 'Foo Editor') }, async () => new Map());
   const paths = items.map((i) => path.relative(root, i.path));
   assert.ok(paths.includes(path.join('pf', 'Foo Editor')), 'install folder');
   assert.ok(paths.includes(path.join('pf', 'Acme', 'FooEditor')), 'folder under publisher');
@@ -139,7 +146,6 @@ test('scanFiles finds program folders and never offers protected or generic ones
   assert.equal(new Set(items.map((i) => i.path.toLowerCase())).size, items.length, 'no duplicates');
 });
 
-const { programFolder, folderSize } = require('../electron/measure.cjs');
 
 test('folderSize adds file sizes and respects its budget', async (t) => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-size-'));
@@ -154,16 +160,15 @@ test('folderSize adds file sizes and respects its budget', async (t) => {
   assert.equal(limited.truncated, true);
 });
 
-test('programFolder never measures protected, cache or unrelated folders', () => {
+test('programFolder never measures protected, cache or unrelated folders', async () => {
   const win = process.env.SystemRoot || 'C:\\Windows';
-  assert.equal(programFolder({ location: win }), null);
-  assert.equal(programFolder({ location: 'C:' }), null);
-  assert.equal(programFolder({ location: '', icon: `${win}\\Installer\\{GUID}\\app.ico` }), null);
-  assert.equal(programFolder({ location: '', icon: `${process.env.ProgramFiles}\\NVIDIA Corporation\\Installer2\\x\\app.exe` }), null);
-  assert.equal(programFolder({ location: '', icon: `${process.env.ProgramData}\\Package Cache\\{GUID}\\setup.exe` }), null);
+  assert.equal(await programFolder({ location: win }), null);
+  assert.equal(await programFolder({ location: 'C:' }), null);
+  assert.equal(await programFolder({ location: '', icon: `${win}\\Installer\\{GUID}\\app.ico` }), null);
+  assert.equal(await programFolder({ location: '', icon: `${process.env.ProgramFiles}\\NVIDIA Corporation\\Installer2\\x\\app.exe` }), null);
+  assert.equal(await programFolder({ location: '', icon: `${process.env.ProgramData}\\Package Cache\\{GUID}\\setup.exe` }), null);
 });
 
-const { scoreFor, merge, AUTO_TICK } = require('../electron/leftovers.cjs');
 
 test('merge scores items, keeps the strongest duplicate and ticks only confident ones', () => {
   const out = merge([
@@ -179,7 +184,6 @@ test('merge scores items, keeps the strongest duplicate and ticks only confident
   assert.ok(scoreFor({ reason: 'Publisher folder (would be empty)' }) < AUTO_TICK, 'publisher guesses are never ticked');
 });
 
-const { approvedEnabled } = require('../electron/startup.cjs');
 
 test('StartupApproved flags are read like Task Manager', () => {
   assert.equal(approvedEnabled(''), true, 'no flag means enabled');
@@ -192,8 +196,25 @@ test('StartupApproved flags are read like Task Manager', () => {
 test('PowerShell snippets never use the automatic $args variable', () => {
   // `$args`/`@args` silently splat an empty list in a script block: a restore once ran
   // New-NetFirewallRule with no settings and still reported success.
-  for (const f of fs.readdirSync(path.join(__dirname, '..', 'electron')).filter((n) => n.endsWith('.cjs'))) {
-    const src = fs.readFileSync(path.join(__dirname, '..', 'electron', f), 'utf8');
+  const dir = path.join(here, '..', 'src', 'backend');
+  for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.js'))) {
+    const src = fs.readFileSync(path.join(dir, f), 'utf8');
     assert.ok(!/[@$]args\b/.test(src), `${f} uses $args/@args inside PowerShell`);
   }
+});
+
+test('winpath joins and resolves Windows paths like Node does', () => {
+  for (const [parts, want] of [
+    [['C:\\Program Files', 'Foo'], 'C:\\Program Files\\Foo'],
+    [['C:\\Users\\x\\AppData\\Local', '..', 'LocalLow'], 'C:\\Users\\x\\AppData\\LocalLow'],
+    [['C:\\A\\', '\\B\\', 'c.txt'], 'C:\\A\\B\\c.txt'],
+    [['C:\\A', '.', 'B'], 'C:\\A\\B'],
+  ]) assert.equal(winpath.join(...parts), want);
+  assert.equal(winpath.resolve('C:\\Program Files\\Foo\\..\\..\\Windows'), 'C:\\Windows', '.. is resolved before the protected-folder check');
+  assert.equal(winpath.resolve('C:/A/b'), 'C:\\A\\b');
+  assert.equal(winpath.basename('C:\\A\\Foo.lnk', '.lnk'), 'Foo');
+  assert.equal(winpath.extname('C:\\A\\Foo.Setup.exe'), '.exe');
+  assert.equal(winpath.dirname('C:\\A\\b.exe'), 'C:\\A');
+  assert.equal(winpath.dirname('C:\\b.exe'), 'C:\\');
+  assert.ok(isProtected('C:\\Program Files\\Foo\\..\\..\\Windows'), 'a path climbing into Windows is protected');
 });

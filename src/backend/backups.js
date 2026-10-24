@@ -1,15 +1,15 @@
 // Backs up and removes leftover items, and restores backups.
 // Registry keys are exported to .reg files, values are recorded with their type and data,
 // and files go to the Recycle Bin, so every removal can be undone.
-const fs = require('fs');
-const path = require('path');
-const { reg, runPS, runPSJson, psq } = require('./shell.cjs');
-const { isProtected } = require('./paths.cjs');
+import { sys } from './sys.js';
+import * as path from './winpath.js';
+import { reg, runPS, runPSJson, psq, execFile } from './shell.js';
+import { isProtected } from './paths.js';
 
 let backupRoot = '';
-const setRoot = (dir) => {
+const setRoot = async (dir) => {
   backupRoot = dir;
-  fs.mkdirSync(backupRoot, { recursive: true });
+  await sys.makeDir(backupRoot);
 };
 
 const slug = (s) => (s || 'items').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').slice(0, 40);
@@ -36,10 +36,10 @@ async function readValues(values) {
 
 const REG_TYPE = { String: 'REG_SZ', ExpandString: 'REG_EXPAND_SZ', DWord: 'REG_DWORD', QWord: 'REG_QWORD', Binary: 'REG_BINARY', MultiString: 'REG_MULTI_SZ' };
 
-async function removeItems({ title, items, trashItem }) {
+async function removeItems({ title, items, trashItem = (p) => sys.trash(p) }) {
   const id = `${new Date().toISOString().replace(/[:.]/g, '-')}_${slug(title)}`;
   const dir = path.join(backupRoot, id);
-  fs.mkdirSync(dir, { recursive: true });
+  await sys.makeDir(dir);
   const manifest = { id, title, created: new Date().toISOString(), entries: [] };
   const results = [];
   const log = (item, ok, detail) => results.push({ ...item, ok, detail });
@@ -55,9 +55,7 @@ async function removeItems({ title, items, trashItem }) {
       continue;
     }
     await runPS(`Stop-Service -Name ${psq(item.path)} -Force -ErrorAction SilentlyContinue`).catch(() => {});
-    const r = await new Promise((res) =>
-      require('child_process').execFile('sc.exe', ['delete', item.path], { windowsHide: true }, (e, out) => res({ ok: !e, out }))
-    );
+    const r = await execFile('sc.exe', ['delete', item.path]);
     if (r.ok) manifest.entries.push({ kind: 'service', path: item.path, file: path.basename(file) });
     log(item, r.ok, r.ok ? 'Service deleted' : r.out);
   }
@@ -122,7 +120,7 @@ async function removeItems({ title, items, trashItem }) {
     }
     const r = await reg(['delete', item.path, '/f']);
     if (r.ok) manifest.entries.push({ kind: 'key', path: item.path, file: path.basename(file) });
-    else fs.rmSync(file, { force: true });
+    else await sys.removePath(file);
     log(item, r.ok, r.ok ? 'Key deleted' : r.stderr);
   }
 
@@ -131,7 +129,7 @@ async function removeItems({ title, items, trashItem }) {
       log(item, false, 'Protected location, skipped');
       continue;
     }
-    if (!fs.existsSync(item.path)) {
+    if (!(await sys.exists(item.path))) {
       log(item, true, 'Already gone');
       continue;
     }
@@ -140,32 +138,30 @@ async function removeItems({ title, items, trashItem }) {
       manifest.entries.push({ kind: item.kind, path: item.path, recycled: true });
       log(item, true, 'Moved to Recycle Bin');
     } catch (e) {
-      log(item, false, `Could not move to Recycle Bin: ${e.message}`);
+      log(item, false, `Could not move to Recycle Bin: ${e?.message || e}`);
     }
   }
 
-  fs.writeFileSync(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+  await sys.writeText(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
   return { backupId: id, results };
 }
 
-function list() {
-  if (!fs.existsSync(backupRoot)) return [];
-  return fs
-    .readdirSync(backupRoot)
-    .map((id) => {
-      try {
-        return JSON.parse(fs.readFileSync(path.join(backupRoot, id, 'manifest.json'), 'utf8'));
-      } catch {
-        return null;
-      }
-    })
-    .filter(Boolean)
-    .sort((a, b) => b.created.localeCompare(a.created));
+async function list() {
+  const dirs = (await sys.readDir(backupRoot).catch(() => [])).filter((d) => d.dir);
+  const manifests = await Promise.all(
+    dirs.map((d) =>
+      sys
+        .readText(path.join(backupRoot, d.name, 'manifest.json'))
+        .then(JSON.parse)
+        .catch(() => null)
+    )
+  );
+  return manifests.filter(Boolean).sort((a, b) => b.created.localeCompare(a.created));
 }
 
 async function restore(id) {
   const dir = path.join(backupRoot, id);
-  const manifest = JSON.parse(fs.readFileSync(path.join(dir, 'manifest.json'), 'utf8'));
+  const manifest = JSON.parse(await sys.readText(path.join(dir, 'manifest.json')));
   const results = [];
   for (const e of manifest.entries) {
     if (e.kind === 'key') {
@@ -207,8 +203,10 @@ async function restore(id) {
   return results;
 }
 
+// Deletes one backup folder. The id must be a single folder name inside the backup root.
 function remove(id) {
-  fs.rmSync(path.join(backupRoot, id), { recursive: true, force: true });
+  if (!id || /[\\/]|\.\./.test(id)) throw new Error('Invalid backup id');
+  return sys.removePath(path.join(backupRoot, id));
 }
 
-module.exports = { setRoot, removeItems, list, restore, remove };
+export { setRoot, removeItems, list, restore, remove };

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AboutDialog, Busy, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog } from './dialogs.jsx';
+import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog } from './dialogs.jsx';
+import { setConfirmUI } from './backend/api.js';
 import { DebloatView } from './debloat.jsx';
 import { StartupView } from './startup.jsx';
 
@@ -31,7 +32,7 @@ function toRow(view, r) {
   return { ...r, sizeText: formatSize(r.sizeKB), sortSize: r.sizeKB || 0, date: r.installDate };
 }
 
-// Mirrors the native menu in electron/main.cjs, which stays hidden and only provides accelerators.
+// The menu bar. The shortcuts shown here are handled by the keydown listener in App.
 const MENUS = [
   ['File', [['export', 'Export to HTML...', 'Ctrl+S'], null, ['elevate', 'Restart as Administrator'], null, ['quit', 'Exit']]],
   [
@@ -94,7 +95,7 @@ function MenuBar({ onAction, checked = {} }) {
                     key={j}
                     onClick={() => {
                       setOpen(null);
-                      it[0] === 'quit' ? window.close() : onAction(it[0]);
+                      onAction(it[0]);
                     }}
                   >
                     <span>
@@ -183,19 +184,18 @@ export default function App() {
     api.invoke('monitor:status').then((s) => s && setModal({ type: 'monitor', resume: s }));
   }, []);
 
-  // Load icons a few at a time so the list appears immediately.
+  // Icons arrive in one batch after the list is shown; programs without one keep a placeholder.
   useEffect(() => {
     if (view !== 'desktop') return;
     let cancelled = false;
-    const queue = rows.filter((r) => !(r.key in icons));
-    const worker = async () => {
-      while (queue.length && !cancelled) {
-        const r = queue.shift();
-        const url = await api.invoke('icon:get', r).catch(() => null);
-        if (!cancelled) setIcons((m) => ({ ...m, [r.key]: url }));
-      }
-    };
-    Array.from({ length: 6 }, worker);
+    const missing = rows.filter((r) => !(r.key in icons));
+    if (!missing.length) return;
+    api
+      .invoke('icons:get', missing)
+      .then((found) => {
+        if (!cancelled) setIcons((m) => ({ ...m, ...Object.fromEntries(missing.map((r) => [r.key, found[r.key] || null])) }));
+      })
+      .catch(() => {});
     return () => {
       cancelled = true;
     };
@@ -472,6 +472,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       api.invoke('export:html', { title: 'Export to HTML', html });
     },
     elevate: () => api.invoke('app:elevate'),
+    quit: () => api.invoke('app:quit'),
     find: () => searchRef.current?.focus(),
     refresh: () => load(),
     monitor: () => setModal({ type: 'monitor' }),
@@ -494,7 +495,31 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
   };
   const dispatchRef = useRef(dispatch);
   dispatchRef.current = dispatch;
-  useEffect(() => api.onMenu((a) => dispatchRef.current(a)), []);
+  // Keyboard shortcuts (they match the accelerators shown in the menus).
+  useEffect(() => {
+    const onKey = (e) => {
+      const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
+      const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+      let action = null;
+      if (e.ctrlKey && !e.altKey && /^[1-6]$/.test(key)) action = `view:${['desktop', 'store', 'monitored', 'backups', 'debloat', 'startup'][Number(key) - 1]}`;
+      else if (e.ctrlKey && key === 'f') action = 'find';
+      else if (e.ctrlKey && key === 's') action = 'export';
+      else if (e.ctrlKey && key === 'm') action = 'monitor';
+      else if (e.ctrlKey && key === 'l') action = 'analyze';
+      else if (key === 'F5') action = 'refresh';
+      else if (e.altKey && key === 'Enter') action = 'properties';
+      else if (!typing && key === 'Delete') action = e.shiftKey ? 'force' : 'uninstall';
+      if (!action || document.querySelector('.overlay')) return;
+      e.preventDefault();
+      dispatchRef.current(action);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Confirmations are shown in the app's own dialog.
+  const [confirm, setConfirm] = useState(null);
+  useEffect(() => setConfirmUI((options) => new Promise((resolve) => setConfirm({ ...options, resolve }))), []);
   // Sizes and dates measured from install folders arrive one program at a time.
   useEffect(
     () =>
@@ -713,6 +738,15 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       )}
 
       {busy && <Busy message={busy} onStop={busyStop} />}
+      {confirm && (
+        <ConfirmDialog
+          {...confirm}
+          onAnswer={(answer) => {
+            setConfirm(null);
+            confirm.resolve(confirm.checkboxLabel ? answer : answer.ok);
+          }}
+        />
+      )}
       {modal?.type === 'leftovers' && <LeftoversDialog {...modal} onClose={() => setModal(null)} />}
       {modal?.type === 'results' && <ResultsDialog {...modal} onClose={() => setModal(null)} />}
       {modal?.type === 'properties' && <PropertiesDialog program={modal.program} onClose={() => setModal(null)} />}
