@@ -46,6 +46,21 @@ function Approved($key, $name) {
   if ($v -is [byte[]]) { return ($v | ForEach-Object { $_.ToString('x2') }) -join '' }
   return ''
 }
+# A service can be reconfigured only when it isn't protected (PPL) and Administrators hold the
+# "change configuration" right (DC, or generic all/write) with no deny entry for it.
+function Changeable($name) {
+  $prot = (& sc.exe qprotection $name 2>$null | Out-String)
+  if ($prot -notmatch 'PROTECTION LEVEL:\\s*NONE') { return $false }
+  $sd = (& sc.exe sdshow $name 2>$null | Out-String).Trim()
+  $allow = $false
+  foreach ($ace in [regex]::Matches($sd, '\\(([AD]);[^;]*;([^;]*);[^;]*;[^;]*;BA\\)')) {
+    $rights = @([regex]::Matches($ace.Groups[2].Value, '..') | ForEach-Object { $_.Value })
+    $grants = ($rights -contains 'DC') -or ($rights -contains 'GA') -or ($rights -contains 'GW')
+    if ($grants -and $ace.Groups[1].Value -eq 'D') { return $false }
+    if ($grants) { $allow = $true }
+  }
+  return $allow
+}
 $out = New-Object System.Collections.ArrayList
 
 foreach ($r in $in.runKeys) {
@@ -79,6 +94,8 @@ foreach ($s in Get-CimInstance Win32_Service -ErrorAction SilentlyContinue) {
   $company = Company $s.PathName
   if (-not $isManaged -and ($company -match '^Microsoft' -or $s.PathName -match '\\\\Windows\\\\(System32|SysWOW64)\\\\(svchost|lsass|services)\\.exe')) { continue }
   if (-not $isManaged -and -not $company -and $s.PathName -match '^\\W*[a-z]:\\\\Windows\\\\') { continue }
+  # Only services SweepUninstall can actually change (ones it already switched stay listed).
+  if (-not $isManaged -and -not (Changeable $s.Name)) { continue }
   [void]$out.Add([pscustomobject]@{ type = 'service'; source = 'service'; name = $s.Name; display = $s.DisplayName; command = $s.PathName; startMode = $s.StartMode; state = $s.State; company = $company })
 }
 @($out) | ConvertTo-Json -Compress -Depth 3

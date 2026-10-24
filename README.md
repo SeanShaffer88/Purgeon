@@ -56,7 +56,7 @@ It has a compact single-list window with a dark terminal theme. It is built with
 
 **Debloat Windows**
 - The **Debloat Windows** button next to the view picker (or `Ctrl+5`) lists 26 safe, reversible tweaks in five groups: Privacy & telemetry, Start/search/taskbar, Ads & suggestions, Explorer & UI, and Windows Update.
-- Each option is either **ENABLED** (green, the tweak is applied) or **DISABLED** (red, Windows default). Click an option to toggle it. Turning one off restores the Windows default.
+- Each option is either **ENABLED** (green, the tweak is applied) or **DISABLED** (red, Windows default). Click an option to toggle it. Turning one off puts back exactly the value you had before SweepUninstall applied it (or Windows' default if it never changed it).
 - Each option says when it takes effect: **Applies immediately**, **Needs Explorer restart** or **Needs reboot**. A **Restart Explorer** button appears when an Explorer change is pending.
 - Machine-wide policies are tagged **Admin** and need SweepUninstall to run as administrator.
 - Only options that are safe and widely recommended are included: no service removal, no app removal, and no security features turned off.
@@ -65,7 +65,7 @@ It has a compact single-list window with a dark terminal theme. It is built with
 - The **Startup & Services** button in the second toolbar (or `Ctrl+6`) lists everything that starts with Windows:
   - Run entries and Startup-folder shortcuts
   - scheduled tasks outside Windows' own `\Microsoft\` folder
-  - third-party services that start automatically
+  - third-party services that start automatically, but only ones that can actually be changed (Windows-protected services, and services that lock their own settings, are not listed)
 - Each entry shows **ENABLED** (green) or **DISABLED** (red), its publisher, its command, and which installed program it belongs to. Click to toggle.
 - Turning an entry off never deletes it:
   - Run entries and shortcuts use Windows' own on/off switch, the same one Task Manager's Startup tab uses.
@@ -80,11 +80,24 @@ It has a compact single-list window with a dark terminal theme. It is built with
   - Firewall rules are saved with their settings.
   - Services have their definition exported.
   - Files go to the Recycle Bin.
-- **Tools › Backups** (`Ctrl+4`) restores registry entries, tasks, firewall rules and services from any removal.
+- **Tools › Backups** (`Ctrl+4`) restores any removal: registry entries, tasks, firewall rules, services, and files, which are moved back out of the Recycle Bin automatically.
+
+**Change History and undo**
+- **Tools › Change History** (`Ctrl+H`) lists every change SweepUninstall makes: removals, debloat tweaks, startup and service changes, uninstalls, restores and restore points.
+- Double-click a change (or press `Del`) to undo it. Undone changes stay listed and are marked **(undone)**.
+- After a removal, the report has an **Undo** button that puts everything back at once.
+- An uninstaller run can't be undone directly; reinstall the program or use the restore point made before it.
 
 **Safety**
 - An automated test suite runs on every build and blocks a release if it fails. It covers name matching, the protected-folder guard, snapshot comparison, debloat reversibility, match scores and the startup switches.
 - SweepUninstall never offers drive roots, relative paths, the Windows folder, your profile folder, install roots, or folders with generic names such as `Microsoft` or `Common Files`.
+- It refuses to delete registry keys that Windows depends on (hive roots, `HKLM\SYSTEM`, Windows' own keys under `SOFTWARE\Microsoft`, file-extension keys and shared shell keys), even when told to.
+- It never deletes Windows' own services (protected ones, or ones whose program is in the Windows folder) or scheduled tasks under `\Microsoft\`.
+- Only services whose settings can actually be changed are offered in Startup & Services.
+
+**Display**
+- The window opens at a size that fits your screen, and very large screens get a little extra zoom automatically. Windows' display scale setting is respected.
+- `Ctrl++` / `Ctrl+-` / `Ctrl+0` (or View › Zoom) change the zoom; your choice is remembered.
 
 **Also**
 - Remove a stale uninstall entry
@@ -178,6 +191,8 @@ npm test
 | `Ctrl+5` | Debloat Windows |
 | `Ctrl+6` | Startup & Services |
 | `Ctrl+M` | Monitor an installation |
+| `Ctrl+H` | Change History |
+| `Ctrl++` / `Ctrl+-` / `Ctrl+0` | Zoom in / out / reset |
 | `Ctrl+S` | Export to HTML |
 | `F5` | Refresh |
 
@@ -204,13 +219,13 @@ npm test
 
 - The installation monitor records folders up to three levels deep and files up to two levels deep under the usual install roots. For the registry, it records keys up to two levels under `SOFTWARE`, plus Uninstall, App Paths, Run and Services. A file added deep inside a folder that already existed is not captured.
 - Changes made by other programs while monitoring is active are recorded too. Review the list before deleting.
-- Files are restored from the Recycle Bin, not by SweepUninstall. A restored service comes back after a restart.
+- Files can be restored only while they are still in the Recycle Bin. A restored service comes back after a restart.
 - Measured sizes stop after 15 seconds or 300,000 files per folder. A "+" after the size means it is at least that large.
 
 ## Disclaimer
 
 SweepUninstall is an independent project, written from scratch using documented Windows APIs.
-It is not affiliated with, and contains no code from, Total Uninstall or Geek Uninstaller.
+It is not affiliated with any other uninstaller and contains no code from one.
 Uninstalling software changes your system, so review what is selected before deleting.
 
 ## License

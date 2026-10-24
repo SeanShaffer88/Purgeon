@@ -3,7 +3,7 @@ import * as path from './winpath.js';
 // Heuristic analysis of what a program left on disk and in the registry.
 // Items: { kind: 'dir'|'file'|'key'|'value'|'service', path, name?, confidence: 'high'|'low', reason }
 import { runPSJson, psq } from './shell.js';
-import { fileRoots, shortcutRoots, GENERIC, isProtected } from './paths.js';
+import { fileRoots, shortcutRoots, GENERIC, isProtected, isProtectedKey } from './paths.js';
 import { scanDeep } from './deepscan.js';
 
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -218,6 +218,9 @@ function scoreFor(item) {
 function merge(items) {
   const byId = new Map();
   for (const raw of items) {
+    // Never offer a key whose deletion could harm Windows, nor a file in a protected folder.
+    if (raw.kind === 'key' && isProtectedKey(raw.path)) continue;
+    if ((raw.kind === 'dir' || raw.kind === 'file') && isProtected(raw.path)) continue;
     const score = scoreFor(raw);
     const item = { ...raw, score, confidence: score >= AUTO_TICK ? 'high' : 'low' };
     const id = `${item.kind}|${item.path}|${item.name || ''}`.toLowerCase();

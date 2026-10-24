@@ -265,6 +265,23 @@ fn quit(app: tauri::AppHandle) {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .setup(|app| {
+            // Size the window to the screen it opens on (in Windows' scaled units, so the
+            // display scale setting is respected), then show it.
+            if let Some(window) = app.get_webview_window("main") {
+                if let Ok(Some(monitor)) = window.current_monitor() {
+                    let scale = monitor.scale_factor();
+                    let area = monitor.work_area();
+                    let (w, h) = (area.size.width as f64 / scale, area.size.height as f64 / scale);
+                    let width = (w * 0.5).clamp(760.0, 1500.0).min(w * 0.95);
+                    let height = (h * 0.7).clamp(560.0, 1100.0).min(h * 0.92);
+                    let _ = window.set_size(tauri::LogicalSize::new(width, height));
+                    let _ = window.center();
+                }
+                let _ = window.show();
+            }
+            Ok(())
+        })
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             run_ps, exec, run_command_line, launch, read_dir, stat, exists, read_text, write_text, make_dir, remove_path, move_to_trash, walk, folder_size, sys_info, quit

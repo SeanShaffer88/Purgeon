@@ -214,10 +214,22 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove }) {
   );
 }
 
-export function ResultsDialog({ title, results, note, onClose }) {
+export function ResultsDialog({ title, results, note, onClose, onUndo }) {
   const failed = results.filter((r) => !r.ok);
   return (
-    <Dialog title={title} onClose={onClose} width={640} buttons={<button className="primary" onClick={onClose}>OK</button>}>
+    <Dialog
+      title={title}
+      onClose={onClose}
+      width={640}
+      buttons={
+        <>
+          {onUndo && results.some((r) => r.ok) && <button onClick={onUndo}>Undo</button>}
+          <button className="primary" onClick={onClose}>
+            OK
+          </button>
+        </>
+      }
+    >
       <p className="heading">
         {failed.length ? `${results.length - failed.length} of ${results.length} items done, ${failed.length} failed.` : `All ${results.length} items done.`}
       </p>
@@ -394,7 +406,7 @@ export function AboutDialog({ onClose }) {
       <p className="heading">SweepUninstall 0.1</p>
       <p>Uninstalls programs, then hunts down the leftover files, registry keys, startup entries and services they leave behind.</p>
       <p>You can monitor installations to record exactly what they change, and every removal is backed up first.</p>
-      <p className="muted">An independent project, not affiliated with the makers of Total Uninstall or Geek Uninstaller.</p>
+      <p className="muted">An independent project, not affiliated with any other uninstaller.</p>
     </Dialog>
   );
 }

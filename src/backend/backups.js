@@ -4,7 +4,7 @@
 import { sys } from './sys.js';
 import * as path from './winpath.js';
 import { reg, runPS, runPSJson, psq, execFile } from './shell.js';
-import { isProtected } from './paths.js';
+import { isProtected, isProtectedKey } from './paths.js';
 
 let backupRoot = '';
 const setRoot = async (dir) => {
@@ -48,6 +48,22 @@ async function removeItems({ title, items, trashItem = (p) => sys.trash(p) }) {
   // exported first; importing it back recreates the service after a reboot.
   let s = 0;
   for (const item of items.filter((i) => i.kind === 'service')) {
+    // Never delete Windows' own services: protected ones, or ones whose program lives in the Windows folder.
+    const guard = await runPS(`
+      $s = Get-CimInstance Win32_Service -Filter ${psq(`Name='${String(item.path).replace(/'/g, "''")}'`)} -ErrorAction SilentlyContinue
+      if (-not $s) { 'GONE'; return }
+      $prot = (& sc.exe qprotection ${psq(item.path)} 2>$null | Out-String)
+      if ($prot -notmatch 'PROTECTION LEVEL:\\s*NONE') { 'PROTECTED'; return }
+      if ([string]$s.PathName -match ('^\\W*' + [regex]::Escape($env:SystemRoot) + '\\\\')) { 'WINDOWS'; return }
+      'OK'`).catch(() => 'ERR');
+    if (/^GONE/.test(guard.trim())) {
+      log(item, true, 'Already gone');
+      continue;
+    }
+    if (!/^OK/.test(guard.trim())) {
+      log(item, false, /^ERR/.test(guard.trim()) ? 'Could not check the service, not deleted' : 'Windows service, skipped');
+      continue;
+    }
     const file = path.join(dir, `service-${++s}.reg`);
     const ex = await reg(['export', `HKLM\\SYSTEM\\CurrentControlSet\\Services\\${item.path}`, file, '/y']);
     if (!ex.ok) {
@@ -63,6 +79,10 @@ async function removeItems({ title, items, trashItem = (p) => sys.trash(p) }) {
   // Scheduled tasks: exported to XML, then unregistered.
   let t = 0;
   for (const item of items.filter((i) => i.kind === 'task')) {
+    if (/^\\Microsoft\\/i.test(item.path)) {
+      log(item, false, 'Windows task, skipped');
+      continue;
+    }
     const file = path.join(dir, `task-${++t}.xml`);
     const out = await runPS(`
       $t = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { ($_.TaskPath + $_.TaskName) -eq ${psq(item.path)} } | Select-Object -First 1
@@ -112,6 +132,10 @@ async function removeItems({ title, items, trashItem = (p) => sys.trash(p) }) {
 
   let n = 0;
   for (const item of items.filter((i) => i.kind === 'key')) {
+    if (isProtectedKey(item.path)) {
+      log(item, false, 'Protected Windows key, skipped');
+      continue;
+    }
     const file = path.join(dir, `key-${++n}.reg`);
     const ex = await reg(['export', item.path, file, '/y']);
     if (!ex.ok) {
@@ -142,6 +166,11 @@ async function removeItems({ title, items, trashItem = (p) => sys.trash(p) }) {
     }
   }
 
+  // Keep a backup only when something was actually removed.
+  if (!manifest.entries.length) {
+    await sys.removePath(dir);
+    return { backupId: null, results };
+  }
   await sys.writeText(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
   return { backupId: id, results };
 }
@@ -157,6 +186,35 @@ async function list() {
     )
   );
   return manifests.filter(Boolean).sort((a, b) => b.created.localeCompare(a.created));
+}
+
+// Moves the newest Recycle Bin copy of `original` back into place. Each recycled item has a
+// $I record holding its original path (format 2: path length at byte 24, UTF-16 path from 28;
+// format 1: fixed 520-byte path from 24) next to the $R item itself.
+function restoreFromRecycleBin(original) {
+  return runPS(`
+    $ErrorActionPreference = 'Stop'
+    $orig = ${psq(original)}
+    if (Test-Path -LiteralPath $orig) { 'EXISTS'; return }
+    $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $bin = Join-Path ([IO.Path]::GetPathRoot($orig)) ('$Recycle.Bin\\' + $sid)
+    $best = $null; $bestTime = [long]0
+    foreach ($i in Get-ChildItem -LiteralPath $bin -Filter '$I*' -Force -ErrorAction SilentlyContinue) {
+      $b = [IO.File]::ReadAllBytes($i.FullName)
+      if ($b.Length -lt 28) { continue }
+      if ([BitConverter]::ToInt64($b, 0) -eq 2) { $len = [BitConverter]::ToInt32($b, 24); $p = [Text.Encoding]::Unicode.GetString($b, 28, [Math]::Max(0, $len - 1) * 2) }
+      else { $p = [Text.Encoding]::Unicode.GetString($b, 24, [Math]::Min(520, $b.Length - 24)).TrimEnd([char]0) }
+      $t = [BitConverter]::ToInt64($b, 16)
+      if ($p -ieq $orig -and $t -gt $bestTime) { $best = $i; $bestTime = $t }
+    }
+    if (-not $best) { 'NOTFOUND'; return }
+    $item = Join-Path $bin ('$R' + $best.Name.Substring(2))
+    if (-not (Test-Path -LiteralPath $item)) { 'NOTFOUND'; return }
+    $parent = Split-Path -Parent $orig
+    if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+    Move-Item -LiteralPath $item -Destination $orig
+    Remove-Item -LiteralPath $best.FullName -Force -ErrorAction SilentlyContinue
+    if (Test-Path -LiteralPath $orig) { 'OK' } else { 'Could not move it back' }`);
 }
 
 async function restore(id) {
@@ -195,7 +253,9 @@ async function restore(id) {
         if (Get-NetFirewallRule -Name $r.Name -ErrorAction SilentlyContinue) { 'OK' } else { 'Firewall rule was not recreated' }`).catch((err) => err.message);
       results.push({ ...e, ok: /^OK/.test(out.trim()), detail: /^OK/.test(out.trim()) ? 'Firewall rule restored' : out.trim() });
     } else if (e.recycled) {
-      results.push({ ...e, ok: false, detail: 'Restore from the Recycle Bin' });
+      const out = (await restoreFromRecycleBin(e.path).catch((err) => `ERR ${err.message}`)).trim();
+      const detail = { OK: 'Restored from the Recycle Bin', EXISTS: 'Already back in place', NOTFOUND: 'Not in the Recycle Bin any more (it may have been emptied)' }[out] || out.replace(/^ERR /, '');
+      results.push({ ...e, ok: out === 'OK' || out === 'EXISTS', detail });
     } else {
       results.push({ ...e, ok: false, detail: 'Not restorable' });
     }
@@ -209,4 +269,4 @@ function remove(id) {
   return sys.removePath(path.join(backupRoot, id));
 }
 
-export { setRoot, removeItems, list, restore, remove };
+export { setRoot, removeItems, list, restore, remove, restoreFromRecycleBin };

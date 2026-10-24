@@ -65,4 +65,44 @@ function isProtected(p) {
   return false;
 }
 
-export { fileRoots, shortcutRoots, GENERIC, isProtected };
+// Registry keys that must never be deleted, whatever a scan or recording suggests.
+const HIVES = { hkey_local_machine: 'hklm', hkey_current_user: 'hkcu', hkey_classes_root: 'hkcr', hkey_users: 'hku', hkey_current_config: 'hkcc' };
+// Key names under SOFTWARE\Microsoft that belong to Windows itself.
+const WINDOWS_KEYS = new Set([
+  'windows', 'windows nt', 'windows defender', 'windows search', 'windowsupdate', 'cryptography', 'policies', 'wbem', '.netframework',
+  'net framework setup', 'ole', 'rpc', 'security center', 'active setup', 'internet explorer', 'ctf', 'input', 'appmodel', 'wcmsvc',
+  'servicing', 'sqmclient', 'tracing', 'userdata', 'msi', 'installer', 'shell', 'deviceaccess', 'dfs', 'ime', 'ncd', 'non-driver signing',
+]);
+// Shared keys under Classes that many programs and Windows rely on.
+const SHARED_CLASSES = new Set(['*', 'clsid', 'directory', 'folder', 'drive', 'allfilesystemobjects', 'applications', 'interface', 'typelib', 'appid', 'systemfileassociations', 'mime', 'lnkfile', 'exefile', 'local settings']);
+
+function isProtectedKey(key) {
+  const parts = String(key || '').replace(/^Registry::/i, '').split('\\').filter(Boolean);
+  if (!parts.length) return true;
+  const hive = HIVES[parts[0].toLowerCase()] || parts[0].toLowerCase();
+  if (!['hklm', 'hkcu', 'hkcr', 'hku', 'hkcc'].includes(hive)) return true;
+  let rest = parts.slice(1).map((p) => p.toLowerCase());
+  if (hive === 'hku') rest = rest.slice(1); // HKU\<sid>\Software\... is a user's HKCU
+  if (hive === 'hkcc' || (hive === 'hklm' && rest[0] !== 'software')) return true; // SYSTEM, SAM, SECURITY, HARDWARE...
+  if (hive === 'hkcr') rest = ['software', 'classes', ...rest];
+  if (rest.length < 2) return true; // a hive root, SOFTWARE, Software, ...
+  if (rest[1] === 'wow6432node') rest = [rest[0], ...rest.slice(2)];
+  if (rest.length < 2) return true;
+  const [, top, ...below] = rest;
+  if (top === 'classes') {
+    if (!below.length || below[0].startsWith('.')) return true;
+    // Registries of IDs (CLSID\{id}) allow one entry; shared types need their own sub-entry (Directory\shell\X).
+    const minDepth = ['clsid', 'appid', 'interface', 'typelib'].includes(below[0]) ? 2 : 3;
+    return SHARED_CLASSES.has(below[0]) && below.length < minDepth;
+  }
+  if (top === 'policies' && below.length < 2) return true;
+  if (top === 'microsoft') {
+    if (!below.length || WINDOWS_KEYS.has(below[0]) && !isProgramEntry(below)) return true;
+  }
+  return false;
+}
+
+// Per-program entries Windows keeps under Microsoft\Windows\CurrentVersion: uninstall entries and App Paths.
+const isProgramEntry = (below) => below[0] === 'windows' && below[1] === 'currentversion' && ['uninstall', 'app paths'].includes(below[2]) && below.length === 4;
+
+export { fileRoots, shortcutRoots, GENERIC, isProtected, isProtectedKey };

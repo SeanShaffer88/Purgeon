@@ -10,6 +10,7 @@ import * as debloat from './debloat.js';
 import * as restore from './restore.js';
 import * as measure from './measure.js';
 import * as startup from './startup.js';
+import * as history from './history.js';
 
 const DEFAULT_SETTINGS = { createRestorePoints: true };
 const settingsFile = () => path.join(sys.info.dataDir, 'settings.json');
@@ -115,6 +116,57 @@ const handlers = {
   'dialog:confirm': (options) => (confirmUI ? confirmUI(options) : Promise.resolve(options.checkboxLabel ? { ok: false, checked: false } : false)),
 };
 
+// Change History: what each change-making request records, with the request that undoes it.
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
+const recorders = {
+  'debloat:set': ({ id, enable }) => {
+    const t = debloat.TWEAKS.find((x) => x.id === id);
+    return { type: 'Debloat', title: `${enable ? 'Applied' : 'Turned off'} "${t?.title || id}"`, undo: { channel: 'debloat:set', arg: { id, enable: !enable } } };
+  },
+  'startup:set': ({ entry, enable }) => ({
+    type: entry.type === 'service' ? 'Service' : 'Startup',
+    title: `${enable ? 'Turned on' : 'Turned off'} "${entry.name}"`,
+    detail: entry.where,
+    undo: { channel: 'startup:set', arg: { entry: { ...entry, enabled: enable }, enable: !enable } },
+  }),
+  'items:remove': ({ title }, result) => {
+    const done = result.results.filter((r) => r.ok && !/already gone/i.test(r.detail || '')).length;
+    return done && result.backupId ? { type: 'Removal', title: `Removed ${plural(done, 'item')}: ${title}`, detail: `Backup ${result.backupId}`, undo: { channel: 'backups:restore', arg: result.backupId } } : null;
+  },
+  'program:runUninstaller': (program, result) => ({
+    type: 'Uninstall',
+    title: `Ran the uninstaller for ${program.name}`,
+    detail: result.ok ? 'Finished' : result.error || `Exit code ${result.code}`,
+  }),
+  'restore:create': ({ description }, result) =>
+    result.created ? { type: 'Restore point', title: `Created restore point "${description}"`, detail: 'Use Windows System Restore to go back to it' } : null,
+  'backups:restore': (id, results) => ({
+    type: 'Restore',
+    title: `Restored the backup of ${String(id).replace(/^[^_]*_/, '').replace(/-/g, ' ') || 'removed items'}`,
+    detail: `${results.filter((r) => r.ok).length} of ${results.length} entries restored`,
+  }),
+  'monitor:finish': (_name, record) => ({ type: 'Monitor', title: `Recorded the installation of ${record.name}`, detail: plural(record.items.length, 'change') }),
+};
+for (const [channel, describe] of Object.entries(recorders)) {
+  const run = handlers[channel];
+  handlers[channel] = async (arg) => {
+    const result = await run(arg);
+    const entry = describe(arg, result);
+    if (entry) await history.record(entry).catch(() => {});
+    return result;
+  };
+}
+handlers['history:list'] = () => history.list();
+handlers['history:undo'] = async (id) => {
+  const entry = (await history.list()).find((e) => e.id === id);
+  if (!entry) throw new Error('That change is no longer in the history.');
+  if (entry.undone) throw new Error('This change was already undone.');
+  if (!entry.undo) throw new Error(entry.type === 'Uninstall' ? 'An uninstall cannot be undone here. Reinstall the program, or use the restore point made before it.' : 'This change cannot be undone here.');
+  const result = await handlers[entry.undo.channel](entry.undo.arg);
+  await history.markUndone(id);
+  return result;
+};
+
 export const setConfirmUI = (fn) => {
   confirmUI = fn;
 };
@@ -123,7 +175,13 @@ export const setConfirmUI = (fn) => {
 export async function initBackend() {
   const data = sys.info.dataDir;
   await sys.makeDir(data);
-  await Promise.all([backups.setRoot(path.join(data, 'backups')), monitor.setRoot(path.join(data, 'monitor')), startup.setRoot(path.join(data, 'startup'))]);
+  await Promise.all([
+    backups.setRoot(path.join(data, 'backups')),
+    monitor.setRoot(path.join(data, 'monitor')),
+    startup.setRoot(path.join(data, 'startup')),
+    debloat.setRoot(path.join(data, 'debloat')),
+    history.setRoot(path.join(data, 'history')),
+  ]);
 }
 
 export const api = {

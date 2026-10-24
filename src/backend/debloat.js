@@ -1,7 +1,9 @@
 // Safe, reversible Windows debloat tweaks. Each tweak is a set of registry values:
-// "enabled" means every value holds its tweak value; disabling restores Windows' default
-// (deleting the value, or writing the documented default where one exists).
+// "enabled" means every value holds its tweak value. Disabling puts back what was there before
+// SweepUninstall applied the tweak; if that is unknown, it restores Windows' default.
 // effect: 'immediate' | 'explorer' (needs an Explorer restart) | 'reboot'
+import { sys } from './sys.js';
+import * as path from './winpath.js';
 import { reg, runPS, runPSJson } from './shell.js';
 
 const ADV = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced';
@@ -80,25 +82,78 @@ async function list() {
   });
 }
 
+// Values as they were before SweepUninstall first applied each tweak, so turning a tweak off
+// puts back exactly what was there (not just the Windows default).
+let stateFile = '';
+const setRoot = async (dir) => {
+  await sys.makeDir(dir);
+  stateFile = path.join(dir, 'previous-values.json');
+};
+const readPrevious = () => sys.readText(stateFile).then(JSON.parse).catch(() => ({}));
+const writePrevious = (s) => sys.writeText(stateFile, JSON.stringify(s, null, 2));
+
+const REG_TYPE = { String: 'REG_SZ', ExpandString: 'REG_EXPAND_SZ', DWord: 'REG_DWORD', QWord: 'REG_QWORD', Binary: 'REG_BINARY', MultiString: 'REG_MULTI_SZ' };
+
+const CAPTURE = `
+$in = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$out = foreach ($v in $in) {
+  $k = Get-Item -LiteralPath "Registry::$($v.key)" -ErrorAction SilentlyContinue
+  $keyExisted = [bool]$k
+  $data = if ($k) { $k.GetValue($v.name, $null, 'DoNotExpandEnvironmentNames') } else { $null }
+  $kind = if ($null -ne $data) { [string]$k.GetValueKind($v.name) } else { $null }
+  if ($data -is [byte[]]) { $data = ($data | ForEach-Object { $_.ToString('x2') }) -join '' }
+  elseif ($data -is [string[]]) { $data = $data -join '\\0' }
+  [pscustomobject]@{ key = $v.key; name = $v.name; keyExisted = $keyExisted; existed = ($null -ne $data); kind = $kind; data = if ($null -ne $data) { [string]$data } else { $null } }
+}
+@($out) | ConvertTo-Json -Compress
+`;
+
+const fail = (t, r) => {
+  const denied = /access is denied/i.test(r.stderr);
+  throw new Error(denied ? `"${t.title}" needs administrator rights. Use File › Restart as Administrator.` : r.stderr.trim());
+};
+const valueArgs = (v) => (v.name ? ['/v', v.name] : ['/ve']);
+
 async function set(id, enable) {
   const t = TWEAKS.find((x) => x.id === id);
   if (!t) throw new Error(`Unknown tweak ${id}`);
-  for (const v of t.values) {
+  const previous = stateFile ? await readPrevious() : {};
+
+  if (enable) {
+    // Remember what was there the first time this tweak is applied.
+    if (stateFile && !previous[id]) {
+      previous[id] = await runPSJson(CAPTURE, { input: JSON.stringify(t.values.map((v) => ({ key: v.key, name: v.name }))) });
+      await writePrevious(previous);
+    }
+    for (const v of t.values) {
+      const r = await reg(['add', v.key, ...valueArgs(v), '/t', v.type, '/d', String(v.on), '/f']);
+      if (!r.ok) fail(t, r);
+    }
+    return;
+  }
+
+  const saved = previous[id];
+  for (const [i, v] of t.values.entries()) {
+    const before = saved?.[i];
     let r;
-    if (enable) {
-      r = await reg(['add', v.key, ...(v.name ? ['/v', v.name] : ['/ve']), '/t', v.type, '/d', String(v.on), '/f']);
-    } else if (v.deleteKeyOnRevert) {
+    if (before && before.existed) {
+      // Put back the exact earlier value.
+      r = await reg(['add', v.key, ...valueArgs(v), '/t', REG_TYPE[before.kind] || v.type, '/d', before.data, '/f']);
+    } else if (v.deleteKeyOnRevert && (!before || !before.keyExisted)) {
       r = await reg(['delete', v.deleteKeyOnRevert, '/f']);
-    } else if (v.off === null) {
-      r = await reg(['delete', v.key, '/v', v.name, '/f']);
+      if (!r.ok && /unable to find/i.test(r.stderr)) r = { ok: true };
+    } else if (before || v.off === null) {
+      // It didn't exist before (or Windows' default is "absent"): remove it.
+      r = await reg(['delete', v.key, ...(v.name ? ['/v', v.name] : ['/ve']), '/f']);
       if (!r.ok && /unable to find/i.test(r.stderr)) r = { ok: true };
     } else {
-      r = await reg(['add', v.key, '/v', v.name, '/t', v.type, '/d', String(v.off), '/f']);
+      r = await reg(['add', v.key, ...valueArgs(v), '/t', v.type, '/d', String(v.off), '/f']);
     }
-    if (!r.ok) {
-      const denied = /access is denied/i.test(r.stderr);
-      throw new Error(denied ? `"${t.title}" needs administrator rights. Use File › Restart as Administrator.` : r.stderr.trim());
-    }
+    if (!r.ok) fail(t, r);
+  }
+  if (saved) {
+    delete previous[id];
+    await writePrevious(previous);
   }
 }
 
@@ -110,4 +165,4 @@ async function restartExplorer() {
   `);
 }
 
-export { list, set, restartExplorer, TWEAKS, needsAdmin };
+export { setRoot, list, set, restartExplorer, TWEAKS, needsAdmin };

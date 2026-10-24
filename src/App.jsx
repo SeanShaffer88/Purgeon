@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog } from './dialogs.jsx';
 import { setConfirmUI } from './backend/api.js';
+import { applyZoom, nextStep } from './zoom.js';
 import { DebloatView } from './debloat.jsx';
 import { StartupView } from './startup.jsx';
 
@@ -12,6 +13,7 @@ const VIEWS = {
   // Views below are opened from toolbar buttons or the Tools menu, not the view picker.
   monitored: { label: 'Monitored Programs', noun: 'monitored programs', cols: [['name', 'Name'], ['size', 'Changes'], ['date', 'Monitored On']], button: true },
   backups: { label: 'Backups', noun: 'backups', cols: [['name', 'Removed'], ['size', 'Entries'], ['date', 'Backed Up On']], button: true },
+  history: { label: 'Change History', noun: 'changes', cols: [['name', 'Change'], ['size', 'Type'], ['date', 'When']], button: true },
   startup: { label: 'Startup & Services', noun: 'entries', cols: [], custom: true, button: true },
   debloat: { label: 'Debloat Windows', noun: 'tweaks', cols: [], button: true, custom: true },
 };
@@ -29,6 +31,11 @@ const normKey = (k) => (k || '').replace(/^HKEY_LOCAL_MACHINE\\/i, 'HKLM\\').rep
 function toRow(view, r) {
   if (view === 'monitored') return { ...r, key: r.id, sizeText: `${r.items.length} items`, sortSize: r.items.length, date: r.finished.slice(0, 10) };
   if (view === 'backups') return { ...r, key: r.id, name: r.title, sizeText: `${r.entries.length}`, sortSize: r.entries.length, date: r.created.slice(0, 10) };
+  if (view === 'history') {
+    const t = new Date(r.time);
+    const when = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')} ${t.toTimeString().slice(0, 5)}`;
+    return { ...r, key: r.id, name: r.undone ? `${r.title}  (undone)` : r.title, sizeText: r.type, sortSize: r.type, date: when, sortDate: r.time };
+  }
   return { ...r, sizeText: formatSize(r.sizeKB), sortSize: r.sizeKB || 0, date: r.installDate };
 }
 
@@ -61,9 +68,13 @@ const MENUS = [
       null,
       ['find', 'Find...', 'Ctrl+F'],
       ['refresh', 'Refresh', 'F5'],
+      null,
+      ['zoomIn', 'Zoom In', 'Ctrl++'],
+      ['zoomOut', 'Zoom Out', 'Ctrl+-'],
+      ['zoomReset', 'Reset Zoom', 'Ctrl+0'],
     ],
   ],
-  ['Tools', [['monitor', 'Monitor an Installation...', 'Ctrl+M'], ['view:backups', 'Backups', 'Ctrl+4'], null, ['toggleRestore', 'Create Restore Points']]],
+  ['Tools', [['monitor', 'Monitor an Installation...', 'Ctrl+M'], ['view:backups', 'Backups', 'Ctrl+4'], ['view:history', 'Change History', 'Ctrl+H'], null, ['toggleRestore', 'Create Restore Points']]],
   ['Help', [['about', 'About']]],
 ];
 
@@ -135,6 +146,7 @@ export default function App() {
   const stopBatch = useRef(false);
   const [notice, setNotice] = useState(null);
   const [restoreOn, setRestoreOn] = useState(true);
+  const [zoom, setZoom] = useState(1);
   const debloatGatePassed = useRef(false);
   const searchRef = useRef(null);
   const listRef = useRef(null);
@@ -155,6 +167,7 @@ export default function App() {
       let data;
       if (v === 'monitored') data = await api.invoke('monitor:list');
       else if (v === 'backups') data = await api.invoke('backups:list');
+      else if (v === 'history') data = await api.invoke('history:list');
       else data = await api.invoke('programs:list', v);
       if (v === 'desktop') {
         desktopCache.current = data;
@@ -172,6 +185,8 @@ export default function App() {
   useEffect(() => {
     setSelected(null);
     setMarked(new Set());
+    // Change History reads newest first; every other list starts alphabetical.
+    setSort(view === 'history' ? { col: 'date', dir: -1 } : { col: 'name', dir: 1 });
     anchor.current = null;
     if (!VIEWS[view].custom) load(view);
     else setCustomStatus('');
@@ -181,7 +196,11 @@ export default function App() {
 
   useEffect(() => {
     api.invoke('app:isAdmin').then(setAdmin);
-    api.invoke('settings:get').then((s) => setRestoreOn(s.createRestorePoints));
+    api.invoke('settings:get').then((s) => {
+      setRestoreOn(s.createRestorePoints);
+      setZoom(s.zoom || 1);
+      applyZoom(s.zoom || 1);
+    });
     api.invoke('monitor:status').then((s) => s && setModal({ type: 'monitor', resume: s }));
   }, []);
 
@@ -205,7 +224,7 @@ export default function App() {
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
     const list = q ? rows.filter((r) => `${r.name} ${r.publisher || ''}`.toLowerCase().includes(q)) : rows;
-    const val = (r) => (sort.col === 'size' ? r.sortSize : (r[sort.col] || '').toString().toLowerCase());
+    const val = (r) => (sort.col === 'size' ? r.sortSize : sort.col === 'date' && r.sortDate ? r.sortDate : (r[sort.col] || '').toString().toLowerCase());
     return [...list].sort((a, b) => {
       const x = val(a);
       const y = val(b);
@@ -268,6 +287,47 @@ export default function App() {
 
   // ---- actions -------------------------------------------------------------
 
+  // Zoom steps are remembered between sessions.
+  const changeZoom = async (direction) => {
+    const next = nextStep(zoom, direction);
+    setZoom(next);
+    await api.invoke('settings:set', { zoom: next });
+    await applyZoom(next);
+    setNotice({ tone: 'ok', text: `Zoom ${Math.round(next * 100)}%` });
+  };
+
+  // Reverses one Change History entry and reports what happened.
+  const runUndo = async (historyId, title) => {
+    setModal(null);
+    setBusy('Undoing…');
+    try {
+      const result = await api.invoke('history:undo', historyId);
+      if (Array.isArray(result)) setModal({ type: 'results', title: 'Undo Report', results: result });
+      else setNotice({ tone: 'ok', text: `Undone: ${title}` });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+      load();
+    }
+  };
+
+  // The Removal Report's Undo button: restore that backup through its history entry.
+  const undoRemoval = async (backupId) => {
+    const entry = (await api.invoke('history:list')).find((e) => e.undo?.channel === 'backups:restore' && e.undo.arg === backupId && !e.undone);
+    if (entry) return runUndo(entry.id, entry.title);
+    setModal(null);
+    setBusy('Restoring…');
+    try {
+      setModal({ type: 'results', title: 'Undo Report', results: await api.invoke('backups:restore', backupId) });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+      load();
+    }
+  };
+
   const removeWithBackup = async (title, items, location) => {
     setModal(null);
     const locations = [].concat(location || []).filter(Boolean);
@@ -283,8 +343,14 @@ export default function App() {
     }
     setBusy('Backing up and removing selected items…');
     try {
-      const { results } = await api.invoke('items:remove', { title, items });
-      setModal({ type: 'results', title: 'Removal Report', results, note: 'A backup was saved. To undo, go to Tools › Backups.' });
+      const { results, backupId } = await api.invoke('items:remove', { title, items });
+      setModal({
+        type: 'results',
+        title: 'Removal Report',
+        results,
+        note: 'A backup was saved. Click Undo to put everything back now, or later from Tools › Change History.',
+        ...(backupId && { onUndo: () => undoRemoval(backupId) }),
+      });
       return true;
     } catch (e) {
       setError(e.message);
@@ -393,7 +459,20 @@ export default function App() {
   };
 
   const actions = {
+    undoChange: async (p) => {
+      if (view !== 'history') return;
+      if (p.undone) return setNotice({ tone: 'warn', text: 'This change was already undone.' });
+      if (!p.undo) {
+        return setNotice({
+          tone: 'warn',
+          text: p.type === 'Uninstall' ? 'An uninstall cannot be undone here. Reinstall the program, or use the restore point made before it.' : 'This change cannot be undone here.',
+        });
+      }
+      if (!(await api.invoke('dialog:confirm', { message: `Undo this change?`, detail: p.title }))) return;
+      await runUndo(p.id, p.title);
+    },
     uninstall: async (p) => {
+      if (view === 'history') return actions.undoChange(p);
       if (view === 'monitored') return uninstallMonitored(p);
       if (view === 'backups') return actions.deleteBackup(p);
       const go = await confirmWithRestore(`Uninstall ${p.name}?`, p.store ? 'The app package will be removed.' : "The program's own uninstaller will run first, then SweepUninstall scans for leftovers.");
@@ -478,6 +557,9 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     refresh: () => load(),
     monitor: () => setModal({ type: 'monitor' }),
     about: () => setModal({ type: 'about' }),
+    zoomIn: () => changeZoom(1),
+    zoomOut: () => changeZoom(-1),
+    zoomReset: () => changeZoom(0),
     toggleRestore: async () => {
       const s = await api.invoke('settings:set', { createRestorePoints: !restoreOn });
       setRestoreOn(s.createRestorePoints);
@@ -506,6 +588,10 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       else if (e.ctrlKey && key === 'f') action = 'find';
       else if (e.ctrlKey && key === 's') action = 'export';
       else if (e.ctrlKey && key === 'm') action = 'monitor';
+      else if (e.ctrlKey && key === 'h') action = 'view:history';
+      else if (e.ctrlKey && (key === '=' || key === '+')) action = 'zoomIn';
+      else if (e.ctrlKey && key === '-') action = 'zoomOut';
+      else if (e.ctrlKey && key === '0') action = 'zoomReset';
       else if (e.ctrlKey && key === 'l') action = 'analyze';
       else if (key === 'F5') action = 'refresh';
       else if (e.altKey && key === 'Enter') action = 'properties';
@@ -563,6 +649,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
 
   const contextItems = isBatch
     ? [['uninstall', `Uninstall ${markedRows.length} Programs...`, 'Del'], null, ['clearSelection', 'Clear Selection']]
+    : view === 'history'
+      ? [['undoChange', 'Undo This Change', 'Del']]
     : view === 'backups'
       ? [['restore', 'Restore'], ['properties', 'Show Contents'], null, ['deleteBackup', 'Delete Backup']]
       : view === 'monitored'
@@ -633,7 +721,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             {label}
           </button>
         ))}
-        {view === 'backups' && <span className="toolbar-note">Backups · open from Tools › Backups</span>}
+        {view === 'backups' && <span className="toolbar-note">Backups · Tools › Backups</span>}
+        {view === 'history' && <span className="toolbar-note">Change History · double-click a change to undo it</span>}
       </div>
 
       {error && (
@@ -656,7 +745,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       ) : view === 'startup' ? (
         <StartupView key={customKey} filter={filter} admin={admin} programs={desktopCache.current} onError={setError} onStatus={setCustomStatus} />
       ) : (
-      <div className="list" tabIndex={0} ref={listRef} onKeyDown={onListKey}>
+      <div className={`list view-${view}`} tabIndex={0} ref={listRef} onKeyDown={onListKey}>
         <div className="list-header">
           {cols.map(([id, label]) => (
             <div key={id} className={`col col-${id}`} onClick={() => setSort((s) => ({ col: id, dir: s.col === id ? -s.dir : 1 }))}>
@@ -669,7 +758,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           <div className="list-empty">Loading…</div>
         ) : visible.length === 0 ? (
           <div className="list-empty">
-            {filter ? 'No matches.' : view === 'monitored' ? 'No monitored programs yet. Use Tools › Monitor an Installation.' : view === 'backups' ? 'No backups yet.' : 'Nothing found.'}
+            {filter ? 'No matches.' : view === 'monitored' ? 'No monitored programs yet. Use Tools › Monitor an Installation.' : view === 'backups' ? 'No backups yet.' : view === 'history' ? 'No changes yet. Everything SweepUninstall changes will be listed here.' : 'Nothing found.'}
           </div>
         ) : (
           visible.map((r, idx) => (
@@ -678,7 +767,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               data-idx={idx}
               className={`row ${marked.has(r.key) ? 'selected' : ''} ${r.key === selected ? 'focused' : ''} ${r.arch === 'user' ? 'user' : ''}`}
               onMouseDown={(e) => e.button === 0 && selectRow(r.key, { ctrl: batchable && e.ctrlKey, shift: batchable && e.shiftKey })}
-              onDoubleClick={(e) => !e.ctrlKey && !e.shiftKey && dispatch(view === 'backups' ? 'restore' : 'uninstall')}
+              onDoubleClick={(e) => !e.ctrlKey && !e.shiftKey && dispatch(view === 'backups' ? 'restore' : view === 'history' ? 'undoChange' : 'uninstall')}
               onContextMenu={(e) => {
                 e.preventDefault();
                 if (!marked.has(r.key)) selectRow(r.key);

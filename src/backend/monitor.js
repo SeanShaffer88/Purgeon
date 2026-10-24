@@ -3,7 +3,7 @@ import * as path from './winpath.js';
 // Installation monitoring: snapshot the file system and registry before and after an
 // installer runs, then record what was added so it can be removed precisely later.
 import { runPS } from './shell.js';
-import { fileRoots, shortcutRoots, isProtected } from './paths.js';
+import { fileRoots, shortcutRoots, isProtected, isProtectedKey } from './paths.js';
 
 let storeDir = '';
 const setRoot = async (dir) => {
@@ -115,7 +115,8 @@ async function finish(name) {
         return { kind: st?.dir ? 'dir' : 'file', path: p, confidence: 'high', reason: 'Created during installation' };
       })
   );
-  const keyItems = collapse(pick('K')).map((p) => {
+  // Services are kept (they become 'service' items); other protected keys are never recorded for removal.
+  const keyItems = collapse(pick('K').filter((p) => /\\SYSTEM\\CurrentControlSet\\Services\\[^\\]+$/i.test(p) || !isProtectedKey(p))).map((p) => {
     if (/\\SYSTEM\\CurrentControlSet\\Services\\[^\\]+$/i.test(p)) {
       return { kind: 'service', path: p.split('\\').pop(), confidence: 'high', reason: 'Service created during installation' };
     }

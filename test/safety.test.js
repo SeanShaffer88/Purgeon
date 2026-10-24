@@ -218,3 +218,32 @@ test('winpath joins and resolves Windows paths like Node does', () => {
   assert.equal(winpath.dirname('C:\\b.exe'), 'C:\\');
   assert.ok(isProtected('C:\\Program Files\\Foo\\..\\..\\Windows'), 'a path climbing into Windows is protected');
 });
+import { isProtectedKey } from '../src/backend/paths.js';
+
+test('isProtectedKey refuses Windows-critical keys and allows program leftovers', () => {
+  for (const k of [
+    'HKEY_LOCAL_MACHINE', 'HKLM\\SOFTWARE', 'HKEY_CURRENT_USER\\Software', 'HKLM\\SOFTWARE\\WOW6432Node',
+    'HKLM\\SYSTEM\\CurrentControlSet\\Services\\Foo', 'HKLM\\SAM', 'HKLM\\SOFTWARE\\Microsoft',
+    'HKLM\\SOFTWARE\\Microsoft\\Windows', 'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion',
+    'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall', 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run',
+    'HKLM\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows NT\\CurrentVersion', 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes',
+    'HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes\\.txt', 'HKCR\\*', 'HKCR\\CLSID', 'HKEY_CURRENT_USER\\Software\\Classes\\Directory\\shell',
+    'HKLM\\SOFTWARE\\Policies\\Microsoft', 'HKU\\S-1-5-21-1\\Software', 'NotAHive\\Foo', '',
+  ]) assert.ok(isProtectedKey(k), `${k || '(empty)'} must be protected`);
+  for (const k of [
+    'HKEY_CURRENT_USER\\Software\\OBS Studio', 'HKLM\\SOFTWARE\\WOW6432Node\\Blizzard Entertainment\\Battle.net',
+    'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Battle.net', 'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths\\obs64.exe',
+    'HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes\\Directory\\shell\\git_gui', 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes\\CLSID\\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}',
+    'HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes\\obs', 'HKLM\\SOFTWARE\\Microsoft\\Teams', 'HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\DataCollection',
+  ]) assert.ok(!isProtectedKey(k), `${k} should be removable`);
+});
+
+test('merge never offers protected keys or folders', () => {
+  const out = merge([
+    { kind: 'key', path: 'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion', score: 100, reason: 'test' },
+    { kind: 'key', path: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Classes\\.txt', score: 90, reason: 'test' },
+    { kind: 'dir', path: process.env.SystemRoot || 'C:\\Windows', score: 100, reason: 'test' },
+    { kind: 'key', path: 'HKEY_CURRENT_USER\\Software\\OBS Studio', score: 80, reason: 'test' },
+  ]);
+  assert.deepEqual(out.map((i) => i.path), ['HKEY_CURRENT_USER\\Software\\OBS Studio']);
+});
