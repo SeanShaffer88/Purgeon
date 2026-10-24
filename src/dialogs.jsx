@@ -86,7 +86,7 @@ export function Busy({ message, onStop }) {
 
 const GROUPS = [
   { id: 'registry', label: 'Registry', kinds: ['key', 'value', 'createkey', 'setvalue'] },
-  { id: 'files', label: 'Files and Folders', kinds: ['dir', 'file'] },
+  { id: 'files', label: 'Files and Folders', kinds: ['dir', 'file', 'junk'] },
   { id: 'services', label: 'Services', kinds: ['service'] },
   { id: 'tasks', label: 'Scheduled Tasks', kinds: ['task'] },
   { id: 'firewall', label: 'Firewall Rules', kinds: ['firewall'] },
@@ -238,13 +238,15 @@ export function ResultsDialog({ title, results, note, onClose, onUndo }) {
         {failed.length ? `${results.length - failed.length} of ${results.length} items done, ${failed.length} failed.` : `All ${results.length} items done.`}
       </p>
       <div className="tree">
-        {results.map((r, i) => (
+        {/* Problems first; very long reports (a junk cleanup) show the first 500 rows. */}
+        {[...failed, ...results.filter((r) => r.ok)].slice(0, 500).map((r, i) => (
           <div key={i} className={`result ${r.ok ? 'ok' : 'fail'}`}>
             <span className="mark">{r.ok ? '✓' : '✗'}</span>
             <span className="path">{itemLabel(r)}</span>
             <span className="muted">{r.detail}</span>
           </div>
         ))}
+        {results.length > 500 && <div className="muted result">…and {(results.length - 500).toLocaleString()} more</div>}
       </div>
       {note && <p className="footnote">{note}</p>}
     </Dialog>
@@ -407,9 +409,10 @@ const baseName = (p) => (p || '').split('\\').pop().replace(/\.(exe|msi|msix|bat
 export function AboutDialog({ onClose }) {
   return (
     <Dialog title="About SweepUninstall" onClose={onClose} width={420} buttons={<button className="primary" onClick={onClose}>OK</button>}>
-      <p className="heading">SweepUninstall 0.1</p>
+      <p className="heading">SweepUninstall {__APP_VERSION__}</p>
+      {window.__sweepPortable && <p className="muted">Portable mode: settings, backups and snapshots are kept in the "SweepUninstall Data" folder next to the program.</p>}
       <p>Uninstalls programs, then hunts down the leftover files, registry keys, startup entries and services they leave behind.</p>
-      <p>You can monitor installations to record exactly what they change, and every removal is backed up first.</p>
+      <p>It also monitors installations, compares system snapshots, cleans junk files and manages startup programs. Every change is backed up first and can be undone.</p>
       <p className="muted">An independent project, not affiliated with any other uninstaller.</p>
     </Dialog>
   );

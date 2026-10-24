@@ -5,6 +5,8 @@ import { applyZoom, nextStep } from './zoom.js';
 import { TakeSnapshotDialog, ComparisonDialog, comparisonHtml } from './snapshots.jsx';
 import { DebloatView } from './debloat.jsx';
 import { StartupView } from './startup.jsx';
+import { JunkView, formatBytes } from './junk.jsx';
+import { GroupDialog } from './groups.jsx';
 
 const api = window.api;
 
@@ -18,7 +20,12 @@ const VIEWS = {
   history: { label: 'Change History', noun: 'changes', cols: [['name', 'Change'], ['size', 'Type'], ['date', 'When']], button: true },
   startup: { label: 'Startup & Services', noun: 'entries', cols: [], custom: true, button: true },
   debloat: { label: 'Debloat Windows', noun: 'tweaks', cols: [], button: true, custom: true },
+  junk: { label: 'Junk Files', noun: 'categories', cols: [], button: true, custom: true },
 };
+
+// Group filter values besides a group's name.
+const ALL_GROUPS = '';
+const UNGROUPED = '\u0000ungrouped';
 
 const formatSize = (kb) => {
   if (!kb) return '';
@@ -59,6 +66,7 @@ const MENUS = [
       ['force', 'Force Removal...', 'Shift+Del'],
       ['analyze', 'Analyze Leftovers...', 'Ctrl+L'],
       ['removeEntry', 'Remove Entry...'],
+      ['setGroup', 'Set Group...', 'Ctrl+G'],
       null,
       ['registry', 'Registry Entry'],
       ['folder', 'Installation Folder'],
@@ -75,6 +83,7 @@ const MENUS = [
       ['view:monitored', 'Monitored Programs', 'Ctrl+3'],
       ['view:debloat', 'Debloat Windows', 'Ctrl+5'],
       ['view:startup', 'Startup & Services', 'Ctrl+6'],
+      ['view:junk', 'Junk Files', 'Ctrl+8'],
       null,
       ['find', 'Find...', 'Ctrl+F'],
       ['refresh', 'Refresh', 'F5'],
@@ -84,7 +93,7 @@ const MENUS = [
       ['zoomReset', 'Reset Zoom', 'Ctrl+0'],
     ],
   ],
-  ['Tools', [['monitor', 'Monitor an Installation...', 'Ctrl+M'], ['view:backups', 'Backups', 'Ctrl+4'], ['view:history', 'Change History', 'Ctrl+H'], null, ['view:snapshots', 'Snapshots', 'Ctrl+7'], ['takeSnapshot', 'Take a Snapshot...'], null, ['toggleRestore', 'Create Restore Points']]],
+  ['Tools', [['monitor', 'Monitor an Installation...', 'Ctrl+M'], ['view:backups', 'Backups', 'Ctrl+4'], ['view:history', 'Change History', 'Ctrl+H'], null, ['view:snapshots', 'Snapshots', 'Ctrl+7'], ['takeSnapshot', 'Take a Snapshot...'], null, ['view:junk', 'Junk Files', 'Ctrl+8'], null, ['toggleRestore', 'Create Restore Points']]],
   ['Help', [['about', 'About']]],
 ];
 
@@ -157,6 +166,10 @@ export default function App() {
   const [notice, setNotice] = useState(null);
   const [restoreOn, setRestoreOn] = useState(true);
   const [zoom, setZoom] = useState(1);
+  // Program groups ({ programKey: group }) and the group the program lists are filtered to.
+  const [groups, setGroups] = useState({});
+  const [groupFilter, setGroupFilter] = useState(ALL_GROUPS);
+  const groupNames = useMemo(() => [...new Set(Object.values(groups))].sort((a, b) => a.localeCompare(b)), [groups]);
   const debloatGatePassed = useRef(false);
   const searchRef = useRef(null);
   const listRef = useRef(null);
@@ -213,6 +226,7 @@ export default function App() {
       applyZoom(s.zoom || 1);
     });
     api.invoke('monitor:status').then((s) => s && setModal({ type: 'monitor', resume: s }));
+    api.invoke('groups:get').then(setGroups).catch(() => {});
   }, []);
 
   // Icons arrive in one batch after the list is shown; programs without one keep a placeholder.
@@ -234,14 +248,16 @@ export default function App() {
 
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    const list = q ? rows.filter((r) => `${r.name} ${r.publisher || ''}`.toLowerCase().includes(q)) : rows;
+    const programs = view === 'desktop' || view === 'store';
+    const inGroup = (r) => !programs || groupFilter === ALL_GROUPS || (groupFilter === UNGROUPED ? !groups[r.key] : groups[r.key] === groupFilter);
+    const list = rows.filter((r) => inGroup(r) && (!q || `${r.name} ${r.publisher || ''} ${(programs && groups[r.key]) || ''}`.toLowerCase().includes(q)));
     const val = (r) => (sort.col === 'size' ? r.sortSize : sort.col === 'date' && r.sortDate ? r.sortDate : (r[sort.col] || '').toString().toLowerCase());
     return [...list].sort((a, b) => {
       const x = val(a);
       const y = val(b);
       return (x < y ? -1 : x > y ? 1 : 0) * sort.dir;
     });
-  }, [rows, filter, sort]);
+  }, [rows, filter, sort, groups, groupFilter, view]);
 
   const current = visible.find((r) => r.key === selected) || null;
   const markedRows = visible.filter((r) => marked.has(r.key));
@@ -321,6 +337,7 @@ export default function App() {
       setError(e.message);
     } finally {
       setBusy('');
+      api.invoke('groups:get').then(setGroups).catch(() => {});
       load();
     }
   };
@@ -522,6 +539,31 @@ export default function App() {
     removeWithBackup(`Cleanup since ${beforeName}`, items);
   };
 
+  // ---- junk files and groups -----------------------------------------------
+
+  const cleanJunk = async (items, categories, bytes) => {
+    const ok = await api.invoke('dialog:confirm', {
+      message: `Clean ${formatBytes(bytes)} of junk files?`,
+      detail: `${categories.map((c) => `• ${c.label}: ${formatBytes(c.bytes)}`).join('\n')}\n\n${items.length.toLocaleString()} items go to the Recycle Bin. You can undo this from Tools › Change History until the Recycle Bin is emptied.`,
+    });
+    if (!ok) return;
+    removeWithBackup(`Junk files (${categories.map((c) => c.label).join(', ')})`, items);
+  };
+
+  const openGroupDialog = (list) => list.length && setModal({ type: 'group', programs: list });
+
+  const saveGroup = async (list, group) => {
+    setModal(null);
+    try {
+      await api.invoke('groups:set', { keys: list.map((p) => p.key), group, label: list.length === 1 ? list[0].name : undefined });
+      setGroups(await api.invoke('groups:get'));
+      const who = list.length === 1 ? list[0].name : `${list.length} programs`;
+      setNotice({ tone: 'ok', text: group ? `${who} put in the group "${group}".` : `${who} taken out of ${list.length === 1 ? 'its group' : 'their groups'}.` });
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
   const actions = {
     compareNow: (p) => view === 'snapshots' && runCompare(p, null),
     deleteSnapshot: async (p) => {
@@ -651,6 +693,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     if (busy || modal) return;
     if (action === 'clearSelection') return setMarked(new Set(current ? [current.key] : []));
     if (action === 'uninstall' && isBatch) return batchUninstall(markedRows);
+    if (action === 'setGroup') return batchable && openGroupDialog(markedRows.length ? markedRows : [current].filter(Boolean));
     if (current && actions[action]) actions[action](current);
   };
   const dispatchRef = useRef(dispatch);
@@ -661,7 +704,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(e.target.tagName);
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       let action = null;
-      if (e.ctrlKey && !e.altKey && /^[1-7]$/.test(key)) action = `view:${['desktop', 'store', 'monitored', 'backups', 'debloat', 'startup', 'snapshots'][Number(key) - 1]}`;
+      if (e.ctrlKey && !e.altKey && /^[1-8]$/.test(key)) action = `view:${['desktop', 'store', 'monitored', 'backups', 'debloat', 'startup', 'snapshots', 'junk'][Number(key) - 1]}`;
+      else if (e.ctrlKey && key === 'g') action = 'setGroup';
       else if (e.ctrlKey && key === 'f') action = 'find';
       else if (e.ctrlKey && key === 's') action = 'export';
       else if (e.ctrlKey && key === 'm') action = 'monitor';
@@ -725,7 +769,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
   };
 
   const contextItems = isBatch
-    ? [['uninstall', `Uninstall ${markedRows.length} Programs...`, 'Del'], null, ['clearSelection', 'Clear Selection']]
+    ? [['uninstall', `Uninstall ${markedRows.length} Programs...`, 'Del'], ['setGroup', `Set Group for ${markedRows.length} Programs...`, 'Ctrl+G'], null, ['clearSelection', 'Clear Selection']]
     : view === 'history'
       ? [['undoChange', 'Undo This Change', 'Del']]
     : view === 'snapshots'
@@ -735,12 +779,13 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       : view === 'monitored'
         ? [['uninstall', 'Uninstall...'], null, ['properties', 'Recorded Changes'], ['search', 'Search Online']]
         : view === 'store'
-          ? [['uninstall', 'Uninstall...'], null, ['folder', 'Installation Folder'], ['search', 'Search Online'], null, ['properties', 'Properties']]
+          ? [['uninstall', 'Uninstall...'], ['setGroup', 'Set Group...', 'Ctrl+G'], null, ['folder', 'Installation Folder'], ['search', 'Search Online'], null, ['properties', 'Properties']]
           : [
               ['uninstall', 'Uninstall...', 'Del'],
               ['force', 'Force Removal...', 'Shift+Del'],
               ['analyze', 'Analyze Leftovers...', 'Ctrl+L'],
               ['removeEntry', 'Remove Entry...'],
+              ['setGroup', 'Set Group...', 'Ctrl+G'],
               null,
               ['registry', 'Registry Entry'],
               ['folder', 'Installation Folder'],
@@ -756,40 +801,31 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
   return (
     <div className="app" onClick={() => menu && setMenu(null)}>
       <MenuBar onAction={dispatch} checked={{ toggleRestore: restoreOn }} />
-      <div className="toolbar">
-        <div className="toolbar-left">
-          <select
-            className={`view-picker ${VIEWS[view].button ? 'inactive' : ''}`}
-            value={VIEWS[view].button ? lastListView.current : view}
-            onChange={(e) => setView(e.target.value)}
-            onClick={() => VIEWS[view].button && setView(lastListView.current)}
-            aria-label="View"
-          >
-            {Object.entries(VIEWS)
-              .filter(([, v]) => !v.button)
-              .map(([id, v]) => (
-                <option key={id} value={id}>
-                  {v.label}
-                </option>
-              ))}
-          </select>
-          <button
-            className={`debloat-button ${view === 'debloat' ? 'active' : ''}`}
-            onClick={() => toggleView('debloat')}
-            aria-pressed={view === 'debloat'}
-            title="Safe, reversible tweaks that remove Windows ads, telemetry and clutter (Ctrl+5)"
-          >
-            Debloat Windows
+      {/* Two rows of four equal columns, so the buttons line up and fill the width. */}
+      <div className="toolbar toolbar-grid">
+        <select
+          className={`view-picker ${VIEWS[view].button ? 'inactive' : ''}`}
+          value={VIEWS[view].button ? lastListView.current : view}
+          onChange={(e) => setView(e.target.value)}
+          onClick={() => VIEWS[view].button && setView(lastListView.current)}
+          aria-label="View"
+        >
+          {Object.entries(VIEWS)
+            .filter(([, v]) => !v.button)
+            .map(([id, v]) => (
+              <option key={id} value={id}>
+                {v.label}
+              </option>
+            ))}
+        </select>
+        {[
+          ['debloat', 'Debloat Windows', 'Safe, reversible tweaks that remove Windows ads, telemetry and clutter (Ctrl+5)'],
+          ['startup', 'Startup & Services', 'Programs, tasks and services that start with Windows (Ctrl+6)'],
+        ].map(([id, label, title]) => (
+          <button key={id} className={`debloat-button ${view === id ? 'active' : ''}`} onClick={() => toggleView(id)} aria-pressed={view === id} title={title}>
+            {label}
           </button>
-          <button
-            className={`debloat-button ${view === 'startup' ? 'active' : ''}`}
-            onClick={() => toggleView('startup')}
-            aria-pressed={view === 'startup'}
-            title="Programs, tasks and services that start with Windows (Ctrl+6)"
-          >
-            Startup &amp; Services
-          </button>
-        </div>
+        ))}
         <div className="search">
           <input ref={searchRef} value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search" onKeyDown={(e) => e.key === 'Escape' && setFilter('')} />
           {filter && (
@@ -799,25 +835,42 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           )}
         </div>
       </div>
-      <div className="toolbar toolbar2" role="toolbar" aria-label="Tools">
+      <div className="toolbar toolbar-grid toolbar2" role="toolbar" aria-label="Tools">
         {[
           ['monitored', 'Monitored Programs', 'Programs recorded with Tools › Monitor an Installation (Ctrl+3)'],
           ['snapshots', 'Snapshots', 'Take snapshots and compare them to see what changed (Ctrl+7)'],
+          ['junk', 'Junk Files', 'Temporary files, crash dumps and caches that can be cleaned (Ctrl+8)'],
         ].map(([id, label, title]) => (
           <button key={id} className={`tool-button ${view === id ? 'active' : ''}`} onClick={() => toggleView(id)} aria-pressed={view === id} title={title}>
             {label}
           </button>
         ))}
-        {view === 'backups' && <span className="toolbar-note">Backups · Tools › Backups</span>}
-        {view === 'snapshots' && (
-          <span className="tool-actions">
-            <button className="tool-button" onClick={() => dispatch('takeSnapshot')}>Take Snapshot</button>
-            <button className="tool-button" disabled={!current} onClick={() => dispatch('compareNow')}>Compare with Now</button>
-            <button className="tool-button" disabled={markedRows.length !== 2} onClick={() => dispatch('compareSelected')}>Compare Selected</button>
-          </span>
-        )}
-        {view === 'history' && <span className="toolbar-note">Change History · double-click a change to undo it</span>}
+        <select
+          className={`group-picker ${groupFilter !== ALL_GROUPS && batchable ? 'active' : ''}`}
+          value={groupFilter}
+          disabled={!batchable}
+          onChange={(e) => setGroupFilter(e.target.value)}
+          aria-label="Program group"
+          title={batchable ? 'Show one group of programs. Right-click a program › Set Group to add it to one (Ctrl+G).' : 'Groups apply to the program lists'}
+        >
+          <option value={ALL_GROUPS}>All Groups</option>
+          {groupNames.map((g) => (
+            <option key={g} value={g}>
+              {g} ({Object.values(groups).filter((x) => x === g).length})
+            </option>
+          ))}
+          <option value={UNGROUPED}>Ungrouped</option>
+        </select>
       </div>
+      {view === 'snapshots' && (
+        <div className="view-bar">
+          <button className="tool-button" onClick={() => dispatch('takeSnapshot')}>Take Snapshot</button>
+          <button className="tool-button" disabled={!current} onClick={() => dispatch('compareNow')}>Compare with Now</button>
+          <button className="tool-button" disabled={markedRows.length !== 2} onClick={() => dispatch('compareSelected')}>Compare Selected</button>
+        </div>
+      )}
+      {view === 'backups' && <div className="view-bar note">Backups (Tools › Backups) · double-click a backup to restore it</div>}
+      {view === 'history' && <div className="view-bar note">Change History · double-click a change to undo it</div>}
 
       {error && (
         <div className="error-bar">
@@ -838,6 +891,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         <DebloatView key={customKey} filter={filter} admin={admin} onError={setError} onStatus={setCustomStatus} beforeChange={beforeDebloatChange} />
       ) : view === 'startup' ? (
         <StartupView key={customKey} filter={filter} admin={admin} programs={desktopCache.current} onError={setError} onStatus={setCustomStatus} />
+      ) : view === 'junk' ? (
+        <JunkView key={customKey} filter={filter} admin={admin} onError={setError} onStatus={setCustomStatus} onClean={cleanJunk} />
       ) : (
       <div className={`list view-${view}`} tabIndex={0} ref={listRef} onKeyDown={onListKey}>
         <div className="list-header">
@@ -887,6 +942,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
                     {cellFor(r, id)}
                     {id === 'size' && r.sizeTruncated ? '+' : ''}
                   </span>
+                  {id === 'name' && batchable && groups[r.key] && <span className="group-tag">{groups[r.key]}</span>}
                 </div>
               ))}
             </div>
@@ -946,6 +1002,9 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {modal?.type === 'results' && <ResultsDialog {...modal} onClose={() => setModal(null)} />}
       {modal?.type === 'properties' && <PropertiesDialog program={modal.program} onClose={() => setModal(null)} />}
       {modal?.type === 'about' && <AboutDialog onClose={() => setModal(null)} />}
+      {modal?.type === 'group' && (
+        <GroupDialog programs={modal.programs} current={groups[modal.programs[0].key] || ''} grouped={modal.programs.some((p) => groups[p.key])} names={groupNames} onSave={(g) => saveGroup(modal.programs, g)} onClose={() => setModal(null)} />
+      )}
       {modal?.type === 'takeSnapshot' && <TakeSnapshotDialog onTake={takeSnapshot} onClose={() => setModal(null)} />}
       {modal?.type === 'compare' && (
         <ComparisonDialog

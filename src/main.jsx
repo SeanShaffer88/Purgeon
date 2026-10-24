@@ -1,5 +1,5 @@
 import { createRoot } from 'react-dom/client';
-import { setSys } from './backend/sys.js';
+import { setSys, sys } from './backend/sys.js';
 import { createTauriSys } from './backend/tauri-sys.js';
 import { api, initBackend, __handlers } from './backend/api.js';
 import './styles.css';
@@ -7,9 +7,12 @@ import './styles.css';
 async function start() {
   setSys(await createTauriSys());
   await initBackend();
+  // Command-line requests (see cli.js) run without showing the window.
+  if (sys.info.args?.length) return (await import('./cli.js')).runCli(sys.info.args);
   // The UI talks to the backend through window.api; keyboard shortcuts are handled in App.
   window.api = { invoke: api.invoke, onMeasured: api.onMeasured, onMenu: () => () => {} };
   window.__sweepHandlers = __handlers;
+  window.__sweepPortable = !!sys.info.portable;
   const { default: App } = await import('./App.jsx');
   createRoot(document.getElementById('root')).render(<App />);
 }

@@ -241,6 +241,67 @@ async fn folder_size(path: String, max_entries: u64, max_ms: u64) -> FolderSize 
     .unwrap_or(FolderSize { bytes: 0, entries: 0, truncated: true })
 }
 
+/// Moves several items to the Recycle Bin; one entry per path, empty when it worked.
+#[tauri::command]
+async fn move_many_to_trash(paths: Vec<String>) -> Vec<String> {
+    tauri::async_runtime::spawn_blocking(move || paths.iter().map(|p| trash::delete(p).err().map(|e| e.to_string()).unwrap_or_default()).collect())
+        .await
+        .unwrap_or_default()
+}
+
+#[derive(Serialize)]
+struct JunkEntry {
+    path: String,
+    dir: bool,
+    bytes: u64,
+    /// Newest modification time inside the entry (ms since 1970), so recently used folders are left alone.
+    newest: f64,
+}
+
+/// The items directly inside a junk folder, each with its total size and newest modification time.
+#[tauri::command]
+async fn list_junk(root: String, max_ms: u64) -> Vec<JunkEntry> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let start = Instant::now();
+        let Ok(rd) = fs::read_dir(&root) else { return vec![] };
+        let mut out = Vec::new();
+        for e in rd.flatten() {
+            let Ok(t) = e.file_type() else { continue };
+            if t.is_symlink() {
+                continue;
+            }
+            let modified = |m: &fs::Metadata| millis(m.modified());
+            let Ok(meta) = e.metadata() else { continue };
+            let (mut bytes, mut newest) = (if t.is_file() { meta.len() } else { 0 }, modified(&meta));
+            if t.is_dir() {
+                let mut stack = vec![e.path()];
+                while let Some(dir) = stack.pop() {
+                    if start.elapsed() > Duration::from_millis(max_ms) {
+                        break;
+                    }
+                    let Ok(rd) = fs::read_dir(&dir) else { continue };
+                    for c in rd.flatten() {
+                        let (Ok(ct), Ok(cm)) = (c.file_type(), c.metadata()) else { continue };
+                        if ct.is_symlink() {
+                            continue;
+                        }
+                        newest = newest.max(modified(&cm));
+                        if ct.is_dir() {
+                            stack.push(c.path());
+                        } else {
+                            bytes += cm.len();
+                        }
+                    }
+                }
+            }
+            out.push(JunkEntry { path: e.path().display().to_string(), dir: t.is_dir(), bytes, newest });
+        }
+        out
+    })
+    .await
+    .unwrap_or_default()
+}
+
 /// Takes a snapshot of files/folders and registry keys/values into a compressed file.
 #[tauri::command]
 async fn take_snapshot(out: String, name: String, file_roots: Vec<String>, file_depth: u32, reg_roots: Vec<snapshot::RegRoot>, excludes: Vec<String>) -> Result<snapshot::SnapshotStats, String> {
@@ -265,52 +326,127 @@ async fn snapshot_subtree(path: String, key: String) -> Result<snapshot::Subtree
         .map_err(|e| e.to_string())?
 }
 
+/// Portable mode: when the program file's name contains "portable" (as the portable release's
+/// does) or a file named "portable" sits next to it, all data is kept in a "SweepUninstall Data"
+/// folder beside it instead of in the user's profile. Falls back to normal mode when that
+/// folder cannot be created (a read-only location).
+fn portable_dir() -> Option<PathBuf> {
+    let exe = std::env::current_exe().ok()?;
+    let dir = exe.parent()?;
+    let named = exe.file_stem()?.to_string_lossy().to_lowercase().contains("portable");
+    if !named && !dir.join("portable").exists() {
+        return None;
+    }
+    let data = dir.join("SweepUninstall Data");
+    fs::create_dir_all(&data).ok().map(|_| data)
+}
+
+/// Command-line requests (--snapshot, --compare, --list-snapshots, --help) run without a window.
+fn cli_args() -> Vec<String> {
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    if args.iter().any(|a| matches!(a.to_lowercase().as_str(), "--snapshot" | "--compare" | "--list-snapshots" | "--help" | "-h" | "/?")) {
+        args
+    } else {
+        vec![]
+    }
+}
+
 #[derive(Serialize)]
 struct SysInfo {
     env: std::collections::HashMap<String, String>,
     home: String,
     data_dir: String,
     exe: String,
+    portable: bool,
+    args: Vec<String>,
 }
 
 #[tauri::command]
 fn sys_info(app: tauri::AppHandle) -> SysInfo {
+    let portable = portable_dir();
     SysInfo {
         env: std::env::vars().collect(),
         home: std::env::var("USERPROFILE").unwrap_or_default(),
-        data_dir: app.path().app_data_dir().map(|p| p.display().to_string()).unwrap_or_default(),
+        data_dir: portable.clone().or_else(|| app.path().app_data_dir().ok()).map(|p| p.display().to_string()).unwrap_or_default(),
         exe: std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default(),
+        portable: portable.is_some(),
+        args: cli_args(),
     }
 }
 
 #[tauri::command]
-fn quit(app: tauri::AppHandle) {
-    app.exit(0);
+fn quit(app: tauri::AppHandle, code: Option<i32>) {
+    app.exit(code.unwrap_or(0));
+}
+
+#[link(name = "kernel32")]
+extern "system" {
+    fn AttachConsole(process_id: u32) -> i32;
+    fn GetStdHandle(which: u32) -> isize;
+    fn SetStdHandle(which: u32, handle: isize) -> i32;
+}
+
+/// Connects to the console the program was started from, unless output is already redirected.
+/// Error output is switched off: the browser engine logs harmless window-class messages there,
+/// and command-line errors are printed to standard output instead.
+fn attach_console() {
+    const STD_OUTPUT_HANDLE: u32 = -11i32 as u32;
+    const STD_ERROR_HANDLE: u32 = -12i32 as u32;
+    const ATTACH_PARENT_PROCESS: u32 = u32::MAX;
+    unsafe {
+        let h = GetStdHandle(STD_OUTPUT_HANDLE);
+        if h == 0 || h == -1 {
+            AttachConsole(ATTACH_PARENT_PROCESS);
+        }
+        SetStdHandle(STD_ERROR_HANDLE, 0);
+    }
+}
+
+/// Writes command-line output to the console (or to wherever output is redirected).
+#[tauri::command]
+fn cli_print(text: String) {
+    let mut out = std::io::stdout();
+    let _ = out.write_all(text.as_bytes());
+    let _ = out.flush();
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    let cli = !cli_args().is_empty();
+    if cli {
+        attach_console();
+    }
     tauri::Builder::default()
-        .setup(|app| {
+        .setup(move |app| {
+            // The window is created here so that in portable mode the browser data goes in the
+            // portable data folder too.
+            let config = app.config().app.windows.first().cloned().ok_or("no window configured")?;
+            let mut builder = tauri::WebviewWindowBuilder::from_config(app, &config)?;
+            if let Some(dir) = portable_dir() {
+                builder = builder.data_directory(dir.join("WebView"));
+            }
+            let window = builder.build()?;
+            if cli {
+                return Ok(());
+            }
             // Size the window to the screen it opens on (in Windows' scaled units, so the
             // display scale setting is respected), then show it.
-            if let Some(window) = app.get_webview_window("main") {
-                if let Ok(Some(monitor)) = window.current_monitor() {
-                    let scale = monitor.scale_factor();
-                    let area = monitor.work_area();
-                    let (w, h) = (area.size.width as f64 / scale, area.size.height as f64 / scale);
-                    let width = (w * 0.5).clamp(760.0, 1500.0).min(w * 0.95);
-                    let height = (h * 0.7).clamp(560.0, 1100.0).min(h * 0.92);
-                    let _ = window.set_size(tauri::LogicalSize::new(width, height));
-                    let _ = window.center();
-                }
-                let _ = window.show();
+            if let Ok(Some(monitor)) = window.current_monitor() {
+                let scale = monitor.scale_factor();
+                let area = monitor.work_area();
+                let (w, h) = (area.size.width as f64 / scale, area.size.height as f64 / scale);
+                let width = (w * 0.5).clamp(760.0, 1500.0).min(w * 0.95);
+                let height = (h * 0.7).clamp(560.0, 1100.0).min(h * 0.92);
+                let _ = window.set_size(tauri::LogicalSize::new(width, height));
+                let _ = window.center();
             }
+            let _ = window.show();
             Ok(())
         })
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
-            run_ps, exec, run_command_line, launch, read_dir, stat, exists, read_text, write_text, make_dir, remove_path, move_to_trash, walk, folder_size, take_snapshot, compare_snapshots, snapshot_subtree, sys_info, quit
+            run_ps, exec, run_command_line, launch, read_dir, stat, exists, read_text, write_text, make_dir, remove_path, move_to_trash, move_many_to_trash, list_junk, walk, folder_size, take_snapshot,
+            compare_snapshots, snapshot_subtree, sys_info, quit, cli_print
         ])
         .run(tauri::generate_context!())
         .expect("error while running SweepUninstall");

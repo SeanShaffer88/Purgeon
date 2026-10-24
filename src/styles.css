@@ -401,3 +401,50 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .show-more { display: block; margin: 6px auto; }
 .kind-setvalue, .kind-createkey { background: var(--violet); }
 .tool-actions { margin-left: auto; display: flex; gap: 6px; }
+
+/* Toolbars: two rows of four equal columns that fill the window and line up with each other. */
+.toolbar-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 5px 8px; }
+.toolbar-grid > * { min-width: 0; height: 26px; }
+.toolbar-grid .view-picker, .toolbar-grid .group-picker {
+  width: 100%; border: 1px solid var(--border-strong); background: var(--panel); padding: 0 6px; cursor: pointer;
+}
+.toolbar-grid .view-picker:hover, .toolbar-grid .view-picker:focus { border-color: var(--green); }
+.toolbar-grid .search { width: auto; }
+.toolbar-grid .search input { height: 100%; }
+.toolbar-grid .debloat-button, .toolbar-grid .tool-button {
+  width: 100%; padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center;
+}
+.toolbar2.toolbar-grid { padding: 4px 8px 5px; }
+.group-picker { color: var(--violet); outline: none; border-radius: 0; }
+.group-picker:hover:not(:disabled), .group-picker:focus { border-color: var(--violet); }
+.group-picker.active { border-color: var(--violet); background: #221a33; }
+.group-picker:disabled { color: var(--dim); cursor: default; }
+.group-picker option { background: var(--raised); color: var(--text); }
+
+/* Actions and notes for the open list view, under the toolbars */
+.view-bar { display: flex; gap: 6px; align-items: center; padding: 4px 8px; background: var(--bg); border-bottom: 1px solid var(--border); }
+.view-bar .tool-button { height: 24px; }
+.view-bar.note { color: var(--muted); }
+
+/* program groups */
+.group-tag { margin-left: 8px; padding: 0 6px; border: 1px solid #4a3a6a; color: var(--violet); font-size: 11px; white-space: nowrap; flex: none; }
+.group-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.chip { border: 1px solid var(--border-strong); background: var(--panel); padding: 1px 8px; cursor: pointer; color: var(--violet); }
+.chip:hover, .chip.on { border-color: var(--violet); background: #221a33; }
+
+/* junk files */
+.junk-row { cursor: pointer; }
+.junk-row input { margin: 0 4px 0 2px; accent-color: var(--green); }
+.junk-row.empty { opacity: 0.55; cursor: default; }
+.junk-size { color: var(--amber); min-width: 84px; text-align: right; }
+.junk-row.empty .junk-size { color: var(--green); }
+.junk-count { white-space: nowrap; }
+.junk-items { margin: 0 12px 6px 40px; border-left: 1px solid var(--border-strong); max-height: 260px; overflow-y: auto; }
+.junk-item { display: flex; justify-content: space-between; gap: 12px; padding: 1px 8px; }
+.junk-item .path { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.junk-note { padding: 0 12px 12px; }
+.fx-admin.warn { color: var(--red); border-color: var(--red); }
+.junk-row.off { background: transparent; border-left-color: var(--border-strong); }
+.junk-row.off:hover { background: var(--hover); }
+.junk-row .tweak-tags { flex-direction: row; align-items: center; gap: 12px; }
+.view-bar:not(.note) { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); padding: 4px 8px 5px; }

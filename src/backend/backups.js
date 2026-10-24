@@ -6,6 +6,7 @@ import * as path from './winpath.js';
 import { reg, runPS, runPSJson, psq, execFile } from './shell.js';
 import { isProtected, isProtectedKey } from './paths.js';
 import { regAddArgs } from './snapshots.js';
+import { isJunkPath } from './junk.js';
 
 let backupRoot = '';
 const setRoot = async (dir) => {
@@ -193,6 +194,18 @@ async function removeItems({ title, items, trashItem = (p) => sys.trash(p) }) {
     }
   }
 
+  // Junk files: only allowed inside the known junk folders (see junk.js), moved to the Recycle Bin in one batch.
+  const junk = items.filter((i) => i.kind === 'junk');
+  const allowed = junk.filter((i) => isJunkPath(i.path));
+  for (const item of junk.filter((i) => !isJunkPath(i.path))) log(item, false, 'Not in a junk folder, skipped');
+  const errors = sys.trashMany ? await sys.trashMany(allowed.map((i) => i.path)) : await Promise.all(allowed.map((i) => trashItem(i.path).then(() => '', (e) => String(e?.message || e))));
+  allowed.forEach((item, i) => {
+    if (!errors[i]) {
+      manifest.entries.push({ kind: item.dir ? 'dir' : 'file', path: item.path, recycled: true });
+      log(item, true, 'Moved to Recycle Bin');
+    } else log(item, false, /being used|in use|access is denied|0x80070020|0x80070005/i.test(errors[i]) ? 'In use, skipped' : errors[i]);
+  });
+
   // Keep a backup only when something was actually removed.
   if (!manifest.entries.length) {
     await sys.removePath(dir);
@@ -215,39 +228,66 @@ async function list() {
   return manifests.filter(Boolean).sort((a, b) => b.created.localeCompare(a.created));
 }
 
-// Moves the newest Recycle Bin copy of `original` back into place. Each recycled item has a
-// $I record holding its original path (format 2: path length at byte 24, UTF-16 path from 28;
-// format 1: fixed 520-byte path from 24) next to the $R item itself.
-function restoreFromRecycleBin(original) {
-  return runPS(`
-    $ErrorActionPreference = 'Stop'
-    $orig = ${psq(original)}
-    if (Test-Path -LiteralPath $orig) { 'EXISTS'; return }
+// Moves the newest Recycle Bin copy of each original path back into place, in one pass. Each
+// recycled item has a $I record holding its original path (format 2: path length at byte 24,
+// UTF-16 path from 28; format 1: fixed 520-byte path from 24) next to the $R item itself.
+// Resolves to { [original]: 'OK' | 'EXISTS' | 'NOTFOUND' | error text }.
+async function restoreManyFromRecycleBin(originals) {
+  if (!originals.length) return {};
+  const out = await runPS(
+    `$wanted = @([Console]::In.ReadToEnd() | ConvertFrom-Json)
     $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
-    $bin = Join-Path ([IO.Path]::GetPathRoot($orig)) ('$Recycle.Bin\\' + $sid)
-    $best = $null; $bestTime = [long]0
-    foreach ($i in Get-ChildItem -LiteralPath $bin -Filter '$I*' -Force -ErrorAction SilentlyContinue) {
-      $b = [IO.File]::ReadAllBytes($i.FullName)
-      if ($b.Length -lt 28) { continue }
-      if ([BitConverter]::ToInt64($b, 0) -eq 2) { $len = [BitConverter]::ToInt32($b, 24); $p = [Text.Encoding]::Unicode.GetString($b, 28, [Math]::Max(0, $len - 1) * 2) }
-      else { $p = [Text.Encoding]::Unicode.GetString($b, 24, [Math]::Min(520, $b.Length - 24)).TrimEnd([char]0) }
-      $t = [BitConverter]::ToInt64($b, 16)
-      if ($p -ieq $orig -and $t -gt $bestTime) { $best = $i; $bestTime = $t }
+    $index = @{}
+    foreach ($root in @($wanted | ForEach-Object { [IO.Path]::GetPathRoot([string]$_) } | Sort-Object -Unique)) {
+      $bin = Join-Path $root ('$Recycle.Bin\\' + $sid)
+      foreach ($i in Get-ChildItem -LiteralPath $bin -Filter '$I*' -Force -ErrorAction SilentlyContinue) {
+        try { $b = [IO.File]::ReadAllBytes($i.FullName) } catch { continue }
+        if ($b.Length -lt 28) { continue }
+        if ([BitConverter]::ToInt64($b, 0) -eq 2) { $len = [BitConverter]::ToInt32($b, 24); $p = [Text.Encoding]::Unicode.GetString($b, 28, [Math]::Max(0, $len - 1) * 2) }
+        else { $p = [Text.Encoding]::Unicode.GetString($b, 24, [Math]::Min(520, $b.Length - 24)).TrimEnd([char]0) }
+        $t = [BitConverter]::ToInt64($b, 16); $k = $p.ToLowerInvariant()
+        if (-not $index.ContainsKey($k) -or $index[$k].Time -lt $t) { $index[$k] = @{ Info = $i; Time = $t; Bin = $bin } }
+      }
     }
-    if (-not $best) { 'NOTFOUND'; return }
-    $item = Join-Path $bin ('$R' + $best.Name.Substring(2))
-    if (-not (Test-Path -LiteralPath $item)) { 'NOTFOUND'; return }
-    $parent = Split-Path -Parent $orig
-    if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
-    Move-Item -LiteralPath $item -Destination $orig
-    Remove-Item -LiteralPath $best.FullName -Force -ErrorAction SilentlyContinue
-    if (Test-Path -LiteralPath $orig) { 'OK' } else { 'Could not move it back' }`);
+    # The Recycle Bin records long paths; paths built from %TEMP% can hold 8.3 short names (SEANSH~1).
+    if (@($wanted) -match '~') { Add-Type -Namespace SweepUninstall -Name LongPath -MemberDefinition '[DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern uint GetLongPathName(string s, System.Text.StringBuilder b, uint n);' }
+    function Get-LongPath([string]$p) {
+      if ($p -notmatch '~') { return $p }
+      $tail = ''; $head = $p
+      while ($head -and -not (Test-Path -LiteralPath $head)) { $tail = '\\' + (Split-Path -Leaf $head) + $tail; $head = Split-Path -Parent $head }
+      $sb = New-Object Text.StringBuilder 1024
+      if ($head -and [SweepUninstall.LongPath]::GetLongPathName($head, $sb, 1024) -gt 0) { return $sb.ToString() + $tail }
+      $p
+    }
+    $result = @{}
+    foreach ($w in $wanted) {
+      $orig = [string]$w
+      try {
+        if (Test-Path -LiteralPath $orig) { $result[$orig] = 'EXISTS'; continue }
+        $hit = $index[(Get-LongPath $orig).ToLowerInvariant()]
+        if (-not $hit) { $result[$orig] = 'NOTFOUND'; continue }
+        $item = Join-Path $hit.Bin ('$R' + $hit.Info.Name.Substring(2))
+        if (-not (Test-Path -LiteralPath $item)) { $result[$orig] = 'NOTFOUND'; continue }
+        $parent = Split-Path -Parent $orig
+        if (-not (Test-Path -LiteralPath $parent)) { New-Item -ItemType Directory -Path $parent -Force | Out-Null }
+        Move-Item -LiteralPath $item -Destination $orig -ErrorAction Stop
+        Remove-Item -LiteralPath $hit.Info.FullName -Force -ErrorAction SilentlyContinue
+        $result[$orig] = if (Test-Path -LiteralPath $orig) { 'OK' } else { 'Could not move it back' }
+      } catch { $result[$orig] = $_.Exception.Message }
+    }
+    $result | ConvertTo-Json -Compress`,
+    { input: JSON.stringify(originals) }
+  );
+  return JSON.parse(out.trim() || '{}');
 }
+
+const restoreFromRecycleBin = async (original) => (await restoreManyFromRecycleBin([original]))[original] || 'NOTFOUND';
 
 async function restore(id) {
   const dir = path.join(backupRoot, id);
   const manifest = JSON.parse(await sys.readText(path.join(dir, 'manifest.json')));
   const results = [];
+  const recycled = await restoreManyFromRecycleBin(manifest.entries.filter((e) => e.recycled).map((e) => e.path)).catch((err) => ({ error: `ERR ${err.message}` }));
   for (const e of manifest.entries) {
     if (e.kind === 'key') {
       const r = await reg(['import', path.join(dir, e.file)]);
@@ -289,7 +329,7 @@ async function restore(id) {
         if (Get-NetFirewallRule -Name $r.Name -ErrorAction SilentlyContinue) { 'OK' } else { 'Firewall rule was not recreated' }`).catch((err) => err.message);
       results.push({ ...e, ok: /^OK/.test(out.trim()), detail: /^OK/.test(out.trim()) ? 'Firewall rule restored' : out.trim() });
     } else if (e.recycled) {
-      const out = (await restoreFromRecycleBin(e.path).catch((err) => `ERR ${err.message}`)).trim();
+      const out = String(recycled[e.path] || recycled.error || 'NOTFOUND').trim();
       const detail = { OK: 'Restored from the Recycle Bin', EXISTS: 'Already back in place', NOTFOUND: 'Not in the Recycle Bin any more (it may have been emptied)' }[out] || out.replace(/^ERR /, '');
       results.push({ ...e, ok: out === 'OK' || out === 'EXISTS', detail });
     } else {

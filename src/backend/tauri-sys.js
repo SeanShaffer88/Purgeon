@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 export async function createTauriSys() {
   const info = await invoke('sys_info');
   return {
-    info: { env: info.env, home: info.home, dataDir: info.data_dir, exe: info.exe },
+    info: { env: info.env, home: info.home, dataDir: info.data_dir, exe: info.exe, portable: info.portable, args: info.args },
     runPS: (script, input) => invoke('run_ps', { script, input: input ?? null }),
     exec: (file, args) => invoke('exec', { file, args }),
     runCommandLine: (commandLine) => invoke('run_command_line', { commandLine }),
@@ -22,6 +22,9 @@ export async function createTauriSys() {
     takeSnapshot: (out, name, fileRoots, fileDepth, regRoots, excludes) => invoke('take_snapshot', { out, name, fileRoots, fileDepth, regRoots, excludes }),
     compareSnapshots: (before, after, limit) => invoke('compare_snapshots', { before, after, limit }),
     snapshotSubtree: (path, key) => invoke('snapshot_subtree', { path, key }),
-    quit: () => invoke('quit'),
+    trashMany: (paths) => invoke('move_many_to_trash', { paths }),
+    listJunk: (root, maxMs) => invoke('list_junk', { root, maxMs }),
+    print: (text) => invoke('cli_print', { text }),
+    quit: (code = 0) => invoke('quit', { code }),
   };
 }

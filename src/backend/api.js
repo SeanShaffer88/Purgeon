@@ -12,6 +12,8 @@ import * as measure from './measure.js';
 import * as startup from './startup.js';
 import * as history from './history.js';
 import * as snapshots from './snapshots.js';
+import * as junk from './junk.js';
+import * as groups from './groups.js';
 
 const DEFAULT_SETTINGS = { createRestorePoints: true };
 const settingsFile = () => path.join(sys.info.dataDir, 'settings.json');
@@ -105,6 +107,10 @@ const handlers = {
   'snapshots:rename': ({ id, name }) => snapshots.rename(id, name),
   'snapshots:compare': ({ before, after }) => snapshots.compare(before, after),
   'snapshots:cleanupItems': ({ before, selected }) => snapshots.cleanupItems(before, selected),
+  'junk:scan': () => junk.scan(),
+  'groups:get': () => groups.get(),
+  'groups:set': ({ keys, group }) => groups.set(keys, group),
+  'groups:restore': (previous) => groups.restore(previous),
   'startup:list': () => startup.list(),
   'startup:set': ({ entry, enable }) => startup.setEnabled(entry, enable),
   'debloat:list': () => debloat.list(),
@@ -157,6 +163,11 @@ const recorders = {
     title: `Took snapshot "${meta.name}"`,
     detail: `${(meta.stats.dirs + meta.stats.files + meta.stats.keys + meta.stats.values).toLocaleString()} entries (${preset})`,
   }),
+  'groups:set': ({ keys, group, label }, previous) => ({
+    type: 'Groups',
+    title: group ? `Put ${label || plural(keys.length, 'program')} in the group "${group}"` : `Took ${label || plural(keys.length, 'program')} out of ${keys.length === 1 ? 'its group' : 'their groups'}`,
+    undo: { channel: 'groups:restore', arg: previous },
+  }),
   'monitor:finish': (_name, record) => ({ type: 'Monitor', title: `Recorded the installation of ${record.name}`, detail: plural(record.items.length, 'change') }),
 };
 for (const [channel, describe] of Object.entries(recorders)) {
@@ -194,6 +205,7 @@ export async function initBackend() {
     debloat.setRoot(path.join(data, 'debloat')),
     history.setRoot(path.join(data, 'history')),
     snapshots.setRoot(path.join(data, 'snapshots')),
+    groups.setRoot(path.join(data, 'groups')),
   ]);
 }
 

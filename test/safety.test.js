@@ -291,3 +291,102 @@ test('installation recordings remove what was added and put back what was change
   ]);
   assert.equal(items.find((i) => i.kind === 'setvalue').data, 'txtfile', 'the file association goes back to what it was');
 });
+
+import * as junk from '../src/backend/junk.js';
+import * as groups from '../src/backend/groups.js';
+import * as backups from '../src/backend/backups.js';
+import { runCli } from '../src/cli.js';
+
+// Runs `fn` with some environment variables replaced (the backend reads env through setSys).
+async function withEnv(vars, fn) {
+  const saved = nodeSys.info.env;
+  setSys({ ...nodeSys, info: { ...nodeSys.info, env: { ...saved, ...vars } } });
+  try {
+    return await fn();
+  } finally {
+    setSys({ ...nodeSys, info: { ...nodeSys.info, env: saved } });
+  }
+}
+
+test('junk cleanup is limited to the contents of the known junk folders', async () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-junk-'));
+  await withEnv({ TEMP: temp, SystemRoot: 'C:\\Windows', LOCALAPPDATA: 'C:\\Users\\x\\AppData\\Local' }, () => {
+    assert.equal(junk.isJunkPath(path.join(temp, 'old.tmp')), true);
+    assert.equal(junk.isJunkPath(path.join(temp, 'sub', 'deep.log')), true);
+    assert.equal(junk.isJunkPath(temp), false, 'never the junk folder itself');
+    assert.equal(junk.isJunkPath(path.join(temp, '..', 'Documents')), false, 'no climbing out with ..');
+    assert.equal(junk.isJunkPath('C:\\Windows\\System32\\drivers\\etc\\hosts'), false);
+    assert.equal(junk.isJunkPath('C:\\Windows\\Temp\\x.tmp'), true);
+    assert.equal(junk.isJunkPath('C:\\Windows\\MEMORY.DMP'), true);
+    assert.equal(junk.isJunkPath('C:\\Windows\\notepad.exe'), false);
+    assert.equal(junk.isJunkPath('C:\\Users\\x\\AppData\\Local\\Microsoft\\Windows\\Explorer\\thumbcache_96.db'), true);
+    assert.equal(junk.isJunkPath('relative\\path'), false);
+  });
+  fs.rmSync(temp, { recursive: true, force: true });
+});
+
+test('junk scan keeps recently used temp items and reports sizes', async () => {
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-junk-'));
+  const old = path.join(temp, 'old-folder');
+  fs.mkdirSync(old);
+  fs.writeFileSync(path.join(old, 'a.bin'), Buffer.alloc(1000));
+  fs.writeFileSync(path.join(temp, 'fresh.tmp'), 'x');
+  const past = new Date(Date.now() - 3 * 86400000);
+  fs.utimesSync(path.join(old, 'a.bin'), past, past);
+  fs.utimesSync(old, past, past);
+  const cats = await withEnv({ TEMP: temp, SystemRoot: path.join(temp, 'nowin'), LOCALAPPDATA: path.join(temp, 'nolocal'), ProgramData: path.join(temp, 'nodata') }, () => junk.scan());
+  const t = cats.find((c) => c.id === 'usertemp');
+  assert.deepEqual(t.items.map((i) => path.basename(i.path)), ['old-folder']);
+  assert.equal(t.bytes, 1000);
+  const items = junk.cleanupItems([t]);
+  assert.deepEqual(items.map((i) => i.kind), ['junk']);
+  fs.rmSync(temp, { recursive: true, force: true });
+});
+
+test('removeItems refuses junk items outside the junk folders', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-bk-'));
+  await backups.setRoot(root);
+  const trashed = [];
+  const { results, backupId } = await backups.removeItems({
+    title: 'junk',
+    items: [{ kind: 'junk', path: path.join(os.homedir(), 'Documents', 'important.docx') }],
+    trashItem: async (p) => trashed.push(p),
+  });
+  assert.equal(trashed.length, 0);
+  assert.equal(results[0].ok, false);
+  assert.equal(backupId, null);
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('groups can be set, cleared and put back', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-groups-'));
+  await groups.setRoot(dir);
+  await groups.set(['A', 'B'], 'Games');
+  const previous = await groups.set(['B', 'C'], 'Work');
+  assert.deepEqual(previous, { B: 'Games', C: '' });
+  assert.deepEqual(await groups.get(), { A: 'Games', B: 'Work', C: 'Work' });
+  await groups.restore(previous);
+  assert.deepEqual(await groups.get(), { A: 'Games', B: 'Games' });
+  await groups.set(['A'], '');
+  assert.deepEqual(groups.names(await groups.get()), ['Games']);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('command line prints help and fails cleanly on bad requests', async () => {
+  const out = [];
+  let code = null;
+  setSys({ ...nodeSys, print: async (t) => out.push(t), quit: async (c) => (code = c) });
+  try {
+    await runCli(['--help']);
+    assert.match(out.join(''), /--snapshot/);
+    assert.equal(code, 0);
+    out.length = 0;
+    await runCli(['--snapshot']);
+    assert.match(out.join(''), /Error: Give the snapshot a name/);
+    assert.equal(code, 1);
+    await runCli(['--snapshot', 'x', '--preset', 'huge']);
+    assert.equal(code, 1);
+  } finally {
+    setSys(nodeSys);
+  }
+});

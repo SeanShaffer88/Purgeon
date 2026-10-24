@@ -108,6 +108,36 @@ export function createNodeSys(dataDir = path.join(os.tmpdir(), 'sweepuninstall-t
       return out;
     },
     folderSize: async (p, maxEntries, maxMs) => folderSize(p, maxEntries, maxMs),
+    listJunk: async (root) => listJunk(root),
     quit: async () => {},
   };
+}
+
+// Items directly inside a folder with their total size and newest modification time (like list_junk in lib.rs).
+function listJunk(root) {
+  let entries = [];
+  try {
+    entries = fs.readdirSync(root, { withFileTypes: true });
+  } catch {
+    return [];
+  }
+  return entries
+    .filter((e) => !e.isSymbolicLink())
+    .map((e) => {
+      const full = path.join(root, e.name);
+      let bytes = 0;
+      let newest = fs.statSync(full).mtimeMs;
+      const visit = (p) => {
+        for (const c of fs.readdirSync(p, { withFileTypes: true })) {
+          const cp = path.join(p, c.name);
+          const s = fs.statSync(cp);
+          newest = Math.max(newest, s.mtimeMs);
+          if (c.isDirectory()) visit(cp);
+          else bytes += s.size;
+        }
+      };
+      if (e.isDirectory()) visit(full);
+      else bytes = fs.statSync(full).size;
+      return { path: full, dir: e.isDirectory(), bytes, newest };
+    });
 }
