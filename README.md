@@ -34,6 +34,13 @@ It has a compact single-list window with a dark terminal theme, built with Elect
 - **Tools › Monitor an Installation** takes a snapshot of the file system and registry, runs your installer, takes a second snapshot and records every folder, file, registry key, startup entry and service that was added.
 - Monitored programs appear under **View › Monitored Programs**. Uninstalling one removes exactly what its installation created.
 
+**Debloat Windows**
+- The **Debloat Windows** button next to the view picker (or `Ctrl+5`) lists 26 safe, reversible tweaks in five groups: Privacy & telemetry, Start/search/taskbar, Ads & suggestions, Explorer & UI, and Windows Update.
+- Each option is either **ENABLED** (green, the tweak is applied) or **DISABLED** (red, Windows default). Click an option to toggle it. Turning one off restores the Windows default.
+- Each option says when it takes effect: **Applies immediately**, **Needs Explorer restart** or **Needs reboot**. A **Restart Explorer** button appears when an Explorer change is pending.
+- Machine-wide policies are tagged **Admin** and need SweepUninstall to run as administrator.
+- Only options that are safe and widely recommended are included: no service removal, no app removal, and no security features turned off.
+
 **Backups and restore**
 - Before anything is deleted, registry keys are exported to `.reg` files and registry values are recorded with their type and data. Files go to the Recycle Bin.
 - **View › Backups** re-imports the registry changes of any removal.
@@ -54,6 +61,12 @@ It has a compact single-list window with a dark terminal theme, built with Elect
 | Installation monitor | Windows Store apps |
 | --- | --- |
 | ![Installation monitor](docs/screenshots/monitor.png) | ![Windows Store apps](docs/screenshots/store-apps.png) |
+
+| Debloat Windows | Debloat Windows (Explorer and Windows Update) |
+| --- | --- |
+| ![Debloat Windows, privacy and taskbar tweaks](docs/screenshots/debloat-top.png) | ![Debloat Windows, Explorer and Windows Update tweaks](docs/screenshots/debloat-bottom.png) |
+
+Screenshots use demo data.
 
 ## Getting started
 
@@ -81,6 +94,7 @@ Use **File › Restart as Administrator** or the link in the status bar.
 | `Alt+Enter` / `Enter` | Properties |
 | `Ctrl+F` | Search |
 | `Ctrl+1` to `Ctrl+4` | Desktop programs, Store apps, Monitored programs, Backups |
+| `Ctrl+5` | Debloat Windows |
 | `Ctrl+M` | Monitor an installation |
 | `Ctrl+S` | Export to HTML |
 | `F5` | Refresh |
@@ -93,6 +107,7 @@ Use **File › Restart as Administrator** or the link in the status bar.
 | `electron/leftovers.cjs` | Heuristic leftover scan, matching normalized program and publisher names |
 | `electron/monitor.cjs` | Before/after snapshots of file system and registry, and the diff |
 | `electron/backups.cjs` | Backup (`reg export`, value capture, Recycle Bin), removal and restore |
+| `electron/debloat.cjs` | Debloat tweak catalog: reads, applies and reverts registry values |
 | `electron/paths.cjs` | Well-known install roots, plus guards that refuse to touch system folders |
 | `src/` | React UI |
 

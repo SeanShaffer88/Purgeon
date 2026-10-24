@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AboutDialog, Busy, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog } from './dialogs.jsx';
+import { DebloatView } from './debloat.jsx';
 
 const api = window.api;
 
@@ -8,6 +9,8 @@ const VIEWS = {
   store: { label: 'Windows Store Apps', noun: 'apps', cols: [['name', 'Name'], ['version', 'Version'], ['publisher', 'Publisher']] },
   monitored: { label: 'Monitored Programs', noun: 'monitored programs', cols: [['name', 'Name'], ['size', 'Changes'], ['date', 'Monitored On']] },
   backups: { label: 'Backups', noun: 'backups', cols: [['name', 'Removed'], ['size', 'Entries'], ['date', 'Backed Up On']] },
+  // Reached through its own toolbar button, not the view picker.
+  debloat: { label: 'Debloat Windows', noun: 'tweaks', cols: [], button: true },
 };
 
 const formatSize = (kb) => {
@@ -51,6 +54,7 @@ const MENUS = [
       ['view:store', 'Windows Store Apps', 'Ctrl+2'],
       ['view:monitored', 'Monitored Programs', 'Ctrl+3'],
       ['view:backups', 'Backups', 'Ctrl+4'],
+      ['view:debloat', 'Debloat Windows', 'Ctrl+5'],
       null,
       ['find', 'Find...', 'Ctrl+F'],
       ['refresh', 'Refresh', 'F5'],
@@ -121,8 +125,13 @@ export default function App() {
   const searchRef = useRef(null);
   const listRef = useRef(null);
   const desktopCache = useRef([]);
+  const lastListView = useRef('desktop');
+  const [debloatStatus, setDebloatStatus] = useState('');
+  const [debloatKey, setDebloatKey] = useState(0);
+  if (view !== 'debloat') lastListView.current = view;
 
   const load = useCallback(async (v = view) => {
+    if (v === 'debloat') return setDebloatKey((k) => k + 1);
     setLoading(true);
     setError('');
     try {
@@ -142,7 +151,7 @@ export default function App() {
 
   useEffect(() => {
     setSelected(null);
-    load(view);
+    if (view !== 'debloat') load(view);
   }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -399,13 +408,31 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     <div className="app" onClick={() => menu && setMenu(null)}>
       <MenuBar onAction={dispatch} />
       <div className="toolbar">
-        <select className="view-picker" value={view} onChange={(e) => setView(e.target.value)} aria-label="View">
-          {Object.entries(VIEWS).map(([id, v]) => (
-            <option key={id} value={id}>
-              {v.label}
-            </option>
-          ))}
-        </select>
+        <div className="toolbar-left">
+          <select
+            className={`view-picker ${view === 'debloat' ? 'inactive' : ''}`}
+            value={view === 'debloat' ? lastListView.current : view}
+            onChange={(e) => setView(e.target.value)}
+            onClick={() => view === 'debloat' && setView(lastListView.current)}
+            aria-label="View"
+          >
+            {Object.entries(VIEWS)
+              .filter(([, v]) => !v.button)
+              .map(([id, v]) => (
+                <option key={id} value={id}>
+                  {v.label}
+                </option>
+              ))}
+          </select>
+          <button
+            className={`debloat-button ${view === 'debloat' ? 'active' : ''}`}
+            onClick={() => setView(view === 'debloat' ? lastListView.current : 'debloat')}
+            aria-pressed={view === 'debloat'}
+            title="Safe, reversible tweaks that remove Windows ads, telemetry and clutter (Ctrl+5)"
+          >
+            Debloat Windows
+          </button>
+        </div>
         <div className="search">
           <input ref={searchRef} value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search" onKeyDown={(e) => e.key === 'Escape' && setFilter('')} />
           {filter && (
@@ -423,6 +450,9 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         </div>
       )}
 
+      {view === 'debloat' ? (
+        <DebloatView key={debloatKey} filter={filter} admin={admin} onError={setError} onStatus={setDebloatStatus} />
+      ) : (
       <div className="list" tabIndex={0} ref={listRef} onKeyDown={onListKey}>
         <div className="list-header">
           {cols.map(([id, label]) => (
@@ -464,13 +494,18 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           ))
         )}
       </div>
+      )}
 
       <div className="statusbar">
-        <span>
-          {loading ? 'Loading' : visible.length} {VIEWS[view].noun}
-          {totalKB ? `, total size ${formatSize(totalKB)}` : ''}
-          {filter && rows.length !== visible.length ? ` (of ${rows.length})` : ''}
-        </span>
+        {view === 'debloat' ? (
+          <span>{debloatStatus}</span>
+        ) : (
+          <span>
+            {loading ? 'Loading' : visible.length} {VIEWS[view].noun}
+            {totalKB ? `, total size ${formatSize(totalKB)}` : ''}
+            {filter && rows.length !== visible.length ? ` (of ${rows.length})` : ''}
+          </span>
+        )}
         <span className="status-right">
           {current && view === 'desktop' && <span className="muted">{current.publisher}</span>}
           {admin === false && (

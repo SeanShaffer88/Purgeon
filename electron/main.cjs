@@ -6,6 +6,7 @@ const programs = require('./programs.cjs');
 const leftovers = require('./leftovers.cjs');
 const backups = require('./backups.cjs');
 const monitor = require('./monitor.cjs');
+const debloat = require('./debloat.cjs');
 const { runCommandLine, reg, runPS, psq } = require('./shell.cjs');
 
 let win;
@@ -46,6 +47,7 @@ function buildMenu() {
         item('Windows Store Apps', 'view:store', 'CmdOrCtrl+2'),
         item('Monitored Programs', 'view:monitored', 'CmdOrCtrl+3'),
         item('Backups', 'view:backups', 'CmdOrCtrl+4'),
+        item('Debloat Windows', 'view:debloat', 'CmdOrCtrl+5'),
         { type: 'separator' },
         item('Find...', 'find', 'CmdOrCtrl+F'),
         item('Refresh', 'refresh', 'F5'),
@@ -142,6 +144,9 @@ const handlers = {
   'monitor:list': () => monitor.list(),
   'monitor:remove': (id) => monitor.remove(id),
   'backups:list': () => backups.list(),
+  'debloat:list': () => debloat.list(),
+  'debloat:set': ({ id, enable }) => debloat.set(id, enable),
+  'debloat:restartExplorer': () => debloat.restartExplorer(),
   'backups:restore': (id) => backups.restore(id),
   'backups:remove': (id) => backups.remove(id),
   'export:html': async ({ title, html }) => {
