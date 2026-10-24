@@ -3,7 +3,7 @@
 A Windows uninstaller that removes a program and then finds the files, folders, registry keys, startup entries and services it left behind.
 It can monitor installations, take snapshots of your system to compare before and after, clean junk files, and manage startup programs and services. Every change is backed up first and can be undone.
 
-It has a compact single-list window with a dark terminal theme. It is built with [Tauri](https://tauri.app/) and React on Windows' built-in WebView2, so the whole app is a **3.7 MB** exe in a **1.2 MB** installer.
+It has a compact single-list window with a dark terminal theme. It is built with [Tauri](https://tauri.app/) and React on Windows' built-in WebView2, so the whole app is a **3.8 MB** exe in a **1.2 MB** installer.
 
 ![SweepUninstall main window](docs/screenshots/main.png)
 
@@ -27,6 +27,9 @@ It has a compact single-list window with a dark terminal theme. It is built with
 
 **Uninstall and leftover cleanup**
 - Runs the program's own uninstaller, then waits for it to finish. This includes Inno Setup and NSIS uninstallers that relaunch themselves from `%TEMP%`.
+- Recognises how a program was installed (Windows Installer, Inno Setup, NSIS, WiX bundle or InstallShield). Before uninstalling, it reads the exact list of files and settings the installer recorded: the Windows Installer package cached for the program, or the Inno Setup uninstall log. Those records disappear during the uninstall, and everything they list that is left behind is offered with a 95–100% match.
+- **Tools › Silent Uninstall When Possible** runs Windows Installer, Inno Setup, NSIS and WiX uninstallers without their windows, which is handy for batch uninstalls. Other uninstallers show their own window as usual; SweepUninstall never guesses switches for them.
+- The confirmation warns before you remove a shared runtime (Visual C++, .NET, Java, DirectX and others), a hardware driver, or a program that other installed programs registered a need for.
 - Scans for leftovers:
   - the install folder
   - folders named after the program or its publisher in Program Files, ProgramData and AppData
@@ -59,6 +62,7 @@ It has a compact single-list window with a dark terminal theme. It is built with
 
 **Installation monitor**
 - **Tools › Monitor an Installation** takes a snapshot of the file system and registry, runs your installer, takes a second snapshot and records every folder, file, registry key, registry value and service that was added.
+- When SweepUninstall runs as administrator, it also **tracks the installer live** with Windows' own event tracing. Every file and registry change made by the installer, the programs it starts and Windows Installer is recorded as it happens, at any depth, so changes deep inside existing folders and keys are caught too. Temporary files and Windows' own bookkeeping are left out.
 - It also records existing settings the installer changed, such as a file association or a Run entry it replaced. Uninstalling the program puts those settings back to what they were before.
 - Monitored programs appear under the **Monitored Programs** button (or `Ctrl+3`). Uninstalling one removes exactly what its installation created.
 
@@ -67,6 +71,7 @@ It has a compact single-list window with a dark terminal theme. It is built with
 - Take one before installing or changing something, in three depths: **Quick** (a few seconds), **Standard** and **Deep**.
 - **Compare with Now** or **Compare Selected** (two snapshots) shows what was **added**, **removed** and **changed**, with old and new registry values side by side. You can filter by files or registry and search the results.
 - **Clean Up Selected** removes added items and puts changed or removed registry values and keys back from the earlier snapshot. Everything is backed up first and can be undone.
+- The **timeline** above the list shows your snapshots in order, ending at Now. Click one, then Ctrl+click a second to compare them, or click Now.
 - Comparisons can be exported to HTML.
 
 **Junk Files**
@@ -97,6 +102,12 @@ It has a compact single-list window with a dark terminal theme. It is built with
   - Services are switched from Automatic to Manual. They no longer start at boot but can still start when needed. Their original start mode is remembered and restored when you turn them back on.
 - Entries from Microsoft are tagged **Windows** and ask before being turned off. Each entry says when a change applies: **Next sign-in** or **Next restart**.
 
+**Program backup and transfer**
+- Right-click a program and choose **Back Up Program** to pack its folders, shortcuts and registry settings into one `.swpkg` file. Nothing on your PC changes.
+- **Tools › Restore a Program Backup** restores one on this or another PC. Paths in the old user profile are moved into yours, and the old user's registry settings into your own.
+- A restore never overwrites existing folders or files. Existing registry keys are saved before the backup is merged into them, and the whole restore can be undone from Change History.
+- Services, scheduled tasks and drivers are not included; if a program needs them, run its installer on the new PC first and then restore its settings.
+
 **Backups and restore**
 - Before anything is deleted, it is backed up:
   - Registry keys are exported to `.reg` files, and registry values are recorded with their type and data.
@@ -118,6 +129,7 @@ It has a compact single-list window with a dark terminal theme. It is built with
 - SweepUninstall never offers drive roots, relative paths, the Windows folder, your profile folder, install roots, or folders with generic names such as `Microsoft` or `Common Files`.
 - It refuses to delete registry keys that Windows depends on (hive roots, `HKLM\SYSTEM`, Windows' own keys under `SOFTWARE\Microsoft`, file-extension keys and shared shell keys), even when told to.
 - It never deletes Windows' own services (protected ones, or ones whose program is in the Windows folder) or scheduled tasks under `\Microsoft\`.
+- **Right before deleting**, SweepUninstall checks again. It skips anything another installed program still uses: a folder holding another program's install folder, a file inside one, another program's uninstall entry, or a file Windows counts as shared by several programs (SharedDLLs). If this check can't run, nothing is deleted.
 - Only services whose settings can actually be changed are offered in Startup & Services.
 - Junk cleaning only ever touches the contents of the known junk folders listed above, never the folders themselves or anything outside them.
 
@@ -169,7 +181,7 @@ Screenshots use demo data.
 Get the latest version from [Releases](https://github.com/SeanShaffer88/SweepUninstall/releases/latest). It runs on Windows 10 and 11 (64-bit).
 
 - **`SweepUninstall-Setup-<version>.exe`** (about 1.2 MB) installs for all users, with a Start Menu shortcut. You can remove it later from Settings › Apps.
-- **`SweepUninstall-Portable-<version>.exe`** (about 3.7 MB) is the whole app as one exe that runs without installing. It keeps its settings, backups, snapshots and browser data in a `SweepUninstall Data` folder next to the exe, so you can carry it on a USB drive. Any copy whose file name contains `portable`, or that has a file named `portable` next to it, works this way.
+- **`SweepUninstall-Portable-<version>.exe`** (about 3.8 MB) is the whole app as one exe that runs without installing. It keeps its settings, backups, snapshots and browser data in a `SweepUninstall Data` folder next to the exe, so you can carry it on a USB drive. Any copy whose file name contains `portable`, or that has a file named `portable` next to it, works this way.
 
 Both ask for administrator rights when they start, because removing programs installed for all users, creating restore points and machine-wide debloat tweaks all need them.
 
@@ -210,12 +222,14 @@ Snapshots can be taken and compared from a terminal, for scripts or scheduled ch
 SweepUninstall --snapshot "Before installing X" --preset quick
 SweepUninstall --compare "Before installing X" now --report changes.html
 SweepUninstall --list-snapshots
+SweepUninstall --monitor "C:\Downloads\setup.exe" --name "Foo Editor"
 SweepUninstall --help
 ```
 
 - `--preset` is `quick`, `standard` (the default) or `deep`.
 - A snapshot is named by its id, its name, or `latest`. Compare two snapshots, or one with `now`.
 - `--report` saves the comparison as HTML, JSON or plain text, depending on the file extension.
+- `--monitor` records an installation: it runs the installer, waits for it to finish and saves the recording under Monitored Programs, with live tracking when run as administrator.
 - The exit code is 0 on success and 1 on an error. Because SweepUninstall asks for administrator rights, run it from an administrator terminal to see its output there.
 
 ### Run the tests
@@ -254,6 +268,7 @@ npm test
 | File | Role |
 | --- | --- |
 | `src-tauri/src/lib.rs` | Small Rust core: runs PowerShell and system tools, reads folders, measures sizes, lists junk folders, moves files to the Recycle Bin, portable mode and command-line output |
+| `src-tauri/src/tracker.rs` | Live installation tracking with Event Tracing for Windows |
 | `src-tauri/src/snapshot.rs` | Snapshot engine: records files, folders, registry keys and values into a compressed file, and compares two snapshots |
 | `src/backend/programs.js` | Reads the Uninstall registry keys and `Get-AppxPackage`; extracts program icons |
 | `src/backend/leftovers.js` | Leftover scan of folders, shortcuts and registry, plus match scoring |
@@ -262,6 +277,9 @@ npm test
 | `src/backend/startup.js` | Startup & Services: lists entries and turns them on or off without deleting them |
 | `src/backend/monitor.js` | Installation monitor: snapshots before and after an installer, turned into what to remove and what to put back |
 | `src/backend/snapshots.js` | Named snapshots, comparisons and cleanup of their differences |
+| `src/backend/installers.js` | Installer types, silent uninstall commands, and the files listed in Windows Installer packages and Inno Setup logs |
+| `src/backend/safety.js` | The check made right before deleting, and dependency warnings |
+| `src/backend/transfer.js` | Program backup files and restoring them |
 | `src/backend/junk.js` | Junk file categories, scanning and the junk-folder guard |
 | `src/backend/groups.js` | Program groups |
 | `src/backend/history.js` | Change History and the request that undoes each change |
@@ -280,6 +298,10 @@ npm test
 - Changes made by other programs while monitoring is active, or between two snapshots, are listed too. Review the list before cleaning up.
 - Files can be restored only while they are still in the Recycle Bin. Junk files moved there still take space until it is emptied. A restored service comes back after a restart.
 - Measured sizes stop after 15 seconds or 300,000 files per folder. A "+" after the size means it is at least that large.
+
+## Roadmap
+
+Planned enhancements are listed in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Disclaimer
 

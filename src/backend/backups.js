@@ -7,6 +7,7 @@ import { reg, runPS, runPSJson, psq, execFile } from './shell.js';
 import { isProtected, isProtectedKey } from './paths.js';
 import { regAddArgs } from './snapshots.js';
 import { isJunkPath } from './junk.js';
+import { readState, guardReason } from './safety.js';
 
 let backupRoot = '';
 const setRoot = async (dir) => {
@@ -38,13 +39,21 @@ async function readValues(values) {
 
 const REG_TYPE = { String: 'REG_SZ', ExpandString: 'REG_EXPAND_SZ', DWord: 'REG_DWORD', QWord: 'REG_QWORD', Binary: 'REG_BINARY', MultiString: 'REG_MULTI_SZ' };
 
-async function removeItems({ title, items, trashItem = (p) => sys.trash(p) }) {
+// `owners`: uninstall keys of the programs being removed (see safety.js). `state` replaces the
+// live system state in tests.
+async function removeItems({ title, items, owners = [], state, trashItem = (p) => sys.trash(p) }) {
   const id = `${new Date().toISOString().replace(/[:.]/g, '-')}_${slug(title)}`;
   const dir = path.join(backupRoot, id);
   await sys.makeDir(dir);
   const manifest = { id, title, created: new Date().toISOString(), entries: [] };
   const results = [];
   const log = (item, ok, detail) => results.push({ ...item, ok, detail });
+
+  // Last check before deleting: is anything still used by another installed program?
+  // If the check itself cannot run, files, folders and keys are left alone.
+  const guarded = items.some((i) => ['dir', 'file', 'key'].includes(i.kind));
+  const live = guarded ? state || (await readState().catch(() => null)) : null;
+  const blocked = (item) => (!guarded ? null : live ? guardReason(item, live, owners) : 'Could not check whether other programs use this, not deleted');
 
   // Services first, so their files are no longer locked. The service's registry definition is
   // exported first; importing it back recreates the service after a reboot.
@@ -138,6 +147,11 @@ async function removeItems({ title, items, trashItem = (p) => sys.trash(p) }) {
       log(item, false, 'Protected Windows key, skipped');
       continue;
     }
+    const why = blocked(item);
+    if (why) {
+      log(item, false, `${why}, skipped`);
+      continue;
+    }
     const file = path.join(dir, `key-${++n}.reg`);
     const ex = await reg(['export', item.path, file, '/y']);
     if (!ex.ok) {
@@ -183,6 +197,11 @@ async function removeItems({ title, items, trashItem = (p) => sys.trash(p) }) {
     }
     if (!(await sys.exists(item.path))) {
       log(item, true, 'Already gone');
+      continue;
+    }
+    const why = blocked(item);
+    if (why) {
+      log(item, false, `${why}, skipped`);
       continue;
     }
     try {

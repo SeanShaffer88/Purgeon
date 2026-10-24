@@ -390,3 +390,127 @@ test('command line prints help and fails cleanly on bad requests', async () => {
     setSys(nodeSys);
   }
 });
+
+import { guardReason, classify } from '../src/backend/safety.js';
+import { detect, msiItems, innoItems, uninstallerExe } from '../src/backend/installers.js';
+import { mapTarget, rewriteReg } from '../src/backend/transfer.js';
+import { registryName, liveItems, mergeItems } from '../src/backend/monitor.js';
+
+test('pre-delete check skips what other installed programs still use', () => {
+  const state = {
+    programs: [
+      { key: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Foo', name: 'Foo', location: 'C:\\Program Files\\Foo' },
+      { key: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Bar', name: 'Bar', location: 'C:\\Program Files\\Vendor\\Bar' },
+    ],
+    shared: [{ path: 'C:\\Program Files\\Common Files\\Vendor\\shared.dll', count: 3 }],
+  };
+  const owners = ['HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Foo'];
+  assert.equal(guardReason({ kind: 'dir', path: 'C:\\Program Files\\Foo' }, state, owners), null, "the owner's own folder may go");
+  assert.match(guardReason({ kind: 'dir', path: 'C:\\Program Files\\Foo' }, state, []), /Used by Foo/);
+  assert.match(guardReason({ kind: 'dir', path: 'C:\\Program Files\\Vendor' }, state, owners), /Used by Bar/, 'a folder holding another program');
+  assert.match(guardReason({ kind: 'file', path: 'C:\\Program Files\\Vendor\\Bar\\bar.exe' }, state, owners), /Used by Bar/);
+  assert.match(guardReason({ kind: 'file', path: 'C:\\Program Files\\Common Files\\Vendor\\SHARED.dll' }, state, owners), /Shared file used by 3/);
+  assert.match(guardReason({ kind: 'dir', path: 'C:\\Program Files\\Common Files\\Vendor' }, state, owners), /Shared file/);
+  assert.match(guardReason({ kind: 'key', path: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Bar' }, state, owners), /Uninstall entry of Bar/);
+  assert.equal(guardReason({ kind: 'key', path: 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\Foo' }, state, owners), null);
+  assert.equal(guardReason({ kind: 'dir', path: 'C:\\Users\\x\\AppData\\Roaming\\Foo' }, state, owners), null);
+});
+
+test('dependency warnings flag shared runtimes and drivers', () => {
+  assert.equal(classify({ name: 'Microsoft Visual C++ 2015-2022 Redistributable (x64) - 14.40' }).kind, 'runtime');
+  assert.equal(classify({ name: 'Microsoft .NET Runtime - 8.0.6 (x64)' }).kind, 'runtime');
+  assert.equal(classify({ name: 'Realtek High Definition Audio Driver', publisher: 'Realtek Semiconductor Corp.' }).kind, 'driver');
+  assert.equal(classify({ name: 'IObit Driver Booster', publisher: 'IObit' }).kind, null, 'a driver updater is not a driver');
+  assert.equal(classify({ name: 'OBS Studio', publisher: 'OBS Project' }).kind, null);
+  assert.match(classify({ name: 'X Runtime' }, ['Game A', 'Game B']).note, /Game A, Game B/);
+});
+
+test('installer technology and silent switches are recognised', () => {
+  const msi = detect({ key: 'HKLM\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\{11111111-2222-3333-4444-555555555555}', uninstall: 'MsiExec.exe /I{11111111-2222-3333-4444-555555555555}' });
+  assert.equal(msi.type, 'msi');
+  assert.equal(msi.silent, 'MsiExec.exe /X{11111111-2222-3333-4444-555555555555} /qn /norestart');
+  const inno = detect({ key: 'HKLM\\...\\Uninstall\\Foo_is1', uninstall: '"C:\\Program Files\\Foo\\unins000.exe"' });
+  assert.equal(inno.type, 'inno');
+  assert.equal(inno.silent, '"C:\\Program Files\\Foo\\unins000.exe" /VERYSILENT /SUPPRESSMSGBOXES /NORESTART');
+  assert.equal(detect({ key: 'x\\{A}', uninstall: '"C:\\ProgramData\\Package Cache\\{A}\\setup.exe" /uninstall' }).type, 'wix');
+  assert.equal(detect({ key: 'x\\Foo', uninstall: 'C:\\Foo\\uninst.exe' }).silent, '', 'unknown uninstallers are never given guessed switches');
+  assert.equal(uninstallerExe('C:\\Program Files\\Foo\\uninst.exe /x'), 'C:\\Program Files\\Foo\\uninst.exe');
+});
+
+test('installer records become safe, collapsed removal items', () => {
+  const items = msiItems(['C:\\Program Files\\Foo\\foo.exe', 'C:\\Program Files\\Foo\\bin\\a.dll', 'C:\\Windows\\System32\\foo.sys', 'C:\\Users\\x\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo\\', '02:\\SOFTWARE\\Foo\\Installed', '01:\\Software\\Classes\\.foo\\']);
+  const show = items.map((i) => `${i.kind}:${i.path}${i.name !== undefined ? `|${i.name}` : ''}`);
+  assert.ok(show.includes('dir:C:\\Program Files\\Foo'));
+  assert.ok(!show.some((s) => s.includes('bin')), 'nested folders collapse into their parent');
+  assert.ok(!show.some((s) => s.includes('System32')), 'system folders are never offered');
+  assert.ok(show.includes('dir:C:\\Users\\x\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo'));
+  assert.ok(show.includes('value:HKEY_LOCAL_MACHINE\\SOFTWARE\\Foo|Installed'));
+  const inno = innoItems(['FC:\\Program Files\\Foo', 'FC:\\Program Files\\Foo\\a.dll', 'KSoftware\\Foo', 'KSoftware\\Foo\\Sub'], new Map([
+    ['c:\\program files\\foo', 'dir'],
+    ['c:\\program files\\foo\\a.dll', 'file'],
+    ['key:software\\foo', ['HKEY_CURRENT_USER\\Software\\Foo']],
+    ['key:software\\foo\\sub', ['HKEY_CURRENT_USER\\Software\\Foo\\Sub']],
+  ]));
+  assert.deepEqual(inno.map((i) => `${i.kind}:${i.path}`), ['dir:C:\\Program Files\\Foo', 'key:HKEY_CURRENT_USER\\Software\\Foo']);
+});
+
+test('program backups move profile paths and the user hive to this PC', () => {
+  const source = { profile: 'C:\\Users\\alice', sid: 'S-1-5-21-1-2-3-1001' };
+  const here = { profile: 'D:\\Users\\bob' };
+  assert.equal(mapTarget({ kind: 'dir', path: 'C:\\Users\\alice\\AppData\\Roaming\\Foo' }, source, here), 'D:\\Users\\bob\\AppData\\Roaming\\Foo');
+  assert.equal(mapTarget({ kind: 'dir', path: 'C:\\Program Files\\Foo' }, source, here), 'C:\\Program Files\\Foo');
+  assert.equal(mapTarget({ kind: 'key', path: 'HKEY_USERS\\S-1-5-21-1-2-3-1001\\Software\\Foo' }, source, here), 'HKEY_CURRENT_USER\\Software\\Foo');
+  assert.equal(mapTarget({ kind: 'key', path: 'HKEY_USERS\\S-1-5-21-1-2-3-1001_Classes\\foofile' }, source, here), 'HKEY_CURRENT_USER\\Software\\Classes\\foofile');
+  const reg = '[HKEY_CURRENT_USER\\Software\\Foo]\r\n"Path"="C:\\\\Users\\\\alice\\\\Documents\\\\Foo"\r\n[HKEY_USERS\\S-1-5-21-1-2-3-1001\\Software\\Bar]\r\n';
+  const out = rewriteReg(reg, source, here);
+  assert.ok(out.includes('"Path"="D:\\\\Users\\\\bob\\\\Documents\\\\Foo"'), out);
+  assert.ok(out.includes('[HKEY_CURRENT_USER\\Software\\Bar]'), out);
+});
+
+test('live tracking results are translated, filtered and merged with snapshot findings', () => {
+  const sid = 'S-1-5-21-9-9-9-1001';
+  assert.equal(registryName('\\REGISTRY\\MACHINE\\SOFTWARE\\Foo', sid), 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Foo');
+  assert.equal(registryName(`\\REGISTRY\\USER\\${sid}\\Software\\Foo`, sid), 'HKEY_CURRENT_USER\\Software\\Foo');
+  assert.equal(registryName(`\\REGISTRY\\USER\\${sid}_Classes\\.foo`, sid), 'HKEY_CURRENT_USER\\Software\\Classes\\.foo');
+  assert.equal(registryName('\\REGISTRY\\MACHINE\\SYSTEM\\ControlSet001\\Services\\FooSvc', sid), 'HKEY_LOCAL_MACHINE\\SYSTEM\\CurrentControlSet\\Services\\FooSvc');
+  const items = liveItems(
+    {
+      created_dirs: ['C:\\Program Files\\Foo', 'C:\\Program Files\\Foo\\deep\\deeper', 'C:\\Users\\x\\AppData\\Local\\Temp\\setup1'],
+      created_files: ['C:\\Program Files\\Foo\\deep\\deeper\\a.dll', 'C:\\Users\\x\\Desktop\\Foo.lnk', 'C:\\Windows\\System32\\foo.dll'],
+      created_keys: ['\\REGISTRY\\MACHINE\\SOFTWARE\\Foo', '\\REGISTRY\\MACHINE\\SOFTWARE\\Foo\\Sub', '\\REGISTRY\\MACHINE\\SYSTEM\\ControlSet001\\Services\\FooSvc', `\\REGISTRY\\USER\\${sid}\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\RecentDocs`],
+      set_values: [
+        { key: '\\REGISTRY\\MACHINE\\SOFTWARE\\Foo', name: 'Version', new: true },
+        { key: `\\REGISTRY\\USER\\${sid}\\Software\\Microsoft\\Windows\\CurrentVersion\\Run`, name: 'Foo', new: true },
+        { key: `\\REGISTRY\\USER\\${sid}\\Software\\Classes\\.txt`, name: '', new: false },
+      ],
+    },
+    sid,
+    'setup.exe'
+  );
+  const show = items.map((i) => `${i.kind}:${i.path}${i.name !== undefined ? `|${i.name}` : ''}`);
+  assert.deepEqual(show, [
+    'dir:C:\\Program Files\\Foo',
+    'file:C:\\Users\\x\\Desktop\\Foo.lnk',
+    'key:HKEY_LOCAL_MACHINE\\SOFTWARE\\Foo',
+    'service:FooSvc',
+    'value:HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run|Foo',
+  ]);
+  const merged = mergeItems([{ kind: 'dir', path: 'C:\\Program Files\\Foo' }], [{ kind: 'file', path: 'C:\\Program Files\\Foo\\x\\y.dll' }, { kind: 'dir', path: 'C:\\ProgramData\\Foo' }]);
+  assert.deepEqual(merged.map((i) => i.path), ['C:\\Program Files\\Foo', 'C:\\ProgramData\\Foo']);
+});
+
+test('removeItems applies the pre-delete check and refuses when it cannot run', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-guard-'));
+  await backups.setRoot(root);
+  const target = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-guarded-'));
+  const trashed = [];
+  const state = { programs: [{ key: 'HKLM\\X\\Other', name: 'Other', location: target }], shared: [] };
+  const r1 = await backups.removeItems({ title: 't', items: [{ kind: 'dir', path: target }], state, trashItem: async (p) => trashed.push(p) });
+  assert.equal(trashed.length, 0);
+  assert.match(r1.results[0].detail, /Used by Other/);
+  const r2 = await backups.removeItems({ title: 't', items: [{ kind: 'dir', path: target }], owners: ['HKLM\\X\\Other'], state, trashItem: async (p) => trashed.push(p) });
+  assert.equal(trashed.length, 1, 'allowed when the folder belongs to the program being removed');
+  assert.ok(r2.results[0].ok);
+  fs.rmSync(root, { recursive: true, force: true });
+  fs.rmSync(target, { recursive: true, force: true });
+});

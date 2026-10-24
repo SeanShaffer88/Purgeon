@@ -5,6 +5,8 @@
 // A snapshot is named by its id, its name or "latest".
 import { sys } from './backend/sys.js';
 import * as snapshots from './backend/snapshots.js';
+import * as monitor from './backend/monitor.js';
+import { runCommandLine } from './backend/shell.js';
 
 const HELP = `SweepUninstall command line
 
@@ -15,6 +17,11 @@ const HELP = `SweepUninstall command line
         lists what was added, removed and changed.
   --list-snapshots
         Lists saved snapshots.
+  --monitor "<installer>" [--name "<program name>"]
+        Records an installation: runs the installer, waits for it to finish
+        and saves what it created and changed under Monitored Programs, so the
+        program can be removed completely later. Run as administrator to also
+        track the installer live.
 
 Snapshots are named by id, by name, or "latest". Run from an administrator
 terminal to see the output there; with --report the results are also saved
@@ -77,6 +84,31 @@ async function run(args) {
       return `${text.split('\r\n').slice(0, 2).join('\r\n')}\r\nReport saved to ${report}\r\n`;
     }
     return text;
+  }
+  if (cmd === '--monitor') {
+    const installer = option(args, '--monitor');
+    if (!installer || installer.startsWith('--')) throw new Error('Name the installer: --monitor "C:\\Downloads\\setup.exe"');
+    if (!(await sys.exists(installer))) throw new Error(`Installer not found: ${installer}`);
+    if (await monitor.status()) throw new Error('Another installation is being monitored. Finish or cancel it in SweepUninstall first.');
+    const started = await monitor.start(installer);
+    if (started.live) {
+      const pid = await sys.trackLaunch(installer);
+      // Installers can run for a long time; wait up to four hours, then a moment for the last changes.
+      await sys.waitProcess(pid, 4 * 3600 * 1000);
+      await new Promise((r) => setTimeout(r, 2000));
+    } else {
+      await runCommandLine(`"${installer}"`);
+    }
+    const name = option(args, '--name') || installer.split('\\').pop().replace(/\.[^.]+$/, '');
+    const rec = await monitor.finish(name);
+    const lines = [
+      `Recorded the installation of ${rec.name} (${started.live ? 'live tracking and snapshots' : 'snapshots only; run as administrator for live tracking'}).`,
+      `${rec.items.length} items, saved under Monitored Programs.`,
+      ...(rec.tracked ? [`Tracked processes: ${rec.tracked.processes.join(', ')}`] : []),
+      '',
+      ...rec.items.map((i) => `  ${i.kind.padEnd(8)} ${i.path}${i.name !== undefined ? ` › ${i.name || '(default)'}` : ''}  [${i.reason}]`),
+    ];
+    return lines.join('\r\n') + '\r\n';
   }
   if (cmd === '--list-snapshots') {
     const list = await snapshots.list();

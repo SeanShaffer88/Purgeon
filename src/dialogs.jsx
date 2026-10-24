@@ -312,12 +312,13 @@ export function MonitorWizard({ resume, onClose, onRecorded }) {
   const [installer, setInstaller] = useState(resume?.installer || '');
   const [name, setName] = useState(() => (resume?.installer ? baseName(resume.installer) : ''));
   const [error, setError] = useState('');
+  const [live, setLive] = useState(!!resume?.live);
 
   const begin = async () => {
     setError('');
     setStep('before');
     try {
-      await api.invoke('monitor:start', installer || null);
+      setLive(!!(await api.invoke('monitor:start', installer || null))?.live);
       if (installer) await api.invoke('monitor:launch', installer);
       setStep('installing');
     } catch (e) {
@@ -369,7 +370,7 @@ export function MonitorWizard({ resume, onClose, onRecorded }) {
       {error && <div className="error-box">{error}</div>}
       {step === 'pick' ? (
         <>
-          <p className="heading">SweepUninstall records every folder, file and registry key that an installer creates, so the program can be removed completely later.</p>
+          <p className="heading">SweepUninstall records every folder, file and registry setting that an installer creates or changes, so the program can be removed completely later. Running as administrator, it also tracks the installer live.</p>
           <ol className="steps">
             <li>Close other programs so their changes aren't recorded.</li>
             <li>Choose the installer. SweepUninstall takes a snapshot and then starts it.</li>
@@ -393,6 +394,13 @@ export function MonitorWizard({ resume, onClose, onRecorded }) {
       ) : (
         <>
           <p className="heading">Monitoring is active. Run the installer to the end, including any first-run setup.</p>
+          <p className={`monitor-mode ${live ? 'on' : ''}`}>
+            {live
+              ? 'Live tracking is on: every file and registry change made by the installer and the programs it starts is recorded as it happens.'
+              : installer
+                ? 'Live tracking needs SweepUninstall to run as administrator, so only the before and after snapshots are compared.'
+                : 'Without a chosen installer, only the before and after snapshots are compared. Choose the installer to also track it live.'}
+          </p>
           {installer && <p className="muted">Installer: {installer}</p>}
           <label className="field">
             Name for this program

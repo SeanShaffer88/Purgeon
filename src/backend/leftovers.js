@@ -5,6 +5,7 @@ import * as path from './winpath.js';
 import { runPSJson, psq } from './shell.js';
 import { fileRoots, shortcutRoots, GENERIC, isProtected, isProtectedKey } from './paths.js';
 import { scanDeep } from './deepscan.js';
+import { installerItems, stillPresent } from './installers.js';
 
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -232,12 +233,16 @@ function merge(items) {
 
 async function scan(program, shortcutTargets) {
   const location = (program.location || '').replace(/^"|"$/g, '').trim();
-  const [files, registry, deep] = await Promise.all([
+  // The installer's own records are read before an uninstall (they disappear with it) and passed
+  // in as program.installerItems; otherwise they are read now.
+  const listed = program.installerItems ? stillPresent(program.installerItems) : program.store ? [] : installerItems(program).catch(() => []);
+  const [files, registry, deep, fromInstaller] = await Promise.all([
     scanFiles(program, shortcutTargets),
     scanRegistry(program),
     scanDeep(program, { nameKey: nameKey(program.name), location }),
+    listed,
   ]);
-  return merge([...registry, ...deep, ...files]);
+  return merge([...registry, ...deep, ...files, ...fromInstaller]);
 }
 
 // Processes running from inside the install folder, so they can be closed before deletion.

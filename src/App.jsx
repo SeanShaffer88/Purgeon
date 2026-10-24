@@ -2,11 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog } from './dialogs.jsx';
 import { setConfirmUI } from './backend/api.js';
 import { applyZoom, nextStep } from './zoom.js';
-import { TakeSnapshotDialog, ComparisonDialog, comparisonHtml } from './snapshots.jsx';
+import { TakeSnapshotDialog, ComparisonDialog, SnapshotTimeline, comparisonHtml } from './snapshots.jsx';
 import { DebloatView } from './debloat.jsx';
 import { StartupView } from './startup.jsx';
 import { JunkView, formatBytes } from './junk.jsx';
 import { GroupDialog } from './groups.jsx';
+import { ProgramBackupDialog, ProgramRestoreDialog } from './transfer.jsx';
 
 const api = window.api;
 
@@ -67,6 +68,7 @@ const MENUS = [
       ['analyze', 'Analyze Leftovers...', 'Ctrl+L'],
       ['removeEntry', 'Remove Entry...'],
       ['setGroup', 'Set Group...', 'Ctrl+G'],
+      ['backupProgram', 'Back Up Program...'],
       null,
       ['registry', 'Registry Entry'],
       ['folder', 'Installation Folder'],
@@ -93,7 +95,7 @@ const MENUS = [
       ['zoomReset', 'Reset Zoom', 'Ctrl+0'],
     ],
   ],
-  ['Tools', [['monitor', 'Monitor an Installation...', 'Ctrl+M'], ['view:backups', 'Backups', 'Ctrl+4'], ['view:history', 'Change History', 'Ctrl+H'], null, ['view:snapshots', 'Snapshots', 'Ctrl+7'], ['takeSnapshot', 'Take a Snapshot...'], null, ['view:junk', 'Junk Files', 'Ctrl+8'], null, ['toggleRestore', 'Create Restore Points']]],
+  ['Tools', [['monitor', 'Monitor an Installation...', 'Ctrl+M'], ['view:backups', 'Backups', 'Ctrl+4'], ['view:history', 'Change History', 'Ctrl+H'], null, ['view:snapshots', 'Snapshots', 'Ctrl+7'], ['takeSnapshot', 'Take a Snapshot...'], null, ['restoreProgram', 'Restore a Program Backup...'], null, ['view:junk', 'Junk Files', 'Ctrl+8'], null, ['toggleRestore', 'Create Restore Points'], ['toggleSilent', 'Silent Uninstall When Possible']]],
   ['Help', [['about', 'About']]],
 ];
 
@@ -165,6 +167,7 @@ export default function App() {
   const stopBatch = useRef(false);
   const [notice, setNotice] = useState(null);
   const [restoreOn, setRestoreOn] = useState(true);
+  const [silentOn, setSilentOn] = useState(false);
   const [zoom, setZoom] = useState(1);
   // Program groups ({ programKey: group }) and the group the program lists are filtered to.
   const [groups, setGroups] = useState({});
@@ -222,6 +225,7 @@ export default function App() {
     api.invoke('app:isAdmin').then(setAdmin);
     api.invoke('settings:get').then((s) => {
       setRestoreOn(s.createRestorePoints);
+      setSilentOn(!!s.silentUninstall);
       setZoom(s.zoom || 1);
       applyZoom(s.zoom || 1);
     });
@@ -358,7 +362,28 @@ export default function App() {
     }
   };
 
-  const removeWithBackup = async (title, items, location) => {
+  // Reads what must be known before uninstalling: installer type, silent switches, the files the
+  // installer recorded and what depends on each program. One entry per program, in order.
+  const prepare = async (list) => {
+    if (!list.length) return [];
+    setBusy(list.length === 1 ? `Checking ${list[0].name}…` : `Checking ${list.length} programs…`);
+    try {
+      return await Promise.all(list.map((p) => api.invoke('program:prepare', p).catch(() => null)));
+    } finally {
+      setBusy('');
+    }
+  };
+  const prepNote = (info, uninstalling = true) => {
+    if (!info) return '';
+    const parts = [];
+    if (info.dependencies?.note) parts.push(`⚠ ${info.dependencies.note}`);
+    if (uninstalling && info.installer.label) parts.push(`Installer: ${info.installer.label}${silentOn ? (info.installer.silent ? ' (runs silently)' : ' (no known silent mode, its window will appear)') : ''}.`);
+    if (info.installerItems?.length) parts.push(`Its installer recorded ${info.installerItems.length} files, folders or settings; they are included in the leftover scan.`);
+    return parts.length ? `\n\n${parts.join('\n\n')}` : '';
+  };
+
+  // `owners`: uninstall keys of the programs being removed; anything another installed program still uses is skipped.
+  const removeWithBackup = async (title, items, location, owners = []) => {
     setModal(null);
     const locations = [].concat(location || []).filter(Boolean);
     if (locations.length) {
@@ -373,7 +398,7 @@ export default function App() {
     }
     setBusy('Backing up and removing selected items…');
     try {
-      const { results, backupId } = await api.invoke('items:remove', { title, items });
+      const { results, backupId } = await api.invoke('items:remove', { title, items, owners });
       setModal({
         type: 'results',
         title: 'Removal Report',
@@ -397,7 +422,7 @@ export default function App() {
       title,
       heading,
       items,
-      onRemove: (sel) => removeWithBackup(p.name, sel, p.location),
+      onRemove: (sel) => removeWithBackup(p.name, sel, p.location, [p.key]),
     });
 
   const scanFor = async (p, title, headingFn) => {
@@ -428,7 +453,7 @@ export default function App() {
       heading: `This installation created ${rec.items.length} items. Items already removed are skipped.`,
       items: rec.items,
       onRemove: async (sel) => {
-        if (await removeWithBackup(rec.name, sel)) {
+        if (await removeWithBackup(rec.name, sel, null, [...rec.uninstallKeys, registered?.key].filter(Boolean))) {
           await api.invoke('monitor:remove', rec.id);
           load();
         }
@@ -438,9 +463,16 @@ export default function App() {
 
   // Runs each program's own uninstaller in turn, then shows one combined leftover list.
   const batchUninstall = async (list) => {
+    const prep = await prepare(list.filter((p) => !p.store));
+    const infoFor = (p) => prep[list.filter((x) => !x.store).indexOf(p)];
+    const line = (p) => {
+      const info = infoFor(p);
+      const tags = [info?.installer.label, silentOn && info?.installer.silent ? 'silent' : '', info?.dependencies?.kind === 'runtime' ? '⚠ shared runtime' : info?.dependencies?.kind === 'driver' ? '⚠ driver' : '', info?.dependencies?.dependents?.length ? `⚠ needed by ${info.dependencies.dependents.join(', ')}` : ''].filter(Boolean);
+      return `• ${p.name}${tags.length ? `  (${tags.join(', ')})` : ''}`;
+    };
     const go = await confirmWithRestore(
       `Uninstall ${list.length} programs?`,
-      `${list.map((p) => `• ${p.name}`).join('\n')}\n\nEach program's own uninstaller runs in turn, so finish each uninstaller's window. Afterwards SweepUninstall scans all of them for leftovers.`
+      `${list.map(line).join('\n')}\n\nEach program's own uninstaller runs in turn${silentOn ? '; ones marked silent run without their windows' : ', so finish each uninstaller\'s window'}. Afterwards SweepUninstall scans all of them for leftovers.`
     );
     if (!go.ok) return;
     if (go.checked) await makeRestorePoint(`SweepUninstall: before uninstalling ${list.length} programs`, 'uninstall');
@@ -468,7 +500,7 @@ export default function App() {
     const items = [];
     for (const [i, { p }] of ran.entries()) {
       setBusy(`Scanning for leftovers (${i + 1} of ${ran.length}): ${p.name}…`);
-      const found = await api.invoke('program:scan', p).catch(() => []);
+      const found = await api.invoke('program:scan', { ...p, installerItems: infoFor(p)?.installerItems || [] }).catch(() => []);
       items.push(...found.map((it) => ({ ...it, program: p.name })));
     }
     setBusy('');
@@ -484,7 +516,7 @@ export default function App() {
       title: `Batch Uninstall – ${list.length} programs`,
       heading,
       items,
-      onRemove: (sel) => removeWithBackup(`Batch uninstall (${list.length} programs)`, sel, ran.map((o) => o.p.location)),
+      onRemove: (sel) => removeWithBackup(`Batch uninstall (${list.length} programs)`, sel, ran.map((o) => o.p.location), list.map((p) => p.key)),
     });
   };
 
@@ -564,7 +596,71 @@ export default function App() {
     }
   };
 
+  // ---- program backup and transfer -------------------------------------------
+
+  const backupProgram = async (p) => {
+    setBusy(`Finding ${p.name}'s files and settings…`);
+    try {
+      const items = await api.invoke('program:scan', p);
+      setModal({ type: 'backupProgram', program: p, items: items.filter((i) => ['dir', 'file', 'key', 'value'].includes(i.kind)) });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  };
+  const saveProgramBackup = async (p, items) => {
+    const file = await api.invoke('transfer:pickSave', p);
+    if (!file) return;
+    setModal(null);
+    setBusy(`Backing up ${p.name}…\nLarge programs can take a few minutes.`);
+    try {
+      const out = await api.invoke('transfer:export', { program: p, items, file });
+      const files = out.items.reduce((n, i) => n + (i.files || 0), 0);
+      const skipped = out.items.reduce((n, i) => n + (i.skipped || 0), 0);
+      const bytes = out.items.reduce((n, i) => n + (i.bytes || 0), 0);
+      setNotice({ tone: skipped ? 'warn' : 'ok', text: `${p.name} backed up to ${out.file}: ${files.toLocaleString()} files (${formatBytes(bytes)}) and ${out.items.filter((i) => i.kind === 'key' || i.kind === 'value').length} registry entries.${skipped ? ` ${skipped} files in use were skipped; close the program and back up again to include them.` : ''}` });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  };
+  const restoreProgramBackup = async () => {
+    const file = await api.invoke('transfer:pickOpen');
+    if (!file) return;
+    setBusy('Reading the backup…');
+    try {
+      setModal({ type: 'restoreProgram', backup: await api.invoke('transfer:read', file) });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  };
+  const runProgramRestore = async (backup, numbers) => {
+    setModal(null);
+    setBusy(`Restoring ${backup.program.name}…`);
+    try {
+      const out = await api.invoke('transfer:restore', { file: backup.file, numbers });
+      const entry = (await api.invoke('history:list')).find((e) => e.undo?.channel === 'transfer:undo' && e.undo.arg === out.id);
+      setModal({
+        type: 'results',
+        title: 'Restore Report',
+        results: out.results,
+        note: 'Undo removes what was restored and puts back any registry settings it changed. You can also undo it later from Tools › Change History.',
+        ...(entry && { onUndo: () => runUndo(entry.id, entry.title) }),
+      });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+      load();
+    }
+  };
+
   const actions = {
+    backupProgram: (p) => view === 'desktop' && backupProgram(p),
     compareNow: (p) => view === 'snapshots' && runCompare(p, null),
     deleteSnapshot: async (p) => {
       if (view !== 'snapshots') return;
@@ -589,10 +685,15 @@ export default function App() {
       if (view === 'snapshots') return actions.deleteSnapshot(p);
       if (view === 'monitored') return uninstallMonitored(p);
       if (view === 'backups') return actions.deleteBackup(p);
-      const go = await confirmWithRestore(`Uninstall ${p.name}?`, p.store ? 'The app package will be removed.' : "The program's own uninstaller will run first, then SweepUninstall scans for leftovers.");
+      const prep = p.store ? null : await prepare([p]);
+      const info = prep?.[0];
+      const go = await confirmWithRestore(
+        `Uninstall ${p.name}?`,
+        (p.store ? 'The app package will be removed.' : "The program's own uninstaller will run first, then SweepUninstall scans for leftovers.") + (info ? prepNote(info) : '')
+      );
       if (!go.ok) return;
       if (go.checked) await makeRestorePoint(`SweepUninstall: before uninstalling ${p.name}`, 'uninstall');
-      setBusy(`Running the uninstaller for ${p.name}…\nFinish the uninstaller's window if one appears.`);
+      setBusy(info && silentOn && info.installer.silent ? `Uninstalling ${p.name} silently…` : `Running the uninstaller for ${p.name}…\nFinish the uninstaller's window if one appears.`);
       let result;
       try {
         result = await api.invoke('program:runUninstaller', p);
@@ -605,7 +706,7 @@ export default function App() {
         return load();
       }
       load();
-      await scanFor(p, `Uninstall – ${p.name}`, (items) =>
+      await scanFor({ ...p, installerItems: info?.installerItems || [] }, `Uninstall – ${p.name}`, (items) =>
         result.error
           ? `${result.error} SweepUninstall found ${items.length} items.`
           : result.ok
@@ -615,9 +716,10 @@ export default function App() {
     },
     force: async (p) => {
       if (view !== 'desktop') return actions.uninstall(p);
+      const [info] = await prepare([p]);
       const go = await confirmWithRestore(
         `Force removal of ${p.name}?`,
-        "This skips the program's uninstaller and deletes its files and registry entries directly. Use it for programs whose uninstaller is broken or missing. Everything is backed up first."
+        "This skips the program's uninstaller and deletes its files and registry entries directly. Use it for programs whose uninstaller is broken or missing. Everything is backed up first." + prepNote(info, false)
       );
       if (!go.ok) return;
       if (go.checked) await makeRestorePoint(`SweepUninstall: before force removal of ${p.name}`, 'uninstall');
@@ -630,7 +732,7 @@ export default function App() {
     removeEntry: async (p) => {
       if (view !== 'desktop') return;
       if (await api.invoke('dialog:confirm', { message: `Remove ${p.name} from the list?`, detail: 'Only the uninstall entry is deleted (with a backup). Program files are not touched.' })) {
-        removeWithBackup(`${p.name} (entry)`, [{ kind: 'key', path: p.key, confidence: 'high', reason: 'Uninstall entry' }]);
+        removeWithBackup(`${p.name} (entry)`, [{ kind: 'key', path: p.key, confidence: 'high', reason: 'Uninstall entry' }], null, [p.key]);
       }
     },
     registry: (p) => view === 'desktop' && api.invoke('program:openRegistry', p.key),
@@ -656,6 +758,7 @@ export default function App() {
 
   const global = {
     takeSnapshot: () => setModal({ type: 'takeSnapshot' }),
+    restoreProgram: () => restoreProgramBackup(),
     compareSelected: () => {
       if (view !== 'snapshots' || markedRows.length !== 2) return setNotice({ tone: 'warn', text: 'Select exactly two snapshots (Ctrl+click) to compare them.' });
       runCompare(markedRows[0], markedRows[1]);
@@ -679,9 +782,15 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     zoomIn: () => changeZoom(1),
     zoomOut: () => changeZoom(-1),
     zoomReset: () => changeZoom(0),
+    toggleSilent: async () => {
+      const s = await api.invoke('settings:set', { silentUninstall: !silentOn });
+      setSilentOn(s.silentUninstall);
+      setNotice({ tone: 'ok', text: s.silentUninstall ? 'Silent uninstall is on: Windows Installer, Inno Setup, NSIS and WiX uninstallers run without their windows. Others run normally.' : 'Silent uninstall is off: every uninstaller shows its own window.' });
+    },
     toggleRestore: async () => {
       const s = await api.invoke('settings:set', { createRestorePoints: !restoreOn });
       setRestoreOn(s.createRestorePoints);
+      setSilentOn(!!s.silentUninstall);
       setNotice({ tone: 'ok', text: s.createRestorePoints ? 'Restore points are on: confirmations offer to create one first.' : 'Restore points are off: the checkbox starts unticked.' });
     },
   };
@@ -786,6 +895,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               ['analyze', 'Analyze Leftovers...', 'Ctrl+L'],
               ['removeEntry', 'Remove Entry...'],
               ['setGroup', 'Set Group...', 'Ctrl+G'],
+              ['backupProgram', 'Back Up Program...'],
               null,
               ['registry', 'Registry Entry'],
               ['folder', 'Installation Folder'],
@@ -800,7 +910,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
 
   return (
     <div className="app" onClick={() => menu && setMenu(null)}>
-      <MenuBar onAction={dispatch} checked={{ toggleRestore: restoreOn }} />
+      <MenuBar onAction={dispatch} checked={{ toggleRestore: restoreOn, toggleSilent: silentOn }} />
       {/* Two rows of four equal columns, so the buttons line up and fill the width. */}
       <div className="toolbar toolbar-grid">
         <select
@@ -868,6 +978,9 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           <button className="tool-button" disabled={!current} onClick={() => dispatch('compareNow')}>Compare with Now</button>
           <button className="tool-button" disabled={markedRows.length !== 2} onClick={() => dispatch('compareSelected')}>Compare Selected</button>
         </div>
+      )}
+      {view === 'snapshots' && !loading && (
+        <SnapshotTimeline snapshots={rows.filter((r) => r.stats && r.created)} marked={marked} onSelect={(key, ctrl) => selectRow(key, { ctrl })} onCompare={(a, b) => runCompare(a, b)} onCompareNow={(s) => runCompare(s, null)} />
       )}
       {view === 'backups' && <div className="view-bar note">Backups (Tools › Backups) · double-click a backup to restore it</div>}
       {view === 'history' && <div className="view-bar note">Change History · double-click a change to undo it</div>}
@@ -1005,6 +1118,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {modal?.type === 'group' && (
         <GroupDialog programs={modal.programs} current={groups[modal.programs[0].key] || ''} grouped={modal.programs.some((p) => groups[p.key])} names={groupNames} onSave={(g) => saveGroup(modal.programs, g)} onClose={() => setModal(null)} />
       )}
+      {modal?.type === 'backupProgram' && <ProgramBackupDialog {...modal} onSave={(items) => saveProgramBackup(modal.program, items)} onClose={() => setModal(null)} />}
+      {modal?.type === 'restoreProgram' && <ProgramRestoreDialog backup={modal.backup} onRestore={(numbers) => runProgramRestore(modal.backup, numbers)} onClose={() => setModal(null)} />}
       {modal?.type === 'takeSnapshot' && <TakeSnapshotDialog onTake={takeSnapshot} onClose={() => setModal(null)} />}
       {modal?.type === 'compare' && (
         <ComparisonDialog

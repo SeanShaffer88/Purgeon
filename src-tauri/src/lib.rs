@@ -12,6 +12,7 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 use tauri::Manager;
 
 mod snapshot;
+mod tracker;
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
@@ -302,6 +303,68 @@ async fn list_junk(root: String, max_ms: u64) -> Vec<JunkEntry> {
     .unwrap_or_default()
 }
 
+/// Starts live installation tracking (administrator only).
+#[tauri::command]
+fn track_start() -> Result<(), String> {
+    tracker::start()
+}
+
+/// Starts an installer as a child of SweepUninstall, so it and everything it starts are
+/// tracked. .msi packages go through msiexec. Returns the process id.
+#[tauri::command]
+fn track_launch(file: String) -> Result<u32, String> {
+    let lower = file.to_lowercase();
+    let mut cmd = if lower.ends_with(".msi") {
+        let mut c = Command::new("msiexec.exe");
+        c.args(["/i", &file]);
+        c
+    } else if lower.ends_with(".bat") || lower.ends_with(".cmd") {
+        let mut c = Command::new("cmd.exe");
+        c.args(["/c", &file]);
+        c
+    } else {
+        Command::new(&file)
+    };
+    // The installer gets no share of SweepUninstall's console or output.
+    let child = cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|e| e.to_string())?;
+    let pid = child.id();
+    tracker::add_pid(pid, file);
+    Ok(pid)
+}
+
+/// Waits for a process to exit; false when it is still running after `timeout_ms`.
+#[tauri::command]
+async fn wait_process(pid: u32, timeout_ms: u32) -> bool {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn OpenProcess(access: u32, inherit: i32, pid: u32) -> isize;
+        fn WaitForSingleObject(handle: isize, ms: u32) -> u32;
+        fn CloseHandle(handle: isize) -> i32;
+    }
+    const SYNCHRONIZE: u32 = 0x0010_0000;
+    tauri::async_runtime::spawn_blocking(move || unsafe {
+        let h = OpenProcess(SYNCHRONIZE, 0, pid);
+        if h == 0 {
+            return true; // already gone
+        }
+        let r = WaitForSingleObject(h, timeout_ms);
+        CloseHandle(h);
+        r == 0
+    })
+    .await
+    .unwrap_or(false)
+}
+
+#[tauri::command]
+fn track_running() -> bool {
+    tracker::is_running()
+}
+
+#[tauri::command]
+fn track_stop() -> Result<tracker::TrackResult, String> {
+    tracker::stop()
+}
+
 /// Takes a snapshot of files/folders and registry keys/values into a compressed file.
 #[tauri::command]
 async fn take_snapshot(out: String, name: String, file_roots: Vec<String>, file_depth: u32, reg_roots: Vec<snapshot::RegRoot>, excludes: Vec<String>) -> Result<snapshot::SnapshotStats, String> {
@@ -344,7 +407,7 @@ fn portable_dir() -> Option<PathBuf> {
 /// Command-line requests (--snapshot, --compare, --list-snapshots, --help) run without a window.
 fn cli_args() -> Vec<String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if args.iter().any(|a| matches!(a.to_lowercase().as_str(), "--snapshot" | "--compare" | "--list-snapshots" | "--help" | "-h" | "/?")) {
+    if args.iter().any(|a| matches!(a.to_lowercase().as_str(), "--snapshot" | "--compare" | "--list-snapshots" | "--monitor" | "--help" | "-h" | "/?")) {
         args
     } else {
         vec![]
@@ -446,7 +509,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             run_ps, exec, run_command_line, launch, read_dir, stat, exists, read_text, write_text, make_dir, remove_path, move_to_trash, move_many_to_trash, list_junk, walk, folder_size, take_snapshot,
-            compare_snapshots, snapshot_subtree, sys_info, quit, cli_print
+            compare_snapshots, snapshot_subtree, sys_info, quit, cli_print, track_start, track_launch, track_running, track_stop, wait_process
         ])
         .run(tauri::generate_context!())
         .expect("error while running SweepUninstall");

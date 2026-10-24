@@ -25,6 +25,11 @@ export async function createTauriSys() {
     trashMany: (paths) => invoke('move_many_to_trash', { paths }),
     listJunk: (root, maxMs) => invoke('list_junk', { root, maxMs }),
     print: (text) => invoke('cli_print', { text }),
+    trackStart: () => invoke('track_start'),
+    trackLaunch: (file) => invoke('track_launch', { file }),
+    trackRunning: () => invoke('track_running'),
+    trackStop: () => invoke('track_stop'),
+    waitProcess: (pid, timeoutMs) => invoke('wait_process', { pid, timeoutMs }),
     quit: (code = 0) => invoke('quit', { code }),
   };
 }

@@ -448,3 +448,26 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .junk-row.off:hover { background: var(--hover); }
 .junk-row .tweak-tags { flex-direction: row; align-items: center; gap: 12px; }
 .view-bar:not(.note) { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); padding: 4px 8px 5px; }
+
+/* snapshot timeline */
+.timeline { padding: 6px 16px 4px; border-bottom: 1px solid var(--border); background: var(--bg); }
+.timeline-track { position: relative; height: 54px; }
+.timeline-line { position: absolute; left: 1%; right: 1%; top: 10px; border-top: 1px dashed var(--border-strong); }
+.timeline-dot {
+  position: absolute; top: 3px; transform: translateX(-50%); border: 0; background: none; padding: 0; cursor: pointer;
+  display: flex; flex-direction: column; align-items: center; color: var(--muted); max-width: 18%;
+}
+.timeline-dot::before {
+  content: ''; width: 12px; height: 12px; border: 2px solid var(--cyan); background: var(--bg); border-radius: 50%; margin-bottom: 4px;
+}
+.timeline-dot:hover::before, .timeline-dot.on::before { background: var(--cyan); }
+.timeline-dot.on { color: var(--cyan); }
+.timeline-dot.now::before { border-color: var(--green); border-radius: 0; transform: rotate(45deg) scale(0.85); }
+.timeline-dot.now:not(:disabled):hover::before { background: var(--green); }
+.timeline-dot.now:disabled { cursor: default; opacity: 0.6; }
+.timeline-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; font-size: 12px; }
+.timeline-date { font-size: 11px; color: var(--dim); }
+.timeline-hint { color: var(--muted); font-size: 12px; text-align: center; min-height: 18px; }
+
+.monitor-mode { color: var(--muted); border-left: 2px solid var(--border-strong); padding-left: 8px; }
+.monitor-mode.on { color: var(--green); border-left-color: var(--green); }

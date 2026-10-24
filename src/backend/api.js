@@ -14,8 +14,11 @@ import * as history from './history.js';
 import * as snapshots from './snapshots.js';
 import * as junk from './junk.js';
 import * as groups from './groups.js';
+import * as installers from './installers.js';
+import * as safety from './safety.js';
+import * as transfer from './transfer.js';
 
-const DEFAULT_SETTINGS = { createRestorePoints: true };
+const DEFAULT_SETTINGS = { createRestorePoints: true, silentUninstall: false };
 const settingsFile = () => path.join(sys.info.dataDir, 'settings.json');
 const readSettings = () =>
   sys
@@ -62,9 +65,11 @@ const handlers = {
       await programs.removeStoreApp(program.key);
       return { ok: true };
     }
-    const cmd = program.uninstall || program.quiet;
+    // With Tools › Silent Uninstall turned on, uninstallers whose silent switches are known run without their windows.
+    const silent = (await readSettings()).silentUninstall ? (await installers.describe(program)).silent : '';
+    const cmd = silent || program.uninstall || program.quiet;
     if (!cmd) return { ok: false, error: 'This program has no uninstall command. Use Force Removal.' };
-    const result = await runCommandLine(cmd);
+    const result = { ...(await runCommandLine(cmd)), silent: !!silent };
     // Many uninstallers relaunch themselves from %TEMP% and exit at once; wait for the
     // registry entry to disappear for a while before scanning.
     for (let i = 0; i < 120; i++) {
@@ -76,9 +81,15 @@ const handlers = {
     return result;
   },
   'program:scan': (program) => leftovers.scan(program),
+  // Read before uninstalling: the installer type and silent switches, the files its installer
+  // recorded (these records go away with the uninstall), and what depends on the program.
+  'program:prepare': async (program) => {
+    const [installer, installerItems, dependencies] = await Promise.all([installers.describe(program), installers.installerItems(program).catch(() => []), safety.dependencyInfo(program).catch(() => null)]);
+    return { installer, installerItems, dependencies };
+  },
   'program:processes': (location) => leftovers.processesIn(location),
   'program:killProcesses': (ids) => runPS(`Stop-Process -Id ${ids.map(Number).join(',')} -Force -ErrorAction SilentlyContinue`),
-  'items:remove': ({ title, items }) => backups.removeItems({ title, items }),
+  'items:remove': ({ title, items, owners }) => backups.removeItems({ title, items, owners }),
   'program:openFolder': async (location) => (location && (await sys.exists(location)) ? (await open(location), '') : 'Folder not found'),
   'program:openRegistry': async (key) => {
     const full = key.replace(/^HKLM\\/i, 'HKEY_LOCAL_MACHINE\\').replace(/^HKCU\\/i, 'HKEY_CURRENT_USER\\');
@@ -93,7 +104,7 @@ const handlers = {
     return typeof file === 'string' ? file : null;
   },
   'monitor:start': (installer) => monitor.start(installer),
-  'monitor:launch': (installer) => open(installer),
+  'monitor:launch': (installer) => monitor.launch(installer, open),
   'monitor:finish': (name) => monitor.finish(name),
   'monitor:cancel': () => monitor.cancel(),
   'monitor:list': () => monitor.list(),
@@ -111,6 +122,19 @@ const handlers = {
   'groups:get': () => groups.get(),
   'groups:set': ({ keys, group }) => groups.set(keys, group),
   'groups:restore': (previous) => groups.restore(previous),
+  'transfer:pickSave': async (program) => {
+    const { save } = await import('@tauri-apps/plugin-dialog');
+    return save({ title: `Back up ${program.name}`, defaultPath: transfer.defaultFileName(program), filters: [{ name: 'SweepUninstall program backup', extensions: ['swpkg'] }] });
+  },
+  'transfer:pickOpen': async () => {
+    const { open: openDialog } = await import('@tauri-apps/plugin-dialog');
+    const file = await openDialog({ title: 'Restore a program backup', multiple: false, filters: [{ name: 'SweepUninstall program backup', extensions: ['swpkg'] }] });
+    return typeof file === 'string' ? file : null;
+  },
+  'transfer:export': ({ program, items, file }) => transfer.exportProgram(program, items, file),
+  'transfer:read': (file) => transfer.read(file),
+  'transfer:restore': ({ file, numbers }) => transfer.restore(file, numbers),
+  'transfer:undo': (id) => transfer.undo(id),
   'startup:list': () => startup.list(),
   'startup:set': ({ entry, enable }) => startup.setEnabled(entry, enable),
   'debloat:list': () => debloat.list(),
@@ -168,6 +192,9 @@ const recorders = {
     title: group ? `Put ${label || plural(keys.length, 'program')} in the group "${group}"` : `Took ${label || plural(keys.length, 'program')} out of ${keys.length === 1 ? 'its group' : 'their groups'}`,
     undo: { channel: 'groups:restore', arg: previous },
   }),
+  'transfer:export': ({ program }, out) => ({ type: 'Backup', title: `Backed up ${program.name}`, detail: out.file }),
+  'transfer:restore': (_arg, out) =>
+    out.results.some((r) => r.ok) ? { type: 'Restore', title: `Restored ${out.name} from a program backup`, detail: `${out.results.filter((r) => r.ok).length} of ${out.results.length} items`, undo: { channel: 'transfer:undo', arg: out.id } } : null,
   'monitor:finish': (_name, record) => ({ type: 'Monitor', title: `Recorded the installation of ${record.name}`, detail: plural(record.items.length, 'change') }),
 };
 for (const [channel, describe] of Object.entries(recorders)) {
@@ -206,6 +233,7 @@ export async function initBackend() {
     history.setRoot(path.join(data, 'history')),
     snapshots.setRoot(path.join(data, 'snapshots')),
     groups.setRoot(path.join(data, 'groups')),
+    transfer.setRoot(path.join(data, 'transfers')),
   ]);
 }
 
