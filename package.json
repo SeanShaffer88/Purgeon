@@ -16,7 +16,7 @@
     "build": "vite build",
     "start": "vite build && electron .",
     "dev": "electron . --dev",
-    "dist": "vite build && electron-builder --win"
+    "dist": "vite build && electron-builder --win --publish never"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^6.1.2",
