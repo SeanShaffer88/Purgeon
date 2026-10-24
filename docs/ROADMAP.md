@@ -26,7 +26,7 @@ Windows or another installed program still needs.
 - **Command-line install recording.** `--monitor "<installer>"` records an installation without the
   window.
 
-## Added after 0.6.0
+## Added in 0.7.0 (safety)
 
 - **Changed since the scan.** Folders and files that changed after the scan are skipped.
 - **Dry run.** Shows exactly what a removal or cleanup would do, and exports the plan.
@@ -37,7 +37,7 @@ Windows or another installed program still needs.
 - **Backup limits.** Age and size limits that always keep each program's newest backup.
 - **Command log.** One line for every command SweepUninstall runs, kept for 14 days.
 
-## Added after 0.6.0 (second batch)
+## Added in 0.7.0
 
 - **Program insights.** Signature check, programs installed together, possible bundled offers and size growth, with filters.
 - **Who owns this?** Which program a file, folder or registry key belongs to.
