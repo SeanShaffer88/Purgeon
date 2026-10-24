@@ -118,6 +118,10 @@ test('scanFiles finds program folders and never offers protected or generic ones
   mk('pf', 'Microsoft', 'Foo Editor Helper');
   mk('roaming', 'FooEditor');
   mk('local', 'Unrelated App');
+  mk('pf', 'Acme Studio Pro', 'FooEditor'); // another Acme product: not the publisher's folder
+  const startMenu = path.join('roaming', 'Microsoft', 'Windows', 'Start Menu', 'Programs');
+  mk(startMenu, 'Foo Editor');
+  mk(startMenu, 'Acme Studio Pro');
 
   const items = scanFiles({ name: 'Foo Editor 2.1 (x64)', publisher: 'Acme Inc.', location: path.join(root, 'pf', 'Foo Editor') }, () => ({}));
   const paths = items.map((i) => path.relative(root, i.path));
@@ -127,8 +131,10 @@ test('scanFiles finds program folders and never offers protected or generic ones
   const pub = items.find((i) => i.path.endsWith(path.join('pf', 'Acme')));
   assert.equal(pub.confidence, 'low', 'publisher folder is only a low-confidence guess');
   assert.equal(items.find((i) => i.path.endsWith(path.join('Acme', 'FooEditor'))).confidence, 'high', 'the guess does not hide the program folder inside it');
-  assert.ok(!paths.some((p) => p.includes('Microsoft')), 'generic publisher folders are not entered');
+  assert.ok(!paths.some((p) => p.startsWith(path.join('pf', 'Microsoft'))), 'generic publisher folders are not entered');
   assert.ok(!paths.some((p) => p.includes('Unrelated')), 'unrelated folders are not offered');
+  assert.ok(!paths.some((p) => p.includes('Acme Studio Pro')), "another product of the same publisher is not offered (Chrome vs Google Play Games)");
+  assert.ok(paths.includes(path.join(startMenu, 'Foo Editor')), 'Start Menu folder of the program');
   assert.ok(items.every((i) => !isProtected(i.path)), 'nothing protected is offered');
   assert.equal(new Set(items.map((i) => i.path.toLowerCase())).size, items.length, 'no duplicates');
 });
@@ -155,4 +161,20 @@ test('programFolder never measures protected, cache or unrelated folders', () =>
   assert.equal(programFolder({ location: '', icon: `${win}\\Installer\\{GUID}\\app.ico` }), null);
   assert.equal(programFolder({ location: '', icon: `${process.env.ProgramFiles}\\NVIDIA Corporation\\Installer2\\x\\app.exe` }), null);
   assert.equal(programFolder({ location: '', icon: `${process.env.ProgramData}\\Package Cache\\{GUID}\\setup.exe` }), null);
+});
+
+const { scoreFor, merge, AUTO_TICK } = require('../electron/leftovers.cjs');
+
+test('merge scores items, keeps the strongest duplicate and ticks only confident ones', () => {
+  const out = merge([
+    { kind: 'dir', path: 'C:\\P\\Foo', confidence: 'high', reason: 'Folder named after program' },
+    { kind: 'dir', path: 'c:\\p\\foo', score: 100, reason: 'Install location' },
+    { kind: 'file', path: 'C:\\D\\Foo.lnk', confidence: 'low', reason: 'Shortcut named after program' },
+    { kind: 'task', path: '\\FooUpdate', score: 60, reason: 'Scheduled task named after program' },
+  ]);
+  assert.equal(out.length, 3);
+  assert.equal(out.find((i) => i.kind === 'dir').score, 100);
+  for (const i of out) assert.equal(i.confidence, i.score >= AUTO_TICK ? 'high' : 'low');
+  assert.equal(out.find((i) => i.kind === 'task').confidence, 'low', 'name-only task matches are not ticked');
+  assert.ok(scoreFor({ reason: 'Publisher folder (would be empty)' }) < AUTO_TICK, 'publisher guesses are never ticked');
 });

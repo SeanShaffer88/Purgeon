@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const { runPSJson, psq } = require('./shell.cjs');
 const { fileRoots, shortcutRoots, GENERIC, isProtected } = require('./paths.cjs');
+const { scanDeep } = require('./deepscan.cjs');
 
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -80,6 +81,12 @@ function scanFiles(program, readShortcutLink) {
 
   const nk = nameKey(program.name);
   const pk = publisherKey(program.publisher);
+  // A folder belongs to the publisher only when named exactly after it, so "Google Play Games"
+  // is never taken for Google's folder when removing Chrome.
+  const isPublisher = (dirName) => {
+    const c = norm(dirName);
+    return !!pk && !GENERIC.has(c) && (c === pk || c === norm(program.publisher));
+  };
   const location = (program.location || '').replace(/^"|"$/g, '').trim();
 
   if (location && exists(location) && !isProtected(location)) add('dir', location, 'high', 'Install location');
@@ -89,7 +96,7 @@ function scanFiles(program, readShortcutLink) {
       const full = path.join(root, d.name);
       if (nameMatches(d.name, nk)) {
         add('dir', full, 'high', `Folder named after program`);
-      } else if (pk && nameMatches(d.name, pk)) {
+      } else if (isPublisher(d.name)) {
         const children = listDirs(full);
         const hit = children.filter((c) => nameMatches(c.name, nk));
         for (const c of hit) add('dir', path.join(full, c.name), 'high', `Folder under publisher "${d.name}"`);
@@ -113,7 +120,8 @@ function scanFiles(program, readShortcutLink) {
       else if (nameMatches(path.basename(f, path.extname(f)), nk)) add('file', f, 'low', 'Shortcut named after program');
     }
     for (const d of listDirs(root)) {
-      if (nameMatches(d.name, nk) || (pk && nameMatches(d.name, pk))) add('dir', path.join(root, d.name), 'high', 'Start Menu folder');
+      if (nameMatches(d.name, nk)) add('dir', path.join(root, d.name), 'high', 'Start Menu folder');
+      else if (isPublisher(d.name)) add('dir', path.join(root, d.name), 'low', 'Start Menu publisher folder', { container: true });
     }
   }
   return items;
@@ -134,13 +142,14 @@ function M($cand, $key) {
 $res = New-Object System.Collections.ArrayList
 function Add($kind, $path, $conf, $reason, $name) { [void]$res.Add([pscustomobject]@{ kind=$kind; path=$path; name=$name; confidence=$conf; reason=$reason }) }
 
-if ($in.uninstallKey -and (Test-Path "Registry::$($in.uninstallKey)")) { Add 'key' $in.uninstallKey 'high' 'Uninstall entry' $null }
+if ($in.uninstallKey -and (Test-Path -LiteralPath "Registry::$($in.uninstallKey)")) { Add 'key' $in.uninstallKey 'high' 'Uninstall entry' $null }
 
 foreach ($b in 'HKEY_CURRENT_USER\\Software','HKEY_LOCAL_MACHINE\\SOFTWARE','HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node') {
-  foreach ($c in Get-ChildItem "Registry::$b" -ErrorAction SilentlyContinue) {
+  foreach ($c in Get-ChildItem -LiteralPath "Registry::$b" -ErrorAction SilentlyContinue) {
     if (M $c.PSChildName $in.nameKey) { Add 'key' $c.Name 'high' 'Software key named after program' $null; continue }
-    if ($in.publisherKey -and (M $c.PSChildName $in.publisherKey)) {
-      $kids = @(Get-ChildItem $c.PSPath -ErrorAction SilentlyContinue)
+    $pn = N $c.PSChildName
+    if ($in.publisherKey -and $generic -notcontains $pn -and ($pn -eq $in.publisherKey -or $pn -eq $in.publisherFull)) {
+      $kids = @(Get-ChildItem -LiteralPath $c.PSPath -ErrorAction SilentlyContinue)
       $hits = @($kids | Where-Object { M $_.PSChildName $in.nameKey })
       foreach ($h in $hits) { Add 'key' $h.Name 'high' "Key under publisher $($c.PSChildName)" $null }
       if ($hits.Count -gt 0 -and $hits.Count -eq $kids.Count) { Add 'key' $c.Name 'low' 'Publisher key (would be empty)' $null }
@@ -152,13 +161,13 @@ $loc = $in.location
 if ($loc) {
   $loc = $loc.TrimEnd('\\').ToLower()
   foreach ($ap in 'HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\App Paths','HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths') {
-    foreach ($k in Get-ChildItem "Registry::$ap" -ErrorAction SilentlyContinue) {
-      $d = [string](Get-ItemProperty $k.PSPath -ErrorAction SilentlyContinue).'(default)'
+    foreach ($k in Get-ChildItem -LiteralPath "Registry::$ap" -ErrorAction SilentlyContinue) {
+      $d = [string](Get-ItemProperty -LiteralPath $k.PSPath -ErrorAction SilentlyContinue).'(default)'
       if ($d -and $d.Trim('"').ToLower().StartsWith($loc + '\\')) { Add 'key' $k.Name 'high' 'App Paths registration' $null }
     }
   }
   foreach ($run in 'HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Run','HKEY_LOCAL_MACHINE\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Run','HKEY_LOCAL_MACHINE\\SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Run') {
-    $k = Get-Item "Registry::$run" -ErrorAction SilentlyContinue
+    $k = Get-Item -LiteralPath "Registry::$run" -ErrorAction SilentlyContinue
     if (-not $k) { continue }
     foreach ($v in $k.GetValueNames()) {
       $d = [string]$k.GetValue($v)
@@ -177,6 +186,7 @@ async function scanRegistry(program) {
   const input = JSON.stringify({
     nameKey: nameKey(program.name),
     publisherKey: publisherKey(program.publisher),
+    publisherFull: norm(program.publisher),
     uninstallKey: program.key || '',
     location: location && !isProtected(location) ? location : '',
     generic: [...GENERIC],
@@ -191,12 +201,50 @@ async function scanRegistry(program) {
   });
 }
 
+// How sure each kind of match is, 0-100. Items scoring 70 or more start ticked.
+const SCORES = [
+  [/^Uninstall entry/, 100],
+  [/^Install location/, 100],
+  [/^App Paths/, 95],
+  [/^Runs at startup/, 95],
+  [/^Service:/, 95],
+  [/^Shortcut to install folder/, 95],
+  [/^Folder under publisher|^Key under publisher/, 85],
+  [/^Folder named after program/, 85],
+  [/^Software key named after program/, 80],
+  [/^Start Menu folder/, 80],
+  [/^Shortcut named after program/, 45],
+  [/^Publisher (folder|key)|^Start Menu publisher folder/, 35],
+];
+const AUTO_TICK = 70;
+
+function scoreFor(item) {
+  if (typeof item.score === 'number') return item.score;
+  const hit = SCORES.find(([re]) => re.test(item.reason || ''));
+  return hit ? hit[1] : item.confidence === 'high' ? 80 : 40;
+}
+
+// Merges findings: one entry per item, keeping the strongest score and reason.
+function merge(items) {
+  const byId = new Map();
+  for (const raw of items) {
+    const score = scoreFor(raw);
+    const item = { ...raw, score, confidence: score >= AUTO_TICK ? 'high' : 'low' };
+    const id = `${item.kind}|${item.path}|${item.name || ''}`.toLowerCase();
+    const prev = byId.get(id);
+    if (!prev || prev.score < score) byId.set(id, { ...item, ...(prev?.container && { container: true }) });
+  }
+  return [...byId.values()];
+}
+
 async function scan(program, readShortcutLink) {
-  const [files, registry] = await Promise.all([
+  const location = (program.location || '').replace(/^"|"$/g, '').trim();
+  const [files, registry, deep] = await Promise.all([
     Promise.resolve().then(() => scanFiles(program, readShortcutLink)),
     scanRegistry(program),
+    scanDeep(program, { nameKey: nameKey(program.name), location }),
   ]);
-  return [...registry, ...files];
+  return merge([...registry, ...deep, ...files]);
 }
 
 // Processes running from inside the install folder, so they can be closed before deletion.
@@ -207,4 +255,4 @@ async function processesIn(location) {
   );
 }
 
-module.exports = { scan, processesIn, nameKey, under, exists, nameMatches, publisherKey, scanFiles };
+module.exports = { scan, processesIn, nameKey, under, exists, nameMatches, publisherKey, scanFiles, scoreFor, merge, AUTO_TICK };

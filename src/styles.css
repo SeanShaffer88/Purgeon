@@ -339,3 +339,13 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 
 /* sizes and dates measured from the install folder */
 .cell-text.measured { font-style: italic; opacity: 0.85; }
+
+/* leftover match scores and new item kinds */
+.score { flex: none; min-width: 38px; text-align: right; font-size: 10px; margin-left: 6px; }
+.tag + .score { margin-left: 6px; }
+.tree-item .path { margin-right: auto; }
+.score.hi { color: var(--green); }
+.score.mid { color: var(--cyan); }
+.score.lo { color: var(--amber); }
+.kind-task { background: var(--cyan); border-radius: 50%; }
+.kind-firewall { background: var(--red); }

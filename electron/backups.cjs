@@ -20,7 +20,7 @@ async function readValues(values) {
   return runPSJson(
     `$in = [Console]::In.ReadToEnd() | ConvertFrom-Json
      $out = foreach ($v in $in) {
-       $k = Get-Item "Registry::$($v.path)" -ErrorAction SilentlyContinue
+       $k = Get-Item -LiteralPath "Registry::$($v.path)" -ErrorAction SilentlyContinue
        if (-not $k) { continue }
        $data = $k.GetValue($v.name, $null, 'DoNotExpandEnvironmentNames')
        if ($null -eq $data) { continue }
@@ -44,14 +44,59 @@ async function removeItems({ title, items, trashItem }) {
   const results = [];
   const log = (item, ok, detail) => results.push({ ...item, ok, detail });
 
-  // Services first, so their files are no longer locked.
+  // Services first, so their files are no longer locked. The service's registry definition is
+  // exported first; importing it back recreates the service after a reboot.
+  let s = 0;
   for (const item of items.filter((i) => i.kind === 'service')) {
+    const file = path.join(dir, `service-${++s}.reg`);
+    const ex = await reg(['export', `HKLM\\SYSTEM\\CurrentControlSet\\Services\\${item.path}`, file, '/y']);
+    if (!ex.ok) {
+      log(item, /unable to find/i.test(ex.stderr), /unable to find/i.test(ex.stderr) ? 'Already gone' : `Backup failed, not deleted: ${ex.stderr}`);
+      continue;
+    }
     await runPS(`Stop-Service -Name ${psq(item.path)} -Force -ErrorAction SilentlyContinue`).catch(() => {});
     const r = await new Promise((res) =>
       require('child_process').execFile('sc.exe', ['delete', item.path], { windowsHide: true }, (e, out) => res({ ok: !e, out }))
     );
-    manifest.entries.push({ kind: 'service', path: item.path, restorable: false });
+    if (r.ok) manifest.entries.push({ kind: 'service', path: item.path, file: path.basename(file) });
     log(item, r.ok, r.ok ? 'Service deleted' : r.out);
+  }
+
+  // Scheduled tasks: exported to XML, then unregistered.
+  let t = 0;
+  for (const item of items.filter((i) => i.kind === 'task')) {
+    const file = path.join(dir, `task-${++t}.xml`);
+    const out = await runPS(`
+      $t = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { ($_.TaskPath + $_.TaskName) -eq ${psq(item.path)} } | Select-Object -First 1
+      if (-not $t) { 'GONE'; return }
+      Export-ScheduledTask -TaskName $t.TaskName -TaskPath $t.TaskPath | Set-Content -LiteralPath ${psq(file)} -Encoding Unicode
+      Unregister-ScheduledTask -TaskName $t.TaskName -TaskPath $t.TaskPath -Confirm:$false -ErrorAction Stop
+      'OK'`).catch((e) => `ERR ${e.message}`);
+    if (/^GONE/.test(out.trim())) log(item, true, 'Already gone');
+    else if (/^OK/.test(out.trim())) {
+      manifest.entries.push({ kind: 'task', path: item.path, file: path.basename(file) });
+      log(item, true, 'Task removed');
+    } else log(item, false, out.trim().replace(/^ERR /, ''));
+  }
+
+  // Firewall rules: settings saved to JSON, then removed.
+  let f = 0;
+  for (const item of items.filter((i) => i.kind === 'firewall')) {
+    const file = path.join(dir, `firewall-${++f}.json`);
+    const out = await runPS(`
+      $r = Get-NetFirewallRule -Name ${psq(item.path)} -ErrorAction SilentlyContinue
+      if (-not $r) { 'GONE'; return }
+      $a = $r | Get-NetFirewallApplicationFilter; $p = $r | Get-NetFirewallPortFilter
+      [pscustomobject]@{ Name = $r.Name; DisplayName = $r.DisplayName; Direction = [string]$r.Direction; Action = [string]$r.Action
+        Profile = [string]$r.Profile; Enabled = [string]$r.Enabled; Program = $a.Program; Protocol = [string]$p.Protocol
+        LocalPort = @($p.LocalPort); RemotePort = @($p.RemotePort) } | ConvertTo-Json -Compress | Set-Content -LiteralPath ${psq(file)} -Encoding UTF8
+      Remove-NetFirewallRule -Name ${psq(item.path)} -ErrorAction Stop
+      'OK'`).catch((e) => `ERR ${e.message}`);
+    if (/^GONE/.test(out.trim())) log(item, true, 'Already gone');
+    else if (/^OK/.test(out.trim())) {
+      manifest.entries.push({ kind: 'firewall', path: item.path, name: item.name, file: path.basename(file) });
+      log(item, true, 'Firewall rule removed');
+    } else log(item, false, out.trim().replace(/^ERR /, ''));
   }
 
   const values = items.filter((i) => i.kind === 'value');
@@ -129,6 +174,25 @@ async function restore(id) {
     } else if (e.kind === 'value') {
       const r = await reg(['add', e.path, '/v', e.name, '/t', REG_TYPE[e.valueKind] || 'REG_SZ', '/d', e.data, '/f']);
       results.push({ ...e, ok: r.ok, detail: r.ok ? 'Value restored' : r.stderr });
+    } else if (e.kind === 'service' && e.file) {
+      const r = await reg(['import', path.join(dir, e.file)]);
+      results.push({ ...e, ok: r.ok, detail: r.ok ? 'Service restored; restart Windows to start it' : r.stderr });
+    } else if (e.kind === 'task') {
+      const split = e.path.lastIndexOf('\\') + 1;
+      const out = await runPS(
+        `Register-ScheduledTask -Xml (Get-Content -LiteralPath ${psq(path.join(dir, e.file))} -Raw) -TaskName ${psq(e.path.slice(split))} -TaskPath ${psq(e.path.slice(0, split))} -Force -ErrorAction Stop | Out-Null; 'OK'`
+      ).catch((err) => err.message);
+      results.push({ ...e, ok: /^OK/.test(out.trim()), detail: /^OK/.test(out.trim()) ? 'Task restored' : out.trim() });
+    } else if (e.kind === 'firewall') {
+      const out = await runPS(`
+        $r = Get-Content -LiteralPath ${psq(path.join(dir, e.file))} -Raw | ConvertFrom-Json
+        $params = @{ Name = $r.Name; DisplayName = $r.DisplayName; Direction = $r.Direction; Action = $r.Action; Enabled = $r.Enabled; Profile = ($r.Profile -split ',\\s*') }
+        if ($r.Program -and $r.Program -ne 'Any') { $params.Program = $r.Program }
+        if ($r.Protocol -and $r.Protocol -ne 'Any') { $params.Protocol = $r.Protocol
+          if (@($r.LocalPort) -notcontains 'Any') { $params.LocalPort = @($r.LocalPort) }
+          if (@($r.RemotePort) -notcontains 'Any') { $params.RemotePort = @($r.RemotePort) } }
+        New-NetFirewallRule @args -ErrorAction Stop | Out-Null; 'OK'`).catch((err) => err.message);
+      results.push({ ...e, ok: /^OK/.test(out.trim()), detail: /^OK/.test(out.trim()) ? 'Firewall rule restored' : out.trim() });
     } else if (e.recycled) {
       results.push({ ...e, ok: false, detail: 'Restore from the Recycle Bin' });
     } else {

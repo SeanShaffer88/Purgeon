@@ -59,9 +59,20 @@ const GROUPS = [
   { id: 'registry', label: 'Registry', kinds: ['key', 'value'] },
   { id: 'files', label: 'Files and Folders', kinds: ['dir', 'file'] },
   { id: 'services', label: 'Services', kinds: ['service'] },
+  { id: 'tasks', label: 'Scheduled Tasks', kinds: ['task'] },
+  { id: 'firewall', label: 'Firewall Rules', kinds: ['firewall'] },
 ];
 
-const itemLabel = (i) => (i.kind === 'value' ? `${i.path}  ›  ${i.name}` : i.kind === 'service' ? `Service: ${i.path}` : i.path);
+const itemLabel = (i) =>
+  i.kind === 'value'
+    ? `${i.path}  ›  ${i.name}`
+    : i.kind === 'service'
+      ? `Service: ${i.path}`
+      : i.kind === 'task'
+        ? `Task: ${i.path}`
+        : i.kind === 'firewall'
+          ? `Firewall: ${i.name || i.path}`
+          : i.path;
 
 export function LeftoversDialog({ title, heading, items, onClose, onRemove }) {
   const [checked, setChecked] = useState(() => new Set(items.map((it, idx) => (it.confidence === 'high' ? idx : -1)).filter((i) => i >= 0)));
@@ -153,11 +164,14 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove }) {
                 </div>
                 {open &&
                   g.rows.map(({ it, idx }) => (
-                    <label key={idx} className={`tree-item ${it.confidence === 'low' ? 'low' : ''}`} title={it.reason}>
+                    <label key={idx} className={`tree-item ${it.confidence === 'low' ? 'low' : ''}`} title={`${it.reason}${typeof it.score === 'number' ? ` · match ${it.score}%` : ''}`}>
                       <input type="checkbox" checked={checked.has(idx)} onChange={() => toggle(idx)} />
                       <span className={`kind kind-${it.kind}`} />
                       <span className="path">{itemLabel(it)}</span>
                       {it.confidence === 'low' && <span className="tag">check</span>}
+                      {typeof it.score === 'number' && (
+                        <span className={`score ${it.score >= 90 ? 'hi' : it.score >= 70 ? 'mid' : 'lo'}`}>{it.score}%</span>
+                      )}
                     </label>
                   ))}
               </div>

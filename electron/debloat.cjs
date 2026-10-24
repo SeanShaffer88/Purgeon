@@ -54,7 +54,7 @@ const needsAdmin = (t) => t.values.some((v) => /^HKLM\\|^HKCU\\Software\\Policie
 const READ = `
 $in = [Console]::In.ReadToEnd() | ConvertFrom-Json
 $out = foreach ($v in $in) {
-  $k = Get-Item "Registry::$($v.key)" -ErrorAction SilentlyContinue
+  $k = Get-Item -LiteralPath "Registry::$($v.key)" -ErrorAction SilentlyContinue
   $val = if ($k) { $k.GetValue($v.name, $null) } else { $null }
   [pscustomobject]@{ key = $v.key; name = $v.name; value = if ($null -eq $val) { $null } else { [string]$val } }
 }

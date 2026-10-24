@@ -11,7 +11,7 @@ $out = foreach ($r in $roots) {
   $root = "Registry::$($r.hive)\\$($r.path)"
   if (-not (Test-Path $root)) { continue }
   foreach ($k in Get-ChildItem $root -ErrorAction SilentlyContinue) {
-    $p = Get-ItemProperty $k.PSPath -ErrorAction SilentlyContinue
+    $p = Get-ItemProperty -LiteralPath $k.PSPath -ErrorAction SilentlyContinue
     if (-not $p.DisplayName) { continue }
     if ($p.SystemComponent -eq 1 -or $p.ParentKeyName -or $p.ReleaseType -in 'Update','Hotfix','Security Update') { continue }
     [pscustomobject]@{
