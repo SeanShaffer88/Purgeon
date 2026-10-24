@@ -349,3 +349,11 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .score.lo { color: var(--amber); }
 .kind-task { background: var(--cyan); border-radius: 50%; }
 .kind-firewall { background: var(--red); }
+
+/* startup manager */
+.owner { color: var(--cyan); font-weight: normal; }
+.tweak.on .owner { color: var(--cyan); }
+.pending-signin { color: var(--amber); }
+.pending-signin::before { content: '⟳ '; }
+.tag-row { display: flex; gap: 4px; }
+.fx-windows { color: var(--cyan); border-color: #2b5a60; }

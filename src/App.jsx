@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AboutDialog, Busy, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog } from './dialogs.jsx';
 import { DebloatView } from './debloat.jsx';
+import { StartupView } from './startup.jsx';
 
 const api = window.api;
 
@@ -9,8 +10,9 @@ const VIEWS = {
   store: { label: 'Windows Store Apps', noun: 'apps', cols: [['name', 'Name'], ['version', 'Version'], ['publisher', 'Publisher']] },
   monitored: { label: 'Monitored Programs', noun: 'monitored programs', cols: [['name', 'Name'], ['size', 'Changes'], ['date', 'Monitored On']] },
   backups: { label: 'Backups', noun: 'backups', cols: [['name', 'Removed'], ['size', 'Entries'], ['date', 'Backed Up On']] },
+  startup: { label: 'Startup & Services', noun: 'entries', cols: [], custom: true },
   // Reached through its own toolbar button, not the view picker.
-  debloat: { label: 'Debloat Windows', noun: 'tweaks', cols: [], button: true },
+  debloat: { label: 'Debloat Windows', noun: 'tweaks', cols: [], button: true, custom: true },
 };
 
 const formatSize = (kb) => {
@@ -55,6 +57,7 @@ const MENUS = [
       ['view:monitored', 'Monitored Programs', 'Ctrl+3'],
       ['view:backups', 'Backups', 'Ctrl+4'],
       ['view:debloat', 'Debloat Windows', 'Ctrl+5'],
+      ['view:startup', 'Startup & Services', 'Ctrl+6'],
       null,
       ['find', 'Find...', 'Ctrl+F'],
       ['refresh', 'Refresh', 'F5'],
@@ -137,12 +140,13 @@ export default function App() {
   const listRef = useRef(null);
   const desktopCache = useRef([]);
   const lastListView = useRef('desktop');
-  const [debloatStatus, setDebloatStatus] = useState('');
-  const [debloatKey, setDebloatKey] = useState(0);
+  // Debloat and Startup views load their own data; their status text and remount key live here.
+  const [customStatus, setCustomStatus] = useState('');
+  const [customKey, setCustomKey] = useState(0);
   if (view !== 'debloat') lastListView.current = view;
 
   const load = useCallback(async (v = view) => {
-    if (v === 'debloat') return setDebloatKey((k) => k + 1);
+    if (VIEWS[v].custom) return setCustomKey((k) => k + 1);
     setLoading(true);
     setError('');
     try {
@@ -167,7 +171,10 @@ export default function App() {
     setSelected(null);
     setMarked(new Set());
     anchor.current = null;
-    if (view !== 'debloat') load(view);
+    if (!VIEWS[view].custom) load(view);
+    else setCustomStatus('');
+    // The Startup view names the program each entry belongs to, so it needs the program list.
+    if (view === 'startup' && !desktopCache.current.length) api.invoke('programs:list', 'desktop').then((d) => (desktopCache.current = d)).catch(() => {});
   }, [view]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
@@ -608,7 +615,9 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       )}
 
       {view === 'debloat' ? (
-        <DebloatView key={debloatKey} filter={filter} admin={admin} onError={setError} onStatus={setDebloatStatus} beforeChange={beforeDebloatChange} />
+        <DebloatView key={customKey} filter={filter} admin={admin} onError={setError} onStatus={setCustomStatus} beforeChange={beforeDebloatChange} />
+      ) : view === 'startup' ? (
+        <StartupView key={customKey} filter={filter} admin={admin} programs={desktopCache.current} onError={setError} onStatus={setCustomStatus} />
       ) : (
       <div className="list" tabIndex={0} ref={listRef} onKeyDown={onListKey}>
         <div className="list-header">
@@ -667,8 +676,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       )}
 
       <div className="statusbar">
-        {view === 'debloat' ? (
-          <span>{debloatStatus}</span>
+        {VIEWS[view].custom ? (
+          <span>{customStatus}</span>
         ) : (
           <span>
             {loading ? 'Loading' : visible.length} {VIEWS[view].noun}

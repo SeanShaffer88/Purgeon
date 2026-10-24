@@ -1,7 +1,7 @@
 {
   "name": "sweepuninstall",
   "productName": "SweepUninstall",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Windows uninstaller with leftover scanning, install monitoring and backups",
   "author": "Sean Shaffer",
   "license": "MIT",

@@ -9,6 +9,7 @@ const monitor = require('./monitor.cjs');
 const debloat = require('./debloat.cjs');
 const restore = require('./restore.cjs');
 const measure = require('./measure.cjs');
+const startup = require('./startup.cjs');
 const { runCommandLine, reg, runPS, psq } = require('./shell.cjs');
 
 let win;
@@ -50,6 +51,7 @@ function buildMenu() {
         item('Monitored Programs', 'view:monitored', 'CmdOrCtrl+3'),
         item('Backups', 'view:backups', 'CmdOrCtrl+4'),
         item('Debloat Windows', 'view:debloat', 'CmdOrCtrl+5'),
+        item('Startup && Services', 'view:startup', 'CmdOrCtrl+6'),
         { type: 'separator' },
         item('Find...', 'find', 'CmdOrCtrl+F'),
         item('Refresh', 'refresh', 'F5'),
@@ -167,6 +169,8 @@ const handlers = {
   'monitor:list': () => monitor.list(),
   'monitor:remove': (id) => monitor.remove(id),
   'backups:list': () => backups.list(),
+  'startup:list': () => startup.list(),
+  'startup:set': ({ entry, enable }) => startup.setEnabled(entry, enable),
   'debloat:list': () => debloat.list(),
   'debloat:set': ({ id, enable }) => debloat.set(id, enable),
   'debloat:restartExplorer': () => debloat.restartExplorer(),
@@ -199,6 +203,7 @@ app.whenReady().then(() => {
   const data = app.getPath('userData');
   backups.setRoot(path.join(data, 'backups'));
   monitor.setRoot(path.join(data, 'monitor'));
+  startup.setRoot(path.join(data, 'startup'));
   for (const [channel, fn] of Object.entries(handlers)) {
     ipcMain.handle(channel, async (_e, arg) => fn(arg));
   }

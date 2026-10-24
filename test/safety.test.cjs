@@ -178,3 +178,13 @@ test('merge scores items, keeps the strongest duplicate and ticks only confident
   assert.equal(out.find((i) => i.kind === 'task').confidence, 'low', 'name-only task matches are not ticked');
   assert.ok(scoreFor({ reason: 'Publisher folder (would be empty)' }) < AUTO_TICK, 'publisher guesses are never ticked');
 });
+
+const { approvedEnabled } = require('../electron/startup.cjs');
+
+test('StartupApproved flags are read like Task Manager', () => {
+  assert.equal(approvedEnabled(''), true, 'no flag means enabled');
+  assert.equal(approvedEnabled('020000000000000000000000'), true);
+  assert.equal(approvedEnabled('060000000000000000000000'), true);
+  assert.equal(approvedEnabled('030000000000000000000000'), false);
+  assert.equal(approvedEnabled('07000000a1b2c3d4e5f60708'), false);
+});

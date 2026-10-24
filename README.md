@@ -11,6 +11,7 @@ It has a compact single-list window with a dark terminal theme, built with Elect
 
 **Program list**
 - Desktop programs from all three registry uninstall locations (64-bit, 32-bit and per-user), with icons, size and install date
+- When a program doesn't report its size or install date, SweepUninstall measures its folder in the background. Measured values are shown in italics; hover one to see which folder it came from.
 - Windows Store apps
 - Sort by any column, instant search, and type-to-jump
 - Programs installed only for the current user are shown in amber
@@ -25,7 +26,13 @@ It has a compact single-list window with a dark terminal theme, built with Elect
   - App Paths registrations
   - startup Run entries
   - services
-- Results are grouped in a checklist. Low-confidence matches start unchecked and are marked **check**.
+  - scheduled tasks that run the program or are named after it
+  - firewall rules for the program's executables
+  - Explorer right-click entries and shell extensions
+  - file types, URL handlers and "Open with" registrations
+  - data and cache folders named after the program's own executables
+- Every item gets a **match score** from 0 to 100%. Items scoring 70% or more start ticked; weaker guesses start unticked and are marked **check**.
+- Publisher folders count only when named exactly after the publisher, so removing Google Chrome never offers another Google product's folders.
 - **Force Removal** handles programs whose uninstaller is broken or missing.
 - **Analyze Leftovers** shows what belongs to a program without uninstalling it.
 - Running processes in the install folder are detected and can be closed before deleting.
@@ -52,9 +59,30 @@ It has a compact single-list window with a dark terminal theme, built with Elect
 - Machine-wide policies are tagged **Admin** and need SweepUninstall to run as administrator.
 - Only options that are safe and widely recommended are included: no service removal, no app removal, and no security features turned off.
 
+**Startup & Services**
+- **View › Startup & Services** (`Ctrl+6`) lists everything that starts with Windows:
+  - Run entries and Startup-folder shortcuts
+  - scheduled tasks outside Windows' own `\Microsoft\` folder
+  - third-party services that start automatically
+- Each entry shows **ENABLED** (green) or **DISABLED** (red), its publisher, its command, and which installed program it belongs to. Click to toggle.
+- Turning an entry off never deletes it:
+  - Run entries and shortcuts use Windows' own on/off switch, the same one Task Manager's Startup tab uses.
+  - Tasks are disabled.
+  - Services are switched from Automatic to Manual. They no longer start at boot but can still start when needed. Their original start mode is remembered and restored when you turn them back on.
+- Entries from Microsoft are tagged **Windows** and ask before being turned off. Each entry says when a change applies: **Next sign-in** or **Next restart**.
+
 **Backups and restore**
-- Before anything is deleted, registry keys are exported to `.reg` files and registry values are recorded with their type and data. Files go to the Recycle Bin.
-- **View › Backups** re-imports the registry changes of any removal.
+- Before anything is deleted, it is backed up:
+  - Registry keys are exported to `.reg` files, and registry values are recorded with their type and data.
+  - Scheduled tasks are exported to XML.
+  - Firewall rules are saved with their settings.
+  - Services have their definition exported.
+  - Files go to the Recycle Bin.
+- **View › Backups** restores registry entries, tasks, firewall rules and services from any removal.
+
+**Safety**
+- An automated test suite runs on every build and blocks a release if it fails. It covers name matching, the protected-folder guard, snapshot comparison, debloat reversibility, match scores and the startup switches.
+- SweepUninstall never offers drive roots, relative paths, the Windows folder, your profile folder, install roots, or folders with generic names such as `Microsoft` or `Common Files`.
 
 **Also**
 - Remove a stale uninstall entry
@@ -72,6 +100,10 @@ It has a compact single-list window with a dark terminal theme, built with Elect
 | Multi-select | Batch uninstall leftovers |
 | --- | --- |
 | ![Three programs selected](docs/screenshots/multi-select.png) | ![Combined leftover list after a batch uninstall](docs/screenshots/batch-uninstall.png) |
+
+| Startup & Services |
+| --- |
+| ![Startup and services manager](docs/screenshots/startup.png) |
 
 | Installation monitor | Windows Store apps |
 | --- | --- |
@@ -117,7 +149,13 @@ npm run dist
 
 This writes the installer and the portable exe to `release/`. The NSIS installer builder can't handle very long folder paths, so build from a short path such as `C:\src\SweepUninstall`.
 
-Pushing a tag like `v0.2.0` makes GitHub Actions build both exes and publish them as a GitHub Release.
+Pushing a tag like `v0.2.0` makes GitHub Actions run the tests, build both exes and publish them as a GitHub Release.
+
+### Run the tests
+
+```bash
+npm test
+```
 
 ## Keyboard shortcuts
 
@@ -132,6 +170,7 @@ Pushing a tag like `v0.2.0` makes GitHub Actions build both exes and publish the
 | `Ctrl+F` | Search |
 | `Ctrl+1` to `Ctrl+4` | Desktop programs, Store apps, Monitored programs, Backups |
 | `Ctrl+5` | Debloat Windows |
+| `Ctrl+6` | Startup & Services |
 | `Ctrl+M` | Monitor an installation |
 | `Ctrl+S` | Export to HTML |
 | `F5` | Refresh |
@@ -141,22 +180,24 @@ Pushing a tag like `v0.2.0` makes GitHub Actions build both exes and publish the
 | File | Role |
 | --- | --- |
 | `electron/programs.cjs` | Reads the Uninstall registry keys and `Get-AppxPackage` |
-| `electron/leftovers.cjs` | Heuristic leftover scan, matching normalized program and publisher names |
+| `electron/leftovers.cjs` | Leftover scan of folders, shortcuts and registry, plus match scoring |
+| `electron/deepscan.cjs` | Scheduled tasks, firewall rules, shell extensions, file types and exe-named data folders |
+| `electron/measure.cjs` | Measures missing sizes and install dates from program folders |
+| `electron/startup.cjs` | Startup & Services: lists entries and turns them on or off without deleting them |
 | `electron/monitor.cjs` | Before/after snapshots of file system and registry, and the diff |
 | `electron/backups.cjs` | Backup (`reg export`, value capture, Recycle Bin), removal and restore |
 | `electron/debloat.cjs` | Debloat tweak catalog: reads, applies and reverts registry values |
 | `electron/restore.cjs` | Creates System Restore points with `Checkpoint-Computer` and explains why Windows skipped one |
 | `electron/paths.cjs` | Well-known install roots, plus guards that refuse to touch system folders |
 | `src/` | React UI |
-
-Leftover scanning never offers drive roots, the Windows folder, your profile folder or the install roots themselves.
-Generic names such as `Microsoft`, `Common Files` or `Packages` are never matched.
+| `test/` | Safety tests (`node --test`) |
 
 ## Limitations
 
 - The installation monitor records folders up to three levels deep and files up to two levels deep under the usual install roots. For the registry, it records keys up to two levels under `SOFTWARE`, plus Uninstall, App Paths, Run and Services. A file added deep inside a folder that already existed is not captured.
 - Changes made by other programs while monitoring is active are recorded too. Review the list before deleting.
-- Files are restored from the Recycle Bin, not by SweepUninstall. Deleted services are not restored.
+- Files are restored from the Recycle Bin, not by SweepUninstall. A restored service comes back after a restart.
+- Measured sizes stop after 15 seconds or 300,000 files per folder. A "+" after the size means it is at least that large.
 
 ## Disclaimer
 
