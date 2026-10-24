@@ -8,6 +8,7 @@ const backups = require('./backups.cjs');
 const monitor = require('./monitor.cjs');
 const debloat = require('./debloat.cjs');
 const restore = require('./restore.cjs');
+const measure = require('./measure.cjs');
 const { runCommandLine, reg, runPS, psq } = require('./shell.cjs');
 
 let win;
@@ -109,6 +110,8 @@ const handlers = {
     app.quit();
   },
   'programs:list': (kind) => (kind === 'store' ? programs.listStore() : programs.listDesktop()),
+  // Streams each result to the window as a 'measured' event as soon as it is ready.
+  'programs:measure': (list) => measure.measure(list, (result) => win && win.webContents.send('measured', result)),
   'icon:get': async (program) => {
     const p = programs.iconPathFor(program);
     if (!p || !fs.existsSync(p)) return null;

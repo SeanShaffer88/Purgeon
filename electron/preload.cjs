@@ -7,4 +7,9 @@ contextBridge.exposeInMainWorld('api', {
     ipcRenderer.on('menu', listener);
     return () => ipcRenderer.removeListener('menu', listener);
   },
+  onMeasured: (fn) => {
+    const listener = (_e, result) => fn(result);
+    ipcRenderer.on('measured', listener);
+    return () => ipcRenderer.removeListener('measured', listener);
+  },
 });

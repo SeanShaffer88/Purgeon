@@ -132,3 +132,27 @@ test('scanFiles finds program folders and never offers protected or generic ones
   assert.ok(items.every((i) => !isProtected(i.path)), 'nothing protected is offered');
   assert.equal(new Set(items.map((i) => i.path.toLowerCase())).size, items.length, 'no duplicates');
 });
+
+const { programFolder, folderSize } = require('../electron/measure.cjs');
+
+test('folderSize adds file sizes and respects its budget', async (t) => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-size-'));
+  t.after(() => fs.rmSync(root, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(root, 'a', 'b'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'one.bin'), Buffer.alloc(1000));
+  fs.writeFileSync(path.join(root, 'a', 'b', 'two.bin'), Buffer.alloc(2500));
+  const r = await folderSize(root);
+  assert.equal(r.bytes, 3500);
+  assert.equal(r.truncated, false);
+  const limited = await folderSize(root, { maxEntries: 0 });
+  assert.equal(limited.truncated, true);
+});
+
+test('programFolder never measures protected, cache or unrelated folders', () => {
+  const win = process.env.SystemRoot || 'C:\\Windows';
+  assert.equal(programFolder({ location: win }), null);
+  assert.equal(programFolder({ location: 'C:' }), null);
+  assert.equal(programFolder({ location: '', icon: `${win}\\Installer\\{GUID}\\app.ico` }), null);
+  assert.equal(programFolder({ location: '', icon: `${process.env.ProgramFiles}\\NVIDIA Corporation\\Installer2\\x\\app.exe` }), null);
+  assert.equal(programFolder({ location: '', icon: `${process.env.ProgramData}\\Package Cache\\{GUID}\\setup.exe` }), null);
+});

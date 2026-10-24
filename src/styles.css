@@ -336,3 +336,6 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .nested .tree-group { padding-left: 22px; }
 .nested .tree-item { padding-left: 46px; }
 .check { display: inline-block; width: 14px; margin-left: -16px; color: var(--green); }
+
+/* sizes and dates measured from the install folder */
+.cell-text.measured { font-style: italic; opacity: 0.85; }

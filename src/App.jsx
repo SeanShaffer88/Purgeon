@@ -150,7 +150,10 @@ export default function App() {
       if (v === 'monitored') data = await api.invoke('monitor:list');
       else if (v === 'backups') data = await api.invoke('backups:list');
       else data = await api.invoke('programs:list', v);
-      if (v === 'desktop') desktopCache.current = data;
+      if (v === 'desktop') {
+        desktopCache.current = data;
+        api.invoke('programs:measure', data).catch(() => {});
+      }
       setRows(data.map((r) => toRow(v, r)));
     } catch (e) {
       setError(e.message);
@@ -485,6 +488,16 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
   const dispatchRef = useRef(dispatch);
   dispatchRef.current = dispatch;
   useEffect(() => api.onMenu((a) => dispatchRef.current(a)), []);
+  // Sizes and dates measured from install folders arrive one program at a time.
+  useEffect(
+    () =>
+      api.onMeasured((m) => {
+        const merge = (p) => (p.key === m.key ? { ...p, ...m } : p);
+        desktopCache.current = desktopCache.current.map(merge);
+        setRows((rs) => rs.map((r) => (r.key === m.key ? toRow('desktop', merge(r)) : r)));
+      }),
+    []
+  );
 
   // ---- keyboard navigation ---------------------------------------------------
 
@@ -632,7 +645,19 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
                   {id === 'name' && (
                     <span className="icon">{icons[r.key] ? <img src={icons[r.key]} alt="" /> : <span className={`generic-icon ${view}`} />}</span>
                   )}
-                  <span className="cell-text">{cellFor(r, id)}</span>
+                  <span
+                    className={`cell-text ${(id === 'size' && r.sizeMeasured) || (id === 'date' && r.dateMeasured) ? 'measured' : ''}`}
+                    title={
+                      id === 'size' && r.sizeMeasured
+                        ? `Measured from ${r.folder}${r.sizeTruncated ? ' (stopped early; at least this size)' : ''}`
+                        : id === 'date' && r.dateMeasured
+                          ? `Date the folder ${r.folder} was created`
+                          : undefined
+                    }
+                  >
+                    {cellFor(r, id)}
+                    {id === 'size' && r.sizeTruncated ? '+' : ''}
+                  </span>
                 </div>
               ))}
             </div>
