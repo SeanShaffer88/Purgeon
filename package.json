@@ -1,0 +1,29 @@
+{
+  "name": "sweepuninstall",
+  "productName": "SweepUninstall",
+  "version": "0.1.0",
+  "description": "Windows uninstaller with leftover scanning, install monitoring and backups",
+  "author": "Sean Shaffer",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/SeanShaffer88/SweepUninstall.git"
+  },
+  "homepage": "https://github.com/SeanShaffer88/SweepUninstall",
+  "main": "electron/main.cjs",
+  "private": true,
+  "scripts": {
+    "build": "vite build",
+    "start": "vite build && electron .",
+    "dev": "electron . --dev"
+  },
+  "dependencies": {
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.2",
+    "electron": "^45.0.0",
+    "vite": "^8.3.5"
+  }
+}
