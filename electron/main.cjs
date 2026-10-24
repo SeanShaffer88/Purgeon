@@ -102,8 +102,10 @@ const handlers = {
   },
   'restore:create': async ({ description, kind }) => restore.create(description, kind, await isAdmin()),
   'app:elevate': async () => {
-    const args = [app.getAppPath(), ...process.argv.slice(2)].map((a) => `'"${a.replace(/'/g, "''")}"'`).join(',');
-    await runPS(`Start-Process -FilePath ${psq(process.execPath)} -ArgumentList ${args} -Verb RunAs`);
+    // A packaged exe relaunches itself; in development electron.exe needs the app folder.
+    const argv = app.isPackaged ? process.argv.slice(1) : [app.getAppPath(), ...process.argv.slice(2)];
+    const args = argv.length ? ` -ArgumentList ${argv.map((a) => `'"${a.replace(/'/g, "''")}"'`).join(',')}` : '';
+    await runPS(`Start-Process -FilePath ${psq(process.execPath)}${args} -Verb RunAs`);
     app.quit();
   },
   'programs:list': (kind) => (kind === 'store' ? programs.listStore() : programs.listDesktop()),

@@ -83,7 +83,18 @@ It has a compact single-list window with a dark terminal theme, built with Elect
 
 Screenshots use demo data.
 
-## Getting started
+## Download
+
+Get the latest version from [Releases](https://github.com/SeanShaffer88/SweepUninstall/releases/latest). It runs on Windows 10 and 11 (64-bit).
+
+- **`SweepUninstall-Setup-<version>.exe`** installs for all users, with Start Menu and desktop shortcuts. You can remove it later from Settings › Apps.
+- **`SweepUninstall-Portable-<version>.exe`** is a single exe that runs without installing.
+
+Both ask for administrator rights when they start, because removing programs installed for all users, creating restore points and machine-wide debloat tweaks all need them.
+
+The exes are not code-signed yet, so Windows SmartScreen may show "Windows protected your PC". Click **More info › Run anyway** to start it.
+
+## Run from source
 
 Requirements: Windows 10 or 11, and [Node.js](https://nodejs.org/) 20 or later.
 
@@ -96,8 +107,17 @@ npm start
 
 `npm start` builds the React UI with Vite and launches Electron. `npm run dev` relaunches without rebuilding and adds DevTools to the View menu.
 
-Programs installed for all users write to `HKEY_LOCAL_MACHINE` and Program Files, so removing them needs administrator rights.
-Use **File › Restart as Administrator** or the link in the status bar.
+When run from source, the app starts without administrator rights. Use **File › Restart as Administrator** or the link in the status bar.
+
+### Build the installer
+
+```bash
+npm run dist
+```
+
+This writes the installer and the portable exe to `release/`. The NSIS installer builder can't handle very long folder paths, so build from a short path such as `C:\src\SweepUninstall`.
+
+Pushing a tag like `v0.2.0` makes GitHub Actions build both exes and publish them as a GitHub Release.
 
 ## Keyboard shortcuts
 
