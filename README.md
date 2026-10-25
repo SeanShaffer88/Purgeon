@@ -3,8 +3,10 @@
 A Windows uninstaller that removes a program and then finds the files, folders, registry keys, startup entries and services it left behind.
 
 It can also:
+- notice installers as they start, and record what they install;
 - monitor installations and compare before-and-after snapshots;
 - let you try a program and then undo it completely;
+- analyze any program: what it hooks into Windows, its disk use, when it was last used, and what needs it;
 - find leftovers of programs you removed long ago;
 - show where your disk space goes, program by program;
 - move programs, or a whole PC's worth, to another PC;
@@ -14,7 +16,7 @@ It can also:
 
 Every change is backed up first and can be undone.
 
-It has a compact single-list window with a dark terminal theme. It is built with [Tauri](https://tauri.app/) and React on Windows' built-in WebView2, so the whole app is a **3.8 MB** exe in a **1.4 MB** installer.
+It has a compact single-list window with a dark terminal theme. It is built with [Tauri](https://tauri.app/) and React on Windows' built-in WebView2, so the whole app is a **4.0 MB** exe in a **1.5 MB** installer.
 
 ![Purgeon main window](docs/screenshots/main.png)
 
@@ -460,8 +462,8 @@ The exit code is 0 on success and 1 on an error. Run from an administrator termi
 
 Get the latest version from [Releases](https://github.com/SeanShaffer88/Purgeon/releases/latest). It runs on Windows 10 and 11 (64-bit).
 
-- **`Purgeon-Setup-<version>.exe`** (about 1.4 MB) installs for all users, with a Start Menu shortcut. Its last page offers to start Purgeon with Windows (unticked).
-- **`Purgeon-Portable-<version>.exe`** (about 3.8 MB) runs without installing. It keeps its settings, backups, snapshots and browser data in a `Purgeon Data` folder next to the exe, so you can carry it on a USB drive. Any copy whose file name contains `portable`, or that has a file named `portable` next to it, works this way.
+- **`Purgeon-Setup-<version>.exe`** (about 1.5 MB) installs for all users, with a Start Menu shortcut. Its last page offers to start Purgeon with Windows (unticked).
+- **`Purgeon-Portable-<version>.exe`** (about 4.0 MB) runs without installing. It keeps its settings, backups, snapshots and browser data in a `Purgeon Data` folder next to the exe, so you can carry it on a USB drive. Any copy whose file name contains `portable`, or that has a file named `portable` next to it, works this way.
 
 **Upgrading from SweepUninstall:** Purgeon is the same program under a new name.
 - Your settings, backups, snapshots, groups and Change History carry over: Purgeon uses the same data folder.
