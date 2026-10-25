@@ -1,5 +1,5 @@
 // Uninstall queue: programs uninstalled one after another without watching. When an uninstaller
-// needs a restart, the queue is saved and SweepUninstall starts again after you sign in (a
+// needs a restart, the queue is saved and Purgeon starts again after you sign in (a
 // RunOnce entry that Windows removes after using it) to continue, then shows every leftover at once.
 import { sys } from './sys.js';
 import * as path from './winpath.js';
@@ -46,7 +46,7 @@ export async function restartPending() {
   return /True/i.test(out);
 }
 
-// Starts SweepUninstall once at the next sign-in to continue the queue.
+// Starts Purgeon once at the next sign-in to continue the queue.
 export async function arm() {
   const r = await reg(['add', RUNONCE, '/v', VALUE, '/t', 'REG_SZ', '/d', `"${sys.info.exe}" --resume-queue`, '/f']);
   if (!r.ok) throw new Error(r.stderr.trim());
@@ -54,5 +54,5 @@ export async function arm() {
 export const disarm = () => reg(['delete', RUNONCE, '/v', VALUE, '/f']).catch(() => {});
 
 export async function restartNow() {
-  await runPS(`shutdown.exe /r /t 15 /c ${psq('SweepUninstall: restarting to continue the uninstall queue. Save your work.')}`);
+  await runPS(`shutdown.exe /r /t 15 /c ${psq('Purgeon: restarting to continue the uninstall queue. Save your work.')}`);
 }

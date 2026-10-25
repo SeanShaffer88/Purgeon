@@ -16,8 +16,16 @@ async function start() {
   window.__sweepLaunch = sys.info.launch || [];
   const { default: App } = await import('./App.jsx');
   createRoot(document.getElementById('root')).render(<App />);
+  // A window hidden while minimized can come back at Windows' minimized size (far below the
+  // window's smallest size); then it is put back at its remembered size (refit in lib.rs).
+  const refit = () => {
+    if (window.innerWidth < 300 && window.innerHeight < 100) import('@tauri-apps/api/core').then(({ invoke }) => invoke('refit_window')).catch(() => {});
+  };
+  window.addEventListener('focus', refit);
+  document.addEventListener('visibilitychange', refit);
+  setInterval(refit, 1000);
 }
 
 start().catch((e) => {
-  document.getElementById('root').textContent = `SweepUninstall could not start: ${e?.message || e}`;
+  document.getElementById('root').textContent = `Purgeon could not start: ${e?.message || e}`;
 });

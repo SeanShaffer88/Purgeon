@@ -27,7 +27,7 @@ export function TakeSnapshotDialog({ onTake, onClose }) {
       <p className="heading">A snapshot records the files, folders and registry settings programs use, so you can later see exactly what changed.</p>
       <label className="field">
         Name
-        <input autoFocus value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && name.trim() && onTake(name.trim(), preset)} />
+        <input autoFocus title="A name to recognise this snapshot by later, such as Before installing Foo" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && name.trim() && onTake(name.trim(), preset)} />
       </label>
       <div className="field">
         Depth
@@ -170,7 +170,7 @@ export function ComparisonDialog({ comparison, beforeName, afterName, onCleanup,
           <label>
             <input type="checkbox" checked={kinds.registry} onChange={(e) => setKinds((k) => ({ ...k, registry: e.target.checked }))} /> Registry
           </label>
-          <input className="compare-search" placeholder="Filter" value={query} onChange={(e) => (setQuery(e.target.value), setShown(PAGE))} />
+          <input className="compare-search" placeholder="Filter" title="Shows only the changes whose path or value contains this text" value={query} onChange={(e) => (setQuery(e.target.value), setShown(PAGE))} />
         </span>
       </div>
       {comparison.truncated && <div className="error-box">This comparison is very large; only the first part of each list is shown.</div>}

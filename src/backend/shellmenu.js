@@ -1,15 +1,16 @@
 // Explorer right-click entries: "Who owns this?" on files and folders, and "Uninstall with
-// SweepUninstall" on shortcuts and programs. They are added for the current user only, under
-// keys named SweepUninstall*, and turning them off deletes exactly those keys again.
+// Purgeon" on shortcuts and programs. They are added for the current user only, under
+// keys named SweepUninstall* (the name before the rename, kept so entries made by older versions
+// are still recognised), and turning them off deletes exactly those keys again.
 import { sys } from './sys.js';
 import { reg, runPS, psq } from './shell.js';
 
 const CLASSES = 'HKCU\\Software\\Classes';
 const ENTRIES = [
-  { key: `${CLASSES}\\*\\shell\\SweepUninstallWhoOwns`, label: 'Who owns this? (SweepUninstall)', arg: '--who-owns' },
-  { key: `${CLASSES}\\Directory\\shell\\SweepUninstallWhoOwns`, label: 'Who owns this? (SweepUninstall)', arg: '--who-owns' },
-  { key: `${CLASSES}\\lnkfile\\shell\\SweepUninstallUninstall`, label: 'Uninstall with SweepUninstall', arg: '--uninstall-target' },
-  { key: `${CLASSES}\\exefile\\shell\\SweepUninstallUninstall`, label: 'Uninstall with SweepUninstall', arg: '--uninstall-target' },
+  { key: `${CLASSES}\\*\\shell\\SweepUninstallWhoOwns`, label: 'Who owns this? (Purgeon)', arg: '--who-owns' },
+  { key: `${CLASSES}\\Directory\\shell\\SweepUninstallWhoOwns`, label: 'Who owns this? (Purgeon)', arg: '--who-owns' },
+  { key: `${CLASSES}\\lnkfile\\shell\\SweepUninstallUninstall`, label: 'Uninstall with Purgeon', arg: '--uninstall-target' },
+  { key: `${CLASSES}\\exefile\\shell\\SweepUninstallUninstall`, label: 'Uninstall with Purgeon', arg: '--uninstall-target' },
 ];
 
 export async function enabled() {

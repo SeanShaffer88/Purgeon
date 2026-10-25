@@ -94,7 +94,7 @@ foreach ($s in Get-CimInstance Win32_Service -ErrorAction SilentlyContinue) {
   $company = Company $s.PathName
   if (-not $isManaged -and ($company -match '^Microsoft' -or $s.PathName -match '\\\\Windows\\\\(System32|SysWOW64)\\\\(svchost|lsass|services)\\.exe')) { continue }
   if (-not $isManaged -and -not $company -and $s.PathName -match '^\\W*[a-z]:\\\\Windows\\\\') { continue }
-  # Only services SweepUninstall can actually change (ones it already switched stay listed).
+  # Only services Purgeon can actually change (ones it already switched stay listed).
   if (-not $isManaged -and -not (Changeable $s.Name)) { continue }
   [void]$out.Add([pscustomobject]@{ type = 'service'; source = 'service'; name = $s.Name; display = $s.DisplayName; command = $s.PathName; startMode = $s.StartMode; state = $s.State; company = $company })
 }

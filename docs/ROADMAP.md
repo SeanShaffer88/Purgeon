@@ -1,13 +1,13 @@
 # Roadmap
 
 Planned enhancements, grouped by area. Each is meant to be built the same way as the rest of
-SweepUninstall: original code, every change backed up and undoable, and nothing offered that
+Purgeon: original code, every change backed up and undoable, and nothing offered that
 Windows or another installed program still needs.
 
 ## Added since 0.7.0 (next release)
 
 - **Uninstall queue.** Unattended uninstalls that continue after a restart, with all leftovers reviewed at the end.
-- **Removed elsewhere.** Programs uninstalled outside SweepUninstall are noticed and offered a leftover scan.
+- **Removed elsewhere.** Programs uninstalled outside Purgeon are noticed and offered a leftover scan.
 - **Trial installs.** Try a program, then Try Over removes everything it and its installer added.
 - **Rescue broken uninstalls.** Reinstall through winget to get a working uninstaller back, then uninstall.
 - **Disk space map.** A treemap of the space each program and its data folders use.
@@ -21,13 +21,23 @@ Windows or another installed program still needs.
 - **Whole-PC migration.** Several programs packed into one folder, plus a winget list for the rest.
 - **Settings sync.** Chosen programs' settings kept in step through a shared folder.
 - **Portable apps.** Programs without an installer can be registered to get icons, groups and leftover scans.
-- **Explorer right-click entries.** "Uninstall with SweepUninstall" and "Who owns this?", fully removed when turned off.
+- **Explorer right-click entries.** "Uninstall with Purgeon" and "Who owns this?", fully removed when turned off.
 - **Command palette.** `Ctrl+K` for every command and program.
 - **Tray and notifications.** Optional tray icon for maintenance, updates, startup alerts and interrupted removals.
 - **Monthly report.** An HTML summary of a month's changes.
 - **Themes and accessibility.** Light and high-contrast themes, keyboard menus, focus outlines and screen-reader labels.
 - **Explorer context menu manager.** Turn programs' right-click entries off and on without deleting them.
-- **New toolbars.** A search box that also runs commands, one row of view chips, and an action bar for the selection. Views renamed to Programs, Apps, Debloat and Cleaner.
+- **Installer detection.** Installers starting while Purgeon runs (also from the tray) are noticed, with an offer to record them.
+- **Window and tray options.** Always on Top (also a 📌 thumbtack in Purgeon’s own title bar), Minimize to Tray, a close button that asks whether to exit or keep running in the tray (with Remember my choice), Start Minimized to Tray; the tray icon shows the window on a left click and opens its menu on a right click.
+- **Start with Windows.** Off by default; a sign-in task, also offered unticked on the installer's last page, and removed on uninstall.
+- **Hidden programs.** Hide entries from the list and bring them back.
+- **Tooltips everywhere.** Every command, button and field explains what it does and how to undo it.
+- **Messages at the bottom.** Notices and errors appear just above the status bar, marked 👍, ⚠️ or ⛔.
+- **Analyze.** A one-page report on a program: removal, disk space, hooks, last use, dependencies, signature and architecture. "What It Does" is now "What’s This", and "Force Removal" is now "Force".
+- **Architecture column.** 64-bit, 32-bit or ARM64, read from each program file’s header.
+- **Wrapping action bar.** Buttons that don’t fit continue on a second row instead of being cut off.
+- **Portable apps.** Your own folders of portable apps are remembered, and Check for Updates finds newer versions through winget.
+- **New toolbars.** A search box that also runs commands, a details row for the selection, an actions row, and the views as a column of icons on the left. Views renamed to Programs, Apps, Debloat and Cleaner.
 
 ## Added in 0.6.0
 
@@ -42,7 +52,7 @@ Windows or another installed program still needs.
 - **Program backup and transfer.** Programs can be packed into a `.swpkg` file and restored on another
   PC, with profile paths and the user's registry hive moved over. Restores never overwrite existing
   folders and can be undone.
-- **Pre-delete re-check.** Right before anything is deleted, SweepUninstall checks again. It skips
+- **Pre-delete re-check.** Right before anything is deleted, Purgeon checks again. It skips
   folders, files and uninstall entries that another installed program still uses, and files that
   Windows counts as shared.
 - **Dependency warnings.** Shared runtimes, hardware drivers and programs that others registered a
@@ -60,7 +70,7 @@ Windows or another installed program still needs.
   removal can be rolled back, finished or left as it is.
 - **Fingerprinted backups.** A backup that was changed afterwards is not restored.
 - **Backup limits.** Age and size limits that always keep each program's newest backup.
-- **Command log.** One line for every command SweepUninstall runs, kept for 14 days.
+- **Command log.** One line for every command Purgeon runs, kept for 14 days.
 
 ## Added in 0.7.0
 
@@ -132,4 +142,4 @@ Windows or another installed program still needs.
 - Command-line uninstall, leftover scan and junk cleaning for scripts and IT use.
 - Driver store clean-up of old driver versions, with a backup.
 - Export uninstall, scan and comparison reports as HTML, CSV or JSON.
-- Optional notifications of new SweepUninstall releases, through the GitHub API.
+- Optional notifications of new Purgeon releases, through the GitHub API.

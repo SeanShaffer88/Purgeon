@@ -63,6 +63,14 @@ export async function find(name) {
   return parseTable(r.stdout)[0]?.id || null;
 }
 
+// A package's latest version and web page: { version, homepage }.
+export async function show(id) {
+  if (!/^[\w.+-]{2,128}$/.test(id)) throw new Error('Invalid package id');
+  const r = await run(['show', '--id', id, '--exact']);
+  const field = (name) => (r.stdout.match(new RegExp(`^\\s*${name}:\\s*(.+)$`, 'mi')) || [])[1]?.trim() || '';
+  return { version: field('Version'), homepage: field('Homepage') || field('Publisher Url') || field('Release Notes Url') };
+}
+
 export async function install(id) {
   if (!/^[\w.+-]{2,128}$/.test(id)) throw new Error('Invalid package id');
   const r = await run(['install', '--id', id, '--exact', '--accept-package-agreements']);

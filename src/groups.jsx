@@ -24,7 +24,7 @@ export function GroupDialog({ programs, current, grouped, names, onSave, onClose
       <p className="heading">Put {who} in a group. Use the group list in the toolbar to show one group at a time.</p>
       <label className="field">
         Group
-        <input autoFocus list="group-names" maxLength={60} value={name} placeholder="e.g. Games, Work, Utilities" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
+        <input autoFocus list="group-names" title="Type a new group name, or pick one you used before" maxLength={60} value={name} placeholder="e.g. Games, Work, Utilities" onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && save()} />
         <datalist id="group-names">
           {names.map((n) => (
             <option key={n} value={n} />

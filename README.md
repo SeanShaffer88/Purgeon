@@ -1,4 +1,4 @@
-# SweepUninstall
+# Purgeon
 
 A Windows uninstaller that removes a program and then finds the files, folders, registry keys, startup entries and services it left behind.
 
@@ -16,7 +16,7 @@ Every change is backed up first and can be undone.
 
 It has a compact single-list window with a dark terminal theme. It is built with [Tauri](https://tauri.app/) and React on Windows' built-in WebView2, so the whole app is a **3.8 MB** exe in a **1.4 MB** installer.
 
-![SweepUninstall main window](docs/screenshots/main.png)
+![Purgeon main window](docs/screenshots/main.png)
 
 **Contents:**
 - [Toolbars and commands](#toolbars-and-commands)
@@ -27,6 +27,7 @@ It has a compact single-list window with a dark terminal theme. It is built with
 - [Trial installs](#trial-installs)
 - [Snapshots](#snapshots)
 - [Change timeline](#change-timeline)
+- [Analyze a program](#analyze-a-program)
 - [What a program does](#what-a-program-does)
 - [Disk space map](#disk-space-map)
 - [Program migration and settings sync](#program-migration-and-settings-sync)
@@ -51,12 +52,16 @@ Screenshots use demo data. QuickPDF Free, SearchBoost Toolbar and OldPhotoTool a
 
 ## Toolbars and commands
 
+**Views** are a column of icons on the left: **Programs**, **Apps**, **Monitored**, **Startup**, **Debloat**, **Cleaner**, **Snapshots**, **Archive** and **Timeline**. Hover over one for its name, what it shows and its shortcut. Click an open tool view again to go back to the program list.
+
 Under the menu bar are three rows:
 - **Search and commands:** one box searches the open list as you type. It also lists menu commands whose names match; press `↓` and `Enter` to run one, or `Esc` to clear the box. **All commands** (`Ctrl+K`) opens the command palette with every command and program.
-- **Views:** one click opens **Programs**, **Apps**, **Monitored**, **Startup**, **Debloat**, **Cleaner**, **Snapshots**, **Archive** or **Timeline**. Click an open tool view again to go back to the program list. The group picker sits at the end of this row.
-- **Actions:** the main actions for the selected program: Uninstall, Force Removal, Leftovers, What It Does, Migrate, Queue and Properties. With several programs selected it shows the batch actions, and other views show their own (Take Snapshot and Compare in Snapshots, for example).
+- **Details:** the selected program with its version, publisher, size, architecture, install date and group, or what to do in the open view when nothing is selected. The group picker sits at the end of this row.
+- **Actions:** buttons only: Uninstall, Force, Analyze, Leftovers, What’s This, Migrate, Queue, Group, Hide, Folder, Registry, Search Online and Properties. When they don’t fit on one row, they continue on the next instead of being cut off. With several programs selected it shows the batch actions, and other views show their own (Take Snapshot and Compare in Snapshots, for example).
 
-The elevation status sits at the right end of the menu bar: **Not elevated – Restart as Administrator**, or **Administrator**.
+The menu bar is also the window’s title bar: drag its empty middle to move the window, and double-click it to maximize. At its right end are the elevation status (**Not Elevated – Restart as Administrator**, or **Administrator**), then a 📌 thumbtack that keeps Purgeon on top of other windows (green while on), and the minimize, maximize and close buttons. Messages (👍 for done, ⚠️ for warnings, ⛔ for errors) appear at the bottom, just above the status bar.
+
+**Tooltips everywhere:** hover over any menu item, button, view icon, field, column header or list row to see what it is and what it does, including what it changes and how to undo it.
 
 ![Searching for "queue" lists the matching commands](docs/screenshots/command-bar.png)
 
@@ -67,15 +72,17 @@ The elevation status sits at the right end of the menu bar: **Not elevated – R
 ![Program insights: two programs installed together, one a possible bundled offer](docs/screenshots/insights.png)
 
 - **Lists:** desktop programs from all three registry uninstall locations (64-bit, 32-bit and per-user) with icons, size and install date, plus Windows Store apps. Programs installed only for the current user are shown in amber.
-- **Measured values:** when a program doesn't report its size or install date, SweepUninstall measures its folder in the background. Measured values are in italics; hover one to see which folder it came from.
+- **Measured values:** when a program doesn't report its size or install date, Purgeon measures its folder in the background. Measured values are in italics; hover one to see which folder it came from.
 - **Finding programs:** sort by any column, search instantly, or type the first letters to jump.
+- **Architecture:** the **Arch** column shows whether each program is 64-bit, 32-bit or ARM64, read from its program file’s header. When the file can’t be found, it falls back to the part of the registry Windows lists it in, and the tooltip says which. (.NET programs built for “Any CPU” show as 32-bit there but run as 64-bit.)
 - **Insight tags** after a program's name show:
   - **unsigned** or **bad signature**: the program's own file isn't digitally signed, or its signature is broken;
   - **installed with …**: it was installed or updated within two minutes of a program from another publisher, which is how bundled offers usually arrive;
   - **possible offer**: its name matches a type of program often installed as a bundled offer (toolbars, "PC optimizers", search helpers);
   - **growing**: it grew by a fifth and at least 50 MB over the last 90 days.
 - **Filters and details:** the group picker also filters by each insight. **Properties** (`Alt+Enter`) shows the signer, what it was installed with, and its size history.
-- **Removed elsewhere:** when a program disappears through Windows Settings, its own uninstaller or another tool, SweepUninstall notices on the next start and offers a leftover scan.
+- **Hiding entries:** **Action › Hide From List** hides programs you never want to see in the list, such as runtimes and drivers. They stay installed and Windows still lists them; only Purgeon's list hides them. The status bar counts them. **View › Show Hidden Programs** (or a click on that count) shows them dimmed and tagged **hidden**, and **Action › Unhide** brings one back.
+- **Removed elsewhere:** when a program disappears through Windows Settings, its own uninstaller or another tool, Purgeon notices on the next start and offers a leftover scan.
 - **Display:** the window fits your screen and respects Windows' display scale. Zoom with `Ctrl++` / `Ctrl+-` / `Ctrl+0`. **View › Grid Lines** (on by default) separates rows and columns.
 
 ![Windows Store apps](docs/screenshots/store-apps.png)
@@ -85,10 +92,10 @@ The elevation status sits at the right end of the menu bar: **Not elevated – R
 ![Leftover scan after uninstalling a program](docs/screenshots/leftovers.png)
 
 **Running the uninstaller**
-- SweepUninstall runs the program's own uninstaller and waits for it to finish, including Inno Setup and NSIS uninstallers that relaunch themselves from `%TEMP%`.
+- Purgeon runs the program's own uninstaller and waits for it to finish, including Inno Setup and NSIS uninstallers that relaunch themselves from `%TEMP%`.
 - It recognises how the program was installed: Windows Installer, Inno Setup, NSIS, WiX bundle or InstallShield.
 - **Installer records:** before uninstalling, it reads the exact list of files and settings the installer recorded (the Windows Installer package cached for the program, or the Inno Setup uninstall log). Those records disappear during the uninstall. Anything they list that is left behind is offered with a 95–100% match.
-- **Tools › Silent Uninstall When Possible** runs Windows Installer, Inno Setup, NSIS and WiX uninstallers without their windows. Other uninstallers show their window as usual, because SweepUninstall never guesses switches.
+- **Tools › Silent Uninstall When Possible** runs Windows Installer, Inno Setup, NSIS and WiX uninstallers without their windows. Other uninstallers show their window as usual, because Purgeon never guesses switches.
 - **Dependency warnings:** the confirmation warns before you remove a shared runtime (Visual C++, .NET, Java, DirectX and others), a hardware driver, or a program that other installed programs registered a need for.
 
 **Then it scans for leftovers:**
@@ -103,7 +110,7 @@ The elevation status sits at the right end of the menu bar: **Not elevated – R
 **Choosing what to remove**
 - Every item gets a **match score** from 0 to 100%. Items scoring 70% or more start ticked; weaker guesses start unticked and are marked **check**.
 - Publisher folders count only when named exactly after the publisher, so removing one Google program never offers another's folders.
-- **Force Removal** (`Shift+Del`) handles programs whose uninstaller is broken or missing.
+- **Force** (`Shift+Del`) handles programs whose uninstaller is broken or missing.
 - **Rescue Broken Uninstall** reinstalls the program through winget over the existing copy, which puts a working uninstaller back, then uninstalls it normally.
 - **Analyze Leftovers** (`Ctrl+L`) shows what belongs to a program without uninstalling it.
 - Running processes in the install folder are detected and can be closed first.
@@ -123,7 +130,7 @@ The elevation status sits at the right end of the menu bar: **Not elevated – R
 
 **Uninstall queue** (**Tools › Uninstall Queue**, add programs with `Ctrl+Q`):
 - Programs are uninstalled one after another, silently where possible, so you don't have to watch.
-- If an uninstaller needs a restart, the queue is saved and SweepUninstall starts once after you sign back in to continue. It uses a RunOnce entry, which Windows removes after using it.
+- If an uninstaller needs a restart, the queue is saved and Purgeon starts once after you sign back in to continue. It uses a RunOnce entry, which Windows removes after using it.
 - At the end, every program's leftovers are shown together for you to review.
 
 ![Uninstall queue, two done and two waiting](docs/screenshots/queue.png)
@@ -140,9 +147,17 @@ The elevation status sits at the right end of the menu bar: **Not elevated – R
 - **Live tracking:** run as administrator, it also follows the installer with Windows' own event tracing. It records every file and registry change by the installer, the programs it starts and Windows Installer, as it happens and at any depth. Temporary files and Windows' bookkeeping are left out.
 - **Changed settings:** existing settings the installer changed (a file association, a replaced Run entry) are recorded and put back when you uninstall.
 - **Monitored Programs** (`Ctrl+3`) lists the recordings. Uninstalling one removes exactly what its installation created.
-- **Command line:** `SweepUninstall --monitor "setup.exe"` records an installation without the window.
+- **Command line:** `Purgeon --monitor "setup.exe"` records an installation without the window.
 
 ![Monitored programs](docs/screenshots/monitored.png)
+
+**Detecting installations:** while Purgeon runs, including from the tray, it notices installers starting and asks whether to record them. It brings its window forward and shows a Windows notification.
+- **Monitor It** takes the "before" snapshot while the installer waits on its first page, then you install as usual and click **Installation Finished**.
+- It looks only at new programs started in your own Windows session, named like an installer (`setup`, `install`) or Windows Installer opening an `.msi`. Uninstallers, Windows' own servicing, its own program updates and trial installs are left out.
+- An installer that was already running is recorded with snapshots only; live tracking follows installers Purgeon starts itself.
+- **Tools › Detect Installations** turns it off.
+
+![Purgeon asking to monitor an installer that just started](docs/screenshots/installer-detected.png)
 
 ## Trial installs
 
@@ -173,21 +188,35 @@ The elevation status sits at the right end of the menu bar: **Not elevated – R
 **Timeline** (`Ctrl+T`) answers "what changed on this PC last Tuesday?". It joins, newest first:
 - installs and updates Windows recorded;
 - monitored installs, trials and snapshots;
-- removals, including programs removed outside SweepUninstall;
+- removals, including programs removed outside Purgeon;
 - everything in Change History, such as startup changes and clean-ups.
+
+## Analyze a program
+
+![Analyzing a program](docs/screenshots/analyze.png)
+
+**Analyze** (`Ctrl+I`) gives one read-only report on the selected program:
+- a short verdict: how it will be removed (its own uninstaller, silently or not, or Force when it has none), whether it is running now, whether other programs need it, whether it is signed, and whether it has gone unused for half a year;
+- its architecture and main program file;
+- disk space: its install folder plus the data folders named after it;
+- when it was last used, from Windows' Prefetch records (as administrator);
+- how it was installed;
+- what it hooks into Windows, with a count for each kind; click one to see them.
+
+From there, **Uninstall**, **Analyze Leftovers** and **What’s This** are one click away.
 
 ## What a program does
 
 ![What OBS Studio hooks into Windows](docs/screenshots/what-it-does.png)
 
-**What It Does** (`Ctrl+W`) lists, on one page, everything a program hooks into Windows: services, scheduled tasks, startup entries, firewall rules, file types and links it opens, Explorer menus and extensions, its folders, and other registry settings.
+**What’s This** (`Ctrl+W`) lists, on one page, everything a program hooks into Windows: services, scheduled tasks, startup entries, firewall rules, file types and links it opens, Explorer menus and extensions, its folders, and other registry settings.
 
 ## Disk space map
 
 ![Disk space map with Steam selected](docs/screenshots/disk-map.png)
 
 - **View › Disk Space Map** draws each program as a block sized by its install folder plus the data folders named after it in ProgramData and AppData.
-- Click a block to see its biggest folders, then open **What It Does** or **Analyze Leftovers** for that program.
+- Click a block to see its biggest folders, then open **What’s This** or **Analyze Leftovers** for that program.
 
 ## Program migration and settings sync
 
@@ -253,8 +282,10 @@ The elevation status sits at the right end of the menu bar: **Not elevated – R
 
 ![Portable apps](docs/screenshots/portable.png)
 
-- **Tools › Portable Apps** finds programs that run from a folder without being installed, so Windows doesn't list them. **Add a Folder** points to more.
-- **Register** adds one to the program list with its icon, through a per-user uninstall entry marked as SweepUninstall's. It then gets groups, leftover scans and a clean removal like any installed program. **Unregister** removes only that entry.
+- **Tools › Portable Apps** finds programs that run from a folder without being installed, so Windows doesn't list them. It looks in Program Files, `C:\PortableApps`, `C:\Tools`, `C:\Apps` and the same names in your user folder.
+- **Your own folders:** **Add a Folder** adds a folder that holds your portable apps, such as `D:\PortableApps`. It is remembered and looked at every time, both the folder itself and each folder inside it. The ✕ next to it stops looking there.
+- **Updates:** **Check for Updates** looks each app up in winget's catalogue and shows **up to date**, the newer version available, or **not in winget**. For a newer version, **Download Page** opens the publisher's page. Purgeon doesn't replace a portable app's files itself: download the new version and unpack it over the folder, after backing the folder up.
+- **Register** adds one to the program list with its icon, through a per-user uninstall entry marked as Purgeon's. It then gets groups, leftover scans and a clean removal like any installed program. **Unregister** removes only that entry.
 
 ## Cleaner
 
@@ -315,7 +346,7 @@ Entries from Microsoft are tagged **Windows** and ask before being turned off.
 
 **Trust check:** entries worth a second look are tagged, with the reasons on hover: running from a temporary, download or oddly named user folder, being unsigned, or being added recently.
 
-**New-entry alerts:** when a program adds itself to what starts with Windows, SweepUninstall tells you with a Windows notification and offers **Allow** or **Turn Off**.
+**New-entry alerts:** when a program adds itself to what starts with Windows, Purgeon tells you with a Windows notification and offers **Allow** or **Turn Off**.
 
 ## Explorer context menu
 
@@ -325,7 +356,7 @@ Entries from Microsoft are tagged **Windows** and ask before being turned off.
 - Click one to turn it off or on. Nothing is deleted: menu commands use Windows' own `LegacyDisable` switch, and shell extensions go on Windows' blocked list (that needs administrator rights).
 - Changes show in new Explorer windows, or everywhere after **Restart Explorer**. Each one is in Change History and can be undone.
 
-**SweepUninstall's own entries:** **Tools › Explorer Right-Click Menu** adds **Uninstall with SweepUninstall** for shortcuts and programs, and **Who owns this?** for files and folders. They are added for your user only, and turning the option off deletes exactly those keys again.
+**Purgeon's own entries:** **Tools › Explorer Right-Click Menu** adds **Uninstall with Purgeon** for shortcuts and programs, and **Who owns this?** for files and folders. They are added for your user only, and turning the option off deletes exactly those keys again.
 
 ## Debloat
 
@@ -350,14 +381,25 @@ Entries from Microsoft are tagged **Windows** and ask before being turned off.
 
 ![Scheduled maintenance](docs/screenshots/maintenance.png)
 
-**Tools › Scheduled Maintenance** runs SweepUninstall once a week through Windows Task Scheduler. Each run:
+**Tools › Scheduled Maintenance** runs Purgeon once a week through Windows Task Scheduler. Each run:
 - takes a Quick snapshot;
 - cleans the junk categories you choose, to the Recycle Bin;
 - applies your backup limits.
 
 It never uninstalls anything and never runs the permanent Windows clean-ups. Each run writes a short report and appears in Change History.
 
-**Tray:** with **View › Keep Running in the Tray**, closing the window keeps SweepUninstall in the notification area. It tells you about finished maintenance runs, available updates, new startup entries and interrupted removals, and its menu opens the Cleaner or Program Updates directly.
+**Window and tray** (all in the View menu):
+- **Always on Top**, or the 📌 thumbtack in the title bar, keeps the window in front of other windows.
+- **Minimize to Tray** hides the window in the notification area when you minimize it: the window and its taskbar button go away, and only the tray icon remains.
+- **The close button** asks whether to **Minimize to Tray** (keep running there, still spotting installers and new startup entries) or **Exit**, with a **Remember my choice** box. **Close Button Asks**, **Close Button Hides to Tray** and **Close Button Exits** change the choice later.
+- **Start Minimized to Tray** starts it hidden there.
+- **Start with Windows** starts it when you sign in. Purgeon runs as administrator, and Windows skips such programs in its Run list, so this is a task in **Task Scheduler › Purgeon** that starts it at sign-in without a UAC prompt. Turning the option off deletes the task, and uninstalling Purgeon removes it too. The installer's last page offers it as well, unticked.
+
+![The close button asks whether to exit or keep running in the tray](docs/screenshots/close-question.png)
+
+**The tray icon:** a left click shows the window. A right click opens a menu: Show Purgeon, Monitor an Installation, Cleaner, Startup & Services, Program Updates and Exit. The icon also reports finished maintenance runs, available updates, new startup entries and interrupted removals.
+
+![Window and tray options in the View menu](docs/screenshots/window-options.png)
 
 **Monthly report:** **File › Monthly Report** saves an HTML page for a month: programs installed and removed, space freed, startup changes, updates, clean-ups, and programs flagged by the insights.
 
@@ -379,7 +421,7 @@ It never uninstalls anything and never runs the permanent Windows clean-ups. Eac
 **Undo:** **Tools › Change History** (`Ctrl+H`) lists every change and undoes it with a double-click. **Tools › Backups** (`Ctrl+4`) restores any removal. After a removal, the report has an **Undo** button.
 
 **Checks before anything is deleted:**
-- SweepUninstall never offers drive roots, the Windows folder, your profile folder, install roots, or generic folders such as `Microsoft` or `Common Files`.
+- Purgeon never offers drive roots, the Windows folder, your profile folder, install roots, or generic folders such as `Microsoft` or `Common Files`.
 - It refuses to delete registry keys Windows depends on, Windows' own services, and scheduled tasks under `\Microsoft\`.
 - **Right before deleting** it checks again, and skips anything another installed program still uses, any file Windows counts as shared, and anything that changed after the scan. If that check can't run, nothing is deleted.
 
@@ -388,18 +430,19 @@ It never uninstalls anything and never runs the permanent Windows clean-ups. Eac
 - **Restore points:** before an uninstall, a batch or the first Debloat change, the confirmation offers to create one (**Tools › Create Restore Points** sets the default).
 - **Crash-safe removals:** each item is in the backup before the next one is removed. After a crash or power cut, the next start offers to roll back, finish or leave the removal.
 - **Fingerprinted backups:** backups are sealed with SHA-256 fingerprints, and a changed backup is not restored. **Tools › Backup Settings** can limit backups by age or size, always keeping each program's newest.
-- **Command log:** **Tools › Open Command Log** shows every command SweepUninstall ran, with its result, for 14 days.
+- **Command log:** **Tools › Open Command Log** shows every command Purgeon ran, with its result, for 14 days.
 - **Tests:** an automated safety test suite runs on every build and blocks a release if it fails.
 
 ## Command line
 
 ```bash
-SweepUninstall --snapshot "Before installing X" --preset quick
-SweepUninstall --compare "Before installing X" now --report changes.html
-SweepUninstall --list-snapshots
-SweepUninstall --monitor "C:\Downloads\setup.exe" --name "Foo Editor"
-SweepUninstall --maintenance
-SweepUninstall --help
+Purgeon --snapshot "Before installing X" --preset quick
+Purgeon --compare "Before installing X" now --report changes.html
+Purgeon --list-snapshots
+Purgeon --monitor "C:\Downloads\setup.exe" --name "Foo Editor"
+Purgeon --maintenance
+Purgeon --autostart on
+Purgeon --help
 ```
 
 **Options:**
@@ -408,20 +451,28 @@ SweepUninstall --help
 - `--report` saves a comparison as HTML, JSON or plain text, depending on the file extension.
 - `--monitor` runs an installer, waits for it and saves the recording under Monitored Programs, with live tracking as administrator.
 - `--maintenance` runs the weekly maintenance set up in Tools › Scheduled Maintenance.
+- `--autostart on` or `off` turns View › Start with Windows on or off.
+- `--tray` starts Purgeon hidden in the tray.
 
 The exit code is 0 on success and 1 on an error. Run from an administrator terminal to see the output there.
 
 ## Download
 
-Get the latest version from [Releases](https://github.com/SeanShaffer88/SweepUninstall/releases/latest). It runs on Windows 10 and 11 (64-bit).
+Get the latest version from [Releases](https://github.com/SeanShaffer88/Purgeon/releases/latest). It runs on Windows 10 and 11 (64-bit).
 
-- **`SweepUninstall-Setup-<version>.exe`** (about 1.4 MB) installs for all users, with a Start Menu shortcut.
-- **`SweepUninstall-Portable-<version>.exe`** (about 3.8 MB) runs without installing. It keeps its settings, backups, snapshots and browser data in a `SweepUninstall Data` folder next to the exe, so you can carry it on a USB drive. Any copy whose file name contains `portable`, or that has a file named `portable` next to it, works this way.
+- **`Purgeon-Setup-<version>.exe`** (about 1.4 MB) installs for all users, with a Start Menu shortcut. Its last page offers to start Purgeon with Windows (unticked).
+- **`Purgeon-Portable-<version>.exe`** (about 3.8 MB) runs without installing. It keeps its settings, backups, snapshots and browser data in a `Purgeon Data` folder next to the exe, so you can carry it on a USB drive. Any copy whose file name contains `portable`, or that has a file named `portable` next to it, works this way.
+
+**Upgrading from SweepUninstall:** Purgeon is the same program under a new name.
+- Your settings, backups, snapshots, groups and Change History carry over: Purgeon uses the same data folder.
+- The installer puts Purgeon in its own `Program Files\Purgeon` folder. Afterwards, uninstall SweepUninstall from Windows Settings and leave **Delete the application data** unticked, because that folder is now Purgeon's.
+- A portable copy keeps using its `SweepUninstall Data` folder until you rename it to `Purgeon Data`.
+- Scheduled maintenance and Start with Windows tasks from SweepUninstall are replaced the next time you save those options.
 
 **Requirements and notes:**
 - **Administrator rights:** both ask for them when they start. Removing programs installed for all users, creating restore points, machine-wide tweaks and live install tracking all need them.
-- **WebView2:** SweepUninstall uses the Microsoft Edge WebView2 runtime, which is part of Windows 10 and 11. The installer downloads it if it's missing.
-- **Lightweight:** while idle, SweepUninstall uses about 125–135 MB of memory, counting WebView2's helper processes.
+- **WebView2:** Purgeon uses the Microsoft Edge WebView2 runtime, which is part of Windows 10 and 11. The installer downloads it if it's missing.
+- **Lightweight:** while idle, Purgeon uses about 125–135 MB of memory, counting WebView2's helper processes.
 - **SmartScreen:** the exes are not code-signed yet, so Windows SmartScreen may show "Windows protected your PC". Click **More info › Run anyway**.
 
 ## Keyboard shortcuts
@@ -437,7 +488,8 @@ Get the latest version from [Releases](https://github.com/SeanShaffer88/SweepUni
 | `Ctrl+K` | Command palette |
 | `Ctrl+G` | Set group |
 | `Ctrl+Q` | Add to the uninstall queue |
-| `Ctrl+W` | What It Does |
+| `Ctrl+W` | What’s This |
+| `Ctrl+I` | Analyze the selected program |
 | `Ctrl+1` / `Ctrl+2` | Programs / Apps |
 | `Ctrl+3` | Monitored Programs |
 | `Ctrl+4` | Backups |
@@ -459,8 +511,8 @@ Get the latest version from [Releases](https://github.com/SeanShaffer88/SweepUni
 Requirements: Windows 10 or 11, [Node.js](https://nodejs.org/) 20 or later, and [Rust](https://rustup.rs/) (stable).
 
 ```bash
-git clone https://github.com/SeanShaffer88/SweepUninstall.git
-cd SweepUninstall
+git clone https://github.com/SeanShaffer88/Purgeon.git
+cd Purgeon
 npm install
 npm run dev
 ```
@@ -491,8 +543,11 @@ npm run dev
 | `src/backend/queue.js`, `trials.js` | Uninstall queue with restart resume, and trial installs |
 | `src/backend/explore.js` | Disk space map, change timeline, "what it does" sheet and registry search |
 | `src/backend/browsers.js`, `portable.js` | Browser clean-up and portable apps |
-| `src/backend/ctxmenu.js`, `shellmenu.js` | Explorer context menu items, and SweepUninstall's own right-click entries |
+| `src/backend/ctxmenu.js`, `shellmenu.js` | Explorer context menu items, and Purgeon's own right-click entries |
 | `src/backend/report.js` | Monthly report |
+| `src/backend/installwatch.js`, `autostart.js` | Spotting installers as they start, and Start with Windows |
+| `src/tips.js` | Tooltip text for every command and button |
+| `src-tauri/windows/installer.nsi`, `hooks.nsh` | Tauri's installer template with the Start with Windows box, and removing the scheduled tasks on uninstall |
 | `src/backend/paths.js` | Install roots, and guards that refuse to touch system folders |
 | `src/*.jsx`, `src/cli.js` | React UI and the command line |
 | `test/` | Safety tests (`node --test`) against the same backend code |
@@ -512,7 +567,7 @@ Planned enhancements are listed in [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Disclaimer
 
-SweepUninstall is an independent project, written from scratch using documented Windows APIs.
+Purgeon is an independent project, written from scratch using documented Windows APIs.
 It is not affiliated with any other uninstaller and contains no code from one.
 Uninstalling software changes your system, so review what is selected before deleting.
 

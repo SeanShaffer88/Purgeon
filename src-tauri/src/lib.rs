@@ -1,4 +1,4 @@
-// SweepUninstall's native core: a few small, general system commands. The uninstall,
+// Purgeon's native core: a few small, general system commands. The uninstall,
 // scan, backup, debloat and startup logic lives in src/backend (JavaScript) and is built
 // on these.
 use base64::{engine::general_purpose::STANDARD, Engine};
@@ -9,7 +9,7 @@ use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, UNIX_EPOCH};
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use tauri::{Emitter, Manager};
 
 mod snapshot;
@@ -154,7 +154,7 @@ fn make_dir(path: String) -> Result<(), String> {
     fs::create_dir_all(path).map_err(|e| e.to_string())
 }
 
-/// Deletes SweepUninstall's own data (backups, records). Program leftovers go to the
+/// Deletes Purgeon's own data (backups, records). Program leftovers go to the
 /// Recycle Bin through the JavaScript side instead.
 #[tauri::command]
 fn remove_path(path: String) -> Result<(), String> {
@@ -451,7 +451,7 @@ fn track_start() -> Result<(), String> {
     tracker::start()
 }
 
-/// Starts an installer as a child of SweepUninstall, so it and everything it starts are
+/// Starts an installer as a child of Purgeon, so it and everything it starts are
 /// tracked. .msi packages go through msiexec. Returns the process id.
 #[tauri::command]
 fn track_launch(file: String) -> Result<u32, String> {
@@ -467,7 +467,7 @@ fn track_launch(file: String) -> Result<u32, String> {
     } else {
         Command::new(&file)
     };
-    // The installer gets no share of SweepUninstall's console or output.
+    // The installer gets no share of Purgeon's console or output.
     let child = cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|e| e.to_string())?;
     let pid = child.id();
     tracker::add_pid(pid, file);
@@ -495,6 +495,91 @@ async fn wait_process(pid: u32, timeout_ms: u32) -> bool {
     })
     .await
     .unwrap_or(false)
+}
+
+/// The processor each program file is built for, from its PE header: "x64", "x86", "arm64",
+/// "arm", or "" when the file can't be read.
+#[tauri::command]
+fn exe_arch(paths: Vec<String>) -> Vec<String> {
+    fn machine(p: &str) -> Option<&'static str> {
+        use std::io::{Read, Seek, SeekFrom};
+        let mut f = std::fs::File::open(p).ok()?;
+        let mut dos = [0u8; 64];
+        f.read_exact(&mut dos).ok()?;
+        if &dos[0..2] != b"MZ" {
+            return None;
+        }
+        let pe_at = u32::from_le_bytes([dos[60], dos[61], dos[62], dos[63]]) as u64;
+        f.seek(SeekFrom::Start(pe_at)).ok()?;
+        let mut pe = [0u8; 6];
+        f.read_exact(&mut pe).ok()?;
+        if &pe[0..4] != b"PE\0\0" {
+            return None;
+        }
+        Some(match u16::from_le_bytes([pe[4], pe[5]]) {
+            0x8664 => "x64",
+            0x014c => "x86",
+            0xaa64 => "arm64",
+            0x01c4 => "arm",
+            _ => "",
+        })
+    }
+    paths.iter().map(|p| machine(p).unwrap_or("").to_string()).collect()
+}
+
+#[derive(Serialize)]
+struct ProcessInfo {
+    pid: u32,
+    ppid: u32,
+    name: String,
+    session: u32,
+}
+
+/// Every running process (id, parent id, exe name, session), cheaply, for spotting installers
+/// as they start.
+#[tauri::command]
+fn list_processes() -> Vec<ProcessInfo> {
+    #[repr(C)]
+    struct ProcessEntry32W {
+        size: u32,
+        usage: u32,
+        pid: u32,
+        heap: usize,
+        module: u32,
+        threads: u32,
+        ppid: u32,
+        priority: i32,
+        flags: u32,
+        exe: [u16; 260],
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn CreateToolhelp32Snapshot(flags: u32, pid: u32) -> isize;
+        fn Process32FirstW(snap: isize, entry: *mut ProcessEntry32W) -> i32;
+        fn Process32NextW(snap: isize, entry: *mut ProcessEntry32W) -> i32;
+        fn ProcessIdToSessionId(pid: u32, session: *mut u32) -> i32;
+        fn CloseHandle(handle: isize) -> i32;
+    }
+    const TH32CS_SNAPPROCESS: u32 = 2;
+    let mut out = Vec::new();
+    unsafe {
+        let snap = CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0);
+        if snap == -1 {
+            return out;
+        }
+        let mut e: ProcessEntry32W = std::mem::zeroed();
+        e.size = std::mem::size_of::<ProcessEntry32W>() as u32;
+        let mut ok = Process32FirstW(snap, &mut e);
+        while ok != 0 {
+            let len = e.exe.iter().position(|&c| c == 0).unwrap_or(e.exe.len());
+            let mut session = u32::MAX;
+            ProcessIdToSessionId(e.pid, &mut session);
+            out.push(ProcessInfo { pid: e.pid, ppid: e.ppid, name: String::from_utf16_lossy(&e.exe[..len]), session });
+            ok = Process32NextW(snap, &mut e);
+        }
+        CloseHandle(snap);
+    }
+    out
 }
 
 #[tauri::command]
@@ -532,7 +617,7 @@ async fn snapshot_subtree(path: String, key: String) -> Result<snapshot::Subtree
 }
 
 /// Portable mode: when the program file's name contains "portable" (as the portable release's
-/// does) or a file named "portable" sits next to it, all data is kept in a "SweepUninstall Data"
+/// does) or a file named "portable" sits next to it, all data is kept in a "Purgeon Data"
 /// folder beside it instead of in the user's profile. Falls back to normal mode when that
 /// folder cannot be created (a read-only location).
 fn portable_dir() -> Option<PathBuf> {
@@ -542,14 +627,16 @@ fn portable_dir() -> Option<PathBuf> {
     if !named && !dir.join("portable").exists() {
         return None;
     }
-    let data = dir.join("SweepUninstall Data");
+    // A portable copy from before the rename keeps using its "SweepUninstall Data" folder.
+    let old = dir.join("SweepUninstall Data");
+    let data = if old.is_dir() && !dir.join("Purgeon Data").exists() { old } else { dir.join("Purgeon Data") };
     fs::create_dir_all(&data).ok().map(|_| data)
 }
 
 /// Command-line requests (--snapshot, --compare, --list-snapshots, --help) run without a window.
 fn cli_args() -> Vec<String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if args.iter().any(|a| matches!(a.to_lowercase().as_str(), "--snapshot" | "--compare" | "--list-snapshots" | "--monitor" | "--maintenance" | "--help" | "-h" | "/?")) {
+    if args.iter().any(|a| matches!(a.to_lowercase().as_str(), "--snapshot" | "--compare" | "--list-snapshots" | "--monitor" | "--maintenance" | "--autostart" | "--help" | "-h" | "/?")) {
         args
     } else {
         vec![]
@@ -619,36 +706,185 @@ fn cli_print(text: String) {
 }
 
 // ---- tray icon ----------------------------------------------------------------------------
-// Off by default. When on (View › Keep Running in the Tray), closing the window hides it to the
-// tray, so new-startup-entry alerts keep working; the tray menu reopens it.
-static CLOSE_TO_TRAY: AtomicBool = AtomicBool::new(false);
+// The close button asks whether to exit or keep running in the tray (where installer detection and
+// new-startup-entry alerts keep working), unless a choice was remembered; View › Minimize
+// to Tray hides the window there when it is minimized; View › Start Minimized to Tray starts it
+// there. The tray icon shows while any of these is on. A left click on it shows the window again;
+// a right click opens its menu.
+// What the close button does: 0 ask (the page shows the question), 1 hide to the tray, 2 exit.
+static CLOSE_MODE: AtomicU8 = AtomicU8::new(0);
+// Set while the question is showing: a second close then exits, so a page that stopped
+// responding can never keep the window from closing.
+static CLOSE_ASKING: AtomicBool = AtomicBool::new(false);
+static MINIMIZE_TO_TRAY: AtomicBool = AtomicBool::new(false);
 
 fn show_main(app: &tauri::AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
-        let _ = w.show();
-        let _ = w.unminimize();
+        // Restore first, then show: showing a still-minimized window and then restoring it leaves
+        // the page at the minimized size.
+        if w.is_minimized().unwrap_or(false) {
+            let _ = w.unminimize();
+        }
+        if !w.is_visible().unwrap_or(true) {
+            let _ = w.show();
+        }
         let _ = w.set_focus();
+        refit(&w);
+    }
+}
+
+// A window hidden while minimized comes back "restored" but still at Windows' minimized spot
+// (160×28 at -32000,-32000), and every later restore returns there. Windows still remembers the
+// real size in the window's placement, so put it back there.
+// The window's last normal (not minimized or maximized) position and size, kept as it moves.
+static LAST_NORMAL: std::sync::Mutex<Option<[i32; 4]>> = std::sync::Mutex::new(None);
+
+#[link(name = "user32")]
+extern "system" {
+    fn GetWindowRect(hwnd: isize, r: *mut [i32; 4]) -> i32;
+    fn IsIconic(hwnd: isize) -> i32;
+    fn IsZoomed(hwnd: isize) -> i32;
+}
+
+fn sane(r: &[i32; 4]) -> bool {
+    r[0] > -30000 && r[1] > -30000 && r[2] - r[0] >= 300 && r[3] - r[1] >= 150
+}
+
+fn remember_normal(w: &tauri::WebviewWindow) {
+    let Ok(hwnd) = w.hwnd() else { return };
+    let hwnd = hwnd.0 as isize;
+    let mut r = [0i32; 4];
+    unsafe {
+        if IsIconic(hwnd) != 0 || IsZoomed(hwnd) != 0 || GetWindowRect(hwnd, &mut r) == 0 {
+            return;
+        }
+    }
+    if sane(&r) {
+        *LAST_NORMAL.lock().unwrap() = Some(r);
+    }
+}
+
+fn refit(w: &tauri::WebviewWindow) {
+    #[repr(C)]
+    struct Placement {
+        length: u32,
+        flags: u32,
+        show_cmd: u32,
+        min_pos: [i32; 2],
+        max_pos: [i32; 2],
+        normal: [i32; 4],
+    }
+    #[link(name = "user32")]
+    extern "system" {
+        fn GetWindowPlacement(hwnd: isize, p: *mut Placement) -> i32;
+        fn SetWindowPlacement(hwnd: isize, p: *const Placement) -> i32;
+    }
+    const SW_SHOWNORMAL: u32 = 1;
+    let Ok(hwnd) = w.hwnd() else { return };
+    let hwnd = hwnd.0 as isize;
+    unsafe {
+        let mut rect = [0i32; 4];
+        if IsIconic(hwnd) != 0 || GetWindowRect(hwnd, &mut rect) == 0 {
+            return;
+        }
+        if sane(&rect) {
+            return;
+        }
+        let mut p: Placement = std::mem::zeroed();
+        p.length = std::mem::size_of::<Placement>() as u32;
+        if GetWindowPlacement(hwnd, &mut p) == 0 {
+            return;
+        }
+        // Windows' remembered size can be the minimized one too: then use the last size the
+        // window had on screen, or a normal size.
+        if !sane(&p.normal) {
+            p.normal = LAST_NORMAL.lock().unwrap().unwrap_or([100, 100, 100 + 960, 100 + 720]);
+        }
+        p.flags = 0;
+        p.show_cmd = SW_SHOWNORMAL;
+        SetWindowPlacement(hwnd, &p);
+    }
+}
+
+/// The page found itself smaller than its window (see refit).
+#[tauri::command]
+fn refit_window(app: tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        refit(&w);
+    }
+}
+
+/// Hides the window in the tray (the close question's "Minimize to Tray"); the tray icon shows
+/// so there is a way back. Hidden windows have no taskbar button.
+#[tauri::command]
+fn hide_to_tray(app: tauri::AppHandle) {
+    if let Some(t) = app.tray_by_id("main") {
+        let _ = t.set_visible(true);
+    }
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.hide();
     }
 }
 
 #[tauri::command]
-fn set_tray(app: tauri::AppHandle, on: bool) {
-    CLOSE_TO_TRAY.store(on, Ordering::SeqCst);
+fn set_tray(app: tauri::AppHandle, close: String, minimize: bool, visible: bool) {
+    CLOSE_MODE.store(match close.as_str() { "tray" => 1, "exit" => 2, _ => 0 }, Ordering::SeqCst);
+    let close = close == "tray";
+    MINIMIZE_TO_TRAY.store(minimize, Ordering::SeqCst);
+    let hidden = app.get_webview_window("main").map(|w| !w.is_visible().unwrap_or(true)).unwrap_or(false);
     if let Some(t) = app.tray_by_id("main") {
-        let _ = t.set_visible(on);
+        // Never hide the icon while the window is hidden: it is the only way back.
+        let _ = t.set_visible(close || minimize || visible || hidden);
     }
+}
+
+/// The close question was answered (or dismissed): the next close asks again.
+#[tauri::command]
+fn close_answered() {
+    CLOSE_ASKING.store(false, Ordering::SeqCst);
+}
+
+/// Brings the window back (from the tray too), for questions that need an answer now.
+#[tauri::command]
+fn show_window(app: tauri::AppHandle) {
+    show_main(&app);
+}
+
+#[tauri::command]
+fn set_on_top(app: tauri::AppHandle, on: bool) -> Result<(), String> {
+    let w = app.get_webview_window("main").ok_or("no window")?;
+    w.set_always_on_top(on).map_err(|e| e.to_string())
+}
+
+// Whether to start hidden in the tray: "--tray" on the command line, or the startInTray setting
+// (the settings file is read here, before the window would first show).
+fn start_in_tray(app: &tauri::App) -> bool {
+    if std::env::args().any(|a| a.eq_ignore_ascii_case("--tray")) {
+        return true;
+    }
+    let dir = portable_dir().or_else(|| app.path().app_data_dir().ok());
+    dir.and_then(|d| std::fs::read_to_string(d.join("settings.json")).ok())
+        .and_then(|s| serde_json::from_str::<serde_json::Value>(&s).ok())
+        .and_then(|v| v.get("startInTray").and_then(|b| b.as_bool()))
+        .unwrap_or(false)
 }
 
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-    let open = MenuItem::with_id(app, "open", "Open SweepUninstall", true, None::<&str>)?;
+    let open = MenuItem::with_id(app, "open", "Show Purgeon", true, None::<&str>)?;
+    let sep1 = PredefinedMenuItem::separator(app)?;
+    let monitor = MenuItem::with_id(app, "monitor", "Monitor an Installation...", true, None::<&str>)?;
     let junk = MenuItem::with_id(app, "junk", "Cleaner", true, None::<&str>)?;
+    let startup = MenuItem::with_id(app, "startup", "Startup && Services", true, None::<&str>)?;
     let updates = MenuItem::with_id(app, "updates", "Program Updates", true, None::<&str>)?;
-    let sep = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, "quit", "Exit", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &junk, &updates, &sep, &quit])?;
-    let mut tray = TrayIconBuilder::with_id("main").tooltip("SweepUninstall").menu(&menu).show_menu_on_left_click(false);
+    let sep2 = PredefinedMenuItem::separator(app)?;
+    let quit = MenuItem::with_id(app, "quit", "Exit Purgeon", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open, &sep1, &monitor, &junk, &startup, &updates, &sep2, &quit])?;
+    let mut tray = TrayIconBuilder::with_id("main")
+        .tooltip("Purgeon\nLeft-click: show the window\nRight-click: menu")
+        .menu(&menu)
+        .show_menu_on_left_click(false);
     if let Some(icon) = app.default_window_icon() {
         tray = tray.icon(icon.clone());
     }
@@ -691,14 +927,34 @@ pub fn run() {
             }
             build_tray(app)?;
             let hide = window.clone();
-            window.on_window_event(move |e| {
-                if let tauri::WindowEvent::CloseRequested { api, .. } = e {
-                    if CLOSE_TO_TRAY.load(Ordering::SeqCst) {
+            window.on_window_event(move |e| match e {
+                tauri::WindowEvent::CloseRequested { api, .. } => match CLOSE_MODE.load(Ordering::SeqCst) {
+                    1 => {
                         api.prevent_close();
                         let _ = hide.hide();
                     }
+                    0 if !CLOSE_ASKING.swap(true, Ordering::SeqCst) => {
+                        api.prevent_close();
+                        let _ = hide.emit("close-requested", ());
+                    }
+                    _ => {}
+                },
+                // Minimizing shows up as a resize; with Minimize to Tray the window then hides
+                // so it leaves the taskbar, and the tray icon brings it back.
+                // (Purgeon's own minimize button hides straight to the tray instead; this
+                // covers Win+Down and the taskbar.) The hide waits until the minimize has finished:
+                // hiding from inside its resize event leaves the page at the minimized size later.
+                tauri::WindowEvent::Resized(_) if MINIMIZE_TO_TRAY.load(Ordering::SeqCst) && hide.is_minimized().unwrap_or(false) => {
+                    let w = hide.clone();
+                    std::thread::spawn(move || {
+                        std::thread::sleep(std::time::Duration::from_millis(150));
+                        let _ = w.hide();
+                    });
                 }
+                tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Moved(_) => remember_normal(&hide),
+                _ => {}
             });
+            let in_tray = start_in_tray(app);
             // Size the window to the screen it opens on (in Windows' scaled units, so the
             // display scale setting is respected), then show it.
             if let Ok(Some(monitor)) = window.current_monitor() {
@@ -710,15 +966,23 @@ pub fn run() {
                 let _ = window.set_size(tauri::LogicalSize::new(width, height));
                 let _ = window.center();
             }
-            let _ = window.show();
+            // Window events start after setup, so record the starting size here.
+            remember_normal(&window);
+            if in_tray {
+                if let Some(t) = app.tray_by_id("main") {
+                    let _ = t.set_visible(true);
+                }
+            } else {
+                let _ = window.show();
+            }
             Ok(())
         })
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             run_ps, exec, run_command_line, launch, read_dir, stat, exists, read_text, write_text, make_dir, remove_path, move_to_trash, move_many_to_trash, list_junk, walk, folder_size, take_snapshot,
-            compare_snapshots, snapshot_subtree, sys_info, quit, cli_print, track_start, track_launch, track_running, track_stop, wait_process, sha256_files, append_text, uninstall_key_times, set_tray, search_registry
+            compare_snapshots, snapshot_subtree, sys_info, quit, cli_print, track_start, track_launch, track_running, track_stop, wait_process, sha256_files, append_text, uninstall_key_times, set_tray, set_on_top, show_window, hide_to_tray, close_answered, refit_window, list_processes, exe_arch, search_registry
         ])
         .run(tauri::generate_context!())
-        .expect("error while running SweepUninstall");
+        .expect("error while running Purgeon");
 }

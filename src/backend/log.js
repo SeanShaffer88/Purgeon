@@ -1,4 +1,4 @@
-// Command log: one line for every command SweepUninstall runs (PowerShell scripts, programs
+// Command log: one line for every command Purgeon runs (PowerShell scripts, programs
 // such as reg.exe and sc.exe, uninstallers, Recycle Bin moves), with the time, how long it
 // took and whether it worked. One file per day in the logs folder, kept for 14 days.
 import { sys } from './sys.js';

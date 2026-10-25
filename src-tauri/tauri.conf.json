@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "SweepUninstall",
+  "productName": "Purgeon",
   "version": "0.7.0",
   "identifier": "com.seanshaffer.sweepuninstall",
   "build": {
@@ -12,7 +12,9 @@
   "app": {
     "windows": [
       {
-        "title": "SweepUninstall",
+        "title": "Purgeon",
+        "decorations": false,
+        "shadow": true,
         "create": false,
         "visible": false,
         "width": 760,
@@ -39,6 +41,8 @@
       "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },
       "nsis": {
         "installMode": "perMachine",
+        "template": "windows/installer.nsi",
+        "installerHooks": "windows/hooks.nsh",
         "displayLanguageSelector": false
       }
     }

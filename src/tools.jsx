@@ -43,7 +43,7 @@ export function WhoOwnsDialog({ initial = '', onClose }) {
     >
       <p className="heading">Find out which installed program a file, folder or registry key belongs to.</p>
       <div className="field-row">
-        <input autoFocus value={target} placeholder="C:\ProgramData\Something  or  HKEY_CURRENT_USER\Software\Something" onChange={(e) => setTarget(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && check()} />
+        <input autoFocus title="A file or folder path, or a registry key such as HKEY_CURRENT_USER\Software\Something" value={target} placeholder="C:\ProgramData\Something  or  HKEY_CURRENT_USER\Software\Something" onChange={(e) => setTarget(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && check()} />
         <button onClick={() => browse(true)}>Folder…</button>
         <button onClick={() => browse(false)}>File…</button>
       </div>
@@ -145,17 +145,17 @@ export function MaintenanceDialog({ settings, categories, status, onSave, onRunN
         </>
       }
     >
-      <p className="heading">Once a week, Windows runs SweepUninstall in the background to keep things tidy. Nothing is ever uninstalled, and clean-ups can be undone from Change History.</p>
+      <p className="heading">Once a week, Windows runs Purgeon in the background to keep things tidy. Nothing is ever uninstalled, and clean-ups can be undone from Change History.</p>
       <label className="check-row">
         <input type="checkbox" checked={m.enabled} onChange={(e) => set({ enabled: e.target.checked })} /> Run weekly maintenance
       </label>
       <div className="field-row maintenance-when">
-        <select value={m.day} disabled={!m.enabled} onChange={(e) => set({ day: e.target.value })}>
+        <select title="The day of the week maintenance runs" value={m.day} disabled={!m.enabled} onChange={(e) => set({ day: e.target.value })}>
           {['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'].map((d) => (
             <option key={d}>{d}</option>
           ))}
         </select>
-        <input value={m.time} disabled={!m.enabled} onChange={(e) => set({ time: e.target.value.trim() })} placeholder="10:00" />
+        <input title="The time of day maintenance runs, like 10:00. If the PC is off then, it runs when it is next on." value={m.time} disabled={!m.enabled} onChange={(e) => set({ time: e.target.value.trim() })} placeholder="10:00" />
       </div>
       <label className="check-row">
         <input type="checkbox" checked={m.snapshot} disabled={!m.enabled} onChange={(e) => set({ snapshot: e.target.checked })} /> Take a Quick snapshot

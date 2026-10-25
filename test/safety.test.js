@@ -724,7 +724,7 @@ test('a maintenance run writes a report and records itself, and rejects bad sche
   await backups.setRoot(path.join(root, 'backups'));
   const out = await maintenance.run({ snapshot: false, junk: [] }, {});
   assert.ok(fs.existsSync(out.report));
-  assert.match(fs.readFileSync(out.report, 'utf8'), /SweepUninstall maintenance/);
+  assert.match(fs.readFileSync(out.report, 'utf8'), /Purgeon maintenance/);
   assert.equal((await history.list())[0].title, 'Weekly maintenance ran');
   await assert.rejects(() => maintenance.apply({ enabled: true, day: 'Someday', time: '10:00' }), /Choose a day/);
   await assert.rejects(() => maintenance.apply({ enabled: true, day: 'Monday', time: '25:00' }), /Choose a day/);
@@ -753,7 +753,7 @@ test('the uninstall queue adds each program once, removes waiting ones, and know
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('programs removed elsewhere are found, but not ones SweepUninstall removed', async () => {
+test('programs removed elsewhere are found, but not ones Purgeon removed', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-outside-'));
   await archive.setRoot(dir);
   assert.deepEqual(await archive.outside([{ key: 'k1', name: 'One' }, { key: 'k2', name: 'Two' }, { key: 'k3', name: 'Three' }]), [], 'first look only remembers');
@@ -786,7 +786,7 @@ test('new startup entries are reported once, and accepted ones are not', async (
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
-test('portable entries can only be removed when SweepUninstall made them', async () => {
+test('portable entries can only be removed when Purgeon made them', async () => {
   await assert.rejects(() => portableMod.unregister('HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SomeRealProgram'), /Not a portable-app entry/);
   await assert.rejects(() => portableMod.register({ folder: 'C:\\Windows\\System32', name: 'x', exe: 'C:\\Windows\\System32\\cmd.exe' }), /cannot be registered/);
 });
@@ -825,4 +825,20 @@ test('context menu entries are turned off and on without deleting them', async (
   } finally {
     regq('delete', K, '/f');
   }
+});
+
+test('installer detection: setup programs count, uninstallers and Windows servicing do not', async () => {
+  const { looksLikeInstaller } = await import('../src/backend/installwatch.js');
+  for (const n of ['setup.exe', 'Firefox Setup 135.0.exe', 'vlc-3.0.21-win64-installer.exe', 'npp.8.8.Installer.x64.exe', 'ShareX-17.0-setup.tmp', 'install_flash.exe']) assert.ok(looksLikeInstaller(n), n);
+  for (const n of ['unins000.exe', 'Uninstall.exe', 'uninst.exe', 'TrustedInstaller.exe', 'InstallAgent.exe', 'SetupHost.exe', 'msiexec.exe', 'chrome.exe', 'setup.dll']) assert.ok(!looksLikeInstaller(n), n);
+});
+
+test('tooltips: every menu command and dialog button text has one', async () => {
+  const { ACTION_TIPS, tipForLabel } = await import('../src/tips.js');
+  const app = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'App.jsx'), 'utf8');
+  const menus = app.slice(app.indexOf('const MENUS = ['), app.indexOf('];', app.indexOf('const MENUS = [')));
+  const actions = [...menus.matchAll(/\['([\w:]+)', '/g)].map((m) => m[1]);
+  assert.ok(actions.length > 60, `${actions.length} menu commands`);
+  assert.deepEqual(actions.filter((a) => !ACTION_TIPS[a]), []);
+  for (const label of ['Close', 'Cancel', 'Installation Finished', 'Restore 3', 'Show more (40 left)', 'Try Over…', 'Export Plan…']) assert.ok(tipForLabel(label), label);
 });

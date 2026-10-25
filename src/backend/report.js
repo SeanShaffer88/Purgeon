@@ -24,12 +24,12 @@ export async function monthly(month, programs = [], insight = {}) {
     return [i.signature && i.signature !== 'Valid' ? 'unsigned' : '', i.offer ? 'possible bundled offer' : '', i.together ? `installed with ${i.together.join(', ')}` : ''].filter(Boolean).join('; ');
   };
   const title = new Date(`${month}-15`).toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
-  return `<!doctype html><meta charset="utf-8"><title>SweepUninstall report, ${esc(title)}</title>
+  return `<!doctype html><meta charset="utf-8"><title>Purgeon report, ${esc(title)}</title>
 <style>body{font:14px Segoe UI,sans-serif;margin:28px;max-width:1100px}h1{margin-bottom:4px}.sum{display:flex;gap:16px;flex-wrap:wrap;margin:16px 0}.sum div{border:1px solid #ddd;padding:10px 14px;border-radius:6px}.sum b{display:block;font-size:22px}table{border-collapse:collapse;width:100%;margin-bottom:8px}th,td{text-align:left;padding:4px 8px;border-bottom:1px solid #e5e5e5;vertical-align:top}th{background:#f4f4f4}.none{color:#888}small{color:#888;font-weight:normal}</style>
-<h1>SweepUninstall report: ${esc(title)}</h1><p>Made ${esc(new Date().toLocaleString())}.</p>
+<h1>Purgeon report: ${esc(title)}</h1><p>Made ${esc(new Date().toLocaleString())}.</p>
 <div class="sum"><div><b>${added.length}</b>programs installed</div><div><b>${removed.length}</b>programs removed</div><div><b>${fmt(freed)}</b>freed by clean-ups</div><div><b>${by(['Startup', 'Service']).length}</b>startup changes</div><div><b>${by(['Update']).length}</b>updates</div><div><b>${flagged.length}</b>programs flagged</div></div>
 ${section('Programs installed', added, [['Program', (p) => `${p.name} ${p.version || ''}`], ['Publisher', (p) => p.publisher], ['Date', (p) => p.installDate]])}
-${section('Programs removed', removed, [['Program', (e) => `${e.name} ${e.version || ''}`], ['How', (e) => ({ uninstalled: 'Uninstalled', forced: 'Force removed', store: 'Store app', outside: 'Outside SweepUninstall' })[e.how] || e.how], ['When', when]])}
+${section('Programs removed', removed, [['Program', (e) => `${e.name} ${e.version || ''}`], ['How', (e) => ({ uninstalled: 'Uninstalled', forced: 'Force removed', store: 'Store app', outside: 'Outside Purgeon' })[e.how] || e.how], ['When', when]])}
 ${section('Startup and service changes', by(['Startup', 'Service']), [['Change', (e) => e.title], ['When', when]])}
 ${section('Updates and installs', by(['Update', 'Install']), [['Change', (e) => e.title], ['When', when]])}
 ${section('Clean-ups and removals', by(['Removal', 'Clean-up', 'Maintenance', 'Restore']), [['Change', (e) => e.title], ['Details', (e) => e.detail], ['When', when]])}

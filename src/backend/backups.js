@@ -41,7 +41,7 @@ const REG_TYPE = { String: 'REG_SZ', ExpandString: 'REG_EXPAND_SZ', DWord: 'REG_
 
 // ---- crash safety and fingerprints ------------------------------------------------
 // While a removal runs, pending.json names it and its manifest is saved after every item, so
-// if SweepUninstall stops halfway (a crash, a power cut) the removal can be rolled back or
+// if Purgeon stops halfway (a crash, a power cut) the removal can be rolled back or
 // finished on the next start. A finished backup is sealed with SHA-256 fingerprints of its
 // manifest and files; a restore refuses a backup that was changed afterwards.
 const pendingFile = () => path.join(backupRoot, 'pending.json');
@@ -441,13 +441,13 @@ async function restoreManyFromRecycleBin(originals) {
       }
     }
     # The Recycle Bin records long paths; paths built from %TEMP% can hold 8.3 short names (SEANSH~1).
-    if (@($wanted) -match '~') { Add-Type -Namespace SweepUninstall -Name LongPath -MemberDefinition '[DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern uint GetLongPathName(string s, System.Text.StringBuilder b, uint n);' }
+    if (@($wanted) -match '~') { Add-Type -Namespace Purgeon -Name LongPath -MemberDefinition '[DllImport("kernel32.dll", CharSet = CharSet.Unicode)] public static extern uint GetLongPathName(string s, System.Text.StringBuilder b, uint n);' }
     function Get-LongPath([string]$p) {
       if ($p -notmatch '~') { return $p }
       $tail = ''; $head = $p
       while ($head -and -not (Test-Path -LiteralPath $head)) { $tail = '\\' + (Split-Path -Leaf $head) + $tail; $head = Split-Path -Parent $head }
       $sb = New-Object Text.StringBuilder 1024
-      if ($head -and [SweepUninstall.LongPath]::GetLongPathName($head, $sb, 1024) -gt 0) { return $sb.ToString() + $tail }
+      if ($head -and [Purgeon.LongPath]::GetLongPathName($head, $sb, 1024) -gt 0) { return $sb.ToString() + $tail }
       $p
     }
     $result = @{}
@@ -494,7 +494,7 @@ async function restore(id) {
       if (!r.ok && /unable to find/i.test(r.stderr)) r = { ok: true };
       results.push({ ...e, kind: 'value', ok: r.ok, detail: r.ok ? 'Recreated value removed again' : r.stderr });
     } else if (e.kind === 'newkey') {
-      // Only keys SweepUninstall itself created are removed again, and never a protected one.
+      // Only keys Purgeon itself created are removed again, and never a protected one.
       let r = isProtectedKey(e.path) ? { ok: false, stderr: 'Protected Windows key, left in place' } : await reg(['delete', e.path, '/f']);
       if (!r.ok && /unable to find/i.test(r.stderr)) r = { ok: true };
       results.push({ ...e, kind: 'key', ok: r.ok, detail: r.ok ? 'Recreated key removed again' : r.stderr });

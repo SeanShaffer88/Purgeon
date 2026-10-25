@@ -26,7 +26,7 @@ const SHARED_VENDORS = new Set(
   [
     'microsoft', 'windows', 'intel', 'intel corporation', 'nvidia', 'nvidia corporation', 'amd', 'ati', 'realtek', 'dell', 'hp', 'hewlett-packard', 'lenovo',
     'asus', 'acer', 'msi', 'qualcomm', 'broadcom', 'synaptics', 'elan', 'dolby', 'waves', 'conexant', 'oem', 'drivers', 'driverstore', 'regid.1991-06.com.microsoft',
-    'sweepuninstall', 'com.seanshaffer.sweepuninstall', 'node', 'npm', 'npm-cache', 'nuget', 'pip', 'python', 'jedi', 'crashdumps', 'temp', 'connecteddevicesplatform',
+    'purgeon', 'sweepuninstall', 'com.seanshaffer.sweepuninstall', 'node', 'npm', 'npm-cache', 'nuget', 'pip', 'python', 'jedi', 'crashdumps', 'temp', 'connecteddevicesplatform',
     'd3dscache', 'fontcache', 'squirreltemp', 'comms', 'peerdistrepub', 'virtualstore', 'publishers', 'identities', 'ssh', 'gnupg', 'mozilla', 'google',
     'classes', 'clients', 'policies', 'licenses', 'odbc', 'registeredapplications', 'wow6432node', 'partner', 'khronos', 'vulkan', 'openal', 'oracle', 'java', 'javasoft',
   ].map(norm)

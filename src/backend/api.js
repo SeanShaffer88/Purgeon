@@ -32,6 +32,8 @@ import * as portable from './portable.js';
 import * as shellmenu from './shellmenu.js';
 import * as report from './report.js';
 import * as ctxmenu from './ctxmenu.js';
+import * as autostart from './autostart.js';
+import * as installwatch from './installwatch.js';
 
 const DEFAULT_SETTINGS = { createRestorePoints: true, silentUninstall: false, safeMode: false, backupMaxDays: 0, backupMaxMB: 0, gridLines: true };
 const settingsFile = () => path.join(sys.info.dataDir, 'settings.json');
@@ -84,7 +86,7 @@ const handlers = {
     // With Tools › Silent Uninstall turned on, uninstallers whose silent switches are known run without their windows.
     const silent = (await readSettings()).silentUninstall ? (await installers.describe(program)).silent : '';
     const cmd = silent || program.uninstall || program.quiet;
-    if (!cmd) return { ok: false, error: 'This program has no uninstall command. Use Force Removal.' };
+    if (!cmd) return { ok: false, error: 'This program has no uninstall command. Use Action › Force.' };
     const result = { ...(await runCommandLine(cmd)), silent: !!silent };
     // Recorded in the uninstall archive once the program's entry is gone (checked below).
     // Many uninstallers relaunch themselves from %TEMP% and exit at once; wait for the
@@ -196,7 +198,7 @@ const handlers = {
   'queue:disarm': () => queue.disarm(),
   'queue:restartPending': () => queue.restartPending(),
   'queue:restartNow': () => queue.restartNow(),
-  // 2. programs removed outside SweepUninstall
+  // 2. programs removed outside Purgeon
   'programs:outside': (list) => archive.outside(list),
   // 3. trial installs
   'trials:list': () => trials.list(),
@@ -211,6 +213,7 @@ const handlers = {
   'explore:diskMap': (list) => explore.diskMap(list),
   'explore:timeline': async (list) => explore.timeline(list, sys.uninstallKeyTimes ? await sys.uninstallKeyTimes().catch(() => ({})) : {}),
   'program:sheet': (program) => explore.sheet(program),
+  'program:analyze': (program) => explore.analyze(program),
   'registry:search': (term) => explore.searchRegistry(term),
   // 9-10. startup trust and new entries
   'startup:trust': async (entries) => {
@@ -239,7 +242,24 @@ const handlers = {
   },
   'transfer:folder': (folder) => transfer.folderPackages(folder),
   // 15. portable apps
-  'portable:find': (extra) => portable.find(extra || []),
+  // The folders you added are kept in the settings and looked at every time.
+  'portable:find': async () => {
+    const folders = (await readSettings()).portableFolders || [];
+    return { folders, apps: await portable.find(folders) };
+  },
+  'portable:addFolder': async (folder) => {
+    const s = await readSettings();
+    const folders = [...new Set([...(s.portableFolders || []), folder])];
+    await sys.writeText(settingsFile(), JSON.stringify({ ...s, portableFolders: folders }, null, 2));
+    return folders;
+  },
+  'portable:removeFolder': async (folder) => {
+    const s = await readSettings();
+    const folders = (s.portableFolders || []).filter((f) => f.toLowerCase() !== String(folder).toLowerCase());
+    await sys.writeText(settingsFile(), JSON.stringify({ ...s, portableFolders: folders }, null, 2));
+    return folders;
+  },
+  'portable:checkUpdates': (apps) => portable.checkUpdates(apps),
   'portable:register': (app) => portable.register(app),
   'portable:unregister': (key) => portable.unregister(key),
   // 16. Explorer right-click menu
@@ -248,7 +268,17 @@ const handlers = {
   'shell:disable': () => shellmenu.disable(),
   'shell:resolve': (p) => shellmenu.resolveTarget(p),
   // 18. tray
-  'app:setTray': (on) => (sys.setTray ? sys.setTray(on) : null),
+  'app:setTray': (o) => (sys.setTray ? sys.setTray(o) : null),
+  // Window options
+  'app:setOnTop': (on) => (sys.setOnTop ? sys.setOnTop(on) : null),
+  'app:show': () => (sys.showWindow ? sys.showWindow() : null),
+  'app:hideToTray': () => (sys.hideToTray ? sys.hideToTray() : null),
+  'app:closeAnswered': () => (sys.closeAnswered ? sys.closeAnswered() : null),
+  'autostart:enabled': () => autostart.enabled(),
+  'autostart:set': (on) => autostart.set(on),
+  // Installers spotted as they start, and monitoring one that is already running
+  'installers:check': () => installwatch.check(),
+  'monitor:attach': ({ installer, name }) => monitor.attach(installer, name),
   // 21. Explorer context menu items
   'ctxmenu:list': () => ctxmenu.list(),
   'ctxmenu:set': ({ entry, enable }) => ctxmenu.set(entry, enable),
@@ -263,11 +293,11 @@ const handlers = {
   'groups:restore': (previous) => groups.restore(previous),
   'transfer:pickSave': async (program) => {
     const { save } = await import('@tauri-apps/plugin-dialog');
-    return save({ title: `Back up ${program.name}`, defaultPath: transfer.defaultFileName(program), filters: [{ name: 'SweepUninstall program backup', extensions: ['swpkg'] }] });
+    return save({ title: `Back up ${program.name}`, defaultPath: transfer.defaultFileName(program), filters: [{ name: 'Purgeon program backup', extensions: ['swpkg'] }] });
   },
   'transfer:pickOpen': async () => {
     const { open: openDialog } = await import('@tauri-apps/plugin-dialog');
-    const file = await openDialog({ title: 'Restore a program backup', multiple: false, filters: [{ name: 'SweepUninstall program backup', extensions: ['swpkg'] }] });
+    const file = await openDialog({ title: 'Restore a program backup', multiple: false, filters: [{ name: 'Purgeon program backup', extensions: ['swpkg'] }] });
     return typeof file === 'string' ? file : null;
   },
   'transfer:export': ({ program, items, file, contents }) => transfer.exportProgram(program, items, file, contents),
@@ -344,8 +374,8 @@ const recorders = {
   'trials:finish': (id) => ({ type: 'Trial', title: 'Ended a trial install' }),
   'winget:repair': (id, r) => (r.ok ? { type: 'Install', title: `Reinstalled ${id} to repair its uninstaller` } : null),
   'portable:register': (app, out) => ({ type: 'Portable', title: `Registered the portable app ${out.name}`, detail: app.folder, undo: { channel: 'portable:unregister', arg: out.key } }),
-  'shell:enable': () => ({ type: 'Settings', title: 'Added SweepUninstall to Explorer’s right-click menu', undo: { channel: 'shell:disable', arg: null } }),
-  'shell:disable': () => ({ type: 'Settings', title: 'Removed SweepUninstall from Explorer’s right-click menu', undo: { channel: 'shell:enable', arg: null } }),
+  'shell:enable': () => ({ type: 'Settings', title: 'Added Purgeon to Explorer’s right-click menu', undo: { channel: 'shell:disable', arg: null } }),
+  'shell:disable': () => ({ type: 'Settings', title: 'Removed Purgeon from Explorer’s right-click menu', undo: { channel: 'shell:enable', arg: null } }),
   'transfer:export': ({ program, contents }, out) => ({ type: 'Backup', title: `Packaged ${program.name}${contents === 'program' ? ' (program only)' : contents === 'settings' ? ' (settings only)' : ''}`, detail: out.file }),
   'transfer:restore': (_arg, out) =>
     out.results.some((r) => r.ok) ? { type: 'Restore', title: `Restored ${out.name} from a program backup`, detail: `${out.results.filter((r) => r.ok).length} of ${out.results.length} items`, undo: { channel: 'transfer:undo', arg: out.id } } : null,
@@ -386,10 +416,10 @@ export const setConfirmUI = (fn) => {
 export async function initBackend() {
   const data = sys.info.dataDir;
   await sys.makeDir(data);
-  // Every command SweepUninstall runs from here on is written to the command log.
+  // Every command Purgeon runs from here on is written to the command log.
   await log.setRoot(path.join(data, 'logs'));
   log.wrap(sys);
-  log.write(`---- SweepUninstall ${sys.info.exe} started`);
+  log.write(`---- Purgeon ${sys.info.exe} started`);
   await Promise.all([
     backups.setRoot(path.join(data, 'backups')),
     monitor.setRoot(path.join(data, 'monitor')),

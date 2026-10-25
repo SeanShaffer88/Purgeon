@@ -31,7 +31,7 @@ export function ConfirmDialog({ message, detail, checkboxLabel, checkboxChecked,
   const [checked, setChecked] = useState(!!checkboxChecked);
   return (
     <Dialog
-      title="SweepUninstall"
+      title="Purgeon"
       onClose={() => onAnswer({ ok: false, checked })}
       width={500}
       buttons={
@@ -351,7 +351,7 @@ export function PropertiesDialog({ program, onClose }) {
               <tr key={k}>
                 <th>{k}</th>
                 <td>
-                  <input readOnly value={String(v)} onFocus={(e) => e.target.select()} />
+                  <input readOnly title="Click to select the whole value, then Ctrl+C to copy it" value={String(v)} onFocus={(e) => e.target.select()} />
                 </td>
               </tr>
             ))}
@@ -385,7 +385,7 @@ const sizeText = (h) =>
 export function MonitorWizard({ resume, onClose, onRecorded }) {
   const [step, setStep] = useState(resume ? 'installing' : 'pick');
   const [installer, setInstaller] = useState(resume?.installer || '');
-  const [name, setName] = useState(() => (resume?.installer ? baseName(resume.installer) : ''));
+  const [name, setName] = useState(() => resume?.name || (resume?.installer ? baseName(resume.installer) : ''));
   const [error, setError] = useState('');
   const [live, setLive] = useState(!!resume?.live);
 
@@ -445,14 +445,14 @@ export function MonitorWizard({ resume, onClose, onRecorded }) {
       {error && <div className="error-box">{error}</div>}
       {step === 'pick' ? (
         <>
-          <p className="heading">SweepUninstall records every folder, file and registry setting that an installer creates or changes, so the program can be removed completely later. Running as administrator, it also tracks the installer live.</p>
+          <p className="heading">Purgeon records every folder, file and registry setting that an installer creates or changes, so the program can be removed completely later. Running as administrator, it also tracks the installer live.</p>
           <ol className="steps">
             <li>Close other programs so their changes aren't recorded.</li>
-            <li>Choose the installer. SweepUninstall takes a snapshot and then starts it.</li>
+            <li>Choose the installer. Purgeon takes a snapshot and then starts it.</li>
             <li>When setup is done, come back and click <b>Installation Finished</b>.</li>
           </ol>
           <div className="field-row">
-            <input readOnly value={installer} placeholder="No installer chosen" />
+            <input readOnly value={installer} placeholder="No installer chosen" title="The installer to run while monitoring. Use Browse to choose one, or leave it empty and run the installer yourself." />
             <button
               onClick={async () => {
                 const f = await api.invoke('monitor:pickInstaller');
@@ -472,14 +472,16 @@ export function MonitorWizard({ resume, onClose, onRecorded }) {
           <p className={`monitor-mode ${live ? 'on' : ''}`}>
             {live
               ? 'Live tracking is on: every file and registry change made by the installer and the programs it starts is recorded as it happens.'
+              : resume?.attached
+                ? 'This installer was already running when monitoring began, so the before and after snapshots are compared. (Live tracking follows only installers that Purgeon starts itself.)'
               : installer
-                ? 'Live tracking needs SweepUninstall to run as administrator, so only the before and after snapshots are compared.'
+                ? 'Live tracking needs Purgeon to run as administrator, so only the before and after snapshots are compared.'
                 : 'Without a chosen installer, only the before and after snapshots are compared. Choose the installer to also track it live.'}
           </p>
           {installer && <p className="muted">Installer: {installer}</p>}
           <label className="field">
             Name for this program
-            <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Foo Editor" />
+            <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Foo Editor" title="The name this recording is listed under in Monitored Programs" />
           </label>
         </>
       )}
@@ -491,9 +493,9 @@ const baseName = (p) => (p || '').split('\\').pop().replace(/\.(exe|msi|msix|bat
 
 export function AboutDialog({ onClose }) {
   return (
-    <Dialog title="About SweepUninstall" onClose={onClose} width={420} buttons={<button className="primary" onClick={onClose}>OK</button>}>
-      <p className="heading">SweepUninstall {__APP_VERSION__}</p>
-      {window.__sweepPortable && <p className="muted">Portable mode: settings, backups and snapshots are kept in the "SweepUninstall Data" folder next to the program.</p>}
+    <Dialog title="About Purgeon" onClose={onClose} width={420} buttons={<button className="primary" onClick={onClose}>OK</button>}>
+      <p className="heading">Purgeon {__APP_VERSION__}</p>
+      {window.__sweepPortable && <p className="muted">Portable mode: settings, backups and snapshots are kept in the "Purgeon Data" folder next to the program.</p>}
       <p>Uninstalls programs, then hunts down the leftover files, registry keys, startup entries and services they leave behind.</p>
       <p>It also monitors installations, compares system snapshots, cleans junk files and manages startup programs. Every change is backed up first and can be undone.</p>
       <p className="muted">An independent project, not affiliated with any other uninstaller.</p>
@@ -559,11 +561,11 @@ export function BackupSettingsDialog({ settings, onSave, onClose }) {
       <p className="heading">Old backups can be removed automatically. Use 0 to keep them all.</p>
       <label className="field">
         Remove backups older than (days)
-        <input inputMode="numeric" value={days} onChange={(e) => setDays(e.target.value.trim())} />
+        <input inputMode="numeric" title="Backups older than this many days are deleted (each program’s newest backup is always kept). Empty means no age limit." value={days} onChange={(e) => setDays(e.target.value.trim())} />
       </label>
       <label className="field">
         Keep backups under this total size (MB)
-        <input inputMode="numeric" value={mb} onChange={(e) => setMb(e.target.value.trim())} />
+        <input inputMode="numeric" title="When all backups together are larger than this, the oldest are deleted first (each program’s newest is always kept). Empty means no size limit." value={mb} onChange={(e) => setMb(e.target.value.trim())} />
       </label>
       <p className="footnote">
         The newest backup of each program is always kept, so the last removal of anything can still be undone. Once a backup is removed, Change History can no longer undo that change. Files in the Recycle Bin are not counted or touched.

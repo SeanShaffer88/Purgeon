@@ -21,7 +21,7 @@ export const setRoot = async (dir) => {
   await sys.makeDir(root);
 };
 
-const FORMAT = 'sweepuninstall-program-backup';
+const FORMAT = 'purgeon-program-backup';
 
 const EXPORT = `
 $ErrorActionPreference = 'Stop'
@@ -98,7 +98,7 @@ $f = [Console]::In.ReadToEnd().Trim()
 Add-Type -AssemblyName System.IO.Compression, System.IO.Compression.FileSystem
 $zip = [IO.Compression.ZipFile]::OpenRead($f)
 try {
-  $e = $zip.GetEntry('manifest.json'); if (-not $e) { throw 'This file is not a SweepUninstall program backup.' }
+  $e = $zip.GetEntry('manifest.json'); if (-not $e) { throw 'This file is not a Purgeon program backup.' }
   $r = New-Object IO.StreamReader($e.Open()); $r.ReadToEnd(); $r.Close()
 } finally { $zip.Dispose() }
 `;
@@ -136,7 +136,7 @@ export function rewriteReg(text, source, here = { profile: homeDir() }) {
 // to the Recycle Bin first (settings sync).
 export async function read(file, { replace = false } = {}) {
   const manifest = JSON.parse((await runPS(READ_MANIFEST, { input: file })).replace(/^\uFEFF/, ''));
-  if (manifest.format !== FORMAT) throw new Error('This file is not a SweepUninstall program backup.');
+  if (manifest.format !== FORMAT) throw new Error('This file is not a Purgeon program backup.');
   const items = [];
   for (const i of manifest.items) {
     const target = mapTarget(i, manifest.source);

@@ -1,5 +1,5 @@
 [package]
-name = "sweepuninstall"
+name = "purgeon"
 version = "0.7.0"
 description = "Windows uninstaller with leftover scanning, install monitoring and backups"
 authors = ["Sean Shaffer"]
@@ -7,7 +7,7 @@ license = "MIT"
 edition = "2021"
 
 [lib]
-name = "sweepuninstall_lib"
+name = "purgeon_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]

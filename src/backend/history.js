@@ -1,4 +1,4 @@
-// Change History: every change SweepUninstall makes, newest first, each with how to undo it.
+// Change History: every change Purgeon makes, newest first, each with how to undo it.
 // An entry's `undo` is a request ({ channel, arg }) that reverses the change, or null when the
 // change can't be undone directly (an uninstaller run; a restore point covers that).
 import { sys } from './sys.js';

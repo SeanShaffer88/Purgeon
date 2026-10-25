@@ -41,14 +41,14 @@ jobs:
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           New-Item -ItemType Directory -Force release | Out-Null
-          Copy-Item "src-tauri/target/release/bundle/nsis/SweepUninstall_${version}_x64-setup.exe" "release/SweepUninstall-Setup-$version.exe"
-          Copy-Item "src-tauri/target/release/sweepuninstall.exe" "release/SweepUninstall-Portable-$version.exe"
+          Copy-Item "src-tauri/target/release/bundle/nsis/Purgeon_${version}_x64-setup.exe" "release/Purgeon-Setup-$version.exe"
+          Copy-Item "src-tauri/target/release/purgeon.exe" "release/Purgeon-Portable-$version.exe"
           Get-ChildItem release | Format-Table Name, Length
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: SweepUninstall-windows
+          name: Purgeon-windows
           path: release/*
 
       - name: Publish release
@@ -57,5 +57,5 @@ jobs:
         with:
           generate_release_notes: true
           files: |
-            release/SweepUninstall-Setup-*.exe
-            release/SweepUninstall-Portable-*.exe
+            release/Purgeon-Setup-*.exe
+            release/Purgeon-Portable-*.exe

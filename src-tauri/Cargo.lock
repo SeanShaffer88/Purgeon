@@ -2805,6 +2805,24 @@ dependencies = [
 ]
 
 [[package]]
+name = "purgeon"
+version = "0.7.0"
+dependencies = [
+ "base64 0.22.1",
+ "ferrisetw",
+ "flate2",
+ "serde",
+ "serde_json",
+ "sha2 0.11.1",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-notification",
+ "trash",
+ "winreg",
+]
+
+[[package]]
 name = "quick-xml"
 version = "0.42.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3474,24 +3492,6 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
-
-[[package]]
-name = "sweepuninstall"
-version = "0.7.0"
-dependencies = [
- "base64 0.22.1",
- "ferrisetw",
- "flate2",
- "serde",
- "serde_json",
- "sha2 0.11.1",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-notification",
- "trash",
- "winreg",
-]
 
 [[package]]
 name = "swift-rs"

@@ -1,15 +1,15 @@
 {
-  "name": "sweepuninstall",
-  "productName": "SweepUninstall",
+  "name": "purgeon",
+  "productName": "Purgeon",
   "version": "0.7.0",
   "description": "Windows uninstaller with leftover scanning, install monitoring and backups",
   "author": "Sean Shaffer",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/SeanShaffer88/SweepUninstall.git"
+    "url": "https://github.com/SeanShaffer88/Purgeon.git"
   },
-  "homepage": "https://github.com/SeanShaffer88/SweepUninstall",
+  "homepage": "https://github.com/SeanShaffer88/Purgeon",
   "private": true,
   "type": "module",
   "scripts": {

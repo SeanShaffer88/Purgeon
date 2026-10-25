@@ -1,6 +1,6 @@
 // Safe, reversible Windows debloat tweaks. Each tweak is a set of registry values:
 // "enabled" means every value holds its tweak value. Disabling puts back what was there before
-// SweepUninstall applied the tweak; if that is unknown, it restores Windows' default.
+// Purgeon applied the tweak; if that is unknown, it restores Windows' default.
 // effect: 'immediate' | 'explorer' (needs an Explorer restart) | 'reboot'
 import { sys } from './sys.js';
 import * as path from './winpath.js';
@@ -82,7 +82,7 @@ async function list() {
   });
 }
 
-// Values as they were before SweepUninstall first applied each tweak, so turning a tweak off
+// Values as they were before Purgeon first applied each tweak, so turning a tweak off
 // puts back exactly what was there (not just the Windows default).
 let stateFile = '';
 const setRoot = async (dir) => {

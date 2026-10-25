@@ -11,6 +11,10 @@ import * as monitor from './monitor.js';
 import * as archive from './archive.js';
 import * as startup from './startup.js';
 import { inboundRules } from './running.js';
+import * as installers from './installers.js';
+import { dependencyInfo } from './safety.js';
+import { processesIn } from './leftovers.js';
+import { programExe } from './insights.js';
 
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const clean = (p) => String(p || '').replace(/^"|"$/g, '').trim().replace(/\\+$/, '');
@@ -56,14 +60,14 @@ export async function diskMap(programs) {
 
 // ---- change timeline ---------------------------------------------------------------------
 
-// Everything SweepUninstall knows happened, newest first: [{ id, time, type, title, detail }].
+// Everything Purgeon knows happened, newest first: [{ id, time, type, title, detail }].
 export async function timeline(programs = [], written = {}) {
   const [h, s, m, a] = await Promise.all([history.list().catch(() => []), snapshots.list().catch(() => []), monitor.list().catch(() => []), archive.list().catch(() => [])]);
   const events = [
     ...h.map((e) => ({ id: `h${e.id}`, time: e.time, type: e.type, title: e.undone ? `${e.title} (undone)` : e.title, detail: e.detail || '' })),
     ...s.map((x) => ({ id: `s${x.id}`, time: x.created, type: 'Snapshot', title: `Snapshot "${x.name}"`, detail: x.preset })),
     ...m.map((x) => ({ id: `m${x.id}`, time: x.finished, type: 'Installed', title: `Installed ${x.name} (monitored)`, detail: `${x.items.length} recorded changes` })),
-    ...a.map((x) => ({ id: `a${x.id}`, time: x.removed, type: 'Removed', title: `${x.how === 'outside' ? 'Removed outside SweepUninstall' : 'Removed'}: ${x.name}${x.version ? ` ${x.version}` : ''}`, detail: x.publisher })),
+    ...a.map((x) => ({ id: `a${x.id}`, time: x.removed, type: 'Removed', title: `${x.how === 'outside' ? 'Removed outside Purgeon' : 'Removed'}: ${x.name}${x.version ? ` ${x.version}` : ''}`, detail: x.publisher })),
     // Windows records when each program's uninstall entry was last written: an install or an update.
     ...programs
       .filter((p) => written[p.key] || /^\d{4}-\d{2}-\d{2}$/.test(p.installDate || ''))
@@ -100,6 +104,56 @@ export async function sheet(program) {
     const list = all.filter((i, n) => !used.has(n) && test(i) && used.add(n));
     return { id, label, items: list };
   }).filter((s) => s.items.length);
+}
+
+// ---- analyze a program -------------------------------------------------------------------
+
+// When any of the program's executables last ran, from Windows' Prefetch records (readable with
+// administrator rights only): { time } or { unknown: reason }.
+async function lastRun(program, exe) {
+  const loc = clean(program.location);
+  const names = new Set();
+  if (exe) names.add(path.basename(exe).toUpperCase());
+  if (/^[a-z]:\\./i.test(loc)) for (const e of (await sys.readDir(loc).catch(() => [])).filter((x) => x.file && /\.exe$/i.test(x.name))) names.add(e.name.toUpperCase());
+  if (!names.size) return { unknown: 'No program file was found to look for.' };
+  const pf = path.join(sys.info.env?.SystemRoot || 'C:\\Windows', 'Prefetch');
+  const files = await sys.readDir(pf).catch(() => null);
+  if (!files) return { unknown: 'Windows keeps this in its Prefetch folder, which needs administrator rights to read.' };
+  let latest = 0;
+  for (const f of files.filter((x) => x.file && names.has(x.name.replace(/-[0-9A-F]{8}\.pf$/i, '').toUpperCase()))) {
+    const s = await sys.stat(path.join(pf, f.name)).catch(() => null);
+    if (s?.modified > latest) latest = s.modified;
+  }
+  return latest ? { time: new Date(latest).toISOString() } : { unknown: 'Windows has no record of it running recently (Prefetch keeps the last few hundred programs).' };
+}
+
+// One page about a program, from what Purgeon already knows how to find: how it was
+// installed and can be removed, its disk use, what it hooks into Windows, whether it runs now,
+// when it last ran, what depends on it, and the processor it is built for. Read-only.
+export async function analyze(program) {
+  const loc = clean(program.location);
+  const exe = await programExe(program).catch(() => null);
+  const [space, sections, installer, deps, running, used, arch] = await Promise.all([
+    diskMap([program])
+      .then((d) => d[0] || null)
+      .catch(() => null),
+    sheet(program).catch(() => []),
+    installers.describe(program).catch(() => ({})),
+    dependencyInfo(program).catch(() => ({})),
+    /^[a-z]:\\./i.test(loc) ? processesIn(loc).catch(() => []) : [],
+    lastRun(program, exe).catch(() => ({ unknown: 'Could not be read.' })),
+    exe && sys.exeArch ? sys.exeArch([exe]).then((a) => a[0] || '', () => '') : '',
+  ]);
+  return {
+    exe,
+    arch,
+    installer: { label: installer.label || 'Unknown installer', silent: !!installer.silent, uninstaller: !!program.uninstall },
+    space,
+    hooks: sections.map((s) => ({ id: s.id, label: s.label, count: s.items.length, items: s.items.slice(0, 8).map((i) => `${i.path}${i.name ? ` › ${i.name}` : ''}`) })),
+    running: running.map((r) => ({ name: r.ProcessName, path: r.Path })),
+    lastUsed: used,
+    dependencies: { kind: deps.kind || null, dependents: deps.dependents || [], note: deps.note || '' },
+  };
 }
 
 // ---- registry search ---------------------------------------------------------------------

@@ -22,10 +22,18 @@ const afterFile = () => path.join(storeDir, 'session-after.snap');
 
 async function start(installer) {
   const stats = await capture(beforeFile(), 'Before installation', 'standard');
-  // Live tracking only follows an installer SweepUninstall starts itself.
+  // Live tracking only follows an installer Purgeon starts itself.
   const live = !!installer && !!sys.trackStart && (await sys.trackStart().then(() => true, () => false));
   await sys.writeText(sessionFile(), JSON.stringify({ started: new Date().toISOString(), installer, live }));
   return { entries: stats.dirs + stats.files + stats.keys + stats.values, live };
+}
+
+// Monitoring for an installer that is already running (spotted by installwatch.js): the "before"
+// snapshot is taken now, while it waits on its first page. Snapshots only, no live tracking.
+async function attach(installer, name) {
+  const stats = await capture(beforeFile(), 'Before installation', 'standard');
+  await sys.writeText(sessionFile(), JSON.stringify({ started: new Date().toISOString(), installer, name, live: false, attached: true }));
+  return { entries: stats.dirs + stats.files + stats.keys + stats.values };
 }
 
 // Starts the installer: as a tracked child process when live tracking runs, otherwise through Explorer.
@@ -36,10 +44,10 @@ async function launch(installer, open) {
 
 const status = async () => {
   if (!(await sys.exists(sessionFile()))) return null;
-  const { started, installer } = JSON.parse(await sys.readText(sessionFile()));
-  // A trace does not survive SweepUninstall closing, so a resumed session has snapshots only.
+  const { started, installer, name, attached } = JSON.parse(await sys.readText(sessionFile()));
+  // A trace does not survive Purgeon closing, so a resumed session has snapshots only.
   const live = !!sys.trackRunning && (await sys.trackRunning());
-  return { started, installer, live };
+  return { started, installer, name, attached: !!attached, live };
 };
 
 const cancel = async () => {
@@ -197,4 +205,4 @@ export function mergeItems(snapshot, live) {
   return out;
 }
 
-export { setRoot, start, launch, status, cancel, finish, list, remove, collapse, recordItems };
+export { setRoot, start, attach, launch, status, cancel, finish, list, remove, collapse, recordItems };

@@ -126,13 +126,24 @@ export function growth(history, day = today()) {
 
 // ---- all together ------------------------------------------------------------------
 
-// { [programKey]: { signature?, signer?, together?: [names], offer?: true, growth? } }
+// The program's main executable: the one its entry names, or the largest in its folder.
+export const programExe = async (p) => mainExe(p) || (await exeInFolder(p));
+
+// The processor each file is built for ("x64", "x86", "arm64"), read from its header.
+async function architectures(paths) {
+  if (!sys.exeArch || !paths.length) return new Map();
+  const out = await sys.exeArch(paths).catch(() => []);
+  return new Map(paths.map((p, i) => [p.toLowerCase(), out[i] || '']));
+}
+
+// { [programKey]: { signature?, signer?, together?: [names], offer?: true, growth?, arch?, exe? } }
 export async function programInsights(programs) {
-  const exes = new Map(await Promise.all(programs.map(async (p) => [p.key, mainExe(p) || (await exeInFolder(p))])));
-  const [sigs, times, sizes] = await Promise.all([
+  const exes = new Map(await Promise.all(programs.map(async (p) => [p.key, await programExe(p)])));
+  const [sigs, times, sizes, archs] = await Promise.all([
     signatures([...exes.values()].filter(Boolean)),
     sys.uninstallKeyTimes ? sys.uninstallKeyTimes().catch(() => ({})) : {},
     recordSizes(programs).catch(() => ({})),
+    architectures([...exes.values()].filter(Boolean)),
   ]);
   const together = installedTogether(programs, times);
   const out = {};
@@ -145,6 +156,7 @@ export async function programInsights(programs) {
       ...(looksLikeOffer(p.name) && { offer: true }),
       ...(g && { growth: g }),
       ...(times[p.key] && { written: times[p.key] }),
+      ...(exes.get(p.key) && archs.get(exes.get(p.key).toLowerCase()) && { arch: archs.get(exes.get(p.key).toLowerCase()), exe: exes.get(p.key) }),
     };
     if (Object.keys(info).length) out[p.key] = info;
   }

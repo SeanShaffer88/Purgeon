@@ -1,15 +1,16 @@
 // Command-line snapshots, run without a window:
-//   SweepUninstall --snapshot "Before installing X" [--preset quick|standard|deep]
-//   SweepUninstall --compare <before> <after|now> [--report file.html|.json|.txt]
-//   SweepUninstall --list-snapshots
+//   Purgeon --snapshot "Before installing X" [--preset quick|standard|deep]
+//   Purgeon --compare <before> <after|now> [--report file.html|.json|.txt]
+//   Purgeon --list-snapshots
 // A snapshot is named by its id, its name or "latest".
 import { sys } from './backend/sys.js';
 import * as snapshots from './backend/snapshots.js';
 import * as monitor from './backend/monitor.js';
 import * as maintenance from './backend/maintenance.js';
+import * as autostart from './backend/autostart.js';
 import { runCommandLine } from './backend/shell.js';
 
-const HELP = `SweepUninstall command line
+const HELP = `Purgeon command line
 
   --snapshot "<name>" [--preset quick|standard|deep]
         Takes a snapshot of files, folders and registry settings.
@@ -26,6 +27,9 @@ const HELP = `SweepUninstall command line
         and saves what it created and changed under Monitored Programs, so the
         program can be removed completely later. Run as administrator to also
         track the installer live.
+  --autostart on|off
+        Turns View › Start with Windows on or off: a scheduled task that starts
+        Purgeon when you sign in (the installer's last page uses this).
 
 Snapshots are named by id, by name, or "latest". Run from an administrator
 terminal to see the output there; with --report the results are also saved
@@ -93,7 +97,7 @@ async function run(args) {
     const installer = option(args, '--monitor');
     if (!installer || installer.startsWith('--')) throw new Error('Name the installer: --monitor "C:\\Downloads\\setup.exe"');
     if (!(await sys.exists(installer))) throw new Error(`Installer not found: ${installer}`);
-    if (await monitor.status()) throw new Error('Another installation is being monitored. Finish or cancel it in SweepUninstall first.');
+    if (await monitor.status()) throw new Error('Another installation is being monitored. Finish or cancel it in Purgeon first.');
     const started = await monitor.start(installer);
     if (started.live) {
       const pid = await sys.trackLaunch(installer);
@@ -119,6 +123,12 @@ async function run(args) {
     const settings = await sys.readText(`${sys.info.dataDir}\\settings.json`).then(JSON.parse).catch(() => ({}));
     const out = await maintenance.run(settings.maintenance || {}, settings);
     return `${out.lines.join('\r\n')}\r\nReport: ${out.report}\r\n`;
+  }
+  if (cmd === '--autostart') {
+    const v = String(option(args, '--autostart') || '').toLowerCase();
+    if (v !== 'on' && v !== 'off') throw new Error('Use --autostart on or --autostart off.');
+    const on = await autostart.set(v === 'on');
+    return on ? 'Purgeon now starts when you sign in to Windows.\r\n' : 'Purgeon no longer starts with Windows.\r\n';
   }
   if (cmd === '--list-snapshots') {
     const list = await snapshots.list();

@@ -1,4 +1,4 @@
-// Uninstall archive: a permanent record of every program removed with SweepUninstall: when,
+// Uninstall archive: a permanent record of every program removed with Purgeon: when,
 // what was removed (its backups) and where to get it again.
 import { sys } from './sys.js';
 import * as path from './winpath.js';
@@ -58,7 +58,7 @@ export async function remove(id) {
   await write((await read()).filter((x) => x.id !== id));
 }
 
-// ---- programs removed outside SweepUninstall --------------------------------------------
+// ---- programs removed outside Purgeon --------------------------------------------
 // The program list is remembered between runs. A program that disappeared without being
 // removed here was uninstalled from Settings, its own uninstaller or another tool; it is
 // recorded in the archive and returned so its leftovers can be scanned.
@@ -69,7 +69,7 @@ export async function outside(programs) {
   const now = Object.fromEntries(programs.filter((p) => p.key && !p.store).map((p) => [p.key, { key: p.key, name: p.name, version: p.version || '', publisher: p.publisher || '', location: p.location || '', urlInfo: p.urlInfo || '', icon: p.icon || '' }]));
   await sys.writeText(knownFile(), JSON.stringify({ saved: new Date().toISOString(), programs: now }));
   if (!before?.programs) return []; // first run: nothing to compare with
-  // Removed with SweepUninstall since the last look: already in the archive.
+  // Removed with Purgeon since the last look: already in the archive.
   const removedHere = new Set((await read()).filter((e) => e.removed >= before.saved).map((e) => String(e.key).toLowerCase()));
   const gone = Object.values(before.programs).filter((p) => !now[p.key] && !removedHere.has(p.key.toLowerCase()));
   for (const p of gone) await add(p, 'outside');

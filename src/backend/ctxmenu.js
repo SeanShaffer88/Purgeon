@@ -76,7 +76,7 @@ export async function set(entry, enable) {
     if (!r.ok && !(enable && /unable to find/i.test(r.stderr))) throw new Error(/access is denied/i.test(r.stderr) ? `"${entry.name}" is set for all users and needs administrator rights.` : r.stderr.trim());
   } else {
     if (!/^\{[0-9a-f-]{36}\}$/i.test(entry.clsid || '')) throw new Error('Not a shell extension.');
-    const r = enable ? await reg(['delete', BLOCKED, '/v', entry.clsid, '/f']) : await reg(['add', BLOCKED, '/v', entry.clsid, '/t', 'REG_SZ', '/d', `${entry.name} (turned off by SweepUninstall)`, '/f']);
+    const r = enable ? await reg(['delete', BLOCKED, '/v', entry.clsid, '/f']) : await reg(['add', BLOCKED, '/v', entry.clsid, '/t', 'REG_SZ', '/d', `${entry.name} (turned off by Purgeon)`, '/f']);
     if (!r.ok && !(enable && /unable to find/i.test(r.stderr))) throw new Error(/access is denied/i.test(r.stderr) ? 'Shell extensions are turned off for all users and need administrator rights.' : r.stderr.trim());
   }
   return { ...entry, enabled: enable };

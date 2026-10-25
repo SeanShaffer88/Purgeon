@@ -46,7 +46,7 @@ export function QueueDialog({ queue, onStart, onRemove, onClear, onClose }) {
         </>
       }
     >
-      <p className="heading">Programs are uninstalled one after another, silently where possible, so you don't have to watch. If one needs a restart, SweepUninstall continues after you sign back in. At the end, every leftover is shown at once for you to review.</p>
+      <p className="heading">Programs are uninstalled one after another, silently where possible, so you don't have to watch. If one needs a restart, Purgeon continues after you sign back in. At the end, every leftover is shown at once for you to review.</p>
       {!programs.length && <div className="empty-box">The queue is empty. Right-click programs and choose Add to Uninstall Queue.</div>}
       <div className="tree">
         {programs.map((p) => (
@@ -71,7 +71,7 @@ export function QueueDialog({ queue, onStart, onRemove, onClear, onClose }) {
   );
 }
 
-// ---- 2. removed outside SweepUninstall ------------------------------------------------------------
+// ---- 2. removed outside Purgeon ------------------------------------------------------------
 
 export function OutsideDialog({ programs, onScan, onClose }) {
   const [chosen, setChosen] = useState(() => new Set(programs.map((p) => p.key)));
@@ -90,7 +90,7 @@ export function OutsideDialog({ programs, onScan, onClose }) {
       }
     >
       <p className="heading">
-        {programs.length === 1 ? 'This program was' : 'These programs were'} uninstalled since SweepUninstall last looked, from Windows Settings, its own uninstaller or another tool. Uninstallers often leave files and settings behind.
+        {programs.length === 1 ? 'This program was' : 'These programs were'} uninstalled since Purgeon last looked, from Windows Settings, its own uninstaller or another tool. Uninstallers often leave files and settings behind.
       </p>
       <Picker
         items={programs.map((p) => ({ ...p, id: p.key }))}
@@ -220,7 +220,7 @@ export function DiskMapDialog({ data, onAnalyze, onSheet, onClose }) {
             ))}
           </div>
           <span className="plan-actions">
-            <button onClick={() => onSheet(p.key)}>What It Does…</button>
+            <button onClick={() => onSheet(p.key)}>What’s This…</button>
             <button onClick={() => onAnalyze(p.key)}>Analyze Leftovers…</button>
           </span>
         </div>
@@ -234,7 +234,7 @@ export function DiskMapDialog({ data, onAnalyze, onSheet, onClose }) {
 export function SheetDialog({ program, sections, onAnalyze, onClose }) {
   return (
     <Dialog
-      title={`What It Does – ${program.name}`}
+      title={`What’s This – ${program.name}`}
       onClose={onClose}
       width={760}
       buttons={
@@ -246,7 +246,7 @@ export function SheetDialog({ program, sections, onAnalyze, onClose }) {
         </>
       }
     >
-      <p className="heading">Everything {program.name} hooks into Windows that SweepUninstall can see.</p>
+      <p className="heading">Everything {program.name} hooks into Windows that Purgeon can see.</p>
       {!sections.length && <div className="empty-box">Nothing beyond its own folder.</div>}
       {sections.map((s) => (
         <div key={s.id} className="sheet-section">
@@ -277,7 +277,7 @@ export function PromptDialog({ title, heading, label, placeholder, initial = '',
       <p className="heading">{heading}</p>
       <label className="field">
         {label}
-        <input autoFocus value={v} placeholder={placeholder} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && v.trim() && onSubmit(v.trim())} />
+        <input autoFocus value={v} placeholder={placeholder} title={label} onChange={(e) => setV(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && v.trim() && onSubmit(v.trim())} />
       </label>
       {note && <p className="footnote">{note}</p>}
     </Dialog>
@@ -461,7 +461,7 @@ export function SyncDialog({ settings, programs, onSave, onPush, onPull, onPickF
     >
       <p className="heading">Keep chosen programs' settings the same on your PCs through a shared folder, such as one in OneDrive. <b>Send</b> saves this PC's settings there; <b>Get</b> brings in newer settings from another PC.</p>
       <div className="field-row">
-        <input readOnly value={folder} placeholder="Choose a shared folder" />
+        <input readOnly value={folder} placeholder="Choose a shared folder" title="The shared folder settings are kept in, for example one inside OneDrive. Use Folder to choose it." />
         <button onClick={async () => setFolder((await onPickFolder()) || folder)}>Folder…</button>
       </div>
       <Picker items={programs.map((p) => ({ ...p, id: p.key }))} chosen={chosen} setChosen={setChosen} render={(p) => <span className="path">{p.name}</span>} />
@@ -472,19 +472,65 @@ export function SyncDialog({ settings, programs, onSave, onPush, onPull, onPickF
 
 // ---- 15. portable apps ------------------------------------------------------------------------------
 
-export function PortableDialog({ apps, onRegister, onUnregister, onAddFolder, onClose }) {
+export function PortableDialog({ apps, folders = [], updates = null, checking = false, onRegister, onUnregister, onAddFolder, onRemoveFolder, onCheckUpdates, onOpenUrl, onClose }) {
+  const upd = (a) => updates?.find((u) => u.folder === a.folder);
+  const newer = updates ? updates.filter((u) => u.newer).length : 0;
   return (
-    <Dialog title="Portable Apps" onClose={onClose} width={780} buttons={<><button onClick={onAddFolder}>Add a Folder…</button><button className="primary" onClick={onClose}>Close</button></>}>
+    <Dialog
+      title="Portable Apps"
+      onClose={onClose}
+      width={800}
+      buttons={
+        <>
+          {updates && <span className="button-hint">{newer ? `${newer} update${newer === 1 ? '' : 's'} available` : 'No updates found'}</span>}
+          <button onClick={onCheckUpdates} disabled={checking || !apps.length} title="Looks up each app in winget’s catalogue (the Windows Package Manager) and shows where a newer version exists, with its download page. Nothing is downloaded or changed.">
+            {checking ? 'Checking…' : 'Check for Updates'}
+          </button>
+          <button onClick={onAddFolder} title="Choose a folder that holds portable apps, such as D:\PortableApps. It is remembered and looked at every time: the folder itself and each folder inside it.">
+            Add a Folder…
+          </button>
+          <button className="primary" onClick={onClose}>
+            Close
+          </button>
+        </>
+      }
+    >
       <p className="heading">Programs that run from a folder without being installed, so Windows doesn't list them. Registering one adds it to the program list with its icon, so it gets groups, leftover scans and a clean removal.</p>
-      {!apps.length && <div className="empty-box">No portable apps found in the usual places. Use Add a Folder to point to one.</div>}
+      {folders.length > 0 && (
+        <div className="portable-folders">
+          <span className="muted">Your folders:</span>
+          {folders.map((f) => (
+            <span key={f} className="chip-folder" title={`Looked at every time, with each folder inside it: ${f}`}>
+              {f}
+              <button className="link" onClick={() => onRemoveFolder(f)} title="Stop looking in this folder. Nothing in it is changed.">
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      {!apps.length && <div className="empty-box">No portable apps found in the usual places or your folders. Use Add a Folder to point to the folder that holds them.</div>}
       <div className="tree">
         {apps.map((a) => (
           <div key={a.folder} className="tree-item">
             <span className="path">
               <b>{a.name}</b> <span className="muted">{[a.publisher, a.version].filter(Boolean).join(' · ')}</span>
+              {upd(a) && (
+                <span
+                  className={`insight-tag ${upd(a).newer ? 'growing' : 'together'}`}
+                  title={upd(a).found ? `winget package ${upd(a).id}, latest version ${upd(a).latest || 'unknown'}` : 'winget’s catalogue has no package with this exact name, so updates can’t be checked.'}
+                >
+                  {!upd(a).found ? 'not in winget' : upd(a).newer ? `${upd(a).latest} available` : upd(a).latest ? 'up to date' : 'version unknown'}
+                </span>
+              )}
               <br />
               <span className="muted">{a.folder}</span>
             </span>
+            {upd(a)?.newer && upd(a).homepage && (
+              <button className="link" onClick={() => onOpenUrl(upd(a).homepage)} title={`Opens ${upd(a).homepage} in your browser, to download version ${upd(a).latest}. Unpack it over this folder after backing the folder up.`}>
+                Download Page
+              </button>
+            )}
             {a.registered ? (
               <button className="link" onClick={() => onUnregister(a)}>
                 Unregister
@@ -523,6 +569,7 @@ export function CommandPalette({ commands, onRun, onClose }) {
       <div className="palette" role="dialog" aria-label="Command palette" onMouseDown={(e) => e.stopPropagation()}>
         <input
           autoFocus
+          title="Type part of a command or program name; Up and Down choose, Enter runs, Esc closes"
           value={q}
           placeholder="Type a command or a program name…"
           onChange={(e) => setQ(e.target.value)}
@@ -556,8 +603,183 @@ export function ReportDialog({ onMake, onClose }) {
       <p className="heading">An HTML report of a month: programs installed and removed, space freed, startup changes, updates, clean-ups, and programs flagged by the insights.</p>
       <label className="field">
         Month
-        <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} />
+        <input type="month" title="The month the report covers" value={month} onChange={(e) => setMonth(e.target.value)} />
       </label>
+    </Dialog>
+  );
+}
+
+// ---- the close button --------------------------------------------------------------------------------
+
+export function CloseDialog({ onAnswer }) {
+  const [remember, setRemember] = useState(false);
+  return (
+    <Dialog
+      title="Close Purgeon?"
+      onClose={() => onAnswer(null, false)}
+      width={540}
+      buttons={
+        <>
+          <button className="primary" onClick={() => onAnswer('tray', remember)}>
+            Minimize to Tray
+          </button>
+          <button onClick={() => onAnswer('exit', remember)}>Exit</button>
+          <button onClick={() => onAnswer(null, false)}>Cancel</button>
+        </>
+      }
+    >
+      <p className="heading">Keep Purgeon running in the notification area (tray), or exit it completely?</p>
+      <p className="muted">In the tray it keeps watching for installers and new startup entries. Left-click its icon to open it again; right-click it to exit.</p>
+      <label className="check-row" title="Don’t ask again. View › Close Button Asks brings this question back.">
+        <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} /> Remember my choice
+      </label>
+    </Dialog>
+  );
+}
+
+// ---- analyze a program ------------------------------------------------------------------------------
+
+export const ARCH_LABEL = { x64: '64-bit (x64)', x86: '32-bit (x86)', arm64: 'ARM64', arm: 'ARM (32-bit)' };
+
+export function AnalysisDialog({ program, data, insight = {}, onUninstall, onSheet, onLeftovers, onClose }) {
+  const [open, setOpen] = useState(null);
+  const days = data.lastUsed?.time ? Math.floor((Date.now() - new Date(data.lastUsed.time).getTime()) / 86400000) : null;
+  const sig = insight.signature;
+  // The short verdict: what to expect when removing it.
+  const points = [
+    data.installer.uninstaller
+      ? { tone: 'ok', text: `Removed by its own uninstaller (${data.installer.label})${data.installer.silent ? ', which can run silently' : ''}. Leftovers are scanned afterwards.` }
+      : { tone: 'warn', text: 'No uninstaller is registered: use Force, which finds and removes its files and settings with a backup.' },
+    data.dependencies.note && { tone: 'warn', text: data.dependencies.note },
+    data.running.length > 0 && { tone: 'warn', text: `Running now: ${[...new Set(data.running.map((r) => r.name))].join(', ')}. Removal offers to close ${data.running.length === 1 ? 'it' : 'them'} first.` },
+    days !== null && { tone: days > 180 ? 'warn' : 'ok', text: days > 180 ? `Not used for ${days} days: a candidate for removal.` : `Last used ${days === 0 ? 'today' : `${days} day${days === 1 ? '' : 's'} ago`}.` },
+    sig && sig !== 'Valid' && { tone: 'warn', text: sig === 'NotSigned' ? 'Its program file is not digitally signed, so its publisher can’t be verified.' : `Its signature has a problem: ${sig}.` },
+    sig === 'Valid' && insight.signer && { tone: 'ok', text: `Digitally signed by ${insight.signer}.` },
+    insight.offer && { tone: 'warn', text: 'Its name matches a kind of program often installed as a bundled offer.' },
+    insight.together && { tone: 'warn', text: `Installed at the same time as ${insight.together.join(', ')}.` },
+  ].filter(Boolean);
+  const fmtB = (b) => fmt(b || 0);
+  return (
+    <Dialog
+      title={`Analyze – ${program.name}`}
+      onClose={onClose}
+      width={780}
+      buttons={
+        <>
+          <button onClick={onSheet}>What’s This…</button>
+          <button onClick={onLeftovers}>Analyze Leftovers…</button>
+          <button onClick={onUninstall}>Uninstall…</button>
+          <button className="primary" onClick={onClose}>
+            Close
+          </button>
+        </>
+      }
+    >
+      <p className="heading">
+        <b>{program.name}</b> {program.version} {program.publisher ? `· ${program.publisher}` : ''}
+      </p>
+      <div className="analysis-points">
+        {points.map((p, i) => (
+          <div key={i} className={`analysis-point ${p.tone}`}>
+            {p.text}
+          </div>
+        ))}
+      </div>
+      <table className="analysis-table">
+        <tbody>
+          <tr title="The processor the program’s main file is built for, read from the file itself. .NET programs built for “Any CPU” show as 32-bit here but run as 64-bit.">
+            <th>Architecture</th>
+            <td>{ARCH_LABEL[data.arch] || (program.arch === 'x86' ? '32-bit (from its registry entry)' : program.arch === 'x64' ? '64-bit (from its registry entry)' : 'Unknown')}</td>
+          </tr>
+          <tr title="The file Purgeon treats as the program itself">
+            <th>Program file</th>
+            <td className="path">{data.exe || 'Not found'}</td>
+          </tr>
+          <tr title="The folder the program is installed in, as its uninstall entry says">
+            <th>Folder</th>
+            <td className="path">{program.location || 'Not recorded'}</td>
+          </tr>
+          <tr title="Install folder plus the data folders named after it (in ProgramData and AppData), measured now">
+            <th>Disk space</th>
+            <td>{data.space ? `${fmtB(data.space.total)} in all: program ${fmtB(data.space.install)}${data.space.data.length ? `, data ${fmtB(data.space.data.reduce((n, d) => n + d.bytes, 0))} in ${data.space.data.length} folder${data.space.data.length === 1 ? '' : 's'}` : ''}` : 'Not measured'}</td>
+          </tr>
+          <tr title="When any of its program files last ran, from Windows’ Prefetch records">
+            <th>Last used</th>
+            <td>{data.lastUsed?.time ? new Date(data.lastUsed.time).toLocaleString() : data.lastUsed?.unknown}</td>
+          </tr>
+          <tr title="How it was installed, which decides how it is uninstalled">
+            <th>Installer</th>
+            <td>
+              {data.installer.label}
+              {data.installer.silent ? ' · can uninstall silently' : ''}
+            </td>
+          </tr>
+          {data.dependencies.dependents.length > 0 && (
+            <tr title="Installed programs that registered that they need this one">
+              <th>Needed by</th>
+              <td>{data.dependencies.dependents.join(', ')}</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      <div className="tree-group">
+        <b>What it hooks into Windows</b> <span className="muted">(click a line for details)</span>
+      </div>
+      {!data.hooks.length && <div className="empty-box">Nothing beyond its own folder.</div>}
+      {data.hooks.map((h) => (
+        <div key={h.id}>
+          <button className="link analysis-hook" onClick={() => setOpen(open === h.id ? null : h.id)} title={`Show the ${h.label.toLowerCase()} found for this program`}>
+            {open === h.id ? '▾' : '▸'} {h.label}: {h.count}
+          </button>
+          {open === h.id && (
+            <div className="tree">
+              {h.items.map((t) => (
+                <div key={t} className="tree-item">
+                  <span className="path">{t}</span>
+                </div>
+              ))}
+              {h.count > h.items.length && <div className="muted">…and {h.count - h.items.length} more (What’s This lists them all)</div>}
+            </div>
+          )}
+        </div>
+      ))}
+    </Dialog>
+  );
+}
+
+// ---- installer spotted while it starts --------------------------------------------------------------
+
+export function InstallerFoundDialog({ installer, onMonitor, onStop, onClose }) {
+  return (
+    <Dialog
+      title="Installer Started"
+      onClose={onClose}
+      width={620}
+      buttons={
+        <>
+          <button className="primary" onClick={onMonitor}>
+            Monitor It
+          </button>
+          <button onClick={onClose}>Not Now</button>
+          <button onClick={onStop}>Stop Detecting</button>
+        </>
+      }
+    >
+      <p className="heading">
+        <b>{installer.name}</b>
+        {installer.company ? ` (${installer.company})` : ''} is being installed. Record what it installs, so it can be removed completely later?
+      </p>
+      <ol className="steps">
+        <li>Leave the installer on its first page. Purgeon takes a snapshot first, usually in under a minute.</li>
+        <li>Then install as usual, including any first-run setup.</li>
+        <li>
+          Come back and click <b>Installation Finished</b>.
+        </li>
+      </ol>
+      <p className="muted path" title="The installer that was spotted">
+        {installer.path}
+      </p>
+      <p className="footnote">If the installer has already begun copying files, what it copied so far is missed; Tools › Monitor an Installation records from the very start. Tools › Detect Installations turns this question off.</p>
     </Dialog>
   );
 }

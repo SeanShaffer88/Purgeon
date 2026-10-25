@@ -1,4 +1,4 @@
-// Scheduled maintenance: a weekly Windows scheduled task that runs "SweepUninstall --maintenance".
+// Scheduled maintenance: a weekly Windows scheduled task that runs "Purgeon --maintenance".
 // Each run takes a snapshot, cleans the chosen junk categories (Recycle Bin ones only, never the
 // permanent Windows clean-ups), applies the backup limits and writes a short report. It never
 // uninstalls anything, and its cleanups are undoable from Change History like any other.
@@ -10,8 +10,12 @@ import * as snapshots from './snapshots.js';
 import * as backups from './backups.js';
 import * as history from './history.js';
 
-const TASK_PATH = '\\SweepUninstall\\';
+const TASK_PATH = '\\Purgeon\\';
 const TASK_NAME = 'Weekly Maintenance';
+// Where versions from before the rename put the task. It would start the old program, so it is
+// removed whenever this setting is saved.
+const OLD_TASK_PATH = '\\SweepUninstall\\';
+const removeOld = () => runPS(`Unregister-ScheduledTask -TaskPath ${psq(OLD_TASK_PATH)} -TaskName ${psq(TASK_NAME)} -Confirm:$false -ErrorAction SilentlyContinue`).catch(() => {});
 export const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 export const DEFAULTS = { enabled: false, day: 'Sunday', time: '10:00', snapshot: true, junk: ['usertemp', 'dumps', 'wer', 'thumbs', 'shaders'] };
 
@@ -35,6 +39,7 @@ export async function status() {
 // Creates or removes the weekly task to match the settings.
 export async function apply(settings) {
   const m = { ...DEFAULTS, ...settings };
+  await removeOld();
   if (!m.enabled) {
     await runPS(`Unregister-ScheduledTask -TaskPath ${psq(TASK_PATH)} -TaskName ${psq(TASK_NAME)} -Confirm:$false -ErrorAction SilentlyContinue`).catch(() => {});
     return status();
@@ -46,7 +51,7 @@ export async function apply(settings) {
     $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek ${m.day} -At ${psq(m.time)}
     $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Highest
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -ExecutionTimeLimit (New-TimeSpan -Hours 2)
-    Register-ScheduledTask -TaskPath ${psq(TASK_PATH)} -TaskName ${psq(TASK_NAME)} -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description 'SweepUninstall: weekly snapshot, junk clean-up and backup limits. Nothing is uninstalled.' -Force | Out-Null`);
+    Register-ScheduledTask -TaskPath ${psq(TASK_PATH)} -TaskName ${psq(TASK_NAME)} -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description 'Purgeon: weekly snapshot, junk clean-up and backup limits. Nothing is uninstalled.' -Force | Out-Null`);
   return status();
 }
 
@@ -55,7 +60,7 @@ const fmt = (b) => (b < 1048576 ? `${(b / 1024).toFixed(0)} KB` : b < 1073741824
 // One maintenance run. `limits` are the backup limits from the settings.
 export async function run(settings, limits = {}) {
   const m = { ...DEFAULTS, ...settings };
-  const lines = [`SweepUninstall maintenance, ${new Date().toLocaleString()}`, ''];
+  const lines = [`Purgeon maintenance, ${new Date().toLocaleString()}`, ''];
   if (m.snapshot) {
     const meta = await snapshots.take(`Weekly maintenance ${new Date().toISOString().slice(0, 10)}`, 'quick').catch((e) => ({ error: e.message }));
     lines.push(meta.error ? `Snapshot failed: ${meta.error}` : `Snapshot taken: ${meta.name}`);

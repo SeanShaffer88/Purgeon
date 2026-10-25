@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, planHtml } from './dialogs.jsx';
 import { setConfirmUI } from './backend/api.js';
 import { applyZoom, nextStep } from './zoom.js';
+import { ACTION_TIPS, installTips } from './tips.js';
 import { TakeSnapshotDialog, ComparisonDialog, SnapshotTimeline, comparisonHtml } from './snapshots.jsx';
 import { DebloatView } from './debloat.jsx';
 import { StartupView } from './startup.jsx';
@@ -9,12 +10,12 @@ import { JunkView, formatBytes } from './junk.jsx';
 import { GroupDialog } from './groups.jsx';
 import { ProgramBackupDialog, ProgramRestoreDialog } from './transfer.jsx';
 import { WhoOwnsDialog, UpdatesDialog, MaintenanceDialog } from './tools.jsx';
-import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, SheetDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, CommandPalette, ReportDialog, ContextMenuDialog } from './more.jsx';
+import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, SheetDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, CommandPalette, ReportDialog, ContextMenuDialog, InstallerFoundDialog, AnalysisDialog, ARCH_LABEL, CloseDialog } from './more.jsx';
 
 const api = window.api;
 
 const VIEWS = {
-  desktop: { label: 'Programs', noun: 'programs', cols: [['name', 'Name'], ['size', 'Size'], ['date', 'Installed On']] },
+  desktop: { label: 'Programs', noun: 'programs', cols: [['name', 'Name'], ['arch', 'Arch'], ['size', 'Size'], ['date', 'Installed On']] },
   store: { label: 'Apps', noun: 'apps', cols: [['name', 'Name'], ['version', 'Version'], ['publisher', 'Publisher']] },
   // Views below are opened from toolbar buttons or the Tools menu, not the view picker.
   monitored: { label: 'Monitored Programs', noun: 'monitored programs', cols: [['name', 'Name'], ['size', 'Changes'], ['date', 'Monitored On']], button: true },
@@ -41,6 +42,24 @@ const VIEW_CHIPS = [
   ['timeline', 'Timeline', 'Change timeline: everything that changed, newest first (Ctrl+T)'],
 ];
 
+// Icons for the view bar on the left (18px, drawn with the text colour).
+const VIEW_ICON_PATHS = {
+  desktop: 'M3 4h14v10H3zM7 17h6M10 14v3',
+  store: 'M4 7h12l-1 10H5zM7 7a3 3 0 0 1 6 0',
+  monitored: 'M1.5 10s3-5.5 8.5-5.5S18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10zM10 7.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z',
+  startup: 'M10 2.5v7M6.2 5.2a6 6 0 1 0 7.6 0',
+  debloat: 'M4 3v14M10 3v14M16 3v14M2 7h4M8 13h4M14 9h4',
+  junk: 'M4 6h12M8 6V4h4v2M5.5 6l1 11h7l1-11M8.5 9v5M11.5 9v5',
+  snapshots: 'M3 6h3l1.5-2h5L14 6h3v10H3zM10 8.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
+  archive: 'M2.5 4h15v4h-15zM4 8v9h12V8M8 11h4',
+  timeline: 'M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15zM10 6v4.5l3 2',
+};
+const ViewIcon = ({ id }) => (
+  <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
+    <path d={VIEW_ICON_PATHS[id]} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
+
 // What the action bar says in views that have their own buttons.
 const VIEW_NOTES = {
   startup: 'Startup & Services · turn entries off and on; nothing is deleted',
@@ -49,8 +68,8 @@ const VIEW_NOTES = {
 };
 
 // The action bar's buttons for a desktop program, in order.
-const DESKTOP_BAR = ['uninstall', 'force', 'analyze', 'sheet', 'backupProgram', 'queueAdd', 'properties'];
-const shortLabel = (label) => label.replace(/\.\.\.$/, '').replace('Migrate / Back Up Program', 'Migrate').replace('Analyze Leftovers', 'Leftovers').replace('Add to Uninstall Queue', 'Queue').replace('Compare the Two Selected', 'Compare Selected');
+const DESKTOP_BAR = ['uninstall', 'force', 'analyzeProgram', 'analyze', 'sheet', 'backupProgram', 'queueAdd', 'setGroup', 'hide', 'unhide', 'folder', 'registry', 'search', 'properties'];
+const shortLabel = (label) => label.replace(/\.\.\.$/, '').replace('Migrate / Back Up Program', 'Migrate').replace('Analyze Leftovers', 'Leftovers').replace(/^Analyze Program$/, 'Analyze').replace('Add to Uninstall Queue', 'Queue').replace('Compare the Two Selected', 'Compare Selected').replace(/^Set Group$/, 'Group').replace('Hide From List', 'Hide').replace('Installation Folder', 'Folder').replace('Registry Entry', 'Registry');
 
 // Group-picker entries that filter by insight rather than by group.
 const INSIGHT_FILTERS = [
@@ -128,6 +147,15 @@ function InsightTags({ i }) {
   );
 }
 
+// What each menu holds, for the menu bar's tooltips.
+const MENU_TIPS = {
+  File: 'Export and reports, moving programs to another PC, settings sync, and restarting as administrator (Alt+F)',
+  Action: 'What to do with the selected program: uninstall, force, leftovers, groups, hiding and more (Alt+A)',
+  View: 'Which list to show, the disk space map, zoom, themes, and window and tray options (Alt+V)',
+  Tools: 'Monitoring installations, snapshots, backups, clean-up tools and safety options (Alt+T)',
+  Help: 'The command palette and information about Purgeon (Alt+H)',
+};
+
 // The menu bar. The shortcuts shown here are handled by the keydown listener in App.
 const MENUS = [
   [
@@ -149,15 +177,18 @@ const MENUS = [
     'Action',
     [
       ['uninstall', 'Uninstall...', 'Del'],
-      ['force', 'Force Removal...', 'Shift+Del'],
+      ['force', 'Force...', 'Shift+Del'],
       ['analyze', 'Analyze Leftovers...', 'Ctrl+L'],
       ['queueAdd', 'Add to Uninstall Queue', 'Ctrl+Q'],
       ['rescue', 'Rescue Broken Uninstall...'],
       ['removeEntry', 'Remove Entry...'],
       null,
-      ['sheet', 'What It Does...', 'Ctrl+W'],
+      ['analyzeProgram', 'Analyze Program...', 'Ctrl+I'],
+      ['sheet', 'What’s This...', 'Ctrl+W'],
       ['setGroup', 'Set Group...', 'Ctrl+G'],
       ['backupProgram', 'Migrate / Back Up Program...'],
+      ['hide', 'Hide From List'],
+      ['unhide', 'Unhide'],
       null,
       ['registry', 'Registry Entry'],
       ['folder', 'Installation Folder'],
@@ -188,17 +219,25 @@ const MENUS = [
       ['zoomReset', 'Reset Zoom', 'Ctrl+0'],
       null,
       ['toggleGrid', 'Grid Lines'],
+      ['toggleHidden', 'Show Hidden Programs'],
       ['theme:dark', 'Dark Theme'],
       ['theme:light', 'Light Theme'],
       ['theme:contrast', 'High Contrast'],
       null,
-      ['toggleTray', 'Keep Running in the Tray'],
+      ['toggleOnTop', 'Always on Top'],
+      ['toggleMinTray', 'Minimize to Tray'],
+      ['close:ask', 'Close Button Asks'],
+      ['close:tray', 'Close Button Hides to Tray'],
+      ['close:exit', 'Close Button Exits'],
+      ['toggleStartTray', 'Start Minimized to Tray'],
+      ['toggleAutostart', 'Start with Windows'],
     ],
   ],
   [
     'Tools',
     [
       ['monitor', 'Monitor an Installation...', 'Ctrl+M'],
+      ['toggleDetect', 'Detect Installations'],
       ['trials', 'Trial Installs...'],
       ['queue', 'Uninstall Queue...'],
       null,
@@ -235,7 +274,71 @@ const MENUS = [
 
 // Mouse or keyboard: Alt plus a menu's first letter opens it; arrow keys move between items and
 // menus, Enter chooses, Escape closes.
-function MenuBar({ onAction, checked = {}, right = null }) {
+// Purgeon draws its own title bar (the menu bar), so it can hold the always-on-top pin.
+const appWindow = () => import('@tauri-apps/api/window').then(({ getCurrentWindow }) => getCurrentWindow());
+
+// The empty part of the title bar: drag to move the window, double-click to maximize or restore.
+function TitleSpace() {
+  return (
+    <div
+      className="title-space"
+      title="Drag to move the window; double-click to maximize or restore it"
+      onMouseDown={(e) => {
+        if (e.button !== 0) return;
+        appWindow()
+          .then((w) => (e.detail === 2 ? w.toggleMaximize() : w.startDragging()))
+          .catch(() => {});
+      }}
+    >
+      <span>Purgeon</span>
+    </div>
+  );
+}
+
+const PinIcon = ({ on }) => (
+  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" style={{ transform: on ? 'none' : 'rotate(45deg)' }}>
+    <path d="M10.2 1.3 14.7 5.8 13.6 6.9 12.7 6.6 10 9.3 10.5 12.4 9.4 13.5 6.6 10.7 2.4 14.9 1.1 14.9 1.1 13.6 5.3 9.4 2.5 6.6 3.6 5.5 6.7 6 9.4 3.3 9.1 2.4Z" fill={on ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="1.2" strokeLinejoin="round" />
+  </svg>
+);
+
+// Pin, minimize, maximize and close, in that order at the right end of the title bar.
+function WindowControls({ pinned, onPin, toTray }) {
+  const [max, setMax] = useState(false);
+  useEffect(() => {
+    let off = null;
+    appWindow()
+      .then(async (w) => {
+        setMax(await w.isMaximized());
+        off = await w.onResized(async () => setMax(await w.isMaximized()));
+      })
+      .catch(() => {});
+    return () => off?.();
+  }, []);
+  const run = (fn) => () => appWindow().then(fn).catch(() => {});
+  return (
+    <div className="win-controls">
+      <button
+        className={`win-btn pin ${pinned ? 'on' : ''}`}
+        onClick={onPin}
+        aria-pressed={pinned}
+        title={pinned ? 'Always on top is on: Purgeon stays in front of other windows. Click to turn it off.' : 'Always on top: keep Purgeon in front of other windows, even when you click elsewhere (View › Always on Top).'}
+      >
+        <PinIcon on={pinned} />
+      </button>
+      <button className="win-btn glyph" onClick={toTray ? () => api.invoke('app:hideToTray') : run((w) => w.minimize())} title={toTray ? 'Minimize to the tray: the window and its taskbar button go away; left-click the tray icon to bring it back (View › Minimize to Tray)' : 'Minimize to the taskbar (View › Minimize to Tray sends it to the tray instead)'} aria-label="Minimize">
+        {''}
+      </button>
+      <button className="win-btn glyph" onClick={run((w) => w.toggleMaximize())} title={max ? 'Restore the window to its earlier size' : 'Maximize the window'} aria-label={max ? 'Restore' : 'Maximize'}>
+        {max ? '' : ''}
+      </button>
+      <button className="win-btn glyph close" onClick={run((w) => w.close())} title="Close Purgeon (it keeps running in the tray with View › Close to Tray)" aria-label="Close">
+        {''}
+      </button>
+    </div>
+  );
+}
+
+function MenuBar({ onAction, checked = {}, right = null, controls = null }) {
   const [open, setOpen] = useState(null);
   const bar = useRef(null);
   const focusItem = (step) => {
@@ -289,6 +392,7 @@ function MenuBar({ onAction, checked = {}, right = null }) {
             className={open === i ? 'open' : ''}
             aria-haspopup="menu"
             aria-expanded={open === i}
+            title={MENU_TIPS[label]}
             onClick={() => setOpen(open === i ? null : i)}
             onMouseEnter={() => open !== null && setOpen(i)}
             onKeyDown={(e) => e.key === 'ArrowDown' && (e.preventDefault(), setOpen(i), setTimeout(() => focusItem(1), 0))}
@@ -304,6 +408,7 @@ function MenuBar({ onAction, checked = {}, right = null }) {
                     key={j}
                     role={it[0] in checked ? 'menuitemcheckbox' : 'menuitem'}
                     aria-checked={it[0] in checked ? !!checked[it[0]] : undefined}
+                    title={ACTION_TIPS[it[0]]}
                     onClick={() => {
                       setOpen(null);
                       onAction(it[0]);
@@ -323,7 +428,9 @@ function MenuBar({ onAction, checked = {}, right = null }) {
           )}
         </div>
       ))}
+      <TitleSpace />
       {right && <div className="menubar-right">{right}</div>}
+      {controls}
     </div>
   );
 }
@@ -352,7 +459,16 @@ export default function App() {
   const [safeOn, setSafeOn] = useState(false);
   const [gridOn, setGridOn] = useState(true);
   const [theme, setTheme] = useState('dark');
-  const [trayOn, setTrayOn] = useState(false);
+  // What the close button does: 'ask', 'tray' (keep running in the tray) or 'exit'.
+  const [closeAction, setCloseAction] = useState('ask');
+  const [closeAsk, setCloseAsk] = useState(false);
+  // Window options (View menu); Start with Windows is read from Task Scheduler.
+  const [win, setWin] = useState({ alwaysOnTop: false, minimizeToTray: false, startInTray: false });
+  const [autostartOn, setAutostartOn] = useState(false);
+  const [detectOn, setDetectOn] = useState(true);
+  // Programs hidden from the lists ({ programKey: name }); View › Show Hidden Programs shows them dimmed.
+  const [hidden, setHidden] = useState({});
+  const [showHidden, setShowHidden] = useState(false);
   const [shellOn, setShellOn] = useState(false);
   const [palette, setPalette] = useState(false);
   const outsideChecked = useRef(false);
@@ -429,8 +545,7 @@ export default function App() {
       setSafeOn(!!s.safeMode);
       setGridOn(s.gridLines !== false);
       setTheme(s.theme || 'dark');
-      setTrayOn(!!s.tray);
-      if (s.tray) api.invoke('app:setTray', true).catch(() => {});
+      applyWindow(s);
       api.invoke('backups:prune').catch(() => {});
       setZoom(s.zoom || 1);
       applyZoom(s.zoom || 1);
@@ -440,6 +555,7 @@ export default function App() {
     api.invoke('backups:interrupted').then((p) => p && setModal({ type: 'interrupted', pending: p })).catch(() => {});
     api.invoke('groups:get').then(setGroups).catch(() => {});
     api.invoke('shell:enabled').then(setShellOn).catch(() => {});
+    api.invoke('autostart:enabled').then(setAutostartOn).catch(() => {});
     // Requests from the command line, the Explorer right-click menu and the RunOnce entry.
     const launch = window.__sweepLaunch || [];
     const arg = (name) => {
@@ -451,19 +567,25 @@ export default function App() {
       api.invoke('queue:get').then((q) => q?.restartNeeded && q.programs.some((p) => p.status === 'pending') && setModal({ type: 'queue', queue: q })).catch(() => {});
     if (arg('--who-owns')) setModal({ type: 'whoOwns', target: arg('--who-owns') });
     if (arg('--uninstall-target')) setTimeout(() => uninstallTarget(arg('--uninstall-target')), 2500);
-    // New startup entries: checked now and every 10 minutes while SweepUninstall runs (also from the tray).
+    // New startup entries: checked now and every 10 minutes while Purgeon runs (also from the tray).
     const first = setTimeout(() => checkStartup(), 8000);
     const every = setInterval(() => checkStartup(), 10 * 60 * 1000);
     // Tray menu choices.
     let unlisten = null;
+    let unlistenClose = null;
     import('@tauri-apps/api/event')
-      .then(({ listen }) => listen('tray', (e) => (e.payload === 'junk' ? setView('junk') : e.payload === 'updates' ? setModal({ type: 'updates' }) : null)))
+      .then(({ listen }) => listen('close-requested', () => setCloseAsk(true)))
+      .then((u) => (unlistenClose = u))
+      .catch(() => {});
+    import('@tauri-apps/api/event')
+      .then(({ listen }) => listen('tray', (e) => (e.payload === 'junk' ? setView('junk') : e.payload === 'startup' ? setView('startup') : e.payload === 'updates' ? setModal({ type: 'updates' }) : e.payload === 'monitor' ? setModal((m) => m || { type: 'monitor' }) : null)))
       .then((u) => (unlisten = u))
       .catch(() => {});
     return () => {
       clearTimeout(first);
       clearInterval(every);
       unlisten?.();
+      unlistenClose?.();
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -489,20 +611,30 @@ export default function App() {
     };
   }, [rows]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // A program's architecture: from its program file when known, otherwise from where Windows lists it.
+  const archOf = (r) => {
+    const a = insight[r.key]?.arch;
+    if (a) return { text: { x64: '64-bit', x86: '32-bit', arm64: 'ARM64', arm: 'ARM' }[a] || a, how: `${ARCH_LABEL[a] || a}, read from its program file ${insight[r.key].exe}.${a === 'x86' ? ' (.NET programs built for “Any CPU” show as 32-bit but run as 64-bit.)' : ''}` };
+    if (r.arch === 'x86') return { text: '32-bit', how: 'Listed in the 32-bit part of the registry (WOW6432Node); its program file could not be checked.' };
+    if (r.arch === 'x64') return { text: '64-bit', how: 'Listed in the 64-bit part of the registry; its program file could not be checked.' };
+    return { text: '', how: 'Installed for your user only; its program file could not be checked.' };
+  };
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
     const programs = view === 'desktop' || view === 'store';
     const insightFilter = INSIGHT_FILTERS.find(([id]) => id === groupFilter);
     const inGroup = (r) =>
       !programs || groupFilter === ALL_GROUPS || (insightFilter ? !!insightFilter[2](insight[r.key]) : groupFilter === UNGROUPED ? !groups[r.key] : groups[r.key] === groupFilter);
-    const list = rows.filter((r) => inGroup(r) && (!q || `${r.name} ${r.publisher || ''} ${(programs && groups[r.key]) || ''}`.toLowerCase().includes(q)));
-    const val = (r) => (sort.col === 'size' ? r.sortSize : sort.col === 'date' && r.sortDate ? r.sortDate : (r[sort.col] || '').toString().toLowerCase());
+    const shown = (r) => !programs || showHidden || !hidden[r.key];
+    const list = rows.filter((r) => shown(r) && inGroup(r) && (!q || `${r.name} ${r.publisher || ''} ${(programs && groups[r.key]) || ''}`.toLowerCase().includes(q)));
+    const val = (r) => (sort.col === 'size' ? r.sortSize : sort.col === 'arch' ? archOf(r).text : sort.col === 'date' && r.sortDate ? r.sortDate : (r[sort.col] || '').toString().toLowerCase());
     return [...list].sort((a, b) => {
       const x = val(a);
       const y = val(b);
       return (x < y ? -1 : x > y ? 1 : 0) * sort.dir;
     });
-  }, [rows, filter, sort, groups, groupFilter, view, insight]);
+  }, [rows, filter, sort, groups, groupFilter, view, insight, hidden, showHidden]);
+  const hiddenCount = view === 'desktop' || view === 'store' ? rows.filter((r) => hidden[r.key]).length : 0;
 
   const current = visible.find((r) => r.key === selected) || null;
   const markedRows = visible.filter((r) => marked.has(r.key));
@@ -552,9 +684,9 @@ export default function App() {
   // Called by the Debloat view before a change; asks once per session.
   const beforeDebloatChange = async (title) => {
     if (debloatGatePassed.current || !restoreOn) return true;
-    const r = await confirmWithRestore('Change Windows settings?', `SweepUninstall will apply "${title}". This question appears only before your first debloat change of this session.`);
+    const r = await confirmWithRestore('Change Windows settings?', `Purgeon will apply "${title}". This question appears only before your first debloat change of this session.`);
     if (!r.ok) return false;
-    if (r.checked) await makeRestorePoint('SweepUninstall: before Windows debloat changes', 'settings');
+    if (r.checked) await makeRestorePoint('Purgeon: before Windows debloat changes', 'settings');
     debloatGatePassed.current = true;
     return true;
   };
@@ -667,7 +799,7 @@ export default function App() {
       owners: [p.key],
       onRemove: async (sel) => {
         // A force removal that deletes the uninstall entry removes the program: record it in the archive.
-        if (/^Force Removal/.test(title) && sel.some((i) => i.kind === 'key' && i.path.toLowerCase().endsWith(p.key.split('\\').pop().toLowerCase()))) {
+        if (/^Force – /.test(title) && sel.some((i) => i.kind === 'key' && i.path.toLowerCase().endsWith(p.key.split('\\').pop().toLowerCase()))) {
           await api.invoke('archive:add', { program: p, how: 'forced' }).catch(() => {});
         }
         return removeWithBackup(p.name, sel, p.location, [p.key]);
@@ -689,9 +821,9 @@ export default function App() {
   const uninstallMonitored = async (rec) => {
     const keys = new Set(rec.uninstallKeys.map(normKey));
     const registered = desktopCache.current.find((p) => keys.has(normKey(p.key)));
-    const run = registered && (await confirmWithRestore(`Run ${registered.name}'s own uninstaller first?`, 'Recommended. Afterwards SweepUninstall removes everything else the installation created.'));
+    const run = registered && (await confirmWithRestore(`Run ${registered.name}'s own uninstaller first?`, 'Recommended. Afterwards Purgeon removes everything else the installation created.'));
     if (run?.ok) {
-      if (run.checked) await makeRestorePoint(`SweepUninstall: before uninstalling ${registered.name}`, 'uninstall');
+      if (run.checked) await makeRestorePoint(`Purgeon: before uninstalling ${registered.name}`, 'uninstall');
       setBusy(`Running the uninstaller for ${registered.name}…`);
       await api.invoke('program:runUninstaller', registered);
       setBusy('');
@@ -722,10 +854,10 @@ export default function App() {
     };
     const go = await confirmWithRestore(
       `Uninstall ${list.length} programs?`,
-      `${list.map(line).join('\n')}\n\nEach program's own uninstaller runs in turn${silentOn ? '; ones marked silent run without their windows' : ', so finish each uninstaller\'s window'}. Afterwards SweepUninstall scans all of them for leftovers.`
+      `${list.map(line).join('\n')}\n\nEach program's own uninstaller runs in turn${silentOn ? '; ones marked silent run without their windows' : ', so finish each uninstaller\'s window'}. Afterwards Purgeon scans all of them for leftovers.`
     );
     if (!go.ok) return;
-    if (go.checked) await makeRestorePoint(`SweepUninstall: before uninstalling ${list.length} programs`, 'uninstall');
+    if (go.checked) await makeRestorePoint(`Purgeon: before uninstalling ${list.length} programs`, 'uninstall');
 
     stopBatch.current = false;
     setBusyStop(() => () => {
@@ -760,7 +892,7 @@ export default function App() {
     const problems = outcomes
       .filter((o) => !o.result?.ok)
       .map((o) => (o.skipped ? `${o.p.name}: skipped` : o.result.error ? `${o.p.name}: ${o.result.error}` : `${o.p.name}: uninstaller exited with code ${o.result.code}`));
-    const heading = `Uninstalled ${ok} of ${list.length} programs.${problems.length ? ` ${problems.join('; ')}.` : ''} SweepUninstall found ${items.length} leftover items.`;
+    const heading = `Uninstalled ${ok} of ${list.length} programs.${problems.length ? ` ${problems.join('; ')}.` : ''} Purgeon found ${items.length} leftover items.`;
     setModal({
       type: 'leftovers',
       title: `Batch Uninstall – ${list.length} programs`,
@@ -809,7 +941,7 @@ export default function App() {
       'Added items are removed, and changed or removed registry values and keys are put back from the earlier snapshot. Everything is backed up first and can be undone.'
     );
     if (!go.ok) return;
-    if (go.checked) await makeRestorePoint(`SweepUninstall: before cleaning up changes since ${beforeName}`, 'settings');
+    if (go.checked) await makeRestorePoint(`Purgeon: before cleaning up changes since ${beforeName}`, 'settings');
     setBusy('Preparing the cleanup…');
     let items;
     try {
@@ -881,7 +1013,7 @@ export default function App() {
     setModal(null);
     const go = await confirmWithRestore(`Update ${list.length} program${list.length === 1 ? '' : 's'}?`, `${list.map((u) => `• ${u.name}: ${u.version} → ${u.available}`).join('\n')}\n\nwinget updates them one after another, silently.`);
     if (!go.ok) return;
-    if (go.checked) await makeRestorePoint(`SweepUninstall: before updating ${list.length} programs`, 'install');
+    if (go.checked) await makeRestorePoint(`Purgeon: before updating ${list.length} programs`, 'install');
     const results = [];
     for (const [i, u] of list.entries()) {
       setBusy(`Updating ${i + 1} of ${list.length}: ${u.name}…`);
@@ -1004,9 +1136,9 @@ export default function App() {
     setModal(null);
     let q = await api.invoke('queue:get');
     if (!q) return;
-    const go = await confirmWithRestore(`Uninstall ${q.programs.filter((p) => p.status === 'pending').length} programs from the queue?`, 'They run one after another, silently where possible. If one needs a restart, SweepUninstall asks, then continues after you sign back in. Leftovers are shown at the end.');
+    const go = await confirmWithRestore(`Uninstall ${q.programs.filter((p) => p.status === 'pending').length} programs from the queue?`, 'They run one after another, silently where possible. If one needs a restart, Purgeon asks, then continues after you sign back in. Leftovers are shown at the end.');
     if (!go.ok) return;
-    if (go.checked) await makeRestorePoint('SweepUninstall: before the uninstall queue', 'uninstall');
+    if (go.checked) await makeRestorePoint('Purgeon: before the uninstall queue', 'uninstall');
     stopBatch.current = false;
     setBusyStop(() => () => {
       stopBatch.current = true;
@@ -1029,7 +1161,7 @@ export default function App() {
           await api.invoke('queue:arm');
           setBusy('');
           setBusyStop(null);
-          const now = await api.invoke('dialog:confirm', { message: `${p.name} needs a restart to finish.`, detail: 'Restart now? SweepUninstall continues the queue after you sign back in. Choose No to restart later yourself.' });
+          const now = await api.invoke('dialog:confirm', { message: `${p.name} needs a restart to finish.`, detail: 'Restart now? Purgeon continues the queue after you sign back in. Choose No to restart later yourself.' });
           if (now) await api.invoke('queue:restartNow');
           else setNotice({ tone: 'warn', text: 'The uninstall queue continues after your next restart.' });
           return;
@@ -1055,7 +1187,7 @@ export default function App() {
     });
   };
 
-  // ---- 2. removed outside SweepUninstall ------------------------------------------------------------
+  // ---- 2. removed outside Purgeon ------------------------------------------------------------
 
   const scanRemoved = async (list) => {
     setModal(null);
@@ -1119,12 +1251,12 @@ export default function App() {
     } finally {
       setBusy('');
     }
-    if (!id) return setNotice({ tone: 'warn', text: `winget has no package for ${p.name}, so it can't be repaired that way. Use Force Removal instead.` });
+    if (!id) return setNotice({ tone: 'warn', text: `winget has no package for ${p.name}, so it can't be repaired that way. Use Force instead.` });
     if (!(await api.invoke('dialog:confirm', { message: `Repair ${p.name}'s uninstaller?`, detail: `winget reinstalls the package "${id}" over the existing copy, which puts a working uninstaller back. Then the normal uninstall runs. Reinstalling accepts the package's license terms.` }))) return;
     setBusy(`Reinstalling ${id}…`);
     const r = await api.invoke('winget:repair', id).catch((e) => ({ ok: false, detail: e.message }));
     setBusy('');
-    if (!r.ok) return setError(`winget could not reinstall ${id}: ${r.detail}. Use Force Removal instead.`);
+    if (!r.ok) return setError(`winget could not reinstall ${id}: ${r.detail}. Use Force instead.`);
     const fresh = (await api.invoke('programs:list', 'desktop')).find((x) => x.name === p.name || x.key === p.key);
     await load();
     if (fresh) actions.uninstall(fresh);
@@ -1289,10 +1421,11 @@ export default function App() {
 
   // ---- 15. portable apps --------------------------------------------------------------------------------
 
-  const openPortable = async (extra = []) => {
+  const openPortable = async () => {
     setBusy('Looking for portable apps…');
     try {
-      setModal({ type: 'portable', apps: await api.invoke('portable:find', extra), extra });
+      const { apps, folders } = await api.invoke('portable:find');
+      setModal({ type: 'portable', apps, folders, updates: null });
     } catch (e) {
       setError(e.message);
     } finally {
@@ -1321,6 +1454,17 @@ export default function App() {
     backupProgram: (p) => view === 'desktop' && backupProgram(p),
     rescue: (p) => view === 'desktop' && rescue(p),
     sheet: (p) => view === 'desktop' && openSheet(p),
+    analyzeProgram: async (p) => {
+      if (view !== 'desktop') return;
+      setBusy(`Analyzing ${p.name}: measuring its folders and finding what it hooks into Windows…`);
+      try {
+        setModal({ type: 'analysis', program: p, data: await api.invoke('program:analyze', p) });
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setBusy('');
+      }
+    },
     compareNow: (p) => view === 'snapshots' && runCompare(p, null),
     deleteSnapshot: async (p) => {
       if (view !== 'snapshots') return;
@@ -1344,8 +1488,8 @@ export default function App() {
       if (view === 'history') return actions.undoChange(p);
       if (view === 'archive') return actions.deleteRecord(p);
       if (p.portable) {
-        if (!(await confirmWithRestore(`Remove the portable app ${p.name}?`, 'It has no uninstaller: SweepUninstall removes its folder, its entry and the files and settings it left, after you review them. Everything is backed up first.')).ok) return;
-        return scanFor(p, `Remove Portable App – ${p.name}`, (items) => `SweepUninstall found ${items.length} items belonging to ${p.name}.`);
+        if (!(await confirmWithRestore(`Remove the portable app ${p.name}?`, 'It has no uninstaller: Purgeon removes its folder, its entry and the files and settings it left, after you review them. Everything is backed up first.')).ok) return;
+        return scanFor(p, `Remove Portable App – ${p.name}`, (items) => `Purgeon found ${items.length} items belonging to ${p.name}.`);
       }
       if (view === 'snapshots') return actions.deleteSnapshot(p);
       if (view === 'monitored') return uninstallMonitored(p);
@@ -1354,10 +1498,10 @@ export default function App() {
       const info = prep?.[0];
       const go = await confirmWithRestore(
         `Uninstall ${p.name}?`,
-        (p.store ? 'The app package will be removed.' : "The program's own uninstaller will run first, then SweepUninstall scans for leftovers.") + (info ? prepNote(info) : '')
+        (p.store ? 'The app package will be removed.' : "The program's own uninstaller will run first, then Purgeon scans for leftovers.") + (info ? prepNote(info) : '')
       );
       if (!go.ok) return;
-      if (go.checked) await makeRestorePoint(`SweepUninstall: before uninstalling ${p.name}`, 'uninstall');
+      if (go.checked) await makeRestorePoint(`Purgeon: before uninstalling ${p.name}`, 'uninstall');
       setBusy(info && silentOn && info.installer.silent ? `Uninstalling ${p.name} silently…` : `Running the uninstaller for ${p.name}…\nFinish the uninstaller's window if one appears.`);
       let result;
       try {
@@ -1373,10 +1517,10 @@ export default function App() {
       load();
       await scanFor({ ...p, installerItems: info?.installerItems || [] }, `Uninstall – ${p.name}`, (items) =>
         result.error
-          ? `${result.error} SweepUninstall found ${items.length} items.`
+          ? `${result.error} Purgeon found ${items.length} items.`
           : result.ok
-            ? `Uninstall finished. SweepUninstall found ${items.length} leftover items.`
-            : `The uninstaller exited with code ${result.code}. It may have been cancelled. SweepUninstall found ${items.length} items.`
+            ? `Uninstall finished. Purgeon found ${items.length} leftover items.`
+            : `The uninstaller exited with code ${result.code}. It may have been cancelled. Purgeon found ${items.length} items.`
       );
     },
     force: async (p) => {
@@ -1387,8 +1531,8 @@ export default function App() {
         "This skips the program's uninstaller and deletes its files and registry entries directly. Use it for programs whose uninstaller is broken or missing. Everything is backed up first." + prepNote(info, false)
       );
       if (!go.ok) return;
-      if (go.checked) await makeRestorePoint(`SweepUninstall: before force removal of ${p.name}`, 'uninstall');
-      scanFor(p, `Force Removal – ${p.name}`, (items) => `SweepUninstall found ${items.length} items belonging to ${p.name}.`);
+      if (go.checked) await makeRestorePoint(`Purgeon: before force removal of ${p.name}`, 'uninstall');
+      scanFor(p, `Force – ${p.name}`, (items) => `Purgeon found ${items.length} items belonging to ${p.name}.`);
     },
     analyze: (p) => {
       if (view === 'desktop') scanFor(p, `Analysis – ${p.name}`, (items) => `${items.length} files, folders and registry entries are associated with ${p.name}.`);
@@ -1462,7 +1606,83 @@ export default function App() {
     },
   };
 
+  // Applies settings that live outside the page: tray, always on top, detection, hidden programs.
+  function applyWindow(s) {
+    // Before this choice existed, View › Keep Running in the Tray stored tray: true.
+    const close = ['ask', 'tray', 'exit'].includes(s.closeAction) ? s.closeAction : s.tray ? 'tray' : 'ask';
+    setCloseAction(close);
+    const w = { alwaysOnTop: !!s.alwaysOnTop, minimizeToTray: !!s.minimizeToTray, startInTray: !!s.startInTray };
+    setWin(w);
+    setDetectOn(s.detectInstallers !== false);
+    setHidden(s.hiddenPrograms || {});
+    api.invoke('app:setTray', { close, minimize: w.minimizeToTray, visible: w.startInTray }).catch(() => {});
+    api.invoke('app:setOnTop', w.alwaysOnTop).catch(() => {});
+  }
+  const CLOSE_TEXT = {
+    ask: 'The close button now asks whether to exit or keep Purgeon running in the tray.',
+    tray: 'The close button now keeps Purgeon running in the notification area (tray), where it keeps watching for installers and new startup entries. Left-click the tray icon to open it; exit from its right-click menu.',
+    exit: 'The close button now exits Purgeon.',
+  };
+  const setCloseChoice = (choice) => setOption({ closeAction: choice, tray: choice === 'tray' }, CLOSE_TEXT[choice]);
+  // The close button was pressed and the question is due (see the close-requested event).
+  const answerClose = async (choice, remember) => {
+    setCloseAsk(false);
+    if (remember && choice) applyWindow(await api.invoke('settings:set', { closeAction: choice, tray: choice === 'tray' }));
+    await api.invoke('app:closeAnswered').catch(() => {});
+    if (choice === 'tray') api.invoke('app:hideToTray');
+    else if (choice === 'exit') api.invoke('app:quit');
+  };
+
+  const setOption = async (patch, text) => {
+    applyWindow(await api.invoke('settings:set', patch));
+    setNotice({ tone: 'ok', text });
+  };
+  const setHiddenFor = async (list, hide) => {
+    if (!list.length) return;
+    const next = { ...hidden };
+    for (const r of list) hide ? (next[r.key] = r.name) : delete next[r.key];
+    applyWindow(await api.invoke('settings:set', { hiddenPrograms: next }));
+    const who = list.length === 1 ? list[0].name : `${list.length} programs`;
+    setNotice({
+      tone: 'ok',
+      text: hide
+        ? `${who} ${list.length === 1 ? 'is' : 'are'} hidden from the list. ${list.length === 1 ? 'It is' : 'They are'} still installed, and Windows still lists ${list.length === 1 ? 'it' : 'them'}. View › Show Hidden Programs shows hidden programs so you can unhide them.`
+        : `${who} ${list.length === 1 ? 'is' : 'are'} shown in the list again.`,
+    });
+  };
+
   const global = {
+    toggleOnTop: () => setOption({ alwaysOnTop: !win.alwaysOnTop }, !win.alwaysOnTop ? 'The window now stays in front of other windows (View › Always on Top).' : 'The window no longer stays in front of other windows.'),
+    toggleMinTray: () =>
+      setOption(
+        { minimizeToTray: !win.minimizeToTray },
+        !win.minimizeToTray ? 'Minimizing now hides the window in the notification area (tray). Left-click the tray icon to bring it back; right-click it for its menu.' : 'Minimizing keeps the window on the taskbar again.'
+      ),
+    toggleStartTray: () =>
+      setOption(
+        { startInTray: !win.startInTray },
+        !win.startInTray ? 'Purgeon will start hidden in the notification area (tray). Left-click the tray icon to open the window.' : 'Purgeon will open its window when it starts.'
+      ),
+    toggleDetect: () =>
+      setOption(
+        { detectInstallers: !detectOn },
+        !detectOn ? 'Purgeon now watches for installers starting, and asks whether to record them.' : 'Installer detection is off. Tools › Monitor an Installation still records installations.'
+      ),
+    toggleAutostart: async () => {
+      try {
+        const on = await api.invoke('autostart:set', !autostartOn);
+        setAutostartOn(on);
+        setNotice({
+          tone: 'ok',
+          text: on
+            ? `Purgeon now starts when you sign in to Windows (a task in Task Scheduler › Purgeon).${win.startInTray ? ' It starts hidden in the tray.' : ' Turn on View › Start Minimized to Tray to start it hidden in the tray.'}`
+            : 'Purgeon no longer starts with Windows; its sign-in task was deleted.',
+        });
+      } catch (e) {
+        setError(admin === false ? 'Start with Windows needs administrator rights, to create its sign-in task. Use File › Restart as Administrator.' : e.message);
+      }
+    },
+    toggleHidden: () => setShowHidden((v) => !v),
     takeSnapshot: () => setModal({ type: 'takeSnapshot' }),
     restoreProgram: () => restoreProgramBackup(),
     queue: () => openQueue(),
@@ -1487,16 +1707,11 @@ export default function App() {
       }
     },
     palette: () => setPalette(true),
-    toggleTray: async () => {
-      const s = await api.invoke('settings:set', { tray: !trayOn });
-      setTrayOn(!!s.tray);
-      await api.invoke('app:setTray', !!s.tray);
-      setNotice({ tone: 'ok', text: s.tray ? 'SweepUninstall now stays in the tray when you close its window, and keeps checking for new startup entries. Exit from the tray menu.' : 'Closing the window exits SweepUninstall again.' });
-    },
+
     toggleShell: async () => {
       try {
         setShellOn(await api.invoke(shellOn ? 'shell:disable' : 'shell:enable'));
-        setNotice({ tone: 'ok', text: shellOn ? 'SweepUninstall was removed from Explorer’s right-click menu.' : 'Explorer’s right-click menu now has "Who owns this?" on files and folders, and "Uninstall with SweepUninstall" on shortcuts and programs (under Show more options on Windows 11).' });
+        setNotice({ tone: 'ok', text: shellOn ? 'Purgeon was removed from Explorer’s right-click menu.' : 'Explorer’s right-click menu now has "Who owns this?" on files and folders, and "Uninstall with Purgeon" on shortcuts and programs (under Show more options on Windows 11).' });
       } catch (e) {
         setError(e.message);
       }
@@ -1533,8 +1748,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       const s = await api.invoke('settings:set', { gridLines: !gridOn });
       setGridOn(s.gridLines !== false);
       setTheme(s.theme || 'dark');
-      setTrayOn(!!s.tray);
-      if (s.tray) api.invoke('app:setTray', true).catch(() => {});
+      applyWindow(s);
     },
     toggleSafe: async () => {
       const s = await api.invoke('settings:set', { safeMode: !safeOn });
@@ -1555,8 +1769,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       setSafeOn(!!s.safeMode);
       setGridOn(s.gridLines !== false);
       setTheme(s.theme || 'dark');
-      setTrayOn(!!s.tray);
-      if (s.tray) api.invoke('app:setTray', true).catch(() => {});
+      applyWindow(s);
       api.invoke('backups:prune').catch(() => {});
       setNotice({ tone: 'ok', text: s.createRestorePoints ? 'Restore points are on: confirmations offer to create one first.' : 'Restore points are off: the checkbox starts unticked.' });
     },
@@ -1565,6 +1778,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
   const dispatch = (action) => {
     setMenu(null);
     if (action.startsWith('view:')) return setView(action.slice(5));
+    if (action.startsWith('close:')) return setCloseChoice(action.slice(6));
     if (action.startsWith('theme:')) {
       const th = action.slice(6);
       setTheme(th);
@@ -1575,10 +1789,51 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     if (action === 'clearSelection') return setMarked(new Set(current ? [current.key] : []));
     if (action === 'uninstall' && isBatch) return batchUninstall(markedRows);
     if (action === 'setGroup') return batchable && openGroupDialog(markedRows.length ? markedRows : [current].filter(Boolean));
+    if (action === 'hide' || action === 'unhide') return batchable && setHiddenFor(markedRows.length ? markedRows : [current].filter(Boolean), action === 'hide');
     if (current && actions[action]) actions[action](current);
   };
   const dispatchRef = useRef(dispatch);
   dispatchRef.current = dispatch;
+  useEffect(() => installTips(), []);
+
+  // Installers starting: checked every 3 seconds while Purgeon runs, in the tray too. Not
+  // while Purgeon itself is busy (program updates run installers) or already monitoring,
+  // or during the first half hour of a trial install (that installation is the trial's).
+  const busyRef = useRef('');
+  busyRef.current = busy;
+  useEffect(() => {
+    if (!detectOn) return undefined;
+    let stopped = false;
+    api.invoke('installers:check').catch(() => {});
+    const timer = setInterval(async () => {
+      const found = await api.invoke('installers:check').catch(() => []);
+      if (stopped || !found.length || busyRef.current) return;
+      if (await api.invoke('monitor:status').catch(() => null)) return;
+      const trials = await api.invoke('trials:list').catch(() => []);
+      if (trials.some((t) => Date.now() - new Date(t.started).getTime() < 30 * 60 * 1000)) return;
+      const inst = found[0];
+      notify('Installer started', `${inst.name} is being installed. Purgeon can record what it installs.`);
+      api.invoke('app:show').catch(() => {});
+      setModal((m) => m || { type: 'installerFound', installer: inst });
+    }, 3000);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+    };
+  }, [detectOn]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const monitorDetected = async (inst) => {
+    setModal(null);
+    setBusy(`Taking a snapshot before ${inst.name} installs… Leave its installer on the first page until this is done.`);
+    try {
+      await api.invoke('monitor:attach', { installer: inst.path, name: inst.name });
+      setModal({ type: 'monitor', resume: await api.invoke('monitor:status') });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  };
   // Keyboard shortcuts (they match the accelerators shown in the menus).
   useEffect(() => {
     const onKey = (e) => {
@@ -1591,6 +1846,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       else if (e.ctrlKey && key === 'k') action = 'palette';
       else if (e.ctrlKey && key === 'q') action = 'queueAdd';
       else if (e.ctrlKey && key === 'w') action = 'sheet';
+      else if (e.ctrlKey && key === 'i') action = 'analyzeProgram';
       else if (e.ctrlKey && key === 'f') action = 'find';
       else if (e.ctrlKey && key === 's') action = 'export';
       else if (e.ctrlKey && key === 'm') action = 'monitor';
@@ -1657,7 +1913,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
   };
 
   const contextItems = isBatch
-    ? [['uninstall', `Uninstall ${markedRows.length} Programs...`, 'Del'], ['queueAdd', `Add ${markedRows.length} Programs to the Queue`, 'Ctrl+Q'], ['setGroup', `Set Group for ${markedRows.length} Programs...`, 'Ctrl+G'], null, ['clearSelection', 'Clear Selection']]
+    ? [['uninstall', `Uninstall ${markedRows.length} Programs...`, 'Del'], ['queueAdd', `Add ${markedRows.length} Programs to the Queue`, 'Ctrl+Q'], ['setGroup', `Set Group for ${markedRows.length} Programs...`, 'Ctrl+G'], ['hide', `Hide ${markedRows.length} Programs From List`], ['unhide', `Unhide ${markedRows.length} Programs`], null, ['clearSelection', 'Clear Selection']]
     : view === 'history'
       ? [['undoChange', 'Undo This Change', 'Del']]
     : view === 'archive'
@@ -1672,13 +1928,15 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           ? [['uninstall', 'Uninstall...'], ['setGroup', 'Set Group...', 'Ctrl+G'], null, ['folder', 'Installation Folder'], ['search', 'Search Online'], null, ['properties', 'Properties']]
           : [
               ['uninstall', 'Uninstall...', 'Del'],
-              ['force', 'Force Removal...', 'Shift+Del'],
+              ['force', 'Force...', 'Shift+Del'],
               ['analyze', 'Analyze Leftovers...', 'Ctrl+L'],
               ['removeEntry', 'Remove Entry...'],
               ['setGroup', 'Set Group...', 'Ctrl+G'],
               ['backupProgram', 'Migrate / Back Up Program...'],
               ['queueAdd', 'Add to Uninstall Queue', 'Ctrl+Q'],
-              ['sheet', 'What It Does...', 'Ctrl+W'],
+              current && hidden[current.key] ? ['unhide', 'Unhide'] : ['hide', 'Hide From List'],
+              ['analyzeProgram', 'Analyze Program...', 'Ctrl+I'],
+              ['sheet', 'What’s This...', 'Ctrl+W'],
               ['rescue', 'Rescue Broken Uninstall...'],
               null,
               ['registry', 'Registry Entry'],
@@ -1690,7 +1948,28 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
 
   const totalKB = view === 'desktop' ? visible.reduce((s, r) => s + (r.sizeKB || 0), 0) : 0;
   const cols = VIEWS[view].cols;
-  const cellFor = (r, c) => (c === 'size' ? r.sizeText : c === 'date' ? r.date : r[c]);
+  // A row's tooltip: what it is, and what clicking it does.
+  const rowTip = (r) => {
+    if (view === 'desktop' || view === 'store') {
+      const lines = [
+        `${r.name}${r.version ? ` ${r.version}` : ''}`,
+        r.publisher && `Publisher: ${r.publisher}`,
+        r.date && `Installed on: ${r.date}`,
+        r.location && `Folder: ${r.location}`,
+        hidden[r.key] && 'Hidden from the list (Action › Unhide shows it normally again)',
+        '',
+        'Double-click: uninstall. Right-click: everything you can do with it. Ctrl+click or Shift+click: select several.',
+      ];
+      return lines.filter((l) => l !== false && l !== undefined && l !== null).join('\n');
+    }
+    if (view === 'monitored') return `${r.name}: an installation Purgeon recorded.\nDouble-click: uninstall it, removing exactly what its installation created.`;
+    if (view === 'snapshots') return `${r.name}\nClick to select; Ctrl+click a second snapshot to compare the two. Double-click: compare with the system now.`;
+    if (view === 'backups') return `${r.name}\nDouble-click: restore what this backup holds.`;
+    if (view === 'history') return `${r.name}\nDouble-click: undo this change, from the backup taken when it was made.`;
+    if (view === 'archive') return `${r.name}\nDouble-click: reinstall it with winget. Right-click: website, or put back removed leftovers.`;
+    return r.name;
+  };
+  const cellFor = (r, c) => (c === 'size' ? r.sizeText : c === 'date' ? r.date : c === 'arch' ? archOf(r).text : r[c]);
 
   // Commands whose menu label contains what is typed in the search box.
   const cmdText = filter.trim().toLowerCase();
@@ -1713,21 +1992,55 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       ? DESKTOP_BAR.map((id) => contextItems.find((i) => i && i[0] === id)).filter(Boolean)
       : view === 'snapshots'
         ? [['takeSnapshot', 'Take Snapshot'], ...contextItems.filter(Boolean)]
-        : contextItems.filter(Boolean);
+        : view === 'timeline' || VIEW_NOTES[view]
+          ? []
+          : contextItems.filter(Boolean);
+  // Row 2: what is selected, or what to do in this view.
+  const HINTS = {
+    desktop: 'Nothing selected: click a program to see what you can do with it (double-click uninstalls it).',
+    store: 'Nothing selected: click an app to see what you can do with it.',
+    monitored: 'Click a recorded installation; double-click uninstalls exactly what it installed.',
+    snapshots: 'Click a snapshot, then Ctrl+click a second to compare the two, or double-click one to compare it with now.',
+    backups: 'Double-click a backup to restore what it removed.',
+    history: 'Double-click a change to undo it.',
+    archive: 'Programs removed so far. Double-click one to reinstall it with winget.',
+    timeline: 'Everything that changed on this PC that Purgeon knows of, newest first.',
+  };
+  const details = (() => {
+    if (VIEW_NOTES[view]) return { main: VIEW_NOTES[view], more: '' };
+    if (isBatch) return { main: `${markedRows.length} programs selected`, more: `${formatSize(markedRows.reduce((n, r) => n + (r.sizeKB || 0), 0)) || 'size unknown'} together · the actions below apply to all of them` };
+    if (!current) return { main: HINTS[view] || '', more: '', none: true };
+    if (!batchable) return { main: current.name, more: HINTS[view] || '' };
+    return {
+      main: `${current.name}${current.version && !current.name.includes(current.version) ? ` ${current.version}` : ''}`,
+      more: [current.publisher, current.sizeText, view === 'desktop' && archOf(current).text, current.date && `installed ${current.date}`, groups[current.key] && `group ${groups[current.key]}`, hidden[current.key] && 'hidden'].filter(Boolean).join(' · '),
+    };
+  })();
   const barReady = (id) => (id === 'takeSnapshot' ? true : id === 'compareSelected' ? markedRows.length === 2 : isBatch || !!current);
 
   return (
     <div className={`app ${gridOn ? 'grid' : ''}`} onClick={() => menu && setMenu(null)}>
-      <MenuBar onAction={dispatch} right={
+      <MenuBar onAction={dispatch} controls={<WindowControls pinned={win.alwaysOnTop} toTray={win.minimizeToTray} onPin={() => dispatch('toggleOnTop')} />} right={
           admin === false ? (
             <button className="link elevate" onClick={() => api.invoke('app:elevate')} title="Needed to remove programs installed for all users, and for machine-wide changes">
-              Not elevated – Restart as Administrator
+              Not Elevated – Restart as Administrator
             </button>
           ) : admin ? (
             <span className="elevated">Administrator</span>
           ) : null
         }
-        checked={{ toggleRestore: restoreOn, toggleSilent: silentOn, toggleSafe: safeOn, toggleGrid: gridOn, 'theme:dark': theme === 'dark', 'theme:light': theme === 'light', 'theme:contrast': theme === 'contrast', toggleTray: trayOn, toggleShell: shellOn }} />
+        checked={{ toggleRestore: restoreOn, toggleSilent: silentOn, toggleSafe: safeOn, toggleGrid: gridOn, 'theme:dark': theme === 'dark', 'theme:light': theme === 'light', 'theme:contrast': theme === 'contrast', 'close:ask': closeAction === 'ask', 'close:tray': closeAction === 'tray', 'close:exit': closeAction === 'exit', toggleShell: shellOn, toggleOnTop: win.alwaysOnTop, toggleMinTray: win.minimizeToTray, toggleStartTray: win.startInTray, toggleAutostart: autostartOn, toggleDetect: detectOn, toggleHidden: showHidden }} />
+      <div className="workspace">
+      {/* The views, as icons; each one's name and shortcut is in its tooltip. */}
+      <nav className="view-bar-side" aria-label="Views">
+        {VIEW_CHIPS.map(([id, label, title]) => (
+          <button key={id} className={`view-chip ${view === id ? 'on' : ''}`} onClick={() => (VIEWS[id].button ? toggleView(id) : setView(id))} aria-pressed={view === id} title={`${label}: ${title}`}>
+            <ViewIcon id={id} />
+            <span className="sr-only">{label}</span>
+          </button>
+        ))}
+      </nav>
+      <div className="workspace-main">
       {/* Row 1: one box that searches the list and finds commands. */}
       <div className="cmdbar">
         <div className="search">
@@ -1758,6 +2071,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               }
             }}
             aria-label="Search or run a command"
+            title="Type to filter the list by name, publisher or group. Matching menu commands appear below: press Down, then Enter to run one. Esc clears."
             aria-expanded={cmdShown}
           />
           {filter && (
@@ -1781,13 +2095,12 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           All commands <kbd>Ctrl+K</kbd>
         </button>
       </div>
-      {/* Row 2: every view one click away, and the group filter. */}
-      <div className="toolbar view-chips" role="toolbar" aria-label="Views">
-        {VIEW_CHIPS.map(([id, label, title]) => (
-          <button key={id} className={`view-chip ${view === id ? 'on' : ''}`} onClick={() => (VIEWS[id].button ? toggleView(id) : setView(id))} aria-pressed={view === id} title={title}>
-            {label}
-          </button>
-        ))}
+      {/* Row 2: what is selected (or what this view is for), and the group filter. */}
+      <div className="toolbar details-bar" role="status" aria-label="Selection">
+        <span className={`details-main ${details.none ? 'none' : ''}`} title={details.more ? `${details.main} · ${details.more}` : details.main}>
+          {details.main}
+        </span>
+        {details.more && <span className="details-more">{details.more}</span>}
         <select
           className={`group-picker ${groupFilter !== ALL_GROUPS && batchable ? 'active' : ''}`}
           value={groupFilter}
@@ -1814,42 +2127,18 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           )}
         </select>
       </div>
-      {/* Row 3: what can be done with the selection, or what the open view is for. */}
-      <div className="action-bar" role="toolbar" aria-label="Actions">
-        {VIEW_NOTES[view] ? (
-          <span className="action-note">{VIEW_NOTES[view]}</span>
-        ) : (
-          <>
-            <span className={`action-subject ${current || isBatch ? '' : 'none'}`} title={current?.name}>
-              {isBatch ? `${markedRows.length} selected:` : current ? `${current.name}:` : `Nothing selected`}
-            </span>
-            {barItems.map(([id, label]) => (
-              <button key={id} className={`action-button ${/^(uninstall|force|delete)/i.test(id) ? 'danger' : ''}`} disabled={!barReady(id)} onClick={() => dispatch(id)}>
-                {shortLabel(label)}
-              </button>
-            ))}
-            {view === 'backups' && <span className="action-note right">Double-click a backup to restore it</span>}
-            {view === 'history' && <span className="action-note right">Double-click a change to undo it</span>}
-          </>
-        )}
-      </div>
+      {/* Row 3: the actions for the selection; they continue on another row when they don't fit. */}
+      {barItems.length > 0 && (
+        <div className="action-bar" role="toolbar" aria-label="Actions">
+          {barItems.map(([id, label]) => (
+            <button key={id} className={`action-button ${/^(uninstall|force|delete)/i.test(id) ? 'danger' : ''}`} disabled={!barReady(id)} onClick={() => dispatch(id)} title={ACTION_TIPS[id]}>
+              {shortLabel(label)}
+            </button>
+          ))}
+        </div>
+      )}
       {view === 'snapshots' && !loading && (
         <SnapshotTimeline snapshots={rows.filter((r) => r.stats && r.created)} marked={marked} onSelect={(key, ctrl) => selectRow(key, { ctrl })} onCompare={(a, b) => runCompare(a, b)} onCompareNow={(s) => runCompare(s, null)} />
-      )}
-
-      {error && (
-        <div className="error-bar">
-          <span>{error}</span>
-          <button onClick={() => setError('')}>✕</button>
-        </div>
-      )}
-      {notice && (
-        <div className={`notice-bar ${notice.tone}`}>
-          <span>{notice.text}</span>
-          <button onClick={() => setNotice(null)} aria-label="Dismiss">
-            ✕
-          </button>
-        </div>
       )}
 
       {view === 'debloat' ? (
@@ -1873,7 +2162,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       <div className={`list view-${view}`} tabIndex={0} ref={listRef} onKeyDown={onListKey}>
         <div className="list-header">
           {cols.map(([id, label]) => (
-            <div key={id} className={`col col-${id}`} onClick={() => setSort((s) => ({ col: id, dir: s.col === id ? -s.dir : 1 }))}>
+            <div key={id} className={`col col-${id}`} onClick={() => setSort((s) => ({ col: id, dir: s.col === id ? -s.dir : 1 }))} title={`Sort by ${label.toLowerCase()}. Click again to reverse the order.`}>
               {label}
               {sort.col === id && <span className="sort">{sort.dir > 0 ? '▲' : '▼'}</span>}
             </div>
@@ -1883,14 +2172,15 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           <div className="list-empty">Loading…</div>
         ) : visible.length === 0 ? (
           <div className="list-empty">
-            {filter ? 'No matches.' : view === 'timeline' ? 'Nothing recorded yet.' : view === 'archive' ? 'No programs removed yet. Every program you uninstall is recorded here.' : view === 'monitored' ? 'No monitored programs yet. Use Tools › Monitor an Installation.' : view === 'backups' ? 'No backups yet.' : view === 'history' ? 'No changes yet. Everything SweepUninstall changes will be listed here.' : 'Nothing found.'}
+            {filter ? 'No matches.' : view === 'timeline' ? 'Nothing recorded yet.' : view === 'archive' ? 'No programs removed yet. Every program you uninstall is recorded here.' : view === 'monitored' ? 'No monitored programs yet. Use Tools › Monitor an Installation.' : view === 'backups' ? 'No backups yet.' : view === 'history' ? 'No changes yet. Everything Purgeon changes will be listed here.' : 'Nothing found.'}
           </div>
         ) : (
           visible.map((r, idx) => (
             <div
               key={r.key}
               data-idx={idx}
-              className={`row ${marked.has(r.key) ? 'selected' : ''} ${r.key === selected ? 'focused' : ''} ${r.arch === 'user' ? 'user' : ''}`}
+              className={`row ${marked.has(r.key) ? 'selected' : ''} ${r.key === selected ? 'focused' : ''} ${r.arch === 'user' ? 'user' : ''} ${batchable && hidden[r.key] ? 'hidden-row' : ''}`}
+              title={rowTip(r)}
               onMouseDown={(e) => e.button === 0 && selectRow(r.key, { ctrl: multi && e.ctrlKey, shift: multi && e.shiftKey })}
               onDoubleClick={(e) => !e.ctrlKey && !e.shiftKey && dispatch(view === 'backups' ? 'restore' : view === 'history' ? 'undoChange' : view === 'snapshots' ? 'compareNow' : view === 'archive' ? 'reinstall' : 'uninstall')}
               onContextMenu={(e) => {
@@ -1912,13 +2202,24 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
                         ? `Measured from ${r.folder}${r.sizeTruncated ? ' (stopped early; at least this size)' : ''}`
                         : id === 'date' && r.dateMeasured
                           ? `Date the folder ${r.folder} was created`
-                          : undefined
+                          : id === 'arch'
+                            ? archOf(r).how
+                            : undefined
                     }
                   >
                     {cellFor(r, id)}
                     {id === 'size' && r.sizeTruncated ? '+' : ''}
                   </span>
-                  {id === 'name' && batchable && groups[r.key] && <span className="group-tag">{groups[r.key]}</span>}
+                  {id === 'name' && batchable && hidden[r.key] && (
+                    <span className="hidden-tag" title="Hidden from the list (Action › Hide From List). It is still installed; Action › Unhide shows it normally again.">
+                      hidden
+                    </span>
+                  )}
+                  {id === 'name' && batchable && groups[r.key] && (
+                    <span className="group-tag" title={`In the group "${groups[r.key]}". Pick it in the group list to show only this group; Set Group (Ctrl+G) changes it.`}>
+                      {groups[r.key]}
+                    </span>
+                  )}
                   {id === 'name' && view === 'desktop' && <InsightTags i={insight[r.key]} />}
                 </div>
               ))}
@@ -1928,19 +2229,43 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       </div>
       )}
 
+      {/* Messages sit at the bottom, just above the status bar. */}
+      {error && (
+        <div className="error-bar">
+          <span>{error}</span>
+          <button onClick={() => setError('')}>✕</button>
+        </div>
+      )}
+      {notice && (
+        <div className={`notice-bar ${notice.tone}`}>
+          <span>{notice.text}</span>
+          <button onClick={() => setNotice(null)} aria-label="Dismiss">
+            ✕
+          </button>
+        </div>
+      )}
+
+      </div>
+      </div>
+
       <div className="statusbar">
         {VIEWS[view].custom ? (
           <span>{customStatus}</span>
         ) : (
-          <span>
+          <span title="How many entries the list shows, and their total size where it is known">
             {loading ? 'Loading' : visible.length} {VIEWS[view].noun}
             {totalKB ? `, total size ${formatSize(totalKB)}` : ''}
             {filter && rows.length !== visible.length ? ` (of ${rows.length})` : ''}
             {isBatch ? `, ${markedRows.length} selected` : ''}
+            {hiddenCount > 0 && (
+              <button className="link hidden-count" onClick={() => dispatch('toggleHidden')} title={showHidden ? 'Hidden programs are shown dimmed. Click to hide them again.' : 'Programs you hid with Action › Hide From List. Click to show them dimmed, so you can unhide them.'}>
+                {`, ${hiddenCount} hidden${showHidden ? ' (shown)' : ''}`}
+              </button>
+            )}
           </span>
         )}
         <span className="status-right">
-          {current && view === 'desktop' && <span className="muted">{current.publisher}</span>}
+          {current && view === 'desktop' && <span className="muted" title="Publisher of the selected program, as its uninstall entry reports it">{current.publisher}</span>}
 
         </span>
       </div>
@@ -1949,7 +2274,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         <div className="context-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           {contextItems.map((it, i) =>
             it ? (
-              <button key={i} className={i === 0 ? 'bold' : ''} onClick={() => dispatch(it[0])}>
+              <button key={i} className={i === 0 ? 'bold' : ''} onClick={() => dispatch(it[0])} title={ACTION_TIPS[it[0]]}>
                 <span>{it[1]}</span>
                 <span className="accel">{it[2]}</span>
               </button>
@@ -2147,12 +2472,15 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {modal?.type === 'portable' && (
         <PortableDialog
           apps={modal.apps}
+          folders={modal.folders}
+          updates={modal.updates}
+          checking={modal.checking}
           onRegister={async (a) => {
             try {
               await api.invoke('portable:register', a);
               setNotice({ tone: 'ok', text: `${a.name} is now in the program list.` });
               load();
-              openPortable(modal.extra);
+              openPortable();
             } catch (e) {
               setError(e.message);
             }
@@ -2161,12 +2489,30 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             const p = desktopCache.current.find((x) => x.portable && String(x.location).toLowerCase() === a.folder.toLowerCase());
             if (p) await api.invoke('portable:unregister', p.key.replace(/^HKCU/, 'HKEY_CURRENT_USER')).catch((e) => setError(e.message));
             load();
-            openPortable(modal.extra);
+            openPortable();
           }}
           onAddFolder={async () => {
-            const f = await api.invoke('transfer:pickFolder', 'Choose a portable app’s folder');
-            if (f) openPortable([...(modal.extra || []), f]);
+            const f = await api.invoke('transfer:pickFolder', 'Choose the folder that holds your portable apps');
+            if (!f) return;
+            await api.invoke('portable:addFolder', f);
+            openPortable();
           }}
+          onRemoveFolder={async (f) => {
+            await api.invoke('portable:removeFolder', f);
+            openPortable();
+          }}
+          onCheckUpdates={async () => {
+            const apps = modal.apps;
+            setModal((m) => ({ ...m, checking: true }));
+            try {
+              const updates = await api.invoke('portable:checkUpdates', apps.map((a) => ({ folder: a.folder, name: a.name, version: a.version })));
+              setModal((m) => (m?.type === 'portable' ? { ...m, updates, checking: false } : m));
+            } catch (e) {
+              setModal((m) => (m?.type === 'portable' ? { ...m, checking: false } : m));
+              setError(e.message);
+            }
+          }}
+          onOpenUrl={(url) => /^https?:\/\//i.test(url) && api.invoke('open:url', url)}
           onClose={() => setModal(null)}
         />
       )}
@@ -2194,7 +2540,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             setModal(null);
             try {
               const html = await api.invoke('report:monthly', { month, programs: desktopCache.current, insight });
-              await api.invoke('export:html', { title: 'Save Monthly Report', fileName: `sweepuninstall-report-${month}.html`, html });
+              await api.invoke('export:html', { title: 'Save Monthly Report', fileName: `purgeon-report-${month}.html`, html });
             } catch (e) {
               setError(e.message);
             }
@@ -2219,6 +2565,37 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             } else setTimeout(() => dispatch(c.action), 0);
           }}
           onClose={() => setPalette(false)}
+        />
+      )}
+      {closeAsk && <CloseDialog onAnswer={answerClose} />}
+      {modal?.type === 'analysis' && (
+        <AnalysisDialog
+          program={modal.program}
+          data={modal.data}
+          insight={insight[modal.program.key]}
+          onSheet={() => openSheet(modal.program)}
+          onLeftovers={() => {
+            const p = modal.program;
+            setModal(null);
+            setTimeout(() => actions.analyze(p), 0);
+          }}
+          onUninstall={() => {
+            const p = modal.program;
+            setModal(null);
+            setTimeout(() => actions.uninstall(p), 0);
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'installerFound' && (
+        <InstallerFoundDialog
+          installer={modal.installer}
+          onMonitor={() => monitorDetected(modal.installer)}
+          onStop={() => {
+            setModal(null);
+            dispatch('toggleDetect');
+          }}
+          onClose={() => setModal(null)}
         />
       )}
       {modal?.type === 'updates' && <UpdatesDialog onUpdate={runUpdates} onClose={() => setModal(null)} />}

@@ -45,7 +45,7 @@ function folderSize(dir, maxEntries, maxMs) {
   return { bytes, entries, truncated };
 }
 
-export function createNodeSys(dataDir = path.join(os.tmpdir(), 'sweepuninstall-test-data')) {
+export function createNodeSys(dataDir = path.join(os.tmpdir(), 'purgeon-test-data')) {
   return {
     info: { env: { ...process.env }, home: os.homedir(), dataDir, exe: process.execPath },
     async runPS(script, input) {
