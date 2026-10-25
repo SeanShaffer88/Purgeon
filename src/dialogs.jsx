@@ -10,7 +10,7 @@ export function Dialog({ title, onClose, children, buttons, width = 520 }) {
   }, [onClose]);
   return (
     <div className="overlay">
-      <div className="dialog" style={{ width }}>
+      <div className="dialog" role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined} style={{ width, maxWidth: '96vw' }}>
         <div className="dialog-title">
           <span>{title}</span>
           {onClose && (

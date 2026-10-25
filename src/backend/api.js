@@ -24,6 +24,14 @@ import * as winget from './winget.js';
 import * as archive from './archive.js';
 import * as running from './running.js';
 import * as maintenance from './maintenance.js';
+import * as queue from './queue.js';
+import * as trials from './trials.js';
+import * as explore from './explore.js';
+import * as browsers from './browsers.js';
+import * as portable from './portable.js';
+import * as shellmenu from './shellmenu.js';
+import * as report from './report.js';
+import * as ctxmenu from './ctxmenu.js';
 
 const DEFAULT_SETTINGS = { createRestorePoints: true, silentUninstall: false, safeMode: false, backupMaxDays: 0, backupMaxMB: 0, gridLines: true };
 const settingsFile = () => path.join(sys.info.dataDir, 'settings.json');
@@ -178,6 +186,74 @@ const handlers = {
     const s = await readSettings();
     return maintenance.run(s.maintenance || {}, s);
   },
+  // 1. uninstall queue
+  'queue:get': () => queue.get(),
+  'queue:add': (programs) => queue.add(programs),
+  'queue:remove': (key) => queue.remove(key),
+  'queue:save': (q) => queue.save(q),
+  'queue:clear': () => queue.clear(),
+  'queue:arm': () => queue.arm(),
+  'queue:disarm': () => queue.disarm(),
+  'queue:restartPending': () => queue.restartPending(),
+  'queue:restartNow': () => queue.restartNow(),
+  // 2. programs removed outside SweepUninstall
+  'programs:outside': (list) => archive.outside(list),
+  // 3. trial installs
+  'trials:list': () => trials.list(),
+  'trials:start': ({ installer, name }) => trials.start(installer, name),
+  'trials:launch': (installer) => open(installer),
+  'trials:tryOver': (id) => trials.tryOver(id),
+  'trials:finish': (id) => trials.finish(id),
+  // 4. rescue a broken uninstaller
+  'winget:repair': (id) => winget.repair(id),
+  'winget:exportTo': (file) => winget.exportList(file),
+  // 5-8. exploring
+  'explore:diskMap': (list) => explore.diskMap(list),
+  'explore:timeline': async (list) => explore.timeline(list, sys.uninstallKeyTimes ? await sys.uninstallKeyTimes().catch(() => ({})) : {}),
+  'program:sheet': (program) => explore.sheet(program),
+  'registry:search': (term) => explore.searchRegistry(term),
+  // 9-10. startup trust and new entries
+  'startup:trust': async (entries) => {
+    const exe = (cmd) => ((String(cmd || '').match(/^\s*"([^"]+)"|^\s*(\S+?\.exe)\b/i) || [])[1] || (String(cmd || '').match(/^\s*(\S+?\.exe)\b/i) || [])[1] || '').replace(/%([^%]+)%/g, (_, v) => sys.info.env[v] || `%${v}%`);
+    const files = entries.map((e) => exe(e.command));
+    const sigs = await insights.signatures(files.filter(Boolean));
+    const out = {};
+    for (const [i, e] of entries.entries()) {
+      const f = files[i];
+      const st = f ? await sys.stat(f).catch(() => null) : null;
+      const reasons = running.trustReasons(e.command, f ? sigs.get(f.toLowerCase()) : null, st?.created);
+      if (reasons.length) out[e.id] = reasons;
+    }
+    return out;
+  },
+  'startup:newEntries': async () => running.newEntries(await startup.list()),
+  'startup:accept': (entries) => running.accept(entries),
+  // 11. browsers
+  'browsers:list': () => browsers.list(),
+  'browsers:running': () => browsers.running(),
+  // 13-14. whole-PC migration and settings sync
+  'transfer:pickFolder': async (title) => {
+    const { open: openDialog } = await import('@tauri-apps/plugin-dialog');
+    const dir = await openDialog({ title: title || 'Choose a folder', directory: true, multiple: false });
+    return typeof dir === 'string' ? dir : null;
+  },
+  'transfer:folder': (folder) => transfer.folderPackages(folder),
+  // 15. portable apps
+  'portable:find': (extra) => portable.find(extra || []),
+  'portable:register': (app) => portable.register(app),
+  'portable:unregister': (key) => portable.unregister(key),
+  // 16. Explorer right-click menu
+  'shell:enabled': () => shellmenu.enabled(),
+  'shell:enable': () => shellmenu.enable(),
+  'shell:disable': () => shellmenu.disable(),
+  'shell:resolve': (p) => shellmenu.resolveTarget(p),
+  // 18. tray
+  'app:setTray': (on) => (sys.setTray ? sys.setTray(on) : null),
+  // 21. Explorer context menu items
+  'ctxmenu:list': () => ctxmenu.list(),
+  'ctxmenu:set': ({ entry, enable }) => ctxmenu.set(entry, enable),
+  // 19. reports
+  'report:monthly': ({ month, programs: list, insight }) => report.monthly(month, list, insight),
   'open:url': (url) => {
     if (!/^https?:\/\/[^\s"]+$/i.test(url || '')) throw new Error('Not a web address');
     return open(url);
@@ -196,8 +272,8 @@ const handlers = {
   },
   'transfer:export': ({ program, items, file, contents }) => transfer.exportProgram(program, items, file, contents),
   'transfer:classify': (items) => items.map((i) => transfer.isSettings(i)),
-  'transfer:read': (file) => transfer.read(file),
-  'transfer:restore': ({ file, numbers }) => transfer.restore(file, numbers),
+  'transfer:read': (arg) => (typeof arg === 'string' ? transfer.read(arg) : transfer.read(arg.file, { replace: !!arg.replace })),
+  'transfer:restore': ({ file, numbers, replace }) => transfer.restore(file, numbers, { replace: !!replace }),
   'transfer:undo': (id) => transfer.undo(id),
   'startup:list': () => startup.list(),
   'startup:set': ({ entry, enable }) => startup.setEnabled(entry, enable),
@@ -257,10 +333,19 @@ const recorders = {
     undo: { channel: 'groups:restore', arg: previous },
   }),
   'junk:cleanSystem': (_ids, results) =>
-    results.some((r) => r.ok) ? { type: 'Clean-up', title: `Windows clean-up: ${results.filter((r) => r.ok).map((r) => r.label).join(', ')}`, detail: 'Done by Windows itself; cannot be undone' } : null,
+    results.some((r) => r.ok)
+      ? { type: 'Clean-up', title: `Windows clean-up: ${results.filter((r) => r.ok).map((r) => r.label).join(', ')}`, detail: `${(results.reduce((n, r) => n + (r.freed || 0), 0) / 1048576).toFixed(1)} MB freed · done by Windows itself; cannot be undone` }
+      : null,
   'winget:upgrade': (id, r) => (r.ok ? { type: 'Update', title: `Updated ${id} with winget` } : null),
   'winget:install': (id, r) => (r.ok ? { type: 'Install', title: `Reinstalled ${id} with winget` } : null),
   'maintenance:apply': (_m, s) => ({ type: 'Settings', title: s.registered ? 'Scheduled weekly maintenance' : 'Turned off scheduled maintenance' }),
+  'ctxmenu:set': ({ entry, enable }) => ({ type: 'Context menu', title: `Turned ${enable ? 'on' : 'off'} "${entry.name}" in Explorer's right-click menu`, detail: entry.place, undo: { channel: 'ctxmenu:set', arg: { entry: { ...entry, enabled: enable }, enable: !enable } } }),
+  'trials:start': ({ name }) => ({ type: 'Trial', title: `Started a trial install of ${name}` }),
+  'trials:finish': (id) => ({ type: 'Trial', title: 'Ended a trial install' }),
+  'winget:repair': (id, r) => (r.ok ? { type: 'Install', title: `Reinstalled ${id} to repair its uninstaller` } : null),
+  'portable:register': (app, out) => ({ type: 'Portable', title: `Registered the portable app ${out.name}`, detail: app.folder, undo: { channel: 'portable:unregister', arg: out.key } }),
+  'shell:enable': () => ({ type: 'Settings', title: 'Added SweepUninstall to Explorer’s right-click menu', undo: { channel: 'shell:disable', arg: null } }),
+  'shell:disable': () => ({ type: 'Settings', title: 'Removed SweepUninstall from Explorer’s right-click menu', undo: { channel: 'shell:enable', arg: null } }),
   'transfer:export': ({ program, contents }, out) => ({ type: 'Backup', title: `Packaged ${program.name}${contents === 'program' ? ' (program only)' : contents === 'settings' ? ' (settings only)' : ''}`, detail: out.file }),
   'transfer:restore': (_arg, out) =>
     out.results.some((r) => r.ok) ? { type: 'Restore', title: `Restored ${out.name} from a program backup`, detail: `${out.results.filter((r) => r.ok).length} of ${out.results.length} items`, undo: { channel: 'transfer:undo', arg: out.id } } : null,
@@ -317,6 +402,9 @@ export async function initBackend() {
     insights.setRoot(path.join(data, 'insights')),
     archive.setRoot(path.join(data, 'archive')),
     maintenance.setRoot(path.join(data, 'reports')),
+    queue.setRoot(path.join(data, 'queue')),
+    trials.setRoot(path.join(data, 'trials')),
+    running.setRoot(path.join(data, 'startup')),
   ]);
 }
 

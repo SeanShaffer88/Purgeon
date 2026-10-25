@@ -730,3 +730,99 @@ test('a maintenance run writes a report and records itself, and rejects bad sche
   await assert.rejects(() => maintenance.apply({ enabled: true, day: 'Monday', time: '25:00' }), /Choose a day/);
   fs.rmSync(root, { recursive: true, force: true });
 });
+
+import * as queue from '../src/backend/queue.js';
+import * as archive from '../src/backend/archive.js';
+import { trustReasons } from '../src/backend/running.js';
+import * as runningMod from '../src/backend/running.js';
+import * as portableMod from '../src/backend/portable.js';
+import * as report from '../src/backend/report.js';
+
+test('the uninstall queue adds each program once, removes waiting ones, and knows restart codes', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-queue-'));
+  await queue.setRoot(dir);
+  await queue.add([{ key: 'a', name: 'A' }, { key: 'b', name: 'B' }]);
+  const q = await queue.add([{ key: 'a', name: 'A' }, { key: 'c', name: 'C', store: false }]);
+  assert.deepEqual(q.programs.map((p) => p.key), ['a', 'b', 'c']);
+  q.programs[0].status = 'done';
+  await queue.save(q);
+  await queue.remove('a'); // done ones stay
+  await queue.remove('b');
+  assert.deepEqual((await queue.get()).programs.map((p) => p.key), ['a', 'c']);
+  assert.ok(queue.restartCode(3010) && queue.restartCode(1641) && !queue.restartCode(0) && !queue.restartCode(1));
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('programs removed elsewhere are found, but not ones SweepUninstall removed', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-outside-'));
+  await archive.setRoot(dir);
+  assert.deepEqual(await archive.outside([{ key: 'k1', name: 'One' }, { key: 'k2', name: 'Two' }, { key: 'k3', name: 'Three' }]), [], 'first look only remembers');
+  await new Promise((r) => setTimeout(r, 5));
+  await archive.add({ key: 'k2', name: 'Two' }, 'uninstalled'); // removed here
+  const gone = await archive.outside([{ key: 'k1', name: 'One' }]);
+  assert.deepEqual(gone.map((p) => p.name), ['Three']);
+  assert.ok((await archive.list()).some((e) => e.name === 'Three' && e.how === 'outside'));
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('startup entries worth checking', () => {
+  const now = Date.parse('2026-10-24T12:00:00Z');
+  assert.deepEqual(trustReasons('"C:\\Users\\x\\AppData\\Local\\Temp\\abc\\run.exe"', null, 0, now), ['Runs from a Temp or Downloads folder']);
+  assert.deepEqual(trustReasons('C:\\Users\\x\\AppData\\Roaming\\k3j9x8q2zz\\svc.exe', null, 0, now), ['Runs from a randomly named folder in AppData']);
+  assert.deepEqual(trustReasons('"C:\\Users\\x\\AppData\\Local\\Programs\\Notes\\notes.exe"', { status: 'Valid' }, now - 30 * 86400000, now), []);
+  assert.deepEqual(trustReasons('"C:\\Program Files\\Foo\\foo.exe"', { status: 'NotSigned' }, now - 86400000, now), ['Not digitally signed', 'Its program file appeared in the last 7 days']);
+});
+
+test('new startup entries are reported once, and accepted ones are not', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-baseline-'));
+  await runningMod.setRoot(dir);
+  const base = [{ id: 'run|A', command: 'a.exe', enabled: true }];
+  assert.deepEqual(await runningMod.newEntries(base), [], 'first look records a baseline');
+  const later = [...base, { id: 'run|B', command: 'b.exe', enabled: true }, { id: 'run|C', command: 'c.exe', enabled: false }];
+  assert.deepEqual((await runningMod.newEntries(later)).map((e) => e.id), ['run|B'], 'turned-off entries are not alerts');
+  await runningMod.accept([later[1]]);
+  assert.deepEqual(await runningMod.newEntries(later), []);
+  assert.deepEqual((await runningMod.newEntries([{ id: 'run|A', command: 'evil.exe', enabled: true }])).map((e) => e.id), ['run|A'], 'a changed command counts as new');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('portable entries can only be removed when SweepUninstall made them', async () => {
+  await assert.rejects(() => portableMod.unregister('HKEY_CURRENT_USER\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\SomeRealProgram'), /Not a portable-app entry/);
+  await assert.rejects(() => portableMod.register({ folder: 'C:\\Windows\\System32', name: 'x', exe: 'C:\\Windows\\System32\\cmd.exe' }), /cannot be registered/);
+});
+
+test('the monthly report covers the month asked for', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-report-'));
+  await history.setRoot(path.join(dir, 'h'));
+  await archive.setRoot(path.join(dir, 'a'));
+  await history.record({ type: 'Startup', title: 'Turned off "Foo"' });
+  const month = new Date().toISOString().slice(0, 7);
+  const html = await report.monthly(month, [{ key: 'p', name: 'NewApp', installDate: `${month}-02` }], { p: { offer: true } });
+  assert.match(html, /NewApp/);
+  assert.match(html, /Turned off &quot;Foo&quot;|Turned off "Foo"/);
+  assert.match(html, /possible bundled offer/);
+  await assert.rejects(() => report.monthly('October'), /Choose a month/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+import * as ctxmenu from '../src/backend/ctxmenu.js';
+
+test('context menu entries are turned off and on without deleting them', async () => {
+  const K = 'HKCU\\Software\\Classes\\*\\shell\\SweepCtxTest';
+  regq('add', K, '/v', 'MUIVerb', '/t', 'REG_SZ', '/d', 'Sweep Context Test', '/f');
+  regq('add', `${K}\\command`, '/ve', '/t', 'REG_SZ', '/d', `"${process.execPath}" "%1"`, '/f');
+  try {
+    const entry = (await ctxmenu.list()).find((e) => e.name === 'Sweep Context Test');
+    assert.ok(entry && entry.enabled && entry.type === 'verb' && entry.scope === 'user' && !entry.admin, JSON.stringify(entry));
+    await ctxmenu.set(entry, false);
+    assert.ok(regq('query', K, '/v', 'LegacyDisable'), 'turned off with LegacyDisable');
+    assert.equal((await ctxmenu.list()).find((e) => e.name === 'Sweep Context Test').enabled, false);
+    await ctxmenu.set(entry, true);
+    assert.equal(regq('query', K, '/v', 'LegacyDisable'), null, 'turned back on');
+    assert.ok(regq('query', `${K}\\command`), 'the entry itself is never deleted');
+    await assert.rejects(() => ctxmenu.set({ type: 'verb', key: 'HKEY_LOCAL_MACHINE\\SYSTEM\\X', name: 'x' }, false), /Not a context menu entry/);
+    await assert.rejects(() => ctxmenu.set({ type: 'extension', clsid: 'nope', name: 'x' }, false), /Not a shell extension/);
+  } finally {
+    regq('delete', K, '/f');
+  }
+});

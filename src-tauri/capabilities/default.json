@@ -3,5 +3,7 @@
   "identifier": "default",
   "description": "The main window: core APIs and the native open/save file dialogs.",
   "windows": ["main"],
-  "permissions": ["core:default", "core:webview:allow-set-webview-zoom", "dialog:allow-open", "dialog:allow-save"]
+  "permissions": ["core:default", "core:webview:allow-set-webview-zoom", "dialog:allow-open", "dialog:allow-save",
+    "notification:default",
+    "core:event:default"]
 }

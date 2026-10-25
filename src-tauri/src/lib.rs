@@ -9,7 +9,8 @@ use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant, UNIX_EPOCH};
-use tauri::Manager;
+use std::sync::atomic::{AtomicBool, Ordering};
+use tauri::{Emitter, Manager};
 
 mod snapshot;
 mod tracker;
@@ -305,6 +306,84 @@ fn uninstall_key_times() -> std::collections::HashMap<String, f64> {
     }
     out
 }
+#[derive(Serialize)]
+struct RegHit {
+    kind: &'static str,
+    path: String,
+    name: String,
+    data: String,
+}
+
+#[derive(Serialize)]
+struct RegSearch {
+    results: Vec<RegHit>,
+    #[serde(rename = "timedOut")]
+    timed_out: bool,
+    full: bool,
+}
+
+/// Registry keys whose name contains `term`, and values whose name or text mentions it, under
+/// HKCU\Software and HKLM\SOFTWARE (Classes is left out: it is huge and shared).
+#[tauri::command]
+async fn search_registry(term: String, max: usize, max_ms: u64) -> RegSearch {
+    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ};
+    use winreg::{RegKey, RegValue};
+    tauri::async_runtime::spawn_blocking(move || {
+        let needle = term.to_lowercase();
+        let start = Instant::now();
+        let mut out = Vec::new();
+        let mut timed_out = false;
+        fn text(v: &RegValue) -> Option<String> {
+            match v.vtype {
+                winreg::enums::RegType::REG_SZ | winreg::enums::RegType::REG_EXPAND_SZ | winreg::enums::RegType::REG_MULTI_SZ => {
+                    let words: Vec<u16> = v.bytes.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
+                    Some(String::from_utf16_lossy(&words).trim_end_matches('\0').replace('\0', " | "))
+                }
+                _ => None,
+            }
+        }
+        let mut stack: Vec<(RegKey, String, u32)> = Vec::new();
+        for (hive, name, path) in [(HKEY_CURRENT_USER, "HKEY_CURRENT_USER", "Software"), (HKEY_LOCAL_MACHINE, "HKEY_LOCAL_MACHINE", "SOFTWARE")] {
+            if let Ok(k) = RegKey::predef(hive).open_subkey_with_flags(path, KEY_READ) {
+                stack.push((k, format!("{name}\\{path}"), 0));
+            }
+        }
+        while let Some((key, full, depth)) = stack.pop() {
+            if out.len() >= max {
+                break;
+            }
+            if start.elapsed() > Duration::from_millis(max_ms) {
+                timed_out = true;
+                break;
+            }
+            let leaf = full.rsplit('\\').next().unwrap_or("").to_lowercase();
+            if depth > 0 && leaf.contains(&needle) {
+                out.push(RegHit { kind: "key", path: full.clone(), name: String::new(), data: String::new() });
+                continue; // the key covers everything inside it
+            }
+            for (vname, value) in key.enum_values().flatten() {
+                let data = text(&value).unwrap_or_default();
+                if vname.to_lowercase().contains(&needle) || data.to_lowercase().contains(&needle) {
+                    out.push(RegHit { kind: "value", path: full.clone(), name: vname, data: data.chars().take(200).collect() });
+                }
+            }
+            if depth < 14 {
+                for sub in key.enum_keys().flatten() {
+                    if depth == 0 && sub.eq_ignore_ascii_case("Classes") {
+                        continue;
+                    }
+                    if let Ok(k) = key.open_subkey_with_flags(&sub, KEY_READ) {
+                        stack.push((k, format!("{full}\\{sub}"), depth + 1));
+                    }
+                }
+            }
+        }
+        let full = out.len() >= max;
+        RegSearch { results: out, timed_out, full }
+    })
+    .await
+    .unwrap_or(RegSearch { results: vec![], timed_out: true, full: false })
+}
 /// Moves several items to the Recycle Bin; one entry per path, empty when it worked.
 #[tauri::command]
 async fn move_many_to_trash(paths: Vec<String>) -> Vec<String> {
@@ -485,6 +564,8 @@ struct SysInfo {
     exe: String,
     portable: bool,
     args: Vec<String>,
+    /// All start-up arguments, for requests the window handles (--resume-queue, --who-owns, --uninstall-target).
+    launch: Vec<String>,
 }
 
 #[tauri::command]
@@ -497,6 +578,7 @@ fn sys_info(app: tauri::AppHandle) -> SysInfo {
         exe: std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default(),
         portable: portable.is_some(),
         args: cli_args(),
+        launch: std::env::args().skip(1).collect(),
     }
 }
 
@@ -536,6 +618,58 @@ fn cli_print(text: String) {
     let _ = out.flush();
 }
 
+// ---- tray icon ----------------------------------------------------------------------------
+// Off by default. When on (View › Keep Running in the Tray), closing the window hides it to the
+// tray, so new-startup-entry alerts keep working; the tray menu reopens it.
+static CLOSE_TO_TRAY: AtomicBool = AtomicBool::new(false);
+
+fn show_main(app: &tauri::AppHandle) {
+    if let Some(w) = app.get_webview_window("main") {
+        let _ = w.show();
+        let _ = w.unminimize();
+        let _ = w.set_focus();
+    }
+}
+
+#[tauri::command]
+fn set_tray(app: tauri::AppHandle, on: bool) {
+    CLOSE_TO_TRAY.store(on, Ordering::SeqCst);
+    if let Some(t) = app.tray_by_id("main") {
+        let _ = t.set_visible(on);
+    }
+}
+
+fn build_tray(app: &tauri::App) -> tauri::Result<()> {
+    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
+    use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+    let open = MenuItem::with_id(app, "open", "Open SweepUninstall", true, None::<&str>)?;
+    let junk = MenuItem::with_id(app, "junk", "Cleaner", true, None::<&str>)?;
+    let updates = MenuItem::with_id(app, "updates", "Program Updates", true, None::<&str>)?;
+    let sep = PredefinedMenuItem::separator(app)?;
+    let quit = MenuItem::with_id(app, "quit", "Exit", true, None::<&str>)?;
+    let menu = Menu::with_items(app, &[&open, &junk, &updates, &sep, &quit])?;
+    let mut tray = TrayIconBuilder::with_id("main").tooltip("SweepUninstall").menu(&menu).show_menu_on_left_click(false);
+    if let Some(icon) = app.default_window_icon() {
+        tray = tray.icon(icon.clone());
+    }
+    let icon = tray
+        .on_menu_event(|app, e| match e.id().as_ref() {
+            "quit" => app.exit(0),
+            id => {
+                show_main(app);
+                let _ = app.emit("tray", id.to_string());
+            }
+        })
+        .on_tray_icon_event(|tray, e| {
+            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e {
+                show_main(tray.app_handle());
+            }
+        })
+        .build(app)?;
+    icon.set_visible(false)?;
+    Ok(())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let cli = !cli_args().is_empty();
@@ -555,6 +689,16 @@ pub fn run() {
             if cli {
                 return Ok(());
             }
+            build_tray(app)?;
+            let hide = window.clone();
+            window.on_window_event(move |e| {
+                if let tauri::WindowEvent::CloseRequested { api, .. } = e {
+                    if CLOSE_TO_TRAY.load(Ordering::SeqCst) {
+                        api.prevent_close();
+                        let _ = hide.hide();
+                    }
+                }
+            });
             // Size the window to the screen it opens on (in Windows' scaled units, so the
             // display scale setting is respected), then show it.
             if let Ok(Some(monitor)) = window.current_monitor() {
@@ -570,9 +714,10 @@ pub fn run() {
             Ok(())
         })
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
             run_ps, exec, run_command_line, launch, read_dir, stat, exists, read_text, write_text, make_dir, remove_path, move_to_trash, move_many_to_trash, list_junk, walk, folder_size, take_snapshot,
-            compare_snapshots, snapshot_subtree, sys_info, quit, cli_print, track_start, track_launch, track_running, track_stop, wait_process, sha256_files, append_text, uninstall_key_times
+            compare_snapshots, snapshot_subtree, sys_info, quit, cli_print, track_start, track_launch, track_running, track_stop, wait_process, sha256_files, append_text, uninstall_key_times, set_tray, search_registry
         ])
         .run(tauri::generate_context!())
         .expect("error while running SweepUninstall");

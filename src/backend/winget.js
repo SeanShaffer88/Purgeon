@@ -73,6 +73,13 @@ export async function install(id) {
 export async function exportList(file) {
   const r = await run(['export', '-o', file, '--include-versions']);
   if (!(await sys.exists(file))) throw new Error((r.stdout || r.stderr || 'winget could not export the list').trim());
-  const json = JSON.parse((await sys.readText(file)).replace(/^﻿/, ''));
+  const json = JSON.parse((await sys.readText(file)).replace(/^\uFEFF/, ''));
   return { file, packages: (json.Sources || []).reduce((n, s) => n + (s.Packages || []).length, 0) };
+}
+
+// Reinstalls a package over the existing copy, to repair a broken uninstaller.
+export async function repair(id) {
+  if (!/^[\w.+-]{2,128}$/.test(id)) throw new Error('Invalid package id');
+  const r = await run(['install', '--id', id, '--exact', '--force', '--silent', '--accept-package-agreements']);
+  return { ok: r.ok, detail: r.ok ? 'Reinstalled' : (r.stdout.split(/\r?\n/).reverse().find((l) => l.trim()) || `winget exited with code ${r.code}`).trim() };
 }

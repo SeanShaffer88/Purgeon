@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 export async function createTauriSys() {
   const info = await invoke('sys_info');
   return {
-    info: { env: info.env, home: info.home, dataDir: info.data_dir, exe: info.exe, portable: info.portable, args: info.args },
+    info: { env: info.env, home: info.home, dataDir: info.data_dir, exe: info.exe, portable: info.portable, args: info.args, launch: info.launch || [] },
     runPS: (script, input) => invoke('run_ps', { script, input: input ?? null }),
     exec: (file, args) => invoke('exec', { file, args }),
     runCommandLine: (commandLine) => invoke('run_command_line', { commandLine }),
@@ -33,6 +33,8 @@ export async function createTauriSys() {
     sha256Files: (paths) => invoke('sha256_files', { paths }),
     appendText: (path, contents) => invoke('append_text', { path, contents }),
     uninstallKeyTimes: () => invoke('uninstall_key_times'),
+    setTray: (on) => invoke('set_tray', { on }),
+    searchRegistry: (term, max, maxMs) => invoke('search_registry', { term, max, maxMs }),
     quit: (code = 0) => invoke('quit', { code }),
   };
 }

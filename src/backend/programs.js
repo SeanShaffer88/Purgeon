@@ -28,6 +28,7 @@ $out = foreach ($r in $roots) {
       helpLink    = [string]$p.HelpLink
       urlInfo     = [string]$p.URLInfoAbout
       arch        = $r.arch
+      portable    = [bool]$p.SweepUninstallPortable
     }
   }
 }

@@ -8,5 +8,5 @@ export default defineConfig({
   plugins: [react()],
   base: './',
   define: { __APP_VERSION__: JSON.stringify(version) },
-  build: { outDir: 'dist', emptyOutDir: true },
+  build: { outDir: 'dist', emptyOutDir: true, minify: !process.env.NO_MINIFY },
 });

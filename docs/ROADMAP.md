@@ -4,6 +4,31 @@ Planned enhancements, grouped by area. Each is meant to be built the same way as
 SweepUninstall: original code, every change backed up and undoable, and nothing offered that
 Windows or another installed program still needs.
 
+## Added since 0.7.0 (next release)
+
+- **Uninstall queue.** Unattended uninstalls that continue after a restart, with all leftovers reviewed at the end.
+- **Removed elsewhere.** Programs uninstalled outside SweepUninstall are noticed and offered a leftover scan.
+- **Trial installs.** Try a program, then Try Over removes everything it and its installer added.
+- **Rescue broken uninstalls.** Reinstall through winget to get a working uninstaller back, then uninstall.
+- **Disk space map.** A treemap of the space each program and its data folders use.
+- **Change timeline.** Installs, removals, snapshots, trials and Change History in one list.
+- **What it does.** One page of everything a program hooks into Windows.
+- **Registry search.** Keys and values that mention a word, under the leftover protection rules.
+- **Startup trust check.** Entries from unusual folders, unsigned or newly added are tagged.
+- **New startup entry alerts.** A notification with Allow and Turn Off when a program adds itself.
+- **Browser clean-up.** Extensions that programs added to Chrome, Edge, Brave and Firefox, removable with a backup.
+- **Privacy traces.** Recent-files list, jump lists and the icon cache in the Cleaner, never pre-selected.
+- **Whole-PC migration.** Several programs packed into one folder, plus a winget list for the rest.
+- **Settings sync.** Chosen programs' settings kept in step through a shared folder.
+- **Portable apps.** Programs without an installer can be registered to get icons, groups and leftover scans.
+- **Explorer right-click entries.** "Uninstall with SweepUninstall" and "Who owns this?", fully removed when turned off.
+- **Command palette.** `Ctrl+K` for every command and program.
+- **Tray and notifications.** Optional tray icon for maintenance, updates, startup alerts and interrupted removals.
+- **Monthly report.** An HTML summary of a month's changes.
+- **Themes and accessibility.** Light and high-contrast themes, keyboard menus, focus outlines and screen-reader labels.
+- **Explorer context menu manager.** Turn programs' right-click entries off and on without deleting them.
+- **New toolbars.** A search box that also runs commands, one row of view chips, and an action bar for the selection. Views renamed to Programs, Apps, Debloat and Cleaner.
+
 ## Added in 0.6.0
 
 - **Live install tracking.** The installer and every process it starts, plus Windows Installer's
@@ -102,7 +127,6 @@ Windows or another installed program still needs.
 
 ## Ease of use
 
-- "Uninstall with SweepUninstall" in Explorer's right-click menu for shortcuts and programs.
 - Program details: publisher site, signature, size breakdown and when the program was last run.
 - Sort and filter by when programs were last used, to spot ones to remove.
 - Command-line uninstall, leftover scan and junk cleaning for scripts and IT use.

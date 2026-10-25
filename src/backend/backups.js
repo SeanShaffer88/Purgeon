@@ -542,4 +542,4 @@ function remove(id) {
   return sys.removePath(path.join(backupRoot, id));
 }
 
-export { setRoot, removeItems, planRemoval, interrupted, resolveInterrupted, prune, list, restore, remove, restoreFromRecycleBin };
+export { setRoot, removeItems, planRemoval, interrupted, resolveInterrupted, prune, list, restore, remove, restoreFromRecycleBin, restoreManyFromRecycleBin };

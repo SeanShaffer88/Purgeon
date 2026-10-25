@@ -13,6 +13,7 @@ async function start() {
   window.api = { invoke: api.invoke, onMeasured: api.onMeasured, onMenu: () => () => {} };
   window.__sweepHandlers = __handlers;
   window.__sweepPortable = !!sys.info.portable;
+  window.__sweepLaunch = sys.info.launch || [];
   const { default: App } = await import('./App.jsx');
   createRoot(document.getElementById('root')).render(<App />);
 }

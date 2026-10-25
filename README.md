@@ -4,11 +4,13 @@ A Windows uninstaller that removes a program and then finds the files, folders, 
 
 It can also:
 - monitor installations and compare before-and-after snapshots;
+- let you try a program and then undo it completely;
 - find leftovers of programs you removed long ago;
-- move programs to another PC;
-- clean junk files;
+- show where your disk space goes, program by program;
+- move programs, or a whole PC's worth, to another PC;
+- clean junk files and privacy traces;
 - update programs with winget;
-- manage everything that runs with Windows.
+- manage everything that runs with Windows, and Explorer's right-click menu.
 
 Every change is backed up first and can be undone.
 
@@ -17,26 +19,48 @@ It has a compact single-list window with a dark terminal theme. It is built with
 ![SweepUninstall main window](docs/screenshots/main.png)
 
 **Contents:**
+- [Toolbars and commands](#toolbars-and-commands)
 - [Program list](#program-list)
 - [Uninstall and leftover scan](#uninstall-and-leftover-scan)
-- [Batch uninstall](#batch-uninstall)
+- [Batch uninstall and the uninstall queue](#batch-uninstall-and-the-uninstall-queue)
 - [Installation monitor](#installation-monitor)
+- [Trial installs](#trial-installs)
 - [Snapshots](#snapshots)
-- [Program migration](#program-migration)
+- [Change timeline](#change-timeline)
+- [What a program does](#what-a-program-does)
+- [Disk space map](#disk-space-map)
+- [Program migration and settings sync](#program-migration-and-settings-sync)
 - [Uninstall Archive](#uninstall-archive)
 - [Who owns this?](#who-owns-this)
-- [Orphaned leftovers](#orphaned-leftovers)
+- [Orphaned leftovers and registry search](#orphaned-leftovers-and-registry-search)
 - [Program updates](#program-updates)
-- [Junk Files](#junk-files)
+- [Portable apps](#portable-apps)
+- [Cleaner](#cleaner)
+- [Browser clean-up](#browser-clean-up)
 - [Startup & Services](#startup--services)
-- [Debloat Windows](#debloat-windows)
+- [Explorer context menu](#explorer-context-menu)
+- [Debloat](#debloat)
 - [Program groups](#program-groups)
-- [Scheduled maintenance](#scheduled-maintenance)
+- [Scheduled maintenance, tray and reports](#scheduled-maintenance-tray-and-reports)
+- [Themes and accessibility](#themes-and-accessibility)
 - [Safety, backups and undo](#safety-backups-and-undo)
 - [Command line](#command-line)
 - [Download](#download)
 
 Screenshots use demo data. QuickPDF Free, SearchBoost Toolbar and OldPhotoTool are made-up examples.
+
+## Toolbars and commands
+
+Under the menu bar are three rows:
+- **Search and commands:** one box searches the open list as you type. It also lists menu commands whose names match; press `↓` and `Enter` to run one, or `Esc` to clear the box. **All commands** (`Ctrl+K`) opens the command palette with every command and program.
+- **Views:** one click opens **Programs**, **Apps**, **Monitored**, **Startup**, **Debloat**, **Cleaner**, **Snapshots**, **Archive** or **Timeline**. Click an open tool view again to go back to the program list. The group picker sits at the end of this row.
+- **Actions:** the main actions for the selected program: Uninstall, Force Removal, Leftovers, What It Does, Migrate, Queue and Properties. With several programs selected it shows the batch actions, and other views show their own (Take Snapshot and Compare in Snapshots, for example).
+
+The elevation status sits at the right end of the menu bar: **Not elevated – Restart as Administrator**, or **Administrator**.
+
+![Searching for "queue" lists the matching commands](docs/screenshots/command-bar.png)
+
+![The command palette](docs/screenshots/palette.png)
 
 ## Program list
 
@@ -50,8 +74,8 @@ Screenshots use demo data. QuickPDF Free, SearchBoost Toolbar and OldPhotoTool a
   - **installed with …**: it was installed or updated within two minutes of a program from another publisher, which is how bundled offers usually arrive;
   - **possible offer**: its name matches a type of program often installed as a bundled offer (toolbars, "PC optimizers", search helpers);
   - **growing**: it grew by a fifth and at least 50 MB over the last 90 days.
-- **Filters and details:** the list in the second toolbar filters by each insight. **Properties** (`Alt+Enter`) shows the signer, what it was installed with, and its size history.
-- **Toolbars:** the top toolbar switches between Desktop Programs and Windows Store Apps and opens **Debloat Windows** and **Startup & Services**. The second toolbar opens **Monitored Programs**, **Snapshots** and **Junk Files**, and picks a group or insight. Click an active button again to return to the program list.
+- **Filters and details:** the group picker also filters by each insight. **Properties** (`Alt+Enter`) shows the signer, what it was installed with, and its size history.
+- **Removed elsewhere:** when a program disappears through Windows Settings, its own uninstaller or another tool, SweepUninstall notices on the next start and offers a leftover scan.
 - **Display:** the window fits your screen and respects Windows' display scale. Zoom with `Ctrl++` / `Ctrl+-` / `Ctrl+0`. **View › Grid Lines** (on by default) separates rows and columns.
 
 ![Windows Store apps](docs/screenshots/store-apps.png)
@@ -80,12 +104,13 @@ Screenshots use demo data. QuickPDF Free, SearchBoost Toolbar and OldPhotoTool a
 - Every item gets a **match score** from 0 to 100%. Items scoring 70% or more start ticked; weaker guesses start unticked and are marked **check**.
 - Publisher folders count only when named exactly after the publisher, so removing one Google program never offers another's folders.
 - **Force Removal** (`Shift+Del`) handles programs whose uninstaller is broken or missing.
+- **Rescue Broken Uninstall** reinstalls the program through winget over the existing copy, which puts a working uninstaller back, then uninstalls it normally.
 - **Analyze Leftovers** (`Ctrl+L`) shows what belongs to a program without uninstalling it.
 - Running processes in the install folder are detected and can be closed first.
 
 ![Right-click menu](docs/screenshots/context-menu.png)
 
-## Batch uninstall
+## Batch uninstall and the uninstall queue
 
 ![Three programs selected](docs/screenshots/multi-select.png)
 
@@ -95,6 +120,13 @@ Screenshots use demo data. QuickPDF Free, SearchBoost Toolbar and OldPhotoTool a
 - **Afterwards:** one combined leftover list shows every program's files, folders, registry entries and services, grouped by program.
 
 ![Combined leftover list after a batch uninstall](docs/screenshots/batch-uninstall.png)
+
+**Uninstall queue** (**Tools › Uninstall Queue**, add programs with `Ctrl+Q`):
+- Programs are uninstalled one after another, silently where possible, so you don't have to watch.
+- If an uninstaller needs a restart, the queue is saved and SweepUninstall starts once after you sign back in to continue. It uses a RunOnce entry, which Windows removes after using it.
+- At the end, every program's leftovers are shown together for you to review.
+
+![Uninstall queue, two done and two waiting](docs/screenshots/queue.png)
 
 ## Installation monitor
 
@@ -112,6 +144,16 @@ Screenshots use demo data. QuickPDF Free, SearchBoost Toolbar and OldPhotoTool a
 
 ![Monitored programs](docs/screenshots/monitored.png)
 
+## Trial installs
+
+![Two trials running](docs/screenshots/trials.png)
+
+- **Tools › Trial Installs** lets you try a program and undo it completely.
+- A snapshot is taken, the installer runs, and you use the program for as long as you like.
+- **Try Over** removes everything added since the snapshot, including what the program created while you tried it, and puts changed settings back. You review the full list first, and everything removed is backed up.
+- **Keep It** ends the trial and keeps the program.
+- Close other programs during a trial: anything else that changes is part of the trial too.
+
 ## Snapshots
 
 ![Saved snapshots with the timeline](docs/screenshots/snapshots.png)
@@ -124,7 +166,30 @@ Screenshots use demo data. QuickPDF Free, SearchBoost Toolbar and OldPhotoTool a
 
 ![Comparing a snapshot with the system now](docs/screenshots/snapshot-compare.png)
 
-## Program migration
+## Change timeline
+
+![Change timeline](docs/screenshots/timeline.png)
+
+**Timeline** (`Ctrl+T`) answers "what changed on this PC last Tuesday?". It joins, newest first:
+- installs and updates Windows recorded;
+- monitored installs, trials and snapshots;
+- removals, including programs removed outside SweepUninstall;
+- everything in Change History, such as startup changes and clean-ups.
+
+## What a program does
+
+![What OBS Studio hooks into Windows](docs/screenshots/what-it-does.png)
+
+**What It Does** (`Ctrl+W`) lists, on one page, everything a program hooks into Windows: services, scheduled tasks, startup entries, firewall rules, file types and links it opens, Explorer menus and extensions, its folders, and other registry settings.
+
+## Disk space map
+
+![Disk space map with Steam selected](docs/screenshots/disk-map.png)
+
+- **View › Disk Space Map** draws each program as a block sized by its install folder plus the data folders named after it in ProgramData and AppData.
+- Click a block to see its biggest folders, then open **What It Does** or **Analyze Leftovers** for that program.
+
+## Program migration and settings sync
 
 ![Migrating a program with or without its settings](docs/screenshots/migrate.png)
 
@@ -138,6 +203,10 @@ Screenshots use demo data. QuickPDF Free, SearchBoost Toolbar and OldPhotoTool a
 - **Limits:**
   - Services, scheduled tasks and drivers are not included.
   - Programs installed by Windows Installer run after a restore, but need their installer to repair or update them later; the restore says so.
+
+**A whole PC:** **File › Migrate This PC** packs the programs you choose into one folder, one package each, plus a winget list of all your programs. On the new PC, **File › Restore Programs From Folder** restores the packages with the same checks, and `winget import` installs the rest.
+
+**Settings sync:** **File › Settings Sync** keeps chosen programs' settings the same on your PCs through a shared folder, such as one in OneDrive. **Send My Settings** saves this PC's settings there, and **Get Settings** brings in newer ones from another PC. The settings being replaced go to the Recycle Bin first, and the change can be undone from Change History.
 
 ## Uninstall Archive
 
@@ -154,7 +223,7 @@ Screenshots use demo data. QuickPDF Free, SearchBoost Toolbar and OldPhotoTool a
 - It checks install folders, uninstall entries, monitored installations, and names along the path.
 - Windows' and hardware vendors' shared folders are recognised as such.
 
-## Orphaned leftovers
+## Orphaned leftovers and registry search
 
 ![Orphaned leftovers](docs/screenshots/orphans.png)
 
@@ -171,6 +240,8 @@ Screenshots use demo data. QuickPDF Free, SearchBoost Toolbar and OldPhotoTool a
 
 ![Dry run](docs/screenshots/dry-run.png)
 
+**Tools › Search Registry** finds registry keys named after a word, and values that mention it, in the `Software` branches of your user and the machine. Results go through the same protection rules as leftovers, start unticked, and are backed up before removal.
+
 ## Program updates
 
 ![Program updates through winget](docs/screenshots/updates.png)
@@ -178,16 +249,25 @@ Screenshots use demo data. QuickPDF Free, SearchBoost Toolbar and OldPhotoTool a
 - **Tools › Program Updates** lists newer versions available through winget (the Windows Package Manager). It updates the ones you choose, silently, one after another, with a restore point offered first.
 - **Tools › Export Program List** saves your programs as a winget list. On a new PC, `winget import -i <file>` installs them all.
 
-## Junk Files
+## Portable apps
+
+![Portable apps](docs/screenshots/portable.png)
+
+- **Tools › Portable Apps** finds programs that run from a folder without being installed, so Windows doesn't list them. **Add a Folder** points to more.
+- **Register** adds one to the program list with its icon, through a per-user uninstall entry marked as SweepUninstall's. It then gets groups, leftover scans and a clean removal like any installed program. **Unregister** removes only that entry.
+
+## Cleaner
 
 ![Junk files by category](docs/screenshots/junk.png)
 
-**Junk Files** (`Ctrl+8`) finds files that Windows and programs recreate when needed, with their sizes:
+**Cleaner** (`Ctrl+8`) finds files that Windows and programs recreate when needed, with their sizes:
 - temporary files (yours and Windows'), keeping anything used in the last day;
 - crash dumps and Windows error reports;
 - the Explorer thumbnail cache and DirectX shader caches;
 - downloaded Windows Update files and the Delivery Optimization cache;
 - data folders of Microsoft Store apps that are no longer installed (checked again right before removal).
+
+**Privacy traces** are offered too, but never selected for you: the recent-files list, jump lists, and the icon cache. Only the shortcuts and caches are removed, never the files they point to.
 
 **How cleaning works**
 - Cleaned items go to the Recycle Bin, so a clean-up can be undone.
@@ -204,6 +284,15 @@ Screenshots use demo data. QuickPDF Free, SearchBoost Toolbar and OldPhotoTool a
 - older system restore points (the newest is always kept).
 
 These are permanent. They are never selected for you, need administrator rights, and have their own confirmation.
+
+## Browser clean-up
+
+![Browser clean-up with two extensions added by programs](docs/screenshots/browsers.png)
+
+- **Tools › Browser Clean-up** lists the extensions, search engine and home page of Chrome, Edge, Brave and Firefox.
+- Extensions that a **program added on its own** (through the registry, or into Firefox's shared folders) are flagged. That is how bundled offers arrive, and these can be removed here with a backup.
+- Extensions you added yourself are listed for reference only; remove those in the browser, which keeps its own records right.
+- Nothing is changed while that browser is running.
 
 ## Startup & Services
 
@@ -224,16 +313,30 @@ These are permanent. They are never selected for you, need administrator rights,
 
 Entries from Microsoft are tagged **Windows** and ask before being turned off.
 
-## Debloat Windows
+**Trust check:** entries worth a second look are tagged, with the reasons on hover: running from a temporary, download or oddly named user folder, being unsigned, or being added recently.
 
-![Debloat Windows, privacy and taskbar tweaks](docs/screenshots/debloat-top.png)
+**New-entry alerts:** when a program adds itself to what starts with Windows, SweepUninstall tells you with a Windows notification and offers **Allow** or **Turn Off**.
 
-- **Tweaks:** **Debloat Windows** (`Ctrl+5`) lists 26 safe, reversible tweaks in five groups: Privacy & telemetry, Start/search/taskbar, Ads & suggestions, Explorer & UI, and Windows Update.
+## Explorer context menu
+
+![Explorer context menu items](docs/screenshots/context-menu-items.png)
+
+- **Tools › Explorer Context Menu Items** lists the right-click entries that programs added to Explorer, for files, folders, the folder and desktop background, and drives. Windows' own entries are left out.
+- Click one to turn it off or on. Nothing is deleted: menu commands use Windows' own `LegacyDisable` switch, and shell extensions go on Windows' blocked list (that needs administrator rights).
+- Changes show in new Explorer windows, or everywhere after **Restart Explorer**. Each one is in Change History and can be undone.
+
+**SweepUninstall's own entries:** **Tools › Explorer Right-Click Menu** adds **Uninstall with SweepUninstall** for shortcuts and programs, and **Who owns this?** for files and folders. They are added for your user only, and turning the option off deletes exactly those keys again.
+
+## Debloat
+
+![Debloat, privacy and taskbar tweaks](docs/screenshots/debloat-top.png)
+
+- **Tweaks:** **Debloat** (`Ctrl+5`) lists 26 safe, reversible tweaks in five groups: Privacy & telemetry, Start/search/taskbar, Ads & suggestions, Explorer & UI, and Windows Update.
 - **On and off:** each is either **ENABLED** (green, applied) or **DISABLED** (red, Windows default). Turning one off puts back exactly the value you had before.
 - **Timing:** each says when it takes effect: **Applies immediately**, **Needs Explorer restart** or **Needs reboot**.
 - **What's left out:** no service removal, no app removal, and no security features turned off. Machine-wide policies are tagged **Admin**.
 
-![Debloat Windows, Explorer and Windows Update tweaks](docs/screenshots/debloat-bottom.png)
+![Debloat, Explorer and Windows Update tweaks](docs/screenshots/debloat-bottom.png)
 
 ## Program groups
 
@@ -243,7 +346,7 @@ Entries from Microsoft are tagged **Windows** and ask before being turned off.
 - **Filtering:** the group list shows one group at a time, or only ungrouped programs, and searching matches group names.
 - **Undo:** group changes can be undone from Change History.
 
-## Scheduled maintenance
+## Scheduled maintenance, tray and reports
 
 ![Scheduled maintenance](docs/screenshots/maintenance.png)
 
@@ -253,6 +356,18 @@ Entries from Microsoft are tagged **Windows** and ask before being turned off.
 - applies your backup limits.
 
 It never uninstalls anything and never runs the permanent Windows clean-ups. Each run writes a short report and appears in Change History.
+
+**Tray:** with **View › Keep Running in the Tray**, closing the window keeps SweepUninstall in the notification area. It tells you about finished maintenance runs, available updates, new startup entries and interrupted removals, and its menu opens the Cleaner or Program Updates directly.
+
+**Monthly report:** **File › Monthly Report** saves an HTML page for a month: programs installed and removed, space freed, startup changes, updates, clean-ups, and programs flagged by the insights.
+
+## Themes and accessibility
+
+![Light theme](docs/screenshots/light-theme.png)
+
+- **View** offers the **Dark** terminal theme, a **Light** theme and **High Contrast**.
+- Every menu works from the keyboard: `Alt` plus a menu's underlined letter opens it, arrow keys move, `Enter` chooses and `Esc` closes. Everything that has focus shows a clear outline.
+- Dialogs, menus, toolbars and lists carry roles and labels for screen readers.
 
 ## Safety, backups and undo
 
@@ -318,16 +433,21 @@ Get the latest version from [Releases](https://github.com/SeanShaffer88/SweepUni
 | `Ctrl+L` | Analyze leftovers |
 | `Ctrl+click` / `Shift+click` / `Shift+arrows` / `Ctrl+A` | Select several programs |
 | `Alt+Enter` / `Enter` | Properties |
-| `Ctrl+F` | Search |
+| `Ctrl+F` | Search, or type a command |
+| `Ctrl+K` | Command palette |
 | `Ctrl+G` | Set group |
-| `Ctrl+1` / `Ctrl+2` | Desktop programs / Windows Store apps |
+| `Ctrl+Q` | Add to the uninstall queue |
+| `Ctrl+W` | What It Does |
+| `Ctrl+1` / `Ctrl+2` | Programs / Apps |
 | `Ctrl+3` | Monitored Programs |
 | `Ctrl+4` | Backups |
-| `Ctrl+5` | Debloat Windows |
+| `Ctrl+5` | Debloat |
 | `Ctrl+6` | Startup & Services |
 | `Ctrl+7` | Snapshots |
-| `Ctrl+8` | Junk Files |
+| `Ctrl+8` | Cleaner |
 | `Ctrl+9` | Uninstall Archive |
+| `Ctrl+T` | Change timeline |
+| `Alt` + underlined letter | Open a menu |
 | `Ctrl+M` | Monitor an installation |
 | `Ctrl+H` | Change History |
 | `Ctrl++` / `Ctrl+-` / `Ctrl+0` | Zoom in / out / reset |
@@ -368,6 +488,11 @@ npm run dev
 | `src/backend/startup.js`, `running.js` | Startup & Services, boot delays and inbound firewall rules |
 | `src/backend/debloat.js`, `restore.js` | Debloat tweaks and restore points |
 | `src/backend/maintenance.js`, `log.js`, `history.js`, `groups.js` | Scheduled maintenance, command log, Change History and groups |
+| `src/backend/queue.js`, `trials.js` | Uninstall queue with restart resume, and trial installs |
+| `src/backend/explore.js` | Disk space map, change timeline, "what it does" sheet and registry search |
+| `src/backend/browsers.js`, `portable.js` | Browser clean-up and portable apps |
+| `src/backend/ctxmenu.js`, `shellmenu.js` | Explorer context menu items, and SweepUninstall's own right-click entries |
+| `src/backend/report.js` | Monthly report |
 | `src/backend/paths.js` | Install roots, and guards that refuse to touch system folders |
 | `src/*.jsx`, `src/cli.js` | React UI and the command line |
 | `test/` | Safety tests (`node --test`) against the same backend code |
@@ -377,7 +502,8 @@ npm run dev
 - **Snapshot depth:** snapshots record to a fixed depth (six levels for Standard, ten for Deep); live tracking covers any depth during monitored installs.
 - **File contents:** snapshots don't store file contents, so changed files are listed but can't be put back.
 - **Other activity:** changes made by other programs during monitoring, or between snapshots, are listed too. Review before cleaning up.
-- **Recycle Bin:** files can be restored only while they are still in the Recycle Bin, and Junk Files moved there take space until it is emptied.
+- **Recycle Bin:** files can be restored only while they are still in the Recycle Bin, and files the Cleaner moved there take space until it is emptied.
+- **Trials:** Try Over removes what changed since the trial's snapshot, so changes made by other programs during a trial are listed too.
 - **Services:** a restored service comes back after a restart.
 
 ## Roadmap

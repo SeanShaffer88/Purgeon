@@ -1,6 +1,8 @@
 // What runs without being started: the measured start-up delay each program caused (from
 // Windows' own boot performance records), and programs allowed to accept incoming connections.
 import { runPSJson } from './shell.js';
+import { sys } from './sys.js';
+import * as path from './winpath.js';
 
 // Windows logs slow boots in Microsoft-Windows-Diagnostics-Performance/Operational:
 // event 100 is a boot with its duration; 101 (programs), 103 (services) and 102/104-110
@@ -67,4 +69,45 @@ export async function inboundRules() {
     byProgram.set(k, e);
   }
   return [...byProgram.values()].map((e) => ({ ...e, name: e.names[0], profile: [...e.profiles].join(', ') })).sort((a, b) => a.display.localeCompare(b.display));
+}
+
+// ---- startup trust check and new-entry alerts ------------------------------------------------
+
+const RANDOM_NAME = /\\(?=[a-z0-9]*\d)(?=[a-z0-9]*[a-z])[a-z0-9]{8,}\\|\\\{?[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\}?\\/i;
+
+// Reasons to look twice at a startup entry: it runs from Temp or Downloads, from a randomly
+// named folder in AppData, its file is unsigned, or the file appeared in the last week.
+export function trustReasons(command, sig, created, now = Date.now()) {
+  const c = String(command || '').toLowerCase();
+  const reasons = [];
+  if (/\\(temp|tmp)\\|\\downloads\\/.test(c)) reasons.push('Runs from a Temp or Downloads folder');
+  else if (/\\appdata\\/.test(c) && RANDOM_NAME.test(c.replace(/\\appdata\\(local|roaming|locallow)\\(programs|microsoft)\\/, '\\'))) reasons.push('Runs from a randomly named folder in AppData');
+  if (sig && sig.status && sig.status !== 'Valid') reasons.push(sig.status === 'NotSigned' ? 'Not digitally signed' : `Signature problem: ${sig.status}`);
+  if (created && now - created < 7 * 86400000) reasons.push('Its program file appeared in the last 7 days');
+  return reasons;
+}
+
+let baselineFile = '';
+export const setRoot = async (dir) => {
+  await sys.makeDir(dir);
+  baselineFile = path.join(dir, 'startup-baseline.json');
+};
+
+// Startup entries that are new (or now run something else) since they were last accepted.
+// The first look only records what is there.
+export async function newEntries(entries) {
+  const base = await sys.readText(baselineFile).then(JSON.parse).catch(() => null);
+  const now = Object.fromEntries(entries.map((e) => [e.id, e.command || '']));
+  if (!base) {
+    await sys.writeText(baselineFile, JSON.stringify(now));
+    return [];
+  }
+  return entries.filter((e) => e.enabled !== false && (base[e.id] === undefined || base[e.id] !== (e.command || '')));
+}
+
+// Accepts entries into the baseline (so they are not reported again).
+export async function accept(entries) {
+  const base = await sys.readText(baselineFile).then(JSON.parse).catch(() => ({}));
+  for (const e of entries) base[e.id] = e.command || '';
+  await sys.writeText(baselineFile, JSON.stringify(base));
 }

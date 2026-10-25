@@ -13,6 +13,7 @@ import * as path from './winpath.js';
 import { runPS, runPSJson, reg, psq } from './shell.js';
 import { isProtected, isProtectedKey } from './paths.js';
 import { detect } from './installers.js';
+import { restoreManyFromRecycleBin } from './backups.js';
 
 let root = '';
 export const setRoot = async (dir) => {
@@ -131,7 +132,9 @@ export function rewriteReg(text, source, here = { profile: homeDir() }) {
 }
 
 // The backup's manifest, with each item's target on this PC and whether it can be restored.
-export async function read(file) {
+// With `replace`, existing settings folders in your profile are not blocked: a restore moves them
+// to the Recycle Bin first (settings sync).
+export async function read(file, { replace = false } = {}) {
   const manifest = JSON.parse((await runPS(READ_MANIFEST, { input: file })).replace(/^\uFEFF/, ''));
   if (manifest.format !== FORMAT) throw new Error('This file is not a SweepUninstall program backup.');
   const items = [];
@@ -141,7 +144,7 @@ export async function read(file) {
     if (i.kind === 'dir' || i.kind === 'file') {
       if (isProtected(target)) blocked = 'Protected location';
       else if (!(await sys.exists(target.slice(0, 3)))) blocked = `Drive ${target.slice(0, 2)} is not on this PC`;
-      else if (await sys.exists(target)) blocked = 'Already exists here, left as it is';
+      else if (await sys.exists(target)) blocked = replace && isSettings({ kind: i.kind, path: target }) ? '' : 'Already exists here, left as it is';
     } else if (i.kind === 'key' && isProtectedKey(target)) blocked = 'Protected Windows key';
     items.push({ ...i, target, blocked });
   }
@@ -181,19 +184,30 @@ $res | ConvertTo-Json -Compress
 const REG_TYPE = { String: 'REG_SZ', ExpandString: 'REG_EXPAND_SZ', DWord: 'REG_DWORD', QWord: 'REG_QWORD', Binary: 'REG_BINARY', MultiString: 'REG_MULTI_SZ' };
 
 // Restores the chosen items (by number) of a backup read with read(). Returns { id, results }.
-export async function restore(file, numbers) {
-  const backup = await read(file);
+export async function restore(file, numbers, { replace = false } = {}) {
+  const backup = await read(file, { replace });
   const chosen = backup.items.filter((i) => numbers.includes(i.n) && !i.blocked);
   const id = String(Date.now());
   const dir = path.join(root, id);
   await sys.makeDir(dir);
-  const record = { id, name: backup.program.name, file, created: new Date().toISOString(), dirs: [], files: [], keys: [], values: [] };
+  const record = { id, name: backup.program.name, file, created: new Date().toISOString(), dirs: [], files: [], keys: [], values: [], replaced: [] };
   const results = backup.items.filter((i) => numbers.includes(i.n) && i.blocked).map((i) => ({ kind: i.kind, path: i.target, name: i.name, ok: false, detail: i.blocked }));
 
   const fileItems = chosen.filter((i) => i.kind === 'dir' || i.kind === 'file');
+  // Settings being replaced go to the Recycle Bin first, so undo can bring them back.
+  for (const i of fileItems.filter((x) => replace && isSettings({ kind: x.kind, path: x.target }))) {
+    if (!(await sys.exists(i.target))) continue;
+    try {
+      await sys.trash(i.target);
+      record.replaced.push(i.target);
+    } catch (e) {
+      results.push({ kind: i.kind, path: i.target, ok: false, detail: `In use, not replaced: ${e?.message || e}` });
+      i.skip = true;
+    }
+  }
   const keyItems = chosen.filter((i) => i.kind === 'key');
-  const out = await runPSJson(EXTRACT, { input: JSON.stringify({ file, items: fileItems.map((i) => ({ n: i.n, kind: i.kind, target: i.target })), keys: keyItems.map((i) => ({ n: i.n })) }) }).then((r) => r[0] || {});
-  for (const i of fileItems) {
+  const out = await runPSJson(EXTRACT, { input: JSON.stringify({ file, items: fileItems.filter((i) => !i.skip).map((i) => ({ n: i.n, kind: i.kind, target: i.target })), keys: keyItems.map((i) => ({ n: i.n })) }) }).then((r) => r[0] || {});
+  for (const i of fileItems.filter((x) => !x.skip)) {
     const r = String(out[i.n] || 'Not restored');
     const ok = r.startsWith('OK');
     if (ok) record[i.kind === 'dir' ? 'dirs' : 'files'].push(i.target);
@@ -250,8 +264,11 @@ export async function undo(id) {
       continue;
     }
     try {
-      if (await sys.exists(p)) await sys.trash(p);
-      results.push({ kind: 'dir', path: p, ok: true, detail: 'Moved to Recycle Bin' });
+      // A copy that replaced your settings is deleted outright (it is still in the package), so
+      // the Recycle Bin holds only your earlier settings under that path.
+      const replacing = (record.replaced || []).some((r) => r.toLowerCase() === p.toLowerCase());
+      if (await sys.exists(p)) await (replacing ? sys.removePath(p) : sys.trash(p));
+      results.push({ kind: 'dir', path: p, ok: true, detail: replacing ? 'Restored copy removed (it is still in the package)' : 'Moved to Recycle Bin' });
     } catch (e) {
       results.push({ kind: 'dir', path: p, ok: false, detail: String(e?.message || e) });
     }
@@ -271,11 +288,26 @@ export async function undo(id) {
       : await reg(['delete', v.path, ...(v.name ? ['/v', v.name] : ['/ve']), '/f']);
     results.push({ kind: 'value', path: v.path, name: v.name, ok: r.ok || /unable to find/i.test(r.stderr), detail: v.old ? 'Earlier value put back' : 'Removed' });
   }
+  // Settings a sync replaced come back out of the Recycle Bin.
+  if (record.replaced?.length) {
+    const back = await restoreManyFromRecycleBin(record.replaced).catch(() => ({}));
+    for (const p of record.replaced) results.push({ kind: 'dir', path: p, ok: back[p] === 'OK', detail: back[p] === 'OK' ? 'Earlier settings put back' : 'Earlier settings are not in the Recycle Bin any more' });
+  }
   return results;
 }
 
 // Items a program backup offers by default: what the leftover scan is sure about, minus things
 // that can't be carried to another PC (services, tasks, firewall rules).
 export const backupCandidates = (scanItems) => scanItems.filter((i) => ['dir', 'file', 'key', 'value'].includes(i.kind));
+
+// Packages in a folder (whole-PC migration and settings sync): [{ file, name, mtime }].
+export async function folderPackages(folder) {
+  const out = [];
+  for (const e of (await sys.readDir(folder).catch(() => [])).filter((x) => x.file && /\.swpkg$/i.test(x.name))) {
+    const s = await sys.stat(path.join(folder, e.name)).catch(() => null);
+    out.push({ file: path.join(folder, e.name), name: e.name.replace(/\.swpkg$/i, ''), mtime: s?.modified || 0 });
+  }
+  return out.sort((a, b) => a.name.localeCompare(b.name));
+}
 
 export const defaultFileName = (program) => `${String(program.name).replace(/[\\/:*?"<>|]+/g, ' ').trim() || 'program'}${program.version ? ` ${program.version}` : ''}.swpkg`;

@@ -32,6 +32,17 @@ export const CATEGORIES = [
     roots: () => [win('ServiceProfiles', 'NetworkService', 'AppData', 'Local', 'Microsoft', 'Windows', 'DeliveryOptimization', 'Cache')],
     admin: true,
   },
+  // Privacy traces: not junk as such, so they start unselected.
+  { id: 'recent', label: 'Recent files list', detail: 'Shortcuts to files you opened recently. The files themselves are not touched.', roots: () => [env('APPDATA') && path.join(env('APPDATA'), 'Microsoft', 'Windows', 'Recent')], match: /\.lnk$/i, privacy: true },
+  {
+    id: 'jumplists',
+    label: 'Jump lists',
+    detail: 'Recent and pinned items shown when you right-click taskbar icons.',
+    roots: () => [env('APPDATA') && path.join(env('APPDATA'), 'Microsoft', 'Windows', 'Recent', 'AutomaticDestinations'), env('APPDATA') && path.join(env('APPDATA'), 'Microsoft', 'Windows', 'Recent', 'CustomDestinations')],
+    match: /-ms$|Destinations-ms$|\.(automatic|custom)Destinations-ms$/i,
+    privacy: true,
+  },
+  { id: 'iconcache', label: 'Icon cache', detail: 'Explorer rebuilds program and file icons when needed. Files in use are skipped.', roots: () => [local('Microsoft', 'Windows', 'Explorer')], match: /^iconcache_.*\.db$/i, privacy: true },
   {
     id: 'appdata',
     label: 'Leftover app data folders',
@@ -198,7 +209,7 @@ export async function scan(now = Date.now()) {
         const s = await sys.stat(f).catch(() => null);
         if (s && !s.dir) items.push({ path: f, dir: false, bytes: s.size });
       }
-      return { id: c.id, label: c.label, detail: c.detail, admin: !!c.admin, bytes: items.reduce((n, i) => n + i.bytes, 0), items };
+      return { id: c.id, label: c.label, detail: c.detail, admin: !!c.admin, privacy: !!c.privacy, bytes: items.reduce((n, i) => n + i.bytes, 0), items };
     })
   );
 }

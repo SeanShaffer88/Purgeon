@@ -44,6 +44,8 @@ export function StartupView({ filter, admin, programs, onError, onStatus, onRemo
   const [boot, setBoot] = useState(null);
   const [sigs, setSigs] = useState({});
   const [inbound, setInbound] = useState(null);
+  // Entries worth a second look: odd location, unsigned, or new ({ id: [reasons] }).
+  const [trust, setTrust] = useState({});
   const [working, setWorking] = useState(new Set());
   const [pending, setPending] = useState({ signin: new Set(), reboot: new Set() });
 
@@ -65,6 +67,9 @@ export function StartupView({ filter, admin, programs, onError, onStatus, onRemo
     const files = [...entries.map((e) => exeOf(e.command)), ...(inbound || []).map((r) => r.program.toLowerCase())].filter((f) => /\.exe$/.test(f));
     api.invoke('files:signatures', [...new Set(files)]).then(setSigs).catch(() => {});
   }, [entries, inbound]);
+  useEffect(() => {
+    if (entries) api.invoke('startup:trust', entries).then(setTrust).catch(() => {});
+  }, [entries]);
   const impactOf = (e) => boot?.impact?.[e.type === 'service' ? (e.serviceName || '').toLowerCase() : baseName(exeOf(e.command))] || null;
   const sigOf = (file) => sigs[(file || '').toLowerCase()] || null;
   const SigTag = ({ file }) => {
@@ -146,6 +151,7 @@ export function StartupView({ filter, admin, programs, onError, onStatus, onRemo
           {entries.filter((e) => e.enabled && (e.type === 'run' || e.type === 'folder')).length} start with Windows · {entries.filter((e) => e.type === 'service' && e.enabled).length} automatic services ·{' '}
           {entries.filter((e) => e.type === 'task' && e.enabled).length} tasks · {(inbound || []).length} accept connections
           {unsigned ? ` · ${unsigned} unsigned` : ''}
+          {Object.keys(trust).length ? ` · ${Object.keys(trust).length} worth checking` : ''}
           {avgBoot ? ` · start-up takes about ${secs(avgBoot)} (last ${boot.boots.length} slow boots)` : boot && !boot.available ? ' · start-up timings need administrator rights' : ''}
         </span>
         <span className="debloat-actions">
@@ -192,6 +198,11 @@ export function StartupView({ filter, admin, programs, onError, onStatus, onRemo
                 <span className="tweak-tags">
                   <span className={`fx ${fx.className}`}>{fx.label}</span>
                   <span className="tag-row">
+                    {trust[e.id] && (
+                      <span className="fx fx-unsigned" title={trust[e.id].join('\n')}>
+                        ⚠ Check
+                      </span>
+                    )}
                     {impactOf(e) && (
                       <span className="fx fx-impact" title={`Windows measured it slowing start-up ${impactOf(e).times} time${impactOf(e).times === 1 ? '' : 's'}`}>
                         +{secs(impactOf(e).avgMs)} at start-up

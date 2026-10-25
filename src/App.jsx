@@ -9,22 +9,48 @@ import { JunkView, formatBytes } from './junk.jsx';
 import { GroupDialog } from './groups.jsx';
 import { ProgramBackupDialog, ProgramRestoreDialog } from './transfer.jsx';
 import { WhoOwnsDialog, UpdatesDialog, MaintenanceDialog } from './tools.jsx';
+import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, SheetDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, CommandPalette, ReportDialog, ContextMenuDialog } from './more.jsx';
 
 const api = window.api;
 
 const VIEWS = {
-  desktop: { label: 'Desktop Programs', noun: 'programs', cols: [['name', 'Name'], ['size', 'Size'], ['date', 'Installed On']] },
-  store: { label: 'Windows Store Apps', noun: 'apps', cols: [['name', 'Name'], ['version', 'Version'], ['publisher', 'Publisher']] },
+  desktop: { label: 'Programs', noun: 'programs', cols: [['name', 'Name'], ['size', 'Size'], ['date', 'Installed On']] },
+  store: { label: 'Apps', noun: 'apps', cols: [['name', 'Name'], ['version', 'Version'], ['publisher', 'Publisher']] },
   // Views below are opened from toolbar buttons or the Tools menu, not the view picker.
   monitored: { label: 'Monitored Programs', noun: 'monitored programs', cols: [['name', 'Name'], ['size', 'Changes'], ['date', 'Monitored On']], button: true },
   backups: { label: 'Backups', noun: 'backups', cols: [['name', 'Removed'], ['size', 'Entries'], ['date', 'Backed Up On']], button: true },
   snapshots: { label: 'Snapshots', noun: 'snapshots', cols: [['name', 'Snapshot'], ['size', 'Entries'], ['date', 'Taken On']], button: true },
   history: { label: 'Change History', noun: 'changes', cols: [['name', 'Change'], ['size', 'Type'], ['date', 'When']], button: true },
   startup: { label: 'Startup & Services', noun: 'entries', cols: [], custom: true, button: true },
-  debloat: { label: 'Debloat Windows', noun: 'tweaks', cols: [], button: true, custom: true },
-  junk: { label: 'Junk Files', noun: 'categories', cols: [], button: true, custom: true },
+  debloat: { label: 'Debloat', noun: 'tweaks', cols: [], button: true, custom: true },
+  junk: { label: 'Cleaner', noun: 'categories', cols: [], button: true, custom: true },
+  timeline: { label: 'Change Timeline', noun: 'events', cols: [['name', 'Event'], ['size', 'Type'], ['date', 'When']], button: true },
   archive: { label: 'Uninstall Archive', noun: 'removed programs', cols: [['name', 'Removed Program'], ['size', 'How'], ['date', 'Removed On']], button: true },
 };
+
+// The view chips under the command bar.
+const VIEW_CHIPS = [
+  ['desktop', 'Programs', 'Desktop programs installed on this PC (Ctrl+1)'],
+  ['store', 'Apps', 'Windows Store apps from the Microsoft Store (Ctrl+2)'],
+  ['monitored', 'Monitored', 'Monitored programs: programs recorded with Tools › Monitor an Installation (Ctrl+3)'],
+  ['startup', 'Startup', 'Startup & Services: programs, tasks and services that start with Windows (Ctrl+6)'],
+  ['debloat', 'Debloat', 'Debloat Windows: safe, reversible tweaks that remove Windows ads, telemetry and clutter (Ctrl+5)'],
+  ['junk', 'Cleaner', 'Cleaner: temporary files, crash dumps and caches that can be cleaned (Ctrl+8)'],
+  ['snapshots', 'Snapshots', 'Take snapshots and compare them to see what changed (Ctrl+7)'],
+  ['archive', 'Archive', 'Uninstall archive: programs removed so far, with how to get them back (Ctrl+9)'],
+  ['timeline', 'Timeline', 'Change timeline: everything that changed, newest first (Ctrl+T)'],
+];
+
+// What the action bar says in views that have their own buttons.
+const VIEW_NOTES = {
+  startup: 'Startup & Services · turn entries off and on; nothing is deleted',
+  debloat: 'Debloat · every tweak can be undone',
+  junk: 'Cleaner · tick categories, then clean; files go to the Recycle Bin',
+};
+
+// The action bar's buttons for a desktop program, in order.
+const DESKTOP_BAR = ['uninstall', 'force', 'analyze', 'sheet', 'backupProgram', 'queueAdd', 'properties'];
+const shortLabel = (label) => label.replace(/\.\.\.$/, '').replace('Migrate / Back Up Program', 'Migrate').replace('Analyze Leftovers', 'Leftovers').replace('Add to Uninstall Queue', 'Queue').replace('Compare the Two Selected', 'Compare Selected');
 
 // Group-picker entries that filter by insight rather than by group.
 const INSIGHT_FILTERS = [
@@ -61,6 +87,7 @@ function toRow(view, r) {
     const n = r.stats.dirs + r.stats.files + r.stats.keys + r.stats.values;
     return { ...r, key: r.id, sizeText: n.toLocaleString(), sortSize: n, date: localTime(r.created), sortDate: r.created };
   }
+  if (view === 'timeline') return { ...r, key: r.id, name: r.title, sizeText: r.type, sortSize: r.type, date: localTime(r.time), sortDate: r.time };
   if (view === 'archive') {
     const how = { uninstalled: 'Uninstalled', forced: 'Force removed', store: 'Store app removed' }[r.how] || r.how;
     return { ...r, key: r.id, name: r.version ? `${r.name} ${r.version}` : r.name, sizeText: how, sortSize: how, date: localTime(r.removed), sortDate: r.removed };
@@ -103,14 +130,32 @@ function InsightTags({ i }) {
 
 // The menu bar. The shortcuts shown here are handled by the keydown listener in App.
 const MENUS = [
-  ['File', [['export', 'Export to HTML...', 'Ctrl+S'], null, ['elevate', 'Restart as Administrator'], null, ['quit', 'Exit']]],
+  [
+    'File',
+    [
+      ['export', 'Export to HTML...', 'Ctrl+S'],
+      ['report', 'Monthly Report...'],
+      null,
+      ['migratePc', 'Migrate This PC...'],
+      ['restoreFolder', 'Restore Programs From Folder...'],
+      ['sync', 'Settings Sync...'],
+      null,
+      ['elevate', 'Restart as Administrator'],
+      null,
+      ['quit', 'Exit'],
+    ],
+  ],
   [
     'Action',
     [
       ['uninstall', 'Uninstall...', 'Del'],
       ['force', 'Force Removal...', 'Shift+Del'],
       ['analyze', 'Analyze Leftovers...', 'Ctrl+L'],
+      ['queueAdd', 'Add to Uninstall Queue', 'Ctrl+Q'],
+      ['rescue', 'Rescue Broken Uninstall...'],
       ['removeEntry', 'Remove Entry...'],
+      null,
+      ['sheet', 'What It Does...', 'Ctrl+W'],
       ['setGroup', 'Set Group...', 'Ctrl+G'],
       ['backupProgram', 'Migrate / Back Up Program...'],
       null,
@@ -124,14 +169,17 @@ const MENUS = [
   [
     'View',
     [
-      ['view:desktop', 'Desktop Programs', 'Ctrl+1'],
-      ['view:store', 'Windows Store Apps', 'Ctrl+2'],
+      ['view:desktop', 'Programs', 'Ctrl+1'],
+      ['view:store', 'Apps', 'Ctrl+2'],
       ['view:monitored', 'Monitored Programs', 'Ctrl+3'],
-      ['view:debloat', 'Debloat Windows', 'Ctrl+5'],
+      ['view:debloat', 'Debloat', 'Ctrl+5'],
       ['view:startup', 'Startup & Services', 'Ctrl+6'],
-      ['view:junk', 'Junk Files', 'Ctrl+8'],
+      ['view:junk', 'Cleaner', 'Ctrl+8'],
       ['view:archive', 'Uninstall Archive', 'Ctrl+9'],
+      ['view:timeline', 'Change Timeline', 'Ctrl+T'],
+      ['diskMap', 'Disk Space Map...'],
       null,
+      ['palette', 'Command Palette...', 'Ctrl+K'],
       ['find', 'Find...', 'Ctrl+F'],
       ['refresh', 'Refresh', 'F5'],
       null,
@@ -140,14 +188,62 @@ const MENUS = [
       ['zoomReset', 'Reset Zoom', 'Ctrl+0'],
       null,
       ['toggleGrid', 'Grid Lines'],
+      ['theme:dark', 'Dark Theme'],
+      ['theme:light', 'Light Theme'],
+      ['theme:contrast', 'High Contrast'],
+      null,
+      ['toggleTray', 'Keep Running in the Tray'],
     ],
   ],
-  ['Tools', [['monitor', 'Monitor an Installation...', 'Ctrl+M'], ['view:backups', 'Backups', 'Ctrl+4'], ['view:history', 'Change History', 'Ctrl+H'], null, ['view:snapshots', 'Snapshots', 'Ctrl+7'], ['takeSnapshot', 'Take a Snapshot...'], null, ['restoreProgram', 'Restore a Program Backup...'], null, ['whoOwns', 'Who Owns This...'], ['orphans', 'Find Orphaned Leftovers...'], ['view:archive', 'Uninstall Archive', 'Ctrl+9'], null, ['updates', 'Program Updates (winget)...'], ['exportWinget', 'Export Program List (winget)...'], null, ['maintenance', 'Scheduled Maintenance...'], null, ['view:junk', 'Junk Files', 'Ctrl+8'], null, ['toggleRestore', 'Create Restore Points'], ['toggleSilent', 'Silent Uninstall When Possible'], ['toggleSafe', 'Safe Mode'], null, ['backupSettings', 'Backup Settings...'], ['openLog', 'Open Command Log']]],
-  ['Help', [['about', 'About']]],
+  [
+    'Tools',
+    [
+      ['monitor', 'Monitor an Installation...', 'Ctrl+M'],
+      ['trials', 'Trial Installs...'],
+      ['queue', 'Uninstall Queue...'],
+      null,
+      ['view:backups', 'Backups', 'Ctrl+4'],
+      ['view:history', 'Change History', 'Ctrl+H'],
+      ['view:snapshots', 'Snapshots', 'Ctrl+7'],
+      ['takeSnapshot', 'Take a Snapshot...'],
+      null,
+      ['restoreProgram', 'Restore a Program Backup...'],
+      ['whoOwns', 'Who Owns This...'],
+      ['orphans', 'Find Orphaned Leftovers...'],
+      ['regSearch', 'Search Registry...'],
+      ['portable', 'Portable Apps...'],
+      ['browsers', 'Browser Clean-up...'],
+      ['view:archive', 'Uninstall Archive', 'Ctrl+9'],
+      null,
+      ['updates', 'Program Updates (winget)...'],
+      ['exportWinget', 'Export Program List (winget)...'],
+      ['view:junk', 'Cleaner', 'Ctrl+8'],
+      ['maintenance', 'Scheduled Maintenance...'],
+      null,
+      ['toggleRestore', 'Create Restore Points'],
+      ['toggleSilent', 'Silent Uninstall When Possible'],
+      ['toggleSafe', 'Safe Mode'],
+      ['toggleShell', 'Explorer Right-Click Menu'],
+      ['ctxmenu', 'Explorer Context Menu Items...'],
+      null,
+      ['backupSettings', 'Backup Settings...'],
+      ['openLog', 'Open Command Log'],
+    ],
+  ],
+  ['Help', [['palette', 'Command Palette...', 'Ctrl+K'], ['about', 'About']]],
 ];
 
-function MenuBar({ onAction, checked = {} }) {
+// Mouse or keyboard: Alt plus a menu's first letter opens it; arrow keys move between items and
+// menus, Enter chooses, Escape closes.
+function MenuBar({ onAction, checked = {}, right = null }) {
   const [open, setOpen] = useState(null);
+  const bar = useRef(null);
+  const focusItem = (step) => {
+    const items = [...(bar.current?.querySelectorAll('.dropdown button') || [])];
+    if (!items.length) return;
+    const at = items.indexOf(document.activeElement);
+    items[(at + step + items.length) % items.length].focus();
+  };
   useEffect(() => {
     if (open === null) return;
     const close = () => setOpen(null);
@@ -158,19 +254,56 @@ function MenuBar({ onAction, checked = {} }) {
       window.removeEventListener('blur', close);
     };
   }, [open]);
+  useEffect(() => {
+    const onKey = (e) => {
+      if (e.altKey && !e.ctrlKey && /^[a-z]$/i.test(e.key)) {
+        const i = MENUS.findIndex(([label]) => label[0].toLowerCase() === e.key.toLowerCase());
+        if (i >= 0 && !document.querySelector('.overlay')) {
+          e.preventDefault();
+          setOpen(i);
+          setTimeout(() => focusItem(1), 0);
+        }
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+  const onMenuKey = (e, i) => {
+    if (e.key === 'ArrowDown') (e.preventDefault(), focusItem(1));
+    else if (e.key === 'ArrowUp') (e.preventDefault(), focusItem(-1));
+    else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      setOpen((i + (e.key === 'ArrowRight' ? 1 : MENUS.length - 1)) % MENUS.length);
+      setTimeout(() => focusItem(1), 0);
+    } else if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      setOpen(null);
+    }
+  };
   return (
-    <div className="menubar" onMouseDown={(e) => e.stopPropagation()}>
+    <div className="menubar" role="menubar" ref={bar} onMouseDown={(e) => e.stopPropagation()}>
       {MENUS.map(([label, entries], i) => (
         <div key={label} className="menubar-item">
-          <button className={open === i ? 'open' : ''} onClick={() => setOpen(open === i ? null : i)} onMouseEnter={() => open !== null && setOpen(i)}>
-            {label}
+          <button
+            className={open === i ? 'open' : ''}
+            aria-haspopup="menu"
+            aria-expanded={open === i}
+            onClick={() => setOpen(open === i ? null : i)}
+            onMouseEnter={() => open !== null && setOpen(i)}
+            onKeyDown={(e) => e.key === 'ArrowDown' && (e.preventDefault(), setOpen(i), setTimeout(() => focusItem(1), 0))}
+          >
+            <u>{label[0]}</u>
+            {label.slice(1)}
           </button>
           {open === i && (
-            <div className="context-menu dropdown">
+            <div className="context-menu dropdown" role="menu" onKeyDown={(e) => onMenuKey(e, i)}>
               {entries.map((it, j) =>
                 it ? (
                   <button
                     key={j}
+                    role={it[0] in checked ? 'menuitemcheckbox' : 'menuitem'}
+                    aria-checked={it[0] in checked ? !!checked[it[0]] : undefined}
                     onClick={() => {
                       setOpen(null);
                       onAction(it[0]);
@@ -183,13 +316,14 @@ function MenuBar({ onAction, checked = {} }) {
                     <span className="accel">{it[2]}</span>
                   </button>
                 ) : (
-                  <div key={j} className="sep" />
+                  <div key={j} className="sep" role="separator" />
                 )
               )}
             </div>
           )}
         </div>
       ))}
+      {right && <div className="menubar-right">{right}</div>}
     </div>
   );
 }
@@ -217,6 +351,11 @@ export default function App() {
   const [silentOn, setSilentOn] = useState(false);
   const [safeOn, setSafeOn] = useState(false);
   const [gridOn, setGridOn] = useState(true);
+  const [theme, setTheme] = useState('dark');
+  const [trayOn, setTrayOn] = useState(false);
+  const [shellOn, setShellOn] = useState(false);
+  const [palette, setPalette] = useState(false);
+  const outsideChecked = useRef(false);
   const [zoom, setZoom] = useState(1);
   // Program groups ({ programKey: group }) and the group the program lists are filtered to.
   const [groups, setGroups] = useState({});
@@ -227,6 +366,8 @@ export default function App() {
   const groupNames = useMemo(() => [...new Set(Object.values(groups))].sort((a, b) => a.localeCompare(b)), [groups]);
   const debloatGatePassed = useRef(false);
   const searchRef = useRef(null);
+  const [cmdOpen, setCmdOpen] = useState(false);
+  const [cmdIdx, setCmdIdx] = useState(-1);
   const listRef = useRef(null);
   const desktopCache = useRef([]);
   const lastListView = useRef('desktop');
@@ -248,11 +389,16 @@ export default function App() {
       else if (v === 'history') data = await api.invoke('history:list');
       else if (v === 'snapshots') data = await api.invoke('snapshots:list');
       else if (v === 'archive') data = await api.invoke('archive:list');
+      else if (v === 'timeline') data = await api.invoke('explore:timeline', desktopCache.current);
       else data = await api.invoke('programs:list', v);
       if (v === 'desktop') {
         desktopCache.current = data;
         api.invoke('programs:measure', data).catch(() => {});
         api.invoke('programs:insights', data).then(setInsight).catch(() => {});
+        if (!outsideChecked.current) {
+          outsideChecked.current = true;
+          api.invoke('programs:outside', data).then((gone) => gone.length && setModal((m) => m || { type: 'outside', programs: gone })).catch(() => {});
+        }
       }
       setRows(data.map((r) => toRow(v, r)));
     } catch (e) {
@@ -267,7 +413,7 @@ export default function App() {
     setSelected(null);
     setMarked(new Set());
     // Change History reads newest first; every other list starts alphabetical.
-    setSort(view === 'history' ? { col: 'date', dir: -1 } : { col: 'name', dir: 1 });
+    setSort(view === 'history' || view === 'timeline' ? { col: 'date', dir: -1 } : { col: 'name', dir: 1 });
     anchor.current = null;
     if (!VIEWS[view].custom) load(view);
     else setCustomStatus('');
@@ -282,6 +428,9 @@ export default function App() {
       setSilentOn(!!s.silentUninstall);
       setSafeOn(!!s.safeMode);
       setGridOn(s.gridLines !== false);
+      setTheme(s.theme || 'dark');
+      setTrayOn(!!s.tray);
+      if (s.tray) api.invoke('app:setTray', true).catch(() => {});
       api.invoke('backups:prune').catch(() => {});
       setZoom(s.zoom || 1);
       applyZoom(s.zoom || 1);
@@ -290,7 +439,38 @@ export default function App() {
     // A removal cut off by a crash or power cut comes first.
     api.invoke('backups:interrupted').then((p) => p && setModal({ type: 'interrupted', pending: p })).catch(() => {});
     api.invoke('groups:get').then(setGroups).catch(() => {});
-  }, []);
+    api.invoke('shell:enabled').then(setShellOn).catch(() => {});
+    // Requests from the command line, the Explorer right-click menu and the RunOnce entry.
+    const launch = window.__sweepLaunch || [];
+    const arg = (name) => {
+      const i = launch.findIndex((a) => a.toLowerCase() === name);
+      return i >= 0 ? launch[i + 1] || '' : null;
+    };
+    if (launch.some((a) => a.toLowerCase() === '--resume-queue')) setTimeout(() => openQueue(), 1500);
+    else
+      api.invoke('queue:get').then((q) => q?.restartNeeded && q.programs.some((p) => p.status === 'pending') && setModal({ type: 'queue', queue: q })).catch(() => {});
+    if (arg('--who-owns')) setModal({ type: 'whoOwns', target: arg('--who-owns') });
+    if (arg('--uninstall-target')) setTimeout(() => uninstallTarget(arg('--uninstall-target')), 2500);
+    // New startup entries: checked now and every 10 minutes while SweepUninstall runs (also from the tray).
+    const first = setTimeout(() => checkStartup(), 8000);
+    const every = setInterval(() => checkStartup(), 10 * 60 * 1000);
+    // Tray menu choices.
+    let unlisten = null;
+    import('@tauri-apps/api/event')
+      .then(({ listen }) => listen('tray', (e) => (e.payload === 'junk' ? setView('junk') : e.payload === 'updates' ? setModal({ type: 'updates' }) : null)))
+      .then((u) => (unlisten = u))
+      .catch(() => {});
+    return () => {
+      clearTimeout(first);
+      clearInterval(every);
+      unlisten?.();
+    };
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The theme lives on the root element so dialogs and menus follow it too.
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   // Icons arrive in one batch after the list is shown; programs without one keep a placeholder.
   useEffect(() => {
@@ -812,8 +992,335 @@ export default function App() {
     }
   };
 
+  // ---- 1. uninstall queue --------------------------------------------------------------------
+
+  const openQueue = async () => setModal({ type: 'queue', queue: await api.invoke('queue:get') });
+  const queueAdd = async (list) => {
+    const q = await api.invoke('queue:add', list.filter((p) => !p.store));
+    setNotice({ tone: 'ok', text: `${list.length === 1 ? list[0].name : `${list.length} programs`} added to the uninstall queue (${q.programs.filter((p) => p.status === 'pending').length} waiting). Tools › Uninstall Queue starts it.` });
+  };
+  // Runs every waiting program; stops for a restart when an uninstaller asks for one.
+  const runQueue = async () => {
+    setModal(null);
+    let q = await api.invoke('queue:get');
+    if (!q) return;
+    const go = await confirmWithRestore(`Uninstall ${q.programs.filter((p) => p.status === 'pending').length} programs from the queue?`, 'They run one after another, silently where possible. If one needs a restart, SweepUninstall asks, then continues after you sign back in. Leftovers are shown at the end.');
+    if (!go.ok) return;
+    if (go.checked) await makeRestorePoint('SweepUninstall: before the uninstall queue', 'uninstall');
+    stopBatch.current = false;
+    setBusyStop(() => () => {
+      stopBatch.current = true;
+    });
+    try {
+      for (const p of q.programs.filter((x) => x.status === 'pending')) {
+        if (stopBatch.current) break;
+        setBusy(`Uninstalling ${p.name}…`);
+        const [info] = await Promise.all([api.invoke('program:prepare', p).catch(() => null)]);
+        const r = await api.invoke('program:runUninstaller', p).catch((e) => ({ ok: false, error: e.message }));
+        setBusy(`Scanning for leftovers of ${p.name}…`);
+        const found = await api.invoke('program:scan', { ...p, installerItems: info?.installerItems || [] }).catch(() => []);
+        p.status = r.ok || (r.code === 3010 || r.code === 1641) ? 'done' : 'failed';
+        p.detail = r.error || (r.ok ? '' : `exit code ${r.code}`);
+        q.leftovers.push(...found.map((i) => ({ ...i, program: p.name })));
+        q = await api.invoke('queue:save', q);
+        if (r.code === 3010 || r.code === 1641 || (await api.invoke('queue:restartPending'))) {
+          q.restartNeeded = true;
+          await api.invoke('queue:save', q);
+          await api.invoke('queue:arm');
+          setBusy('');
+          setBusyStop(null);
+          const now = await api.invoke('dialog:confirm', { message: `${p.name} needs a restart to finish.`, detail: 'Restart now? SweepUninstall continues the queue after you sign back in. Choose No to restart later yourself.' });
+          if (now) await api.invoke('queue:restartNow');
+          else setNotice({ tone: 'warn', text: 'The uninstall queue continues after your next restart.' });
+          return;
+        }
+      }
+    } finally {
+      setBusy('');
+      setBusyStop(null);
+      load();
+    }
+    q = await api.invoke('queue:get');
+    if (q.programs.some((p) => p.status === 'pending')) return setModal({ type: 'queue', queue: q });
+    await api.invoke('queue:disarm');
+    setModal({
+      type: 'leftovers',
+      title: `Uninstall Queue – ${q.programs.length} programs`,
+      heading: `${q.programs.filter((p) => p.status === 'done').length} of ${q.programs.length} uninstalled. ${q.leftovers.length} leftover items found.`,
+      items: q.leftovers,
+      owners: q.programs.map((p) => p.key),
+      onRemove: async (sel) => {
+        if (await removeWithBackup('Uninstall queue', sel, q.programs.map((p) => p.location), q.programs.map((p) => p.key))) await api.invoke('queue:clear');
+      },
+    });
+  };
+
+  // ---- 2. removed outside SweepUninstall ------------------------------------------------------------
+
+  const scanRemoved = async (list) => {
+    setModal(null);
+    const items = [];
+    for (const [i, p] of list.entries()) {
+      setBusy(`Scanning for leftovers (${i + 1} of ${list.length}): ${p.name}…`);
+      items.push(...(await api.invoke('program:scan', { ...p, installerItems: [] }).catch(() => [])).map((x) => ({ ...x, program: p.name })));
+    }
+    setBusy('');
+    setModal({ type: 'leftovers', title: 'Leftovers of Removed Programs', heading: `${items.length} leftover items of ${list.length} program${list.length === 1 ? '' : 's'} removed elsewhere.`, items, owners: list.map((p) => p.key), onRemove: (sel) => removeWithBackup('Leftovers of programs removed elsewhere', sel, null, list.map((p) => p.key)) });
+  };
+
+  // ---- 3. trial installs -----------------------------------------------------------------------
+
+  const openTrials = async () => setModal({ type: 'trials', trials: await api.invoke('trials:list') });
+  const newTrial = async () => {
+    const installer = await api.invoke('monitor:pickInstaller');
+    if (!installer) return;
+    const name = installer.split('\\').pop().replace(/\.(exe|msi|msix|bat|cmd)$/i, '');
+    setModal(null);
+    setBusy(`Taking a snapshot before the trial of ${name}…`);
+    try {
+      await api.invoke('trials:start', { installer, name });
+      await api.invoke('trials:launch', installer);
+      setNotice({ tone: 'ok', text: `Trial of ${name} started. Install and try it; Tools › Trial Installs › Try Over removes it completely.` });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  };
+  const tryOver = async (t) => {
+    setModal(null);
+    setBusy(`Comparing with the snapshot taken before ${t.name}…`);
+    try {
+      const r = await api.invoke('trials:tryOver', t.id);
+      setModal({
+        type: 'leftovers',
+        title: `Try Over – ${t.name}`,
+        heading: `${r.items.length} changes since the trial started (${r.added} added, ${r.changed} changed, ${r.removed} removed). Everything added is removed and changed settings are put back. Changes by other programs are listed too, so review before removing.`,
+        items: r.items,
+        owners: [],
+        onRemove: async (sel) => {
+          if (await removeWithBackup(`Try over: ${t.name}`, sel)) await api.invoke('trials:finish', t.id);
+        },
+      });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  // ---- 4. rescue a broken uninstaller -------------------------------------------------------------------
+
+  const rescue = async (p) => {
+    setBusy(`Looking up ${p.name} in winget…`);
+    let id = null;
+    try {
+      if (await api.invoke('winget:available')) id = await api.invoke('winget:find', p.name.replace(/\s+\(?(x64|x86|64-bit|32-bit)\)?$/i, '').replace(/\s+v?\d[\w.\-]*$/, ''));
+    } finally {
+      setBusy('');
+    }
+    if (!id) return setNotice({ tone: 'warn', text: `winget has no package for ${p.name}, so it can't be repaired that way. Use Force Removal instead.` });
+    if (!(await api.invoke('dialog:confirm', { message: `Repair ${p.name}'s uninstaller?`, detail: `winget reinstalls the package "${id}" over the existing copy, which puts a working uninstaller back. Then the normal uninstall runs. Reinstalling accepts the package's license terms.` }))) return;
+    setBusy(`Reinstalling ${id}…`);
+    const r = await api.invoke('winget:repair', id).catch((e) => ({ ok: false, detail: e.message }));
+    setBusy('');
+    if (!r.ok) return setError(`winget could not reinstall ${id}: ${r.detail}. Use Force Removal instead.`);
+    const fresh = (await api.invoke('programs:list', 'desktop')).find((x) => x.name === p.name || x.key === p.key);
+    await load();
+    if (fresh) actions.uninstall(fresh);
+    else setNotice({ tone: 'warn', text: `${id} was reinstalled under a different name; uninstall it from the list.` });
+  };
+
+  // ---- 5-8. disk map, sheet, registry search ---------------------------------------------------------------
+
+  const openDiskMap = async () => {
+    setBusy('Measuring programs and their data folders…\nThis can take a minute.');
+    try {
+      setModal({ type: 'diskmap', data: await api.invoke('explore:diskMap', desktopCache.current) });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  };
+  const openSheet = async (p) => {
+    setModal(null);
+    setBusy(`Finding everything ${p.name} hooks into Windows…`);
+    try {
+      setModal({ type: 'sheet', program: p, sections: await api.invoke('program:sheet', p) });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  };
+  const searchRegistry = async (term) => {
+    setModal(null);
+    setBusy(`Searching the registry for "${term}"…`);
+    try {
+      const r = await api.invoke('registry:search', term);
+      setModal({
+        type: 'leftovers',
+        title: `Registry Search – ${term}`,
+        heading: `${r.items.length} keys and values${r.full ? ' (the first 400)' : ''}${r.timedOut ? ' found before the search time ran out' : ''}. Nothing is selected; Windows' own keys are never listed.`,
+        items: r.items,
+        owners: [],
+        onRemove: (sel) => removeWithBackup(`Registry search: ${term}`, sel),
+      });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  // ---- 10. new startup entries; 18. notifications ---------------------------------------------------
+
+  const notify = async (title, body) => {
+    try {
+      const n = await import('@tauri-apps/plugin-notification');
+      if (!(await n.isPermissionGranted()) && (await n.requestPermission()) !== 'granted') return;
+      n.sendNotification({ title, body });
+    } catch {}
+  };
+  const checkStartup = async (quietIfNone = true) => {
+    const found = await api.invoke('startup:newEntries').catch(() => []);
+    if (!found.length) return !quietIfNone && setNotice({ tone: 'ok', text: 'No new startup entries.' });
+    notify('New startup entry', `${found.map((e) => e.name).join(', ')} added ${found.length === 1 ? 'itself' : 'themselves'} to what starts with Windows.`);
+    setModal((m) => m || { type: 'startupAlert', entries: found });
+  };
+
+  // ---- 11. browsers --------------------------------------------------------------------------------
+
+  const openBrowsers = async () => {
+    setBusy('Reading browser extensions…');
+    try {
+      const [data, running] = await Promise.all([api.invoke('browsers:list'), api.invoke('browsers:running')]);
+      setModal({ type: 'browsers', data, running });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  // ---- 13-14. whole-PC migration, folder restore, sync ---------------------------------------------------
+
+  const packagePrograms = async (list, contents, folder, label) => {
+    const done = [];
+    for (const [i, p] of list.entries()) {
+      setBusy(`${label} ${i + 1} of ${list.length}: ${p.name}…`);
+      try {
+        const items = (await api.invoke('program:scan', p)).filter((x) => ['dir', 'file', 'key', 'value'].includes(x.kind) && x.score >= 70);
+        const name = `${String(p.name).replace(/[\\/:*?"<>|]+/g, ' ').trim()}.swpkg`;
+        const out = await api.invoke('transfer:export', { program: p, items, file: `${folder}\\${name}`, contents });
+        done.push({ kind: 'file', path: p.name, ok: true, detail: `${out.items.reduce((n, x) => n + (x.files || 0), 0)} files, ${out.items.filter((x) => x.kind === 'key' || x.kind === 'value').length} registry entries` });
+      } catch (e) {
+        done.push({ kind: 'file', path: p.name, ok: false, detail: e.message });
+      }
+    }
+    return done;
+  };
+  const migratePc = async (list, mode) => {
+    const folder = await api.invoke('transfer:pickFolder', 'Choose an empty folder for the migration');
+    if (!folder) return;
+    setModal(null);
+    try {
+      const results = await packagePrograms(list, mode, folder, 'Packaging');
+      setBusy('Saving the winget list of all programs…');
+      const w = (await api.invoke('winget:available')) ? await api.invoke('winget:exportTo', `${folder}\\all-programs.winget.json`).catch(() => null) : null;
+      if (w) results.push({ kind: 'file', path: 'all-programs.winget.json', ok: true, detail: `${w.packages} programs for "winget import"` });
+      setModal({ type: 'results', title: 'Migration Package', results, note: `Saved in ${folder}. On the new PC: File › Restore Programs From Folder, then winget import -i all-programs.winget.json for the rest.` });
+    } finally {
+      setBusy('');
+    }
+  };
+  const restoreFolder = async () => {
+    const folder = await api.invoke('transfer:pickFolder', 'Choose the folder with program packages');
+    if (!folder) return;
+    const packages = await api.invoke('transfer:folder', folder);
+    if (!packages.length) return setNotice({ tone: 'warn', text: 'That folder has no program packages (.swpkg).' });
+    setModal({ type: 'restoreFolder', folder, packages });
+  };
+  const restorePackages = async (packages, replace = false) => {
+    setModal(null);
+    const results = [];
+    for (const [i, p] of packages.entries()) {
+      setBusy(`Restoring ${i + 1} of ${packages.length}: ${p.name}…`);
+      try {
+        const b = await api.invoke('transfer:read', { file: p.file, replace });
+        const out = await api.invoke('transfer:restore', { file: p.file, numbers: b.items.filter((x) => !x.blocked).map((x) => x.n), replace });
+        const ok = out.results.filter((r) => r.ok).length;
+        results.push({ kind: 'file', path: p.name, ok: ok > 0 || !out.results.length, detail: `${ok} of ${out.results.length} items restored` });
+      } catch (e) {
+        results.push({ kind: 'file', path: p.name, ok: false, detail: e.message });
+      }
+    }
+    setBusy('');
+    load();
+    return results;
+  };
+  const openSync = async () => setModal({ type: 'sync', settings: await api.invoke('settings:get') });
+  const syncPush = async (s) => {
+    await api.invoke('settings:set', s);
+    setModal(null);
+    const list = desktopCache.current.filter((p) => s.syncKeys.includes(p.key));
+    try {
+      const results = await packagePrograms(list, 'settings', s.syncFolder, 'Sending settings');
+      const lastPull = { ...((await api.invoke('settings:get')).lastPull || {}) };
+      for (const p of await api.invoke('transfer:folder', s.syncFolder)) lastPull[p.name] = p.mtime; // our own copies don't need pulling back
+      await api.invoke('settings:set', { lastPull });
+      setModal({ type: 'results', title: 'Settings Sent', results, note: `Saved in ${s.syncFolder}.` });
+    } finally {
+      setBusy('');
+    }
+  };
+  const syncPull = async (s) => {
+    await api.invoke('settings:set', s);
+    const lastPull = { ...((await api.invoke('settings:get')).lastPull || {}) };
+    const newer = (await api.invoke('transfer:folder', s.syncFolder)).filter((p) => p.mtime > (lastPull[p.name] || 0));
+    if (!newer.length) return setNotice({ tone: 'ok', text: 'Your settings are up to date.' });
+    if (!(await api.invoke('dialog:confirm', { message: `Get newer settings for ${newer.length} program${newer.length === 1 ? '' : 's'}?`, detail: `${newer.map((p) => `• ${p.name}`).join('\n')}\n\nTheir current settings go to the Recycle Bin first, and each change can be undone from Change History. Close these programs first.` }))) return;
+    const results = await restorePackages(newer, true);
+    for (const p of newer) lastPull[p.name] = p.mtime;
+    await api.invoke('settings:set', { lastPull });
+    setModal({ type: 'results', title: 'Settings Received', results });
+  };
+
+  // ---- 15. portable apps --------------------------------------------------------------------------------
+
+  const openPortable = async (extra = []) => {
+    setBusy('Looking for portable apps…');
+    try {
+      setModal({ type: 'portable', apps: await api.invoke('portable:find', extra), extra });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  // ---- 16. Explorer right-click requests (from the command line) -----------------------------------------------
+
+  const uninstallTarget = async (target) => {
+    const p = await api.invoke('shell:resolve', target);
+    const lower = p.toLowerCase();
+    const list = desktopCache.current.length ? desktopCache.current : await api.invoke('programs:list', 'desktop');
+    const owner = list
+      .map((x) => ({ x, loc: String(x.location || '').replace(/^"|"$/g, '').replace(/\\+$/, '').toLowerCase() }))
+      .filter(({ loc }) => loc.length > 3 && (lower === loc || lower.startsWith(loc + '\\')))
+      .sort((a, b) => b.loc.length - a.loc.length)[0]?.x;
+    if (!owner) return setModal({ type: 'whoOwns', target: p });
+    setView('desktop');
+    setSelected(owner.key);
+    setMarked(new Set([owner.key]));
+    actions.uninstall(owner);
+  };
+
   const actions = {
     backupProgram: (p) => view === 'desktop' && backupProgram(p),
+    rescue: (p) => view === 'desktop' && rescue(p),
+    sheet: (p) => view === 'desktop' && openSheet(p),
     compareNow: (p) => view === 'snapshots' && runCompare(p, null),
     deleteSnapshot: async (p) => {
       if (view !== 'snapshots') return;
@@ -836,6 +1343,10 @@ export default function App() {
     uninstall: async (p) => {
       if (view === 'history') return actions.undoChange(p);
       if (view === 'archive') return actions.deleteRecord(p);
+      if (p.portable) {
+        if (!(await confirmWithRestore(`Remove the portable app ${p.name}?`, 'It has no uninstaller: SweepUninstall removes its folder, its entry and the files and settings it left, after you review them. Everything is backed up first.')).ok) return;
+        return scanFor(p, `Remove Portable App – ${p.name}`, (items) => `SweepUninstall found ${items.length} items belonging to ${p.name}.`);
+      }
       if (view === 'snapshots') return actions.deleteSnapshot(p);
       if (view === 'monitored') return uninstallMonitored(p);
       if (view === 'backups') return actions.deleteBackup(p);
@@ -954,6 +1465,42 @@ export default function App() {
   const global = {
     takeSnapshot: () => setModal({ type: 'takeSnapshot' }),
     restoreProgram: () => restoreProgramBackup(),
+    queue: () => openQueue(),
+    queueAdd: () => (view === 'desktop' || view === 'store') && (markedRows.length || current) && queueAdd(markedRows.length ? markedRows : [current]),
+    trials: () => openTrials(),
+    diskMap: () => openDiskMap(),
+    regSearch: () => setModal({ type: 'regSearch' }),
+    browsers: () => openBrowsers(),
+    portable: () => openPortable(),
+    migratePc: () => setModal({ type: 'migratePc' }),
+    restoreFolder: () => restoreFolder(),
+    sync: () => openSync(),
+    report: () => setModal({ type: 'report' }),
+    ctxmenu: async () => {
+      setBusy('Reading Explorer’s right-click entries…');
+      try {
+        setModal({ type: 'ctxmenu', entries: await api.invoke('ctxmenu:list') });
+      } catch (e) {
+        setError(e.message);
+      } finally {
+        setBusy('');
+      }
+    },
+    palette: () => setPalette(true),
+    toggleTray: async () => {
+      const s = await api.invoke('settings:set', { tray: !trayOn });
+      setTrayOn(!!s.tray);
+      await api.invoke('app:setTray', !!s.tray);
+      setNotice({ tone: 'ok', text: s.tray ? 'SweepUninstall now stays in the tray when you close its window, and keeps checking for new startup entries. Exit from the tray menu.' : 'Closing the window exits SweepUninstall again.' });
+    },
+    toggleShell: async () => {
+      try {
+        setShellOn(await api.invoke(shellOn ? 'shell:disable' : 'shell:enable'));
+        setNotice({ tone: 'ok', text: shellOn ? 'SweepUninstall was removed from Explorer’s right-click menu.' : 'Explorer’s right-click menu now has "Who owns this?" on files and folders, and "Uninstall with SweepUninstall" on shortcuts and programs (under Show more options on Windows 11).' });
+      } catch (e) {
+        setError(e.message);
+      }
+    },
     whoOwns: () => setModal({ type: 'whoOwns' }),
     orphans: () => findOrphans(),
     updates: () => setModal({ type: 'updates' }),
@@ -985,6 +1532,9 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     toggleGrid: async () => {
       const s = await api.invoke('settings:set', { gridLines: !gridOn });
       setGridOn(s.gridLines !== false);
+      setTheme(s.theme || 'dark');
+      setTrayOn(!!s.tray);
+      if (s.tray) api.invoke('app:setTray', true).catch(() => {});
     },
     toggleSafe: async () => {
       const s = await api.invoke('settings:set', { safeMode: !safeOn });
@@ -1004,6 +1554,9 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       setSilentOn(!!s.silentUninstall);
       setSafeOn(!!s.safeMode);
       setGridOn(s.gridLines !== false);
+      setTheme(s.theme || 'dark');
+      setTrayOn(!!s.tray);
+      if (s.tray) api.invoke('app:setTray', true).catch(() => {});
       api.invoke('backups:prune').catch(() => {});
       setNotice({ tone: 'ok', text: s.createRestorePoints ? 'Restore points are on: confirmations offer to create one first.' : 'Restore points are off: the checkbox starts unticked.' });
     },
@@ -1012,6 +1565,11 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
   const dispatch = (action) => {
     setMenu(null);
     if (action.startsWith('view:')) return setView(action.slice(5));
+    if (action.startsWith('theme:')) {
+      const th = action.slice(6);
+      setTheme(th);
+      return api.invoke('settings:set', { theme: th });
+    }
     if (global[action]) return global[action]();
     if (busy || modal) return;
     if (action === 'clearSelection') return setMarked(new Set(current ? [current.key] : []));
@@ -1029,6 +1587,10 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       let action = null;
       if (e.ctrlKey && !e.altKey && /^[1-9]$/.test(key)) action = `view:${['desktop', 'store', 'monitored', 'backups', 'debloat', 'startup', 'snapshots', 'junk', 'archive'][Number(key) - 1]}`;
       else if (e.ctrlKey && key === 'g') action = 'setGroup';
+      else if (e.ctrlKey && key === 't') action = 'view:timeline';
+      else if (e.ctrlKey && key === 'k') action = 'palette';
+      else if (e.ctrlKey && key === 'q') action = 'queueAdd';
+      else if (e.ctrlKey && key === 'w') action = 'sheet';
       else if (e.ctrlKey && key === 'f') action = 'find';
       else if (e.ctrlKey && key === 's') action = 'export';
       else if (e.ctrlKey && key === 'm') action = 'monitor';
@@ -1095,7 +1657,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
   };
 
   const contextItems = isBatch
-    ? [['uninstall', `Uninstall ${markedRows.length} Programs...`, 'Del'], ['setGroup', `Set Group for ${markedRows.length} Programs...`, 'Ctrl+G'], null, ['clearSelection', 'Clear Selection']]
+    ? [['uninstall', `Uninstall ${markedRows.length} Programs...`, 'Del'], ['queueAdd', `Add ${markedRows.length} Programs to the Queue`, 'Ctrl+Q'], ['setGroup', `Set Group for ${markedRows.length} Programs...`, 'Ctrl+G'], null, ['clearSelection', 'Clear Selection']]
     : view === 'history'
       ? [['undoChange', 'Undo This Change', 'Del']]
     : view === 'archive'
@@ -1115,6 +1677,9 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               ['removeEntry', 'Remove Entry...'],
               ['setGroup', 'Set Group...', 'Ctrl+G'],
               ['backupProgram', 'Migrate / Back Up Program...'],
+              ['queueAdd', 'Add to Uninstall Queue', 'Ctrl+Q'],
+              ['sheet', 'What It Does...', 'Ctrl+W'],
+              ['rescue', 'Rescue Broken Uninstall...'],
               null,
               ['registry', 'Registry Entry'],
               ['folder', 'Installation Folder'],
@@ -1127,50 +1692,99 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
   const cols = VIEWS[view].cols;
   const cellFor = (r, c) => (c === 'size' ? r.sizeText : c === 'date' ? r.date : r[c]);
 
+  // Commands whose menu label contains what is typed in the search box.
+  const cmdText = filter.trim().toLowerCase();
+  const cmdSeen = new Set();
+  const cmdMatches = cmdText.length < 2 ? [] : MENUS.flatMap(([menu, entries]) => entries.filter(Boolean).map(([action, label, accel]) => ({ action, label: label.replace(/\.\.\.$/, ''), accel, menu })))
+      .filter((c) => c.label.toLowerCase().includes(cmdText) && !cmdSeen.has(c.action) && cmdSeen.add(c.action))
+      .slice(0, 6);
+  const cmdShown = cmdOpen && cmdMatches.length > 0;
+  const runCmd = (c) => {
+    setFilter('');
+    setCmdIdx(-1);
+    searchRef.current?.blur();
+    setTimeout(() => dispatch(c.action), 0);
+  };
+
+  // The action bar: the main actions for the selection in the open list view.
+  const barItems = isBatch
+    ? contextItems.filter(Boolean)
+    : view === 'desktop'
+      ? DESKTOP_BAR.map((id) => contextItems.find((i) => i && i[0] === id)).filter(Boolean)
+      : view === 'snapshots'
+        ? [['takeSnapshot', 'Take Snapshot'], ...contextItems.filter(Boolean)]
+        : contextItems.filter(Boolean);
+  const barReady = (id) => (id === 'takeSnapshot' ? true : id === 'compareSelected' ? markedRows.length === 2 : isBatch || !!current);
+
   return (
     <div className={`app ${gridOn ? 'grid' : ''}`} onClick={() => menu && setMenu(null)}>
-      <MenuBar onAction={dispatch} checked={{ toggleRestore: restoreOn, toggleSilent: silentOn, toggleSafe: safeOn, toggleGrid: gridOn }} />
-      {/* Two rows of four equal columns, so the buttons line up and fill the width. */}
-      <div className="toolbar toolbar-grid">
-        <select
-          className={`view-picker ${VIEWS[view].button ? 'inactive' : ''}`}
-          value={VIEWS[view].button ? lastListView.current : view}
-          onChange={(e) => setView(e.target.value)}
-          onClick={() => VIEWS[view].button && setView(lastListView.current)}
-          aria-label="View"
-        >
-          {Object.entries(VIEWS)
-            .filter(([, v]) => !v.button)
-            .map(([id, v]) => (
-              <option key={id} value={id}>
-                {v.label}
-              </option>
-            ))}
-        </select>
-        {[
-          ['debloat', 'Debloat Windows', 'Safe, reversible tweaks that remove Windows ads, telemetry and clutter (Ctrl+5)'],
-          ['startup', 'Startup & Services', 'Programs, tasks and services that start with Windows (Ctrl+6)'],
-        ].map(([id, label, title]) => (
-          <button key={id} className={`debloat-button ${view === id ? 'active' : ''}`} onClick={() => toggleView(id)} aria-pressed={view === id} title={title}>
-            {label}
-          </button>
-        ))}
+      <MenuBar onAction={dispatch} right={
+          admin === false ? (
+            <button className="link elevate" onClick={() => api.invoke('app:elevate')} title="Needed to remove programs installed for all users, and for machine-wide changes">
+              Not elevated – Restart as Administrator
+            </button>
+          ) : admin ? (
+            <span className="elevated">Administrator</span>
+          ) : null
+        }
+        checked={{ toggleRestore: restoreOn, toggleSilent: silentOn, toggleSafe: safeOn, toggleGrid: gridOn, 'theme:dark': theme === 'dark', 'theme:light': theme === 'light', 'theme:contrast': theme === 'contrast', toggleTray: trayOn, toggleShell: shellOn }} />
+      {/* Row 1: one box that searches the list and finds commands. */}
+      <div className="cmdbar">
         <div className="search">
-          <input ref={searchRef} value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search" onKeyDown={(e) => e.key === 'Escape' && setFilter('')} />
+          <input
+            ref={searchRef}
+            value={filter}
+            onChange={(e) => {
+              setFilter(e.target.value);
+              setCmdIdx(-1);
+              setCmdOpen(true);
+            }}
+            onFocus={() => setCmdOpen(true)}
+            onBlur={() => setCmdOpen(false)}
+            placeholder={`Search ${VIEWS[view].noun} or type a command, e.g. "cleaner" or "snapshot"`}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') {
+                setFilter('');
+                setCmdIdx(-1);
+              } else if (cmdShown && e.key === 'ArrowDown') {
+                e.preventDefault();
+                setCmdIdx((i) => Math.min(cmdMatches.length - 1, i + 1));
+              } else if (cmdShown && e.key === 'ArrowUp') {
+                e.preventDefault();
+                setCmdIdx((i) => Math.max(-1, i - 1));
+              } else if (cmdShown && e.key === 'Enter' && cmdIdx >= 0) {
+                e.preventDefault();
+                runCmd(cmdMatches[cmdIdx]);
+              }
+            }}
+            aria-label="Search or run a command"
+            aria-expanded={cmdShown}
+          />
           {filter && (
             <button className="clear" onClick={() => setFilter('')} aria-label="Clear search">
               ✕
             </button>
           )}
+          {cmdShown && (
+            <div className="cmd-list" role="listbox">
+              <div className="cmd-head">Commands · ↓ to choose, Enter to run</div>
+              {cmdMatches.map((c, i) => (
+                <div key={c.action} role="option" aria-selected={i === cmdIdx} className={`cmd-item ${i === cmdIdx ? 'on' : ''}`} onMouseDown={(e) => (e.preventDefault(), runCmd(c))}>
+                  <span>{c.label}</span>
+                  <span className="cmd-where">{c.menu}{c.accel ? ` · ${c.accel}` : ''}</span>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
+        <button className="palette-hint" onClick={() => dispatch('palette')} title="Every command and program in one list">
+          All commands <kbd>Ctrl+K</kbd>
+        </button>
       </div>
-      <div className="toolbar toolbar-grid toolbar2" role="toolbar" aria-label="Tools">
-        {[
-          ['monitored', 'Monitored Programs', 'Programs recorded with Tools › Monitor an Installation (Ctrl+3)'],
-          ['snapshots', 'Snapshots', 'Take snapshots and compare them to see what changed (Ctrl+7)'],
-          ['junk', 'Junk Files', 'Temporary files, crash dumps and caches that can be cleaned (Ctrl+8)'],
-        ].map(([id, label, title]) => (
-          <button key={id} className={`tool-button ${view === id ? 'active' : ''}`} onClick={() => toggleView(id)} aria-pressed={view === id} title={title}>
+      {/* Row 2: every view one click away, and the group filter. */}
+      <div className="toolbar view-chips" role="toolbar" aria-label="Views">
+        {VIEW_CHIPS.map(([id, label, title]) => (
+          <button key={id} className={`view-chip ${view === id ? 'on' : ''}`} onClick={() => (VIEWS[id].button ? toggleView(id) : setView(id))} aria-pressed={view === id} title={title}>
             {label}
           </button>
         ))}
@@ -1200,18 +1814,28 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           )}
         </select>
       </div>
-      {view === 'snapshots' && (
-        <div className="view-bar">
-          <button className="tool-button" onClick={() => dispatch('takeSnapshot')}>Take Snapshot</button>
-          <button className="tool-button" disabled={!current} onClick={() => dispatch('compareNow')}>Compare with Now</button>
-          <button className="tool-button" disabled={markedRows.length !== 2} onClick={() => dispatch('compareSelected')}>Compare Selected</button>
-        </div>
-      )}
+      {/* Row 3: what can be done with the selection, or what the open view is for. */}
+      <div className="action-bar" role="toolbar" aria-label="Actions">
+        {VIEW_NOTES[view] ? (
+          <span className="action-note">{VIEW_NOTES[view]}</span>
+        ) : (
+          <>
+            <span className={`action-subject ${current || isBatch ? '' : 'none'}`} title={current?.name}>
+              {isBatch ? `${markedRows.length} selected:` : current ? `${current.name}:` : `Nothing selected`}
+            </span>
+            {barItems.map(([id, label]) => (
+              <button key={id} className={`action-button ${/^(uninstall|force|delete)/i.test(id) ? 'danger' : ''}`} disabled={!barReady(id)} onClick={() => dispatch(id)}>
+                {shortLabel(label)}
+              </button>
+            ))}
+            {view === 'backups' && <span className="action-note right">Double-click a backup to restore it</span>}
+            {view === 'history' && <span className="action-note right">Double-click a change to undo it</span>}
+          </>
+        )}
+      </div>
       {view === 'snapshots' && !loading && (
         <SnapshotTimeline snapshots={rows.filter((r) => r.stats && r.created)} marked={marked} onSelect={(key, ctrl) => selectRow(key, { ctrl })} onCompare={(a, b) => runCompare(a, b)} onCompareNow={(s) => runCompare(s, null)} />
       )}
-      {view === 'backups' && <div className="view-bar note">Backups (Tools › Backups) · double-click a backup to restore it</div>}
-      {view === 'history' && <div className="view-bar note">Change History · double-click a change to undo it</div>}
 
       {error && (
         <div className="error-bar">
@@ -1259,7 +1883,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           <div className="list-empty">Loading…</div>
         ) : visible.length === 0 ? (
           <div className="list-empty">
-            {filter ? 'No matches.' : view === 'archive' ? 'No programs removed yet. Every program you uninstall is recorded here.' : view === 'monitored' ? 'No monitored programs yet. Use Tools › Monitor an Installation.' : view === 'backups' ? 'No backups yet.' : view === 'history' ? 'No changes yet. Everything SweepUninstall changes will be listed here.' : 'Nothing found.'}
+            {filter ? 'No matches.' : view === 'timeline' ? 'Nothing recorded yet.' : view === 'archive' ? 'No programs removed yet. Every program you uninstall is recorded here.' : view === 'monitored' ? 'No monitored programs yet. Use Tools › Monitor an Installation.' : view === 'backups' ? 'No backups yet.' : view === 'history' ? 'No changes yet. Everything SweepUninstall changes will be listed here.' : 'Nothing found.'}
           </div>
         ) : (
           visible.map((r, idx) => (
@@ -1317,12 +1941,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         )}
         <span className="status-right">
           {current && view === 'desktop' && <span className="muted">{current.publisher}</span>}
-          {admin === false && (
-            <button className="link" onClick={() => api.invoke('app:elevate')} title="Needed to remove programs installed for all users">
-              Not elevated – Restart as Administrator
-            </button>
-          )}
-          {admin && <span>Administrator</span>}
+
         </span>
       </div>
 
@@ -1398,6 +2017,210 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         <GroupDialog programs={modal.programs} current={groups[modal.programs[0].key] || ''} grouped={modal.programs.some((p) => groups[p.key])} names={groupNames} onSave={(g) => saveGroup(modal.programs, g)} onClose={() => setModal(null)} />
       )}
       {modal?.type === 'whoOwns' && <WhoOwnsDialog initial={modal.target} onClose={() => setModal(null)} />}
+      {modal?.type === 'queue' && (
+        <QueueDialog
+          queue={modal.queue}
+          onStart={runQueue}
+          onRemove={async (key) => setModal({ type: 'queue', queue: await api.invoke('queue:remove', key) })}
+          onClear={async () => {
+            await api.invoke('queue:clear');
+            setModal({ type: 'queue', queue: null });
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'outside' && <OutsideDialog programs={modal.programs} onScan={scanRemoved} onClose={() => setModal(null)} />}
+      {modal?.type === 'trials' && (
+        <TrialsDialog
+          trials={modal.trials}
+          onNew={newTrial}
+          onTryOver={tryOver}
+          onKeep={async (t) => {
+            if (!(await api.invoke('dialog:confirm', { message: `Keep ${t.name}?`, detail: 'The trial ends and its snapshot is deleted. The program stays installed; you can still uninstall it normally later.' }))) return;
+            await api.invoke('trials:finish', t.id);
+            openTrials();
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'diskmap' && (
+        <DiskMapDialog
+          data={modal.data}
+          onSheet={(key) => {
+            const p = desktopCache.current.find((x) => x.key === key);
+            if (p) openSheet(p);
+          }}
+          onAnalyze={(key) => {
+            const p = desktopCache.current.find((x) => x.key === key);
+            setModal(null);
+            if (p) scanFor(p, `Analysis – ${p.name}`, (items) => `${items.length} files, folders and registry entries are associated with ${p.name}.`);
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'sheet' && (
+        <SheetDialog
+          {...modal}
+          onAnalyze={() => {
+            const p = modal.program;
+            setModal(null);
+            scanFor(p, `Analysis – ${p.name}`, (items) => `${items.length} files, folders and registry entries are associated with ${p.name}.`);
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'regSearch' && (
+        <PromptDialog
+          title="Search Registry"
+          heading="Find registry keys named after something, and values that mention it, in the software part of the registry."
+          label="Search for"
+          placeholder="e.g. a program or publisher name"
+          action="Search"
+          note="Results start unselected and go through the same protection rules as leftovers; anything removed is backed up first."
+          onSubmit={searchRegistry}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'startupAlert' && (
+        <StartupAlertDialog
+          entries={modal.entries}
+          onAllow={async (list) => {
+            await api.invoke('startup:accept', list);
+            const left = modal.entries.filter((e) => !list.some((x) => x.id === e.id));
+            setModal(left.length ? { type: 'startupAlert', entries: left } : null);
+          }}
+          onDisable={async (e) => {
+            try {
+              await api.invoke('startup:set', { entry: e, enable: false });
+              await api.invoke('startup:accept', [e]);
+              const left = modal.entries.filter((x) => x.id !== e.id);
+              setModal(left.length ? { type: 'startupAlert', entries: left } : null);
+              setNotice({ tone: 'ok', text: `"${e.name}" no longer starts with Windows. Turn it back on in Startup & Services.` });
+            } catch (err) {
+              setError(err.message);
+            }
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'browsers' && (
+        <BrowsersDialog
+          {...modal}
+          onRemove={async (list) => {
+            if (!list.length) return;
+            const items = list.flatMap((e) => e.removable);
+            const owners = desktopCache.current
+              .filter((p) => items.some((i) => (i.kind === 'dir' || i.kind === 'file') && p.location && i.path.toLowerCase().startsWith(String(p.location).replace(/\\+$/, '').toLowerCase() + '\\')))
+              .map((p) => p.key);
+            setModal(null);
+            await removeWithBackup(`Browser extensions (${list.map((e) => e.name).join(', ')})`, items, null, owners);
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'migratePc' && <MigratePcDialog programs={desktopCache.current} onSave={migratePc} onClose={() => setModal(null)} />}
+      {modal?.type === 'restoreFolder' && (
+        <FolderRestoreDialog
+          {...modal}
+          onRestore={async (list) => {
+            const results = await restorePackages(list);
+            setModal({ type: 'results', title: 'Restore Report', results, note: 'Each restore can be undone from Tools › Change History.' });
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'sync' && (
+        <SyncDialog
+          settings={modal.settings}
+          programs={desktopCache.current}
+          onPickFolder={() => api.invoke('transfer:pickFolder', 'Choose the shared folder for settings sync')}
+          onSave={async (s) => {
+            await api.invoke('settings:set', s);
+            setModal(null);
+            setNotice({ tone: 'ok', text: 'Settings sync saved.' });
+          }}
+          onPush={syncPush}
+          onPull={syncPull}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'portable' && (
+        <PortableDialog
+          apps={modal.apps}
+          onRegister={async (a) => {
+            try {
+              await api.invoke('portable:register', a);
+              setNotice({ tone: 'ok', text: `${a.name} is now in the program list.` });
+              load();
+              openPortable(modal.extra);
+            } catch (e) {
+              setError(e.message);
+            }
+          }}
+          onUnregister={async (a) => {
+            const p = desktopCache.current.find((x) => x.portable && String(x.location).toLowerCase() === a.folder.toLowerCase());
+            if (p) await api.invoke('portable:unregister', p.key.replace(/^HKCU/, 'HKEY_CURRENT_USER')).catch((e) => setError(e.message));
+            load();
+            openPortable(modal.extra);
+          }}
+          onAddFolder={async () => {
+            const f = await api.invoke('transfer:pickFolder', 'Choose a portable app’s folder');
+            if (f) openPortable([...(modal.extra || []), f]);
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'ctxmenu' && (
+        <ContextMenuDialog
+          entries={modal.entries}
+          admin={admin}
+          onToggle={async (e) => {
+            if (e.admin && admin === false) return setError(`"${e.name}" needs administrator rights. Use File › Restart as Administrator.`);
+            if (e.enabled && e.windows && !(await api.invoke('dialog:confirm', { message: `Turn off "${e.name}"?`, detail: 'This entry is part of Windows or a Microsoft product (such as the virus scan entry). Turning it off is reversible.' }))) return;
+            try {
+              const now = await api.invoke('ctxmenu:set', { entry: e, enable: !e.enabled });
+              setModal((m) => m?.type === 'ctxmenu' ? { ...m, entries: m.entries.map((x) => (x.id === now.id ? now : x)) } : m);
+            } catch (err) {
+              setError(err.message);
+            }
+          }}
+          onRestartExplorer={() => api.invoke('debloat:restartExplorer').catch((e) => setError(e.message))}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'report' && (
+        <ReportDialog
+          onMake={async (month) => {
+            setModal(null);
+            try {
+              const html = await api.invoke('report:monthly', { month, programs: desktopCache.current, insight });
+              await api.invoke('export:html', { title: 'Save Monthly Report', fileName: `sweepuninstall-report-${month}.html`, html });
+            } catch (e) {
+              setError(e.message);
+            }
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {palette && (
+        <CommandPalette
+          commands={[
+            ...MENUS.flatMap(([menuLabel, entries]) => entries.filter(Boolean).map(([action, label, accel]) => ({ id: `${menuLabel}|${action}|${label}`, text: `${label.replace(/\.\.\.$/, '')} (${menuLabel})`, hint: accel, action }))),
+            ...desktopCache.current.map((p) => ({ id: `p|${p.key}`, text: `Program: ${p.name}`, program: p })),
+          ]}
+          onRun={(c) => {
+            setPalette(false);
+            if (c.program) {
+              setView('desktop');
+              setFilter('');
+              setSelected(c.program.key);
+              setMarked(new Set([c.program.key]));
+              setTimeout(() => listRef.current?.querySelector('.row.focused')?.scrollIntoView({ block: 'center' }), 300);
+            } else setTimeout(() => dispatch(c.action), 0);
+          }}
+          onClose={() => setPalette(false)}
+        />
+      )}
       {modal?.type === 'updates' && <UpdatesDialog onUpdate={runUpdates} onClose={() => setModal(null)} />}
       {modal?.type === 'maintenance' && (
         <MaintenanceDialog

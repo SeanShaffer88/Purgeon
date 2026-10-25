@@ -26,7 +26,7 @@ export function JunkView({ filter, admin, onError, onStatus, onClean }) {
       .then((c) => {
         setCats(c);
         // Everything found is selected, except what needs administrator rights when not elevated.
-        setChosen(new Set(c.filter((x) => x.items.length && !(x.admin && admin === false)).map((x) => x.id)));
+        setChosen(new Set(c.filter((x) => x.items.length && !x.privacy && !(x.admin && admin === false)).map((x) => x.id)));
       })
       .catch((e) => {
         onError(e.message);
