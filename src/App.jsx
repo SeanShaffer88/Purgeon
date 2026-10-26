@@ -231,6 +231,11 @@ const MENUS = [
       ['close:exit', 'Close Button Exits'],
       ['toggleStartTray', 'Start Minimized to Tray'],
       ['toggleAutostart', 'Start with Windows'],
+      null,
+      ['schedule', 'Background Monitoring...'],
+      ['syncFolder', 'Choose Sync Folder...'],
+      null,
+      ['language', 'Language...'],
     ],
   ],
   [
@@ -459,6 +464,10 @@ export default function App() {
   const [safeOn, setSafeOn] = useState(false);
   const [gridOn, setGridOn] = useState(true);
   const [theme, setTheme] = useState('dark');
+  const [lang, setLang] = useState('en');
+  const [syncOn, setSyncOn] = useState(false);
+  const [syncFolder, setSyncFolder] = useState('');
+  const [scheduleOn, setScheduleOn] = useState(false);
   // What the close button does: 'ask', 'tray' (keep running in the tray) or 'exit'.
   const [closeAction, setCloseAction] = useState('ask');
   const [closeAsk, setCloseAsk] = useState(false);
@@ -545,11 +554,15 @@ export default function App() {
       setSafeOn(!!s.safeMode);
       setGridOn(s.gridLines !== false);
       setTheme(s.theme || 'dark');
+      setLang(s.language || 'en');
+      setSyncOn(!!s.syncOn);
+      setSyncFolder(s.syncFolder || '');
       applyWindow(s);
       api.invoke('backups:prune').catch(() => {});
       setZoom(s.zoom || 1);
       applyZoom(s.zoom || 1);
     });
+    api.invoke('schedule:status').then((s) => s && setScheduleOn(!!s.registered)).catch(() => {});
     api.invoke('monitor:status').then((s) => s && setModal({ type: 'monitor', resume: s }));
     // A removal cut off by a crash or power cut comes first.
     api.invoke('backups:interrupted').then((p) => p && setModal({ type: 'interrupted', pending: p })).catch(() => {});
@@ -1773,6 +1786,41 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       api.invoke('backups:prune').catch(() => {});
       setNotice({ tone: 'ok', text: s.createRestorePoints ? 'Restore points are on: confirmations offer to create one first.' : 'Restore points are off: the checkbox starts unticked.' });
     },
+    setLanguage: async (code) => {
+      await api.invoke('i18n:set', code);
+      setLang(code);
+      setNotice({ tone: 'ok', text: `Language set to ${code}. Restart Purgeon for all menus to use it.` });
+    },
+    toggleSync: async () => {
+      const next = !syncOn;
+      await api.invoke('sync:apply', { folder: syncFolder || undefined, on: next });
+      setSyncOn(next);
+      setNotice({ tone: 'ok', text: next ? 'Settings sync is on.' : 'Settings sync is off.' });
+    },
+    pickSyncFolder: async () => {
+      const { open: openDialog } = await import('@tauri-apps/plugin-dialog');
+      const folder = await openDialog({ title: 'Choose the sync folder', directory: true, multiple: false });
+      if (typeof folder === 'string') {
+        setSyncFolder(folder);
+        await api.invoke('settings:set', { syncFolder: folder });
+        await api.invoke('sync:apply', { folder, on: syncOn });
+        setNotice({ tone: 'ok', text: 'Sync folder chosen.' });
+      }
+    },
+    toggleSchedule: async () => {
+      const next = !scheduleOn;
+      await api.invoke('schedule:apply', { enabled: next, scanLeftovers: true, checkStartup: true });
+      setScheduleOn(next);
+      setNotice({ tone: 'ok', text: next ? 'Background monitoring is on: Purgeon scans for leftovers while the PC is idle.' : 'Background monitoring is off.' });
+    },
+    schedule: async () => { await dispatch('toggleSchedule'); },
+    syncFolder: async () => { await pickSyncFolder(); },
+    language: async () => {
+      const next = lang === 'en' ? 'es' : lang === 'es' ? 'de' : lang === 'de' ? 'fr' : 'en';
+      await api.invoke('i18n:set', next);
+      setLang(next);
+      setNotice({ tone: 'ok', text: `Language switched to ${next}.` });
+    },
   };
 
   const dispatch = (action) => {
@@ -2029,7 +2077,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             <span className="elevated">Administrator</span>
           ) : null
         }
-        checked={{ toggleRestore: restoreOn, toggleSilent: silentOn, toggleSafe: safeOn, toggleGrid: gridOn, 'theme:dark': theme === 'dark', 'theme:light': theme === 'light', 'theme:contrast': theme === 'contrast', 'close:ask': closeAction === 'ask', 'close:tray': closeAction === 'tray', 'close:exit': closeAction === 'exit', toggleShell: shellOn, toggleOnTop: win.alwaysOnTop, toggleMinTray: win.minimizeToTray, toggleStartTray: win.startInTray, toggleAutostart: autostartOn, toggleDetect: detectOn, toggleHidden: showHidden }} />
+        checked={{ toggleRestore: restoreOn, toggleSilent: silentOn, toggleSafe: safeOn, toggleGrid: gridOn, 'theme:dark': theme === 'dark', 'theme:light': theme === 'light', 'theme:contrast': theme === 'contrast', 'close:ask': closeAction === 'ask', 'close:tray': closeAction === 'tray', 'close:exit': closeAction === 'exit', toggleShell: shellOn, toggleOnTop: win.alwaysOnTop, toggleMinTray: win.minimizeToTray, toggleStartTray: win.startInTray, toggleAutostart: autostartOn, toggleDetect: detectOn, toggleHidden: showHidden, toggleSync: syncOn, toggleSchedule: scheduleOn }} />
       <div className="workspace">
       {/* The views, as icons; each one's name and shortcut is in its tooltip. */}
       <nav className="view-bar-side" aria-label="Views">

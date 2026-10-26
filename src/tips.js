@@ -62,6 +62,9 @@ export const ACTION_TIPS = {
   toggleTray: 'When you close the window, Purgeon keeps running in the notification area (tray), so it can still spot installers and new startup entries. Exit from the tray menu.',
   toggleStartTray: 'Purgeon starts hidden in the notification area (tray) instead of opening its window. Left-click the tray icon to open it.',
   toggleAutostart: 'Starts Purgeon when you sign in to Windows, through a scheduled task in Task Scheduler › Purgeon (needed because it runs as administrator). Off by default; turning it off deletes the task.',
+  schedule: 'Turns background monitoring on or off. When on, Purgeon runs quietly while the PC is idle: scans for leftovers of programs removed elsewhere and watches for new startup entries. Results appear in Change History.',
+  syncFolder: 'Chooses the shared folder (for example inside OneDrive, Dropbox or Google Drive) where Purgeon mirrors its settings so they are the same on your PCs.',
+  language: 'Switches Purgeon’s menus, buttons and messages between English, Spanish, German and French. Restart Purgeon for every menu to use the new language.',
   // Tools
   monitor: 'Records everything an installer creates or changes, using a snapshot before and after (and live tracking as administrator), so the program can be removed completely later.',
   toggleDetect: 'Watches for installers starting while Purgeon runs (also from the tray) and asks whether to record them. Nothing is recorded unless you say yes.',

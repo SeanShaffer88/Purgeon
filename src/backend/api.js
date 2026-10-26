@@ -16,12 +16,31 @@ import * as junk from './junk.js';
 import * as groups from './groups.js';
 import * as installers from './installers.js';
 import * as safety from './safety.js';
-import * as transfer from './transfer.js';
 import * as log from './log.js';
-import * as insights from './insights.js';
 import * as owners from './owners.js';
 import * as winget from './winget.js';
-import * as archive from './archive.js';
+// Cold-path modules are loaded on first use (lazy) to speed up startup:
+// transfer, archive, insights, maintenance, queue, explore, browsers, portable,
+// shellmenu, report, ctxmenu, installwatch, trials.
+const lazyModule = (name) => {
+  let mod = null;
+  return {
+    get: async () => (mod || (mod = await import(`./${name}.js`))),
+  };
+};
+const lazyTransfer = lazyModule('transfer');
+const lazyArchive = lazyModule('archive');
+const lazyInsights = lazyModule('insights');
+const lazyMaintenance = lazyModule('maintenance');
+const lazyQueue = lazyModule('queue');
+const lazyTrials = lazyModule('trials');
+const lazyExplore = lazyModule('explore');
+const lazyBrowsers = lazyModule('browsers');
+const lazyPortable = lazyModule('portable');
+const lazyShellmenu = lazyModule('shellmenu');
+const lazyReport = lazyModule('report');
+const lazyCtxmenu = lazyModule('ctxmenu');
+const lazyInstallwatch = lazyModule('installwatch');
 import * as running from './running.js';
 import * as maintenance from './maintenance.js';
 import * as queue from './queue.js';
@@ -34,10 +53,18 @@ import * as report from './report.js';
 import * as ctxmenu from './ctxmenu.js';
 import * as autostart from './autostart.js';
 import * as installwatch from './installwatch.js';
+// New modules (enhancements): i18n, schedule, associations, restorepoint, plugins, sync, profiler.
+import * as i18n from './i18n.js';
+import * as schedule from './schedule.js';
+import * as associations from './associations.js';
+import * as restorepoint from './restorepoint.js';
+import * as plugins from './plugins.js';
+import * as sync from './sync.js';
+import * as profiler from './profiler.js';
 
 const DEFAULT_SETTINGS = { createRestorePoints: true, silentUninstall: false, safeMode: false, backupMaxDays: 0, backupMaxMB: 0, gridLines: true };
 const settingsFile = () => path.join(sys.info.dataDir, 'settings.json');
-const readSettings = () =>
+export const readSettings = () =>
   sys
     .readText(settingsFile())
     .then((t) => ({ ...DEFAULT_SETTINGS, ...JSON.parse(t) }))
@@ -80,7 +107,7 @@ const handlers = {
   'program:runUninstaller': async (program) => {
     if (program.store) {
       await programs.removeStoreApp(program.key);
-      await archive.add(program, 'store').catch(() => {});
+      await (await lazyArchive.get()).add(program, 'store').catch(() => {});
       return { ok: true };
     }
     // With Tools › Silent Uninstall turned on, uninstallers whose silent switches are known run without their windows.
@@ -97,7 +124,7 @@ const handlers = {
       await new Promise((r) => setTimeout(r, 1000));
       if (i > 3 && !(await uninstallerStillRunning())) break;
     }
-    if (!(await reg(['query', program.key])).ok) await archive.add(program, 'uninstalled').catch(() => {});
+    if (!(await reg(['query', program.key])).ok) await (await lazyArchive.get()).add(program, 'uninstalled').catch(() => {});
     return result;
   },
   'program:scan': (program) => leftovers.scan(program),
@@ -149,10 +176,10 @@ const handlers = {
   'junk:scan': () => junk.scan(),
   'junk:scanSystem': () => junk.scanSystem(),
   'junk:cleanSystem': (ids) => junk.cleanSystem(ids),
-  'programs:insights': (list) => insights.programInsights(list),
-  'programs:recordSizes': (list) => insights.recordSizes(list).then(() => true),
-  'programs:sizeHistory': () => insights.sizeHistory(),
-  'files:signatures': async (paths) => Object.fromEntries(await insights.signatures(paths)),
+  'programs:insights': async (list) => (await lazyInsights.get()).programInsights(list),
+  'programs:recordSizes': async (list) => (await lazyInsights.get()).recordSizes(list).then(() => true),
+  'programs:sizeHistory': async () => (await lazyInsights.get()).sizeHistory(),
+  'files:signatures': async (paths) => Object.fromEntries(await (await lazyInsights.get()).signatures(paths)),
   'owners:who': (target) => owners.whoOwns(target),
   'owners:pick': async (folder) => {
     const { open: openDialog } = await import('@tauri-apps/plugin-dialog');
@@ -170,11 +197,11 @@ const handlers = {
     const file = await save({ title: 'Export program list for winget', defaultPath: 'my-programs.winget.json', filters: [{ name: 'winget package list', extensions: ['json'] }] });
     return file ? winget.exportList(file) : null;
   },
-  'archive:list': () => archive.list(),
-  'archive:add': ({ program, how }) => archive.add(program, how),
-  'archive:attachBackup': ({ keys, backupId }) => archive.attachBackup(keys, backupId),
-  'archive:setPackage': ({ id, wingetId }) => archive.setPackage(id, wingetId),
-  'archive:remove': (id) => archive.remove(id),
+  'archive:list': async () => (await lazyArchive.get()).list(),
+  'archive:add': async ({ program, how }) => (await lazyArchive.get()).add(program, how),
+  'archive:attachBackup': async ({ keys, backupId }) => (await lazyArchive.get()).attachBackup(keys, backupId),
+  'archive:setPackage': async ({ id, wingetId }) => (await lazyArchive.get()).setPackage(id, wingetId),
+  'archive:remove': async (id) => (await lazyArchive.get()).remove(id),
   'running:bootImpact': () => running.bootImpact(),
   'running:inbound': () => running.inboundRules(),
   'maintenance:status': () => maintenance.status(),
@@ -199,7 +226,7 @@ const handlers = {
   'queue:restartPending': () => queue.restartPending(),
   'queue:restartNow': () => queue.restartNow(),
   // 2. programs removed outside Purgeon
-  'programs:outside': (list) => archive.outside(list),
+  'programs:outside': async (list) => (await lazyArchive.get()).outside(list),
   // 3. trial installs
   'trials:list': () => trials.list(),
   'trials:start': ({ installer, name }) => trials.start(installer, name),
@@ -240,7 +267,7 @@ const handlers = {
     const dir = await openDialog({ title: title || 'Choose a folder', directory: true, multiple: false });
     return typeof dir === 'string' ? dir : null;
   },
-  'transfer:folder': (folder) => transfer.folderPackages(folder),
+  'transfer:folder': async (folder) => (await lazyTransfer.get()).folderPackages(folder),
   // 15. portable apps
   // The folders you added are kept in the settings and looked at every time.
   'portable:find': async () => {
@@ -276,6 +303,31 @@ const handlers = {
   'app:closeAnswered': () => (sys.closeAnswered ? sys.closeAnswered() : null),
   'autostart:enabled': () => autostart.enabled(),
   'autostart:set': (on) => autostart.set(on),
+  // Enhancement 1: localization
+  'i18n:languages': () => i18n.languages(),
+  'i18n:current': () => i18n.language(),
+  'i18n:set': (code) => i18n.setLanguage(code),
+  // Enhancement 3: scheduled background monitoring
+  'schedule:status': () => schedule.status(),
+  'schedule:apply': (settings) => schedule.apply(settings),
+  'schedule:backgroundScan': () => schedule.backgroundScan(),
+  // Enhancement 4: file association / extension ownership lookup
+  'associations:extensions': () => associations.extensions(),
+  'associations:ownerFor': (extension) => associations.ownerFor(extension),
+  'associations:extensionsForProgram': (nameOrExe) => associations.extensionsForProgram(nameOrExe),
+  // Enhancement 5: System Restore point integration
+  'restorepoint:create': (description) => restorepoint.create(description),
+  'restorepoint:list': () => restorepoint.list(),
+  // Enhancement 6: plugin / user-script architecture
+  'plugins:list': () => plugins.list(),
+  'plugins:setEnabled': ({ id, enabled }) => plugins.setEnabled(id, enabled),
+  'plugins:runLeftoverRules': (id) => plugins.runLeftoverRules(id),
+  // Enhancement 9: cloud-synced settings and backup index
+  'sync:status': () => sync.status(),
+  'sync:apply': ({ folder, on }) => sync.apply({ folder, on }),
+  'sync:syncNow': () => sync.syncNow(),
+  // Enhancement 10: startup profiler
+  'profiler:report': () => profiler.report(),
   // Installers spotted as they start, and monitoring one that is already running
   'installers:check': () => installwatch.check(),
   'monitor:attach': ({ installer, name }) => monitor.attach(installer, name),
@@ -293,18 +345,18 @@ const handlers = {
   'groups:restore': (previous) => groups.restore(previous),
   'transfer:pickSave': async (program) => {
     const { save } = await import('@tauri-apps/plugin-dialog');
-    return save({ title: `Back up ${program.name}`, defaultPath: transfer.defaultFileName(program), filters: [{ name: 'Purgeon program backup', extensions: ['swpkg'] }] });
+    return save({ title: `Back up ${program.name}`, defaultPath: (await lazyTransfer.get()).defaultFileName(program), filters: [{ name: 'Purgeon program backup', extensions: ['swpkg'] }] });
   },
   'transfer:pickOpen': async () => {
     const { open: openDialog } = await import('@tauri-apps/plugin-dialog');
     const file = await openDialog({ title: 'Restore a program backup', multiple: false, filters: [{ name: 'Purgeon program backup', extensions: ['swpkg'] }] });
     return typeof file === 'string' ? file : null;
   },
-  'transfer:export': ({ program, items, file, contents }) => transfer.exportProgram(program, items, file, contents),
-  'transfer:classify': (items) => items.map((i) => transfer.isSettings(i)),
-  'transfer:read': (arg) => (typeof arg === 'string' ? transfer.read(arg) : transfer.read(arg.file, { replace: !!arg.replace })),
-  'transfer:restore': ({ file, numbers, replace }) => transfer.restore(file, numbers, { replace: !!replace }),
-  'transfer:undo': (id) => transfer.undo(id),
+  'transfer:export': async ({ program, items, file, contents }) => (await lazyTransfer.get()).exportProgram(program, items, file, contents),
+  'transfer:classify': async (items) => { const t = await lazyTransfer.get(); return items.map((i) => t.isSettings(i)); },
+  'transfer:read': async (arg) => { const t = await lazyTransfer.get(); return typeof arg === 'string' ? t.read(arg) : t.read(arg.file, { replace: !!arg.replace }); },
+  'transfer:restore': async ({ file, numbers, replace }) => (await lazyTransfer.get()).restore(file, numbers, { replace: !!replace }),
+  'transfer:undo': async (id) => (await lazyTransfer.get()).undo(id),
   'startup:list': () => startup.list(),
   'startup:set': ({ entry, enable }) => startup.setEnabled(entry, enable),
   'debloat:list': () => debloat.list(),
@@ -428,15 +480,22 @@ export async function initBackend() {
     history.setRoot(path.join(data, 'history')),
     snapshots.setRoot(path.join(data, 'snapshots')),
     groups.setRoot(path.join(data, 'groups')),
-    transfer.setRoot(path.join(data, 'transfers')),
-    insights.setRoot(path.join(data, 'insights')),
-    archive.setRoot(path.join(data, 'archive')),
+    (await lazyTransfer.get()).setRoot(path.join(data, 'transfers')),
+    (await lazyInsights.get()).setRoot(path.join(data, 'insights')),
+    (await lazyArchive.get()).setRoot(path.join(data, 'archive')),
     maintenance.setRoot(path.join(data, 'reports')),
     queue.setRoot(path.join(data, 'queue')),
     trials.setRoot(path.join(data, 'trials')),
     running.setRoot(path.join(data, 'startup')),
+    schedule.setRoot(path.join(data, 'schedule')),
+    plugins.setRoot(path.join(data, 'plugins')),
+    sync.setRoot(path.join(data, 'sync')),
   ]);
+  // Record that the core modules loaded; cold modules are loaded on first use below.
+  profiler.mark('backend:init');
 }
+
+profiler.mark('api:imports-loaded');
 
 export const api = {
   async invoke(channel, arg) {
