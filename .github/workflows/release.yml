@@ -47,6 +47,8 @@ jobs:
           }
       - name: Build and verify the three release assets
         run: npm run dist:windows
+      - name: Installer dispatch regression probes
+        run: ./scripts/test-setup-dispatch.ps1
       - name: Installer smoke tests (disposable runner only)
         run: ./scripts/test-windows-installers.ps1 -Directory release
       - name: Upload build artifacts and internal hash evidence

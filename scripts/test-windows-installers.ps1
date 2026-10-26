@@ -18,7 +18,7 @@ function Invoke-Installer([string] $File, [string] $Arguments) {
 
 # An x86 MSI on the x64 runner must install the x86 executable successfully.
 $msiPath = "$packages/Purgeon-Setup.msi"
-$msiInstall = "$testRoot/MSI install"
+$msiInstall = Join-Path $testRoot 'MSI install'
 Invoke-Installer msiexec.exe "/i `"$msiPath`" /qn /norestart INSTALLDIR=`"$msiInstall`" /L*v `"$testRoot/msi-install.log`""
 Assert-PeMachine "$msiInstall/purgeon.exe" 0x14C
 $tasks = @('\Purgeon\Start at Sign-in', '\Purgeon\Weekly Maintenance',
@@ -35,7 +35,7 @@ foreach ($task in $tasks) {
 }
 
 # /S must reach the child, /D must preserve spaces, and native selection must pick x64.
-$exeInstall = "$testRoot/EXE install"
+$exeInstall = Join-Path $testRoot 'EXE install'
 Invoke-Installer "$packages/Purgeon-Setup.exe" "/S /D=$exeInstall"
 Assert-PeMachine "$exeInstall/purgeon.exe" 0x8664
 $uninstaller = Join-Path $exeInstall 'uninstall.exe'

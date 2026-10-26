@@ -9,7 +9,6 @@ Name "Purgeon Setup"
 OutFile "${OUTPUT}"
 RequestExecutionLevel admin
 ManifestDPIAware true
-SilentInstall silent
 SetCompressor /SOLID lzma
 Icon "${ICON}"
 VIProductVersion "${VERSION}.0"
@@ -18,7 +17,8 @@ VIAddVersionKey /LANG=1033 "FileDescription" "Purgeon installer for x86 and x64 
 VIAddVersionKey /LANG=1033 "FileVersion" "${VERSION}"
 VIAddVersionKey /LANG=1033 "LegalCopyright" "Copyright (c) 2026 Sean Shaffer"
 
-Section
+; Run before NSIS validates an installation directory or opens its own pages.
+Function .onInit
   InitPluginsDir
   SetOutPath "$PLUGINSDIR"
   ${If} ${RunningX64}
@@ -41,4 +41,8 @@ Section
 failed:
   MessageBox MB_OK|MB_ICONSTOP "Purgeon Setup could not start the installer." /SD IDOK
   SetErrorLevel 1
+  Quit
+FunctionEnd
+
+Section
 SectionEnd
