@@ -32,6 +32,9 @@ if (Test-Path -LiteralPath "$msiInstall/purgeon.exe") { throw 'MSI uninstall lef
 foreach ($task in $tasks) {
     & schtasks.exe /Query /TN $task 2>$null | Out-Null
     if ($LASTEXITCODE -eq 0) { throw "MSI uninstall left scheduled task: $task" }
+    # A missing task is the expected result; do not leak its native exit code
+    # into GitHub Actions' PowerShell wrapper after all checks have passed.
+    $LASTEXITCODE = 0
 }
 
 # /S must reach the child, /D must preserve spaces, and native selection must pick x64.

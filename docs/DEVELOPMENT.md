@@ -46,9 +46,9 @@ milestone, not whole-product release certification.
   selection, failure code propagation, quoted arguments, silent mode and default/
   explicit installation paths. Four negative package checks reject nonempty output,
   extra assets, altered archives and altered archive entries.
-- **Verified locally:** a packaged development x64 portable copy returns help with
-  exit 0 and rejects `--maintenance --dry-run` with exit 1. No maintenance operation
-  runs. Native startup still creates its existing settings/WebView runtime data.
+- **Verified locally:** packaged development x86 and x64 portable copies return help
+  with exit 0 and reject `--maintenance --dry-run` with exit 1. No maintenance
+  operation runs. Startup creates WebView runtime data, including Crashpad settings.
 - **Partially Verified:** release app/installer packaging. Local WiX validation
   failed because the machine lacks its VBScript validation prerequisite (2738).
   An assembly-only local MSI was used to exercise package metadata/archive/hash
