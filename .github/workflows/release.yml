@@ -27,6 +27,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
+          key: windows-x86-x64
           cache-on-failure: true
       - run: npm ci
       - name: Safety tests
