@@ -15,6 +15,7 @@ use tauri::{Emitter, Manager};
 mod launch_args;
 mod snapshot;
 mod tracker;
+mod windows_tools;
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
@@ -38,7 +39,7 @@ async fn run_ps(script: String, input: Option<String>) -> Result<String, String>
         let wrapped = format!("$ProgressPreference='SilentlyContinue';[Console]::OutputEncoding=[Text.Encoding]::UTF8;{script}");
         let utf16: Vec<u8> = wrapped.encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
         // A PSModulePath inherited from PowerShell 7 stops Windows PowerShell loading its own modules.
-        let mut child = Command::new("powershell.exe")
+        let mut child = Command::new(windows_tools::command("powershell.exe"))
             .env_remove("PSModulePath")
             .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", &STANDARD.encode(utf16)])
             .stdin(Stdio::piped())
@@ -68,7 +69,7 @@ async fn run_ps(script: String, input: Option<String>) -> Result<String, String>
 #[tauri::command]
 async fn exec(file: String, args: Vec<String>) -> ExecResult {
     tauri::async_runtime::spawn_blocking(move || {
-        match Command::new(&file)
+        match Command::new(windows_tools::command(&file))
             .args(&args)
             .creation_flags(CREATE_NO_WINDOW)
             .output()
@@ -101,7 +102,7 @@ async fn exec(file: String, args: Vec<String>) -> ExecResult {
 #[tauri::command]
 async fn run_command_line(command_line: String) -> ExecResult {
     tauri::async_runtime::spawn_blocking(move || {
-        match Command::new("cmd.exe")
+        match Command::new(windows_tools::command("cmd.exe"))
             .raw_arg(format!("/d /s /c \"{command_line}\""))
             .creation_flags(CREATE_NO_WINDOW)
             .status()
@@ -132,7 +133,7 @@ async fn run_command_line(command_line: String) -> ExecResult {
 /// Starts a program or document without waiting (installers, regedit).
 #[tauri::command]
 fn launch(file: String, args: Vec<String>) -> Result<(), String> {
-    Command::new(file)
+    Command::new(windows_tools::command(&file))
         .args(args)
         .spawn()
         .map(|_| ())
@@ -364,7 +365,7 @@ fn append_text(path: String, contents: String) -> Result<(), String> {
 /// usually installed together.
 #[tauri::command]
 fn uninstall_key_times() -> std::collections::HashMap<String, f64> {
-    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ};
+    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_64KEY};
     use winreg::RegKey;
     let mut out = std::collections::HashMap::new();
     let roots = [
@@ -385,11 +386,13 @@ fn uninstall_key_times() -> std::collections::HashMap<String, f64> {
         ),
     ];
     for (hive, label, path) in roots {
-        let Ok(root) = RegKey::predef(hive).open_subkey_with_flags(path, KEY_READ) else {
+        let Ok(root) =
+            RegKey::predef(hive).open_subkey_with_flags(path, KEY_READ | KEY_WOW64_64KEY)
+        else {
             continue;
         };
         for name in root.enum_keys().flatten() {
-            let Ok(key) = root.open_subkey_with_flags(&name, KEY_READ) else {
+            let Ok(key) = root.open_subkey_with_flags(&name, KEY_READ | KEY_WOW64_64KEY) else {
                 continue;
             };
             let Ok(info) = key.query_info() else { continue };
@@ -425,7 +428,7 @@ struct RegSearch {
 /// HKCU\Software and HKLM\SOFTWARE (Classes is left out: it is huge and shared).
 #[tauri::command]
 async fn search_registry(term: String, max: usize, max_ms: u64) -> RegSearch {
-    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ};
+    use winreg::enums::{HKEY_CURRENT_USER, HKEY_LOCAL_MACHINE, KEY_READ, KEY_WOW64_64KEY};
     use winreg::{RegKey, RegValue};
     tauri::async_runtime::spawn_blocking(move || {
         let needle = term.to_lowercase();
@@ -447,7 +450,9 @@ async fn search_registry(term: String, max: usize, max_ms: u64) -> RegSearch {
             (HKEY_CURRENT_USER, "HKEY_CURRENT_USER", "Software"),
             (HKEY_LOCAL_MACHINE, "HKEY_LOCAL_MACHINE", "SOFTWARE"),
         ] {
-            if let Ok(k) = RegKey::predef(hive).open_subkey_with_flags(path, KEY_READ) {
+            if let Ok(k) =
+                RegKey::predef(hive).open_subkey_with_flags(path, KEY_READ | KEY_WOW64_64KEY)
+            {
                 stack.push((k, format!("{name}\\{path}"), 0));
             }
         }
@@ -485,7 +490,7 @@ async fn search_registry(term: String, max: usize, max_ms: u64) -> RegSearch {
                     if depth == 0 && sub.eq_ignore_ascii_case("Classes") {
                         continue;
                     }
-                    if let Ok(k) = key.open_subkey_with_flags(&sub, KEY_READ) {
+                    if let Ok(k) = key.open_subkey_with_flags(&sub, KEY_READ | KEY_WOW64_64KEY) {
                         stack.push((k, format!("{full}\\{sub}"), depth + 1));
                     }
                 }
@@ -598,11 +603,11 @@ fn track_start() -> Result<(), String> {
 fn track_launch(file: String) -> Result<u32, String> {
     let lower = file.to_lowercase();
     let mut cmd = if lower.ends_with(".msi") {
-        let mut c = Command::new("msiexec.exe");
+        let mut c = Command::new(windows_tools::command("msiexec.exe"));
         c.args(["/i", &file]);
         c
     } else if lower.ends_with(".bat") || lower.ends_with(".cmd") {
-        let mut c = Command::new("cmd.exe");
+        let mut c = Command::new(windows_tools::command("cmd.exe"));
         c.args(["/c", &file]);
         c
     } else {
@@ -834,7 +839,7 @@ struct SysInfo {
 fn sys_info(app: tauri::AppHandle) -> SysInfo {
     let portable = portable_dir();
     SysInfo {
-        env: std::env::vars().collect(),
+        env: windows_tools::environment(),
         home: std::env::var("USERPROFILE").unwrap_or_default(),
         data_dir: portable
             .clone()

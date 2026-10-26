@@ -4,7 +4,7 @@ if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hoste
     throw 'Installer smoke tests are restricted to disposable GitHub-hosted runners.'
 }
 $packages = (Resolve-Path -LiteralPath $Directory).Path
-$testRoot = Join-Path $env:RUNNER_TEMP ([Guid]::NewGuid().ToString('N'))
+$testRoot = Join-Path $env:RUNNER_TEMP ('purgeon-installer-tests-' + [Guid]::NewGuid().ToString('N'))
 New-Item -ItemType Directory -Path $testRoot | Out-Null
 
 function Invoke-Installer([string] $File, [string] $Arguments) {
@@ -13,13 +13,20 @@ function Invoke-Installer([string] $File, [string] $Arguments) {
         Stop-Process -Id $process.Id -Force
         throw "Installer timed out: $File"
     }
-    if ($process.ExitCode -notin @(0, 3010)) { throw "Installer failed ($($process.ExitCode)): $File" }
+    if ($process.ExitCode -notin @(0, 3010)) {
+        Get-ChildItem -LiteralPath $testRoot -Filter '*.log' | ForEach-Object {
+            Get-Content -LiteralPath $_.FullName -Tail 40
+        }
+        throw "Installer failed ($($process.ExitCode)): $File"
+    }
 }
 
 # An x86 MSI on the x64 runner must install the x86 executable successfully.
-$msiPath = "$packages/Purgeon-Setup.msi"
+$msiPath = Join-Path $packages 'Purgeon-Setup.msi'
 $msiInstall = Join-Path $testRoot 'MSI install'
-Invoke-Installer msiexec.exe "/i `"$msiPath`" /qn /norestart INSTALLDIR=`"$msiInstall`" /L*v `"$testRoot/msi-install.log`""
+$installLog = Join-Path $testRoot 'msi-install.log'
+$uninstallLog = Join-Path $testRoot 'msi-uninstall.log'
+Invoke-Installer msiexec.exe "/i `"$msiPath`" /qn /norestart INSTALLDIR=`"$msiInstall`" /L*v `"$installLog`""
 Assert-PeMachine "$msiInstall/purgeon.exe" 0x14C
 $tasks = @('\Purgeon\Start at Sign-in', '\Purgeon\Weekly Maintenance',
            '\SweepUninstall\Start at Sign-in', '\SweepUninstall\Weekly Maintenance')
@@ -27,7 +34,7 @@ foreach ($task in $tasks) {
     & schtasks.exe /Create /TN $task /SC ONSTART /TR 'cmd.exe /c exit 0' /F
     if ($LASTEXITCODE) { throw "Cannot create harmless task fixture: $task" }
 }
-Invoke-Installer msiexec.exe "/x `"$msiPath`" /qn /norestart /L*v `"$testRoot/msi-uninstall.log`""
+Invoke-Installer msiexec.exe "/x `"$msiPath`" /qn /norestart /L*v `"$uninstallLog`""
 if (Test-Path -LiteralPath "$msiInstall/purgeon.exe") { throw 'MSI uninstall left the executable behind.' }
 foreach ($task in $tasks) {
     & schtasks.exe /Query /TN $task 2>$null | Out-Null

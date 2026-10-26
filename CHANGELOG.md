@@ -11,6 +11,9 @@
   one x86 MSI compatible with both Windows architectures, and one portable ZIP
   containing both builds, LICENSE and portable instructions. Add installer and
   downloaded-artifact checks to CI.
+- Keep the x86 application's Windows helpers, registry reads and Program Files
+  roots in the native OS view, so its MSI installation can inspect 64-bit programs
+  on 64-bit Windows. Preserve explicit user-supplied executable paths.
 - Validate the entire command line before initializing the backend or running an
   operation. Reject unknown or repeated options, conflicting commands, unexpected
   arguments, and missing values instead of ignoring them.

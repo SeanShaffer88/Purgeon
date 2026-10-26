@@ -17,7 +17,8 @@ listed in `QUALITY.md`.
 | Help without backend initialization | Include | Verified in tests | Six help/empty-input variants pass; native WebView startup is still required |
 | Native launch routing | Include | Partially Verified | 25/25 routing cases in two passing Rust tests; packaged application runtime remains unverified |
 | CLI uninstall / leftover scan / cleaner | Defer | Not part of this fix | Existing roadmap; needs operation-specific safeguards and tests |
-| Native formatter/linter/test gate | Include | Verified locally | Formatting passes; strict all-target Clippy and all 7 native tests pass on both x86/x64 |
+| Native formatter/linter/test gate | Include | Verified locally | Formatting passes; strict all-target Clippy and all 10 native tests pass on both x86/x64 |
+| x86 helper/registry view on x64 Windows | Include | Verified in scoped tests | Real PowerShell bitness check passes; old x86 helper lookup reproduces the failure; full feature parity remains unverified |
 | Universal Setup EXE | Include | Implementation complete; CI pending | Delegates to existing native installer; silent switches and return codes preserved |
 | One MSI for both Windows architectures | Include | Implementation complete; CI pending | x86 MSI runs on either architecture, installs x86 app; native x64 selection inside one MSI is unsupported |
 | Portable distribution | Include | Implementation complete; CI pending | Both executables, shared adjacent data, LICENSE, PORTABLE.txt; content/hash verification |

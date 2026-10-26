@@ -2,8 +2,9 @@
 import { runPSJson, runPS, psq } from './shell.js';
 
 const LIST_DESKTOP = `
+$nativeArch = if ([Environment]::Is64BitOperatingSystem) { 'x64' } else { 'x86' }
 $roots = @(
-  @{ hive='HKLM'; path='SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall'; arch='x64' },
+  @{ hive='HKLM'; path='SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall'; arch=$nativeArch },
   @{ hive='HKLM'; path='SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall'; arch='x86' },
   @{ hive='HKCU'; path='Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall'; arch='user' }
 )

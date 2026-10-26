@@ -11,7 +11,7 @@ dimension at least 3, and no Fail.
 
 | Dimension | Weight | Score | Verdict | Evidence / missing requirement |
 |---|---:|---:|---|---|
-| Correctness | 14 | 2 | Fail | 91 JS tests and 7 native tests per architecture pass; whole-product runtime matrix incomplete |
+| Correctness | 14 | 2 | Fail | 91 JS tests and 10 native tests per architecture pass; whole-product runtime matrix incomplete |
 | Security & privacy | 12 | 1 | Fail | CLI no-side-effect regressions and scoped risk notes; complete Tier 2 review/SBOM absent |
 | Robustness | 11 | 2 | Fail | Invalid-input and initialization-failure tests; whole-product failure drills pending |
 | Feature completeness | 9 | 2 | Fail | Scoped matrix in `docs/PARITY.md`; whole-product capability review pending |

@@ -14,6 +14,12 @@ milestone, not whole-product release certification.
   malformed UTF-16 retains the prior lossy/trailing-byte behavior. Named snapshot
   tuple types remove type-complexity findings without changing storage. Tests cover
   Unicode, embedded NULs, malformed input and gzip snapshot comparison/truncation.
+- The new x86 build exposed WOW64 redirection in the old bare system-tool lookup.
+  `windows_tools.rs` selects Sysnative helpers from x86 on x64 Windows, System32
+  helpers otherwise, and preserves explicit/custom executable paths. Backend
+  Program Files roots include the native folder and the x86 folder. Native registry
+  reads select the 64-bit view explicitly, matching the existing snapshot reader;
+  Windows ignores that flag on a 32-bit OS. Desktop program labels use OS bitness.
 - Repository-wide Rust formatting is applied. The large native diff includes
   formatting-only changes in existing modules.
 - Current branding is Purgeon. Two stale npm lockfile package names were corrected.
@@ -40,8 +46,12 @@ milestone, not whole-product release certification.
 ### Current evidence
 
 - **Verified locally:** 91/91 JavaScript tests, production frontend build, Rust
-  formatting, strict all-target Clippy, and all 7 native tests on x86 and x64.
+  formatting, strict all-target Clippy, and all 10 native tests on x86 and x64.
   The binary test harness now launches without administrator rights on both targets.
+- **Verified locally:** the new native-helper test actually starts PowerShell and
+  checks that its process bitness matches Windows. An x86 reproduction of the old
+  bare lookup fails this assertion on the x64 host. Pure tests cover tool paths,
+  custom-program preservation and native/32-bit Program Files roots.
 - **Verified locally:** 3 harmless installer dispatcher probes cover architecture
   selection, failure code propagation, quoted arguments, silent mode and default/
   explicit installation paths. Four negative package checks reject nonempty output,
@@ -53,10 +63,14 @@ milestone, not whole-product release certification.
   failed because the machine lacks its VBScript validation prerequisite (2738).
   An assembly-only local MSI was used to exercise package metadata/archive/hash
   checks without claiming ICE validation. Validation is not disabled in CI.
-  Final CI package/smoke evidence is pending.
+  CI subsequently built all three files with full MSI validation and passed the
+  dispatcher/integrity probes. Its install smoke test exposed a path-formatting
+  issue in the test runner (MSI 1619); native path construction and error logging
+  were corrected. Final install/uninstall CI evidence is pending.
 - **Unverified:** native 32-bit Windows 10 runtime behavior, upgrade/downgrade matrix,
   missing-WebView2 installation, full GUI/accessibility/performance coverage and
-  broader quality requirements. No new release is tagged or declared shipped.
+  broader quality requirements. Full x86 filesystem/ETW behavior under WOW64 is
+  not certified by the helper tests. No new release is tagged or declared shipped.
 
 ### Review and sources
 
@@ -71,6 +85,7 @@ Sources checked: [Cargo profile environment](https://doc.rust-lang.org/cargo/ref
 [Tauri Windows packaging](https://v2.tauri.app/distribute/windows-installer/),
 [NSIS command-line variables](https://nsis.sourceforge.io/Docs/Chapter4.html), and
 [MSI platform constraints](https://learn.microsoft.com/en-us/windows/win32/msi/template-summary).
+Native-helper selection follows [Microsoft's Sysnative guidance](https://learn.microsoft.com/en-us/windows/win32/winprog64/file-system-redirector).
 The earlier record below is historical; its native blockers are repaired above.
 
 ## 2026-10-26: command-line validation
