@@ -6,9 +6,9 @@ import './styles.css';
 
 async function start() {
   setSys(await createTauriSys());
-  await initBackend();
   // Command-line requests (see cli.js) run without showing the window.
-  if (sys.info.args?.length) return (await import('./cli.js')).runCli(sys.info.args);
+  if (sys.info.args?.length) return (await import('./cli.js')).runCli(sys.info.args, initBackend);
+  await initBackend();
   // The UI talks to the backend through window.api; keyboard shortcuts are handled in App.
   window.api = { invoke: api.invoke, onMeasured: api.onMeasured, onMenu: () => () => {} };
   window.__sweepHandlers = __handlers;

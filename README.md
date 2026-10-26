@@ -458,6 +458,16 @@ Purgeon --help
 
 The exit code is 0 on success and 1 on an error. Run from an administrator terminal to see the output there.
 
+Use one command at a time. Put quotes around names and paths that contain spaces, and
+put the command before its options. Unknown options, repeated options, extra values,
+and missing values are errors; Purgeon checks the whole request before starting the
+operation. For example, `--maintenance --dry-run` is rejected: maintenance has no
+`--dry-run` option. `--help` (also `-h` or `/?`) must be used on its own.
+Names and other values cannot begin with a dash (`-`); use a full path for such a file.
+
+Development validation and outstanding build checks are recorded in
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
 ## Download
 
 Get the latest version from [Releases](https://github.com/SeanShaffer88/Purgeon/releases/latest). It runs on Windows 10 and 11 (64-bit).

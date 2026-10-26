@@ -12,6 +12,7 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use tauri::{Emitter, Manager};
 
+mod launch_args;
 mod snapshot;
 mod tracker;
 
@@ -633,13 +634,13 @@ fn portable_dir() -> Option<PathBuf> {
     fs::create_dir_all(&data).ok().map(|_| data)
 }
 
-/// Command-line requests (--snapshot, --compare, --list-snapshots, --help) run without a window.
+/// CLI requests, including typos, run without a window and are validated before dispatch.
 fn cli_args() -> Vec<String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if args.iter().any(|a| matches!(a.to_lowercase().as_str(), "--snapshot" | "--compare" | "--list-snapshots" | "--monitor" | "--maintenance" | "--autostart" | "--help" | "-h" | "/?")) {
-        args
-    } else {
+    if launch_args::is_window_request(&args) {
         vec![]
+    } else {
+        args
     }
 }
 
