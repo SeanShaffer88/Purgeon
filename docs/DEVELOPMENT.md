@@ -59,14 +59,19 @@ milestone, not whole-product release certification.
 - **Verified locally:** packaged development x86 and x64 portable copies return help
   with exit 0 and reject `--maintenance --dry-run` with exit 1. No maintenance
   operation runs. Startup creates WebView runtime data, including Crashpad settings.
-- **Partially Verified:** release app/installer packaging. Local WiX validation
+- **Verified in CI:** [run 40364098101](https://github.com/SeanShaffer88/Purgeon/actions/runs/40364098101)
+  on code commit `28a2f65` passed 91 JavaScript tests, formatting, strict Clippy and
+  all 10 native tests per architecture. It built all three files with full MSI
+  validation, passed the dispatcher/integrity probes, installed and uninstalled
+  the x86 MSI and native x64 EXE on the x64 runner, verified paths with spaces and
+  removal of all four scheduled tasks, then re-downloaded the artifacts and
+  verified original contents and hashes. The test harness now preserves native
+  exit codes across repeated task queries; a local shadow variable had caused
+  a false cleanup failure and was reproduced before correction.
+- **Local packaging limitation:** local WiX validation
   failed because the machine lacks its VBScript validation prerequisite (2738).
   An assembly-only local MSI was used to exercise package metadata/archive/hash
   checks without claiming ICE validation. Validation is not disabled in CI.
-  CI subsequently built all three files with full MSI validation and passed the
-  dispatcher/integrity probes. Its install smoke test exposed a path-formatting
-  issue in the test runner (MSI 1619); native path construction and error logging
-  were corrected. Final install/uninstall CI evidence is pending.
 - **Unverified:** native 32-bit Windows 10 runtime behavior, upgrade/downgrade matrix,
   missing-WebView2 installation, full GUI/accessibility/performance coverage and
   broader quality requirements. Full x86 filesystem/ETW behavior under WOW64 is
