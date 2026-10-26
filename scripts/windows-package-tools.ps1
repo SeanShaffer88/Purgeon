@@ -36,9 +36,9 @@ function Get-NsisCompiler {
 function Get-MsiProperty($Database, [string] $Name) {
     $view = $Database.OpenView("SELECT ``Value`` FROM ``Property`` WHERE ``Property`` = '$Name'")
     try {
-        $view.Execute()
+        [void] $view.Execute()
         $record = $view.Fetch()
         if (-not $record) { throw "Missing MSI property: $Name" }
         return $record.StringData(1)
-    } finally { $view.Close() }
+    } finally { [void] $view.Close() }
 }

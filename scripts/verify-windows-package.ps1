@@ -27,12 +27,12 @@ if ((Get-MsiProperty $database 'ProductName') -ne 'Purgeon' -or
 foreach ($action in @('RemovePurgeonSignIn', 'RemovePurgeonMaintenance', 'RemoveLegacySignIn', 'RemoveLegacyMaintenance')) {
     $view = $database.OpenView("SELECT ``Condition`` FROM ``InstallExecuteSequence`` WHERE ``Action`` = '$action'")
     try {
-        $view.Execute()
+        [void] $view.Execute()
         $record = $view.Fetch()
         if (-not $record -or $record.StringData(1) -ne 'Installed AND REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE') {
             throw "Missing or unsafe MSI uninstall condition: $action"
         }
-    } finally { $view.Close() }
+    } finally { [void] $view.Close() }
 }
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem

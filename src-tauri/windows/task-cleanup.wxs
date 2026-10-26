@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
   <Fragment>
+    <DirectoryRef Id="TARGETDIR">
+      <Directory Id="SystemFolder" />
+    </DirectoryRef>
     <!-- Referencing this component links the uninstall actions into Tauri's MSI. -->
     <DirectoryRef Id="INSTALLDIR">
       <Component Id="TaskCleanupRegistration" Guid="*" Win64="no">

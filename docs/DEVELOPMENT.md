@@ -42,9 +42,18 @@ milestone, not whole-product release certification.
 - **Verified locally:** 91/91 JavaScript tests, production frontend build, Rust
   formatting, strict all-target Clippy, and all 7 native tests on x86 and x64.
   The binary test harness now launches without administrator rights on both targets.
+- **Verified locally:** 3 harmless installer dispatcher probes cover architecture
+  selection, failure code propagation, quoted arguments, silent mode and default/
+  explicit installation paths. Four negative package checks reject nonempty output,
+  extra assets, altered archives and altered archive entries.
+- **Verified locally:** a packaged development x64 portable copy returns help with
+  exit 0 and rejects `--maintenance --dry-run` with exit 1. No maintenance operation
+  runs. Native startup still creates its existing settings/WebView runtime data.
 - **Partially Verified:** release app/installer packaging. Local WiX validation
   failed because the machine lacks its VBScript validation prerequisite (2738).
-  Validation is not disabled in CI. Final CI package/smoke evidence is pending.
+  An assembly-only local MSI was used to exercise package metadata/archive/hash
+  checks without claiming ICE validation. Validation is not disabled in CI.
+  Final CI package/smoke evidence is pending.
 - **Unverified:** native 32-bit Windows 10 runtime behavior, upgrade/downgrade matrix,
   missing-WebView2 installation, full GUI/accessibility/performance coverage and
   broader quality requirements. No new release is tagged or declared shipped.
