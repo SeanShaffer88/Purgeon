@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+- Repair the native build gate: format the Rust sources, share UTF-16 registry
+  decoding, name snapshot entry types, and run development/test binaries without
+  requesting elevation. Production manifests retain their existing privileges.
+- Correct stale npm package metadata to Purgeon; preserve legacy data and upgrade
+  identities so existing settings and backups remain accessible.
+- Build x86 and x64 applications. Package one architecture-selecting Setup EXE,
+  one x86 MSI compatible with both Windows architectures, and one portable ZIP
+  containing both builds, LICENSE and portable instructions. Add installer and
+  downloaded-artifact checks to CI.
 - Validate the entire command line before initializing the backend or running an
   operation. Reject unknown or repeated options, conflicting commands, unexpected
   arguments, and missing values instead of ignoring them.

@@ -1,5 +1,69 @@
 # Development record
 
+## 2026-10-26: native gate repair and Windows distribution
+
+Scope: repair the reported formatter, four Clippy findings and elevated test
+harness, audit branding, and implement the requested three-file release layout.
+No removal operation or persisted data format changes. This is a development
+milestone, not whole-product release certification.
+
+- Default development/test manifests use `asInvoker`. Cargo release profiles keep
+  the original manifest exactly. Manifest tests check both cases and preservation
+  of DPI, common-controls and OS compatibility declarations.
+- Registry string decoding now shares one implementation using fixed-size chunks;
+  malformed UTF-16 retains the prior lossy/trailing-byte behavior. Named snapshot
+  tuple types remove type-complexity findings without changing storage. Tests cover
+  Unicode, embedded NULs, malformed input and gzip snapshot comparison/truncation.
+- Repository-wide Rust formatting is applied. The large native diff includes
+  formatting-only changes in existing modules.
+- Current branding is Purgeon. Two stale npm lockfile package names were corrected.
+  Legacy SweepUninstall identifiers remain only for existing data, package identity,
+  task cleanup, shell integration and documented migration compatibility.
+- `npm run dist:windows` builds x86 NSIS/MSI and x64 NSIS inputs, then emits exactly
+  `Purgeon-Setup.exe`, `Purgeon-Setup.msi`, `Purgeon-Portable.zip`. The outer EXE
+  delegates to the existing native NSIS installer. The x86 MSI runs on both OS
+  architectures and installs the x86 application; it does not select native x64.
+  MSI uninstall removes the same four current/legacy scheduled tasks as NSIS;
+  repair and major upgrade paths are excluded from that cleanup.
+- The ZIP has both portable executables, LICENSE and PORTABLE.txt at its root.
+  Both architectures share adjacent portable data. The package script rejects a
+  nonempty output folder and verifies PE architectures, MSI metadata, archive
+  membership and hashes. Hash evidence is internal to CI, outside the three assets.
+- Tauri bundles the WebView2 bootstrapper rather than generating a PowerShell
+  download action. Missing WebView2 still requires network access at installation.
+  No runtime Rust/JavaScript dependency was added; NSIS and WiX are Tauri build tools.
+- CI runs formatting, strict native lint and all-target tests on both architectures,
+  builds packages with MSI validation enabled, tests install/uninstall on a disposable
+  x64 runner, uploads/downloads the packages and verifies their original hashes.
+  Installer mutation tests refuse to run outside GitHub-hosted runners.
+
+### Current evidence
+
+- **Verified locally:** 91/91 JavaScript tests, production frontend build, Rust
+  formatting, strict all-target Clippy, and all 7 native tests on x86 and x64.
+  The binary test harness now launches without administrator rights on both targets.
+- **Partially Verified:** release app/installer packaging. Local WiX validation
+  failed because the machine lacks its VBScript validation prerequisite (2738).
+  Validation is not disabled in CI. Final CI package/smoke evidence is pending.
+- **Unverified:** native 32-bit Windows 10 runtime behavior, upgrade/downgrade matrix,
+  missing-WebView2 installation, full GUI/accessibility/performance coverage and
+  broader quality requirements. No new release is tagged or declared shipped.
+
+### Review and sources
+
+The integrator's adversarial reread covers manifest privilege changes, shared
+decoder equivalence, fixed package names, portable activation, architecture
+selection, silent argument forwarding, child exit codes, MSI upgrade conditions,
+output preservation and CI permissions. One issue found and fixed: NSIS removes
+`/D=` from `$CMDLINE`, so the wrapper must forward its saved `$INSTDIR` separately.
+Private profile instructions and local paths are excluded from the repository.
+
+Sources checked: [Cargo profile environment](https://doc.rust-lang.org/cargo/reference/environment-variables.html),
+[Tauri Windows packaging](https://v2.tauri.app/distribute/windows-installer/),
+[NSIS command-line variables](https://nsis.sourceforge.io/Docs/Chapter4.html), and
+[MSI platform constraints](https://learn.microsoft.com/en-us/windows/win32/msi/template-summary).
+The earlier record below is historical; its native blockers are repaired above.
+
 ## 2026-10-26: command-line validation
 
 Scope: a focused safety fix on the existing Rust/Tauri/React application, based on

@@ -38,7 +38,12 @@
     "shortDescription": "Windows uninstaller with leftover scanning",
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/128x128@2x.png", "icons/icon.ico"],
     "windows": {
-      "webviewInstallMode": { "type": "downloadBootstrapper", "silent": true },
+      "webviewInstallMode": { "type": "embedBootstrapper", "silent": true },
+      "wix": {
+        "upgradeCode": "23f1d951-422c-5f4d-90de-749d2729acf9",
+        "fragmentPaths": ["windows/task-cleanup.wxs"],
+        "componentRefs": ["TaskCleanupRegistration"]
+      },
       "nsis": {
         "installMode": "perMachine",
         "template": "windows/installer.nsi",

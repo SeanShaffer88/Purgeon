@@ -1,6 +1,6 @@
 # Capability evidence
 
-Updated: 2026-10-26. Scope: the command-line validation maintenance slice.
+Updated: 2026-10-26. Scope: command-line validation, native gate repair and packaging.
 This is not an exhaustive feature audit or a claim that all roadmap work is done.
 
 Completeness claim for this slice: every supported CLI command validates its full
@@ -17,7 +17,11 @@ listed in `QUALITY.md`.
 | Help without backend initialization | Include | Verified in tests | Six help/empty-input variants pass; native WebView startup is still required |
 | Native launch routing | Include | Partially Verified | 25/25 routing cases in two passing Rust tests; packaged application runtime remains unverified |
 | CLI uninstall / leftover scan / cleaner | Defer | Not part of this fix | Existing roadmap; needs operation-specific safeguards and tests |
-| Full release validation | Investigate | Blocked | Existing formatter/linter/native-test and application evidence gaps in `QUALITY.md` |
+| Native formatter/linter/test gate | Include | Verified locally | Formatting passes; strict all-target Clippy and all 7 native tests pass on both x86/x64 |
+| Universal Setup EXE | Include | Implementation complete; CI pending | Delegates to existing native installer; silent switches and return codes preserved |
+| One MSI for both Windows architectures | Include | Implementation complete; CI pending | x86 MSI runs on either architecture, installs x86 app; native x64 selection inside one MSI is unsupported |
+| Portable distribution | Include | Implementation complete; CI pending | Both executables, shared adjacent data, LICENSE, PORTABLE.txt; content/hash verification |
+| Full release validation | Investigate | Blocked | Whole-product evidence gaps in `QUALITY.md`; 32-bit Windows runtime matrix outstanding |
 
 The generated invalid-option corpus inserts 32 distinct unknown switches at every
 position in seven valid command examples: 608 requests. It supplements named

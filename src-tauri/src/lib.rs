@@ -8,8 +8,8 @@ use std::io::Write;
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::time::{Duration, Instant, UNIX_EPOCH};
 use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
+use std::time::{Duration, Instant, UNIX_EPOCH};
 use tauri::{Emitter, Manager};
 
 mod launch_args;
@@ -67,12 +67,33 @@ async fn run_ps(script: String, input: Option<String>) -> Result<String, String>
 /// Runs a program directly (no shell), e.g. reg.exe, sc.exe or net.exe.
 #[tauri::command]
 async fn exec(file: String, args: Vec<String>) -> ExecResult {
-    tauri::async_runtime::spawn_blocking(move || match Command::new(&file).args(&args).creation_flags(CREATE_NO_WINDOW).output() {
-        Ok(o) => ExecResult { ok: o.status.success(), code: o.status.code().unwrap_or(-1), stdout: text(&o.stdout), stderr: text(&o.stderr) },
-        Err(e) => ExecResult { ok: false, code: -1, stdout: String::new(), stderr: e.to_string() },
+    tauri::async_runtime::spawn_blocking(move || {
+        match Command::new(&file)
+            .args(&args)
+            .creation_flags(CREATE_NO_WINDOW)
+            .output()
+        {
+            Ok(o) => ExecResult {
+                ok: o.status.success(),
+                code: o.status.code().unwrap_or(-1),
+                stdout: text(&o.stdout),
+                stderr: text(&o.stderr),
+            },
+            Err(e) => ExecResult {
+                ok: false,
+                code: -1,
+                stdout: String::new(),
+                stderr: e.to_string(),
+            },
+        }
     })
     .await
-    .unwrap_or(ExecResult { ok: false, code: -1, stdout: String::new(), stderr: "task failed".into() })
+    .unwrap_or(ExecResult {
+        ok: false,
+        code: -1,
+        stdout: String::new(),
+        stderr: "task failed".into(),
+    })
 }
 
 /// Runs an uninstall command line exactly as stored in the registry (through cmd, as Windows
@@ -80,19 +101,42 @@ async fn exec(file: String, args: Vec<String>) -> ExecResult {
 #[tauri::command]
 async fn run_command_line(command_line: String) -> ExecResult {
     tauri::async_runtime::spawn_blocking(move || {
-        match Command::new("cmd.exe").raw_arg(format!("/d /s /c \"{command_line}\"")).creation_flags(CREATE_NO_WINDOW).status() {
-            Ok(s) => ExecResult { ok: s.success(), code: s.code().unwrap_or(-1), stdout: String::new(), stderr: String::new() },
-            Err(e) => ExecResult { ok: false, code: -1, stdout: String::new(), stderr: e.to_string() },
+        match Command::new("cmd.exe")
+            .raw_arg(format!("/d /s /c \"{command_line}\""))
+            .creation_flags(CREATE_NO_WINDOW)
+            .status()
+        {
+            Ok(s) => ExecResult {
+                ok: s.success(),
+                code: s.code().unwrap_or(-1),
+                stdout: String::new(),
+                stderr: String::new(),
+            },
+            Err(e) => ExecResult {
+                ok: false,
+                code: -1,
+                stdout: String::new(),
+                stderr: e.to_string(),
+            },
         }
     })
     .await
-    .unwrap_or(ExecResult { ok: false, code: -1, stdout: String::new(), stderr: "task failed".into() })
+    .unwrap_or(ExecResult {
+        ok: false,
+        code: -1,
+        stdout: String::new(),
+        stderr: "task failed".into(),
+    })
 }
 
 /// Starts a program or document without waiting (installers, regedit).
 #[tauri::command]
 fn launch(file: String, args: Vec<String>) -> Result<(), String> {
-    Command::new(file).args(args).spawn().map(|_| ()).map_err(|e| e.to_string())
+    Command::new(file)
+        .args(args)
+        .spawn()
+        .map(|_| ())
+        .map_err(|e| e.to_string())
 }
 
 #[derive(Serialize)]
@@ -105,11 +149,18 @@ struct Entry {
 
 #[tauri::command]
 fn read_dir(path: String) -> Vec<Entry> {
-    let Ok(rd) = fs::read_dir(&path) else { return vec![] };
+    let Ok(rd) = fs::read_dir(&path) else {
+        return vec![];
+    };
     rd.flatten()
         .filter_map(|e| {
             let t = e.file_type().ok()?;
-            Some(Entry { name: e.file_name().to_string_lossy().into_owned(), dir: t.is_dir(), file: t.is_file(), link: t.is_symlink() })
+            Some(Entry {
+                name: e.file_name().to_string_lossy().into_owned(),
+                dir: t.is_dir(),
+                file: t.is_file(),
+                link: t.is_symlink(),
+            })
         })
         .collect()
 }
@@ -123,13 +174,21 @@ struct Stat {
 }
 
 fn millis(t: std::io::Result<std::time::SystemTime>) -> f64 {
-    t.ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_millis() as f64).unwrap_or(0.0)
+    t.ok()
+        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+        .map(|d| d.as_millis() as f64)
+        .unwrap_or(0.0)
 }
 
 #[tauri::command]
 fn stat(path: String) -> Option<Stat> {
     let m = fs::metadata(&path).ok()?;
-    Some(Stat { size: m.len(), dir: m.is_dir(), created: millis(m.created()), modified: millis(m.modified()) })
+    Some(Stat {
+        size: m.len(),
+        dir: m.is_dir(),
+        created: millis(m.created()),
+        modified: millis(m.modified()),
+    })
 }
 
 #[tauri::command]
@@ -163,7 +222,12 @@ fn remove_path(path: String) -> Result<(), String> {
     if !p.exists() {
         return Ok(());
     }
-    if p.is_dir() { fs::remove_dir_all(p) } else { fs::remove_file(p) }.map_err(|e| e.to_string())
+    if p.is_dir() {
+        fs::remove_dir_all(p)
+    } else {
+        fs::remove_file(p)
+    }
+    .map_err(|e| e.to_string())
 }
 
 /// Moves a leftover file or folder to the Recycle Bin, without any Windows dialogs.
@@ -240,10 +304,18 @@ async fn folder_size(path: String, max_entries: u64, max_ms: u64) -> FolderSize 
                 }
             }
         }
-        FolderSize { bytes, entries, truncated }
+        FolderSize {
+            bytes,
+            entries,
+            truncated,
+        }
     })
     .await
-    .unwrap_or(FolderSize { bytes: 0, entries: 0, truncated: true })
+    .unwrap_or(FolderSize {
+        bytes: 0,
+        entries: 0,
+        truncated: true,
+    })
 }
 
 /// SHA-256 of each file, as lowercase hex; empty for a file that cannot be read.
@@ -254,7 +326,9 @@ async fn sha256_files(paths: Vec<String>) -> Vec<String> {
         paths
             .iter()
             .map(|p| {
-                let Ok(mut f) = fs::File::open(p) else { return String::new() };
+                let Ok(mut f) = fs::File::open(p) else {
+                    return String::new();
+                };
                 let mut h = Sha256::new();
                 let mut buf = vec![0u8; 64 * 1024];
                 loop {
@@ -278,7 +352,12 @@ fn append_text(path: String, contents: String) -> Result<(), String> {
     if let Some(parent) = Path::new(&path).parent() {
         let _ = fs::create_dir_all(parent);
     }
-    fs::OpenOptions::new().create(true).append(true).open(&path).and_then(|mut f| f.write_all(contents.as_bytes())).map_err(|e| e.to_string())
+    fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+        .and_then(|mut f| f.write_all(contents.as_bytes()))
+        .map_err(|e| e.to_string())
 }
 /// When each uninstall entry was last written (ms since 1970), keyed like the program list
 /// ("HKLM\SOFTWARE\...\Uninstall\X"). Programs written within a minute or two of each other were
@@ -289,19 +368,38 @@ fn uninstall_key_times() -> std::collections::HashMap<String, f64> {
     use winreg::RegKey;
     let mut out = std::collections::HashMap::new();
     let roots = [
-        (HKEY_LOCAL_MACHINE, "HKLM", "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall"),
-        (HKEY_LOCAL_MACHINE, "HKLM", "SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall"),
-        (HKEY_CURRENT_USER, "HKCU", "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall"),
+        (
+            HKEY_LOCAL_MACHINE,
+            "HKLM",
+            "SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+        ),
+        (
+            HKEY_LOCAL_MACHINE,
+            "HKLM",
+            "SOFTWARE\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+        ),
+        (
+            HKEY_CURRENT_USER,
+            "HKCU",
+            "Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall",
+        ),
     ];
     for (hive, label, path) in roots {
-        let Ok(root) = RegKey::predef(hive).open_subkey_with_flags(path, KEY_READ) else { continue };
+        let Ok(root) = RegKey::predef(hive).open_subkey_with_flags(path, KEY_READ) else {
+            continue;
+        };
         for name in root.enum_keys().flatten() {
-            let Ok(key) = root.open_subkey_with_flags(&name, KEY_READ) else { continue };
+            let Ok(key) = root.open_subkey_with_flags(&name, KEY_READ) else {
+                continue;
+            };
             let Ok(info) = key.query_info() else { continue };
             let ft = &info.last_write_time;
             let ticks = ((ft.dwHighDateTime as u64) << 32) | ft.dwLowDateTime as u64;
             if ticks > 116_444_736_000_000_000 {
-                out.insert(format!("{label}\\{path}\\{name}"), ((ticks - 116_444_736_000_000_000) / 10_000) as f64);
+                out.insert(
+                    format!("{label}\\{path}\\{name}"),
+                    ((ticks - 116_444_736_000_000_000) / 10_000) as f64,
+                );
             }
         }
     }
@@ -336,15 +434,19 @@ async fn search_registry(term: String, max: usize, max_ms: u64) -> RegSearch {
         let mut timed_out = false;
         fn text(v: &RegValue) -> Option<String> {
             match v.vtype {
-                winreg::enums::RegType::REG_SZ | winreg::enums::RegType::REG_EXPAND_SZ | winreg::enums::RegType::REG_MULTI_SZ => {
-                    let words: Vec<u16> = v.bytes.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
-                    Some(String::from_utf16_lossy(&words).trim_end_matches('\0').replace('\0', " | "))
+                winreg::enums::RegType::REG_SZ
+                | winreg::enums::RegType::REG_EXPAND_SZ
+                | winreg::enums::RegType::REG_MULTI_SZ => {
+                    Some(snapshot::utf16(&v.bytes).replace('\0', " | "))
                 }
                 _ => None,
             }
         }
         let mut stack: Vec<(RegKey, String, u32)> = Vec::new();
-        for (hive, name, path) in [(HKEY_CURRENT_USER, "HKEY_CURRENT_USER", "Software"), (HKEY_LOCAL_MACHINE, "HKEY_LOCAL_MACHINE", "SOFTWARE")] {
+        for (hive, name, path) in [
+            (HKEY_CURRENT_USER, "HKEY_CURRENT_USER", "Software"),
+            (HKEY_LOCAL_MACHINE, "HKEY_LOCAL_MACHINE", "SOFTWARE"),
+        ] {
             if let Ok(k) = RegKey::predef(hive).open_subkey_with_flags(path, KEY_READ) {
                 stack.push((k, format!("{name}\\{path}"), 0));
             }
@@ -359,13 +461,23 @@ async fn search_registry(term: String, max: usize, max_ms: u64) -> RegSearch {
             }
             let leaf = full.rsplit('\\').next().unwrap_or("").to_lowercase();
             if depth > 0 && leaf.contains(&needle) {
-                out.push(RegHit { kind: "key", path: full.clone(), name: String::new(), data: String::new() });
+                out.push(RegHit {
+                    kind: "key",
+                    path: full.clone(),
+                    name: String::new(),
+                    data: String::new(),
+                });
                 continue; // the key covers everything inside it
             }
             for (vname, value) in key.enum_values().flatten() {
                 let data = text(&value).unwrap_or_default();
                 if vname.to_lowercase().contains(&needle) || data.to_lowercase().contains(&needle) {
-                    out.push(RegHit { kind: "value", path: full.clone(), name: vname, data: data.chars().take(200).collect() });
+                    out.push(RegHit {
+                        kind: "value",
+                        path: full.clone(),
+                        name: vname,
+                        data: data.chars().take(200).collect(),
+                    });
                 }
             }
             if depth < 14 {
@@ -380,17 +492,35 @@ async fn search_registry(term: String, max: usize, max_ms: u64) -> RegSearch {
             }
         }
         let full = out.len() >= max;
-        RegSearch { results: out, timed_out, full }
+        RegSearch {
+            results: out,
+            timed_out,
+            full,
+        }
     })
     .await
-    .unwrap_or(RegSearch { results: vec![], timed_out: true, full: false })
+    .unwrap_or(RegSearch {
+        results: vec![],
+        timed_out: true,
+        full: false,
+    })
 }
 /// Moves several items to the Recycle Bin; one entry per path, empty when it worked.
 #[tauri::command]
 async fn move_many_to_trash(paths: Vec<String>) -> Vec<String> {
-    tauri::async_runtime::spawn_blocking(move || paths.iter().map(|p| trash::delete(p).err().map(|e| e.to_string()).unwrap_or_default()).collect())
-        .await
-        .unwrap_or_default()
+    tauri::async_runtime::spawn_blocking(move || {
+        paths
+            .iter()
+            .map(|p| {
+                trash::delete(p)
+                    .err()
+                    .map(|e| e.to_string())
+                    .unwrap_or_default()
+            })
+            .collect()
+    })
+    .await
+    .unwrap_or_default()
 }
 
 #[derive(Serialize)]
@@ -407,7 +537,9 @@ struct JunkEntry {
 async fn list_junk(root: String, max_ms: u64) -> Vec<JunkEntry> {
     tauri::async_runtime::spawn_blocking(move || {
         let start = Instant::now();
-        let Ok(rd) = fs::read_dir(&root) else { return vec![] };
+        let Ok(rd) = fs::read_dir(&root) else {
+            return vec![];
+        };
         let mut out = Vec::new();
         for e in rd.flatten() {
             let Ok(t) = e.file_type() else { continue };
@@ -416,7 +548,8 @@ async fn list_junk(root: String, max_ms: u64) -> Vec<JunkEntry> {
             }
             let modified = |m: &fs::Metadata| millis(m.modified());
             let Ok(meta) = e.metadata() else { continue };
-            let (mut bytes, mut newest) = (if t.is_file() { meta.len() } else { 0 }, modified(&meta));
+            let (mut bytes, mut newest) =
+                (if t.is_file() { meta.len() } else { 0 }, modified(&meta));
             if t.is_dir() {
                 let mut stack = vec![e.path()];
                 while let Some(dir) = stack.pop() {
@@ -425,7 +558,9 @@ async fn list_junk(root: String, max_ms: u64) -> Vec<JunkEntry> {
                     }
                     let Ok(rd) = fs::read_dir(&dir) else { continue };
                     for c in rd.flatten() {
-                        let (Ok(ct), Ok(cm)) = (c.file_type(), c.metadata()) else { continue };
+                        let (Ok(ct), Ok(cm)) = (c.file_type(), c.metadata()) else {
+                            continue;
+                        };
                         if ct.is_symlink() {
                             continue;
                         }
@@ -438,7 +573,12 @@ async fn list_junk(root: String, max_ms: u64) -> Vec<JunkEntry> {
                     }
                 }
             }
-            out.push(JunkEntry { path: e.path().display().to_string(), dir: t.is_dir(), bytes, newest });
+            out.push(JunkEntry {
+                path: e.path().display().to_string(),
+                dir: t.is_dir(),
+                bytes,
+                newest,
+            });
         }
         out
     })
@@ -469,7 +609,12 @@ fn track_launch(file: String) -> Result<u32, String> {
         Command::new(&file)
     };
     // The installer gets no share of Purgeon's console or output.
-    let child = cmd.stdin(Stdio::null()).stdout(Stdio::null()).stderr(Stdio::null()).spawn().map_err(|e| e.to_string())?;
+    let child = cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+        .map_err(|e| e.to_string())?;
     let pid = child.id();
     tracker::add_pid(pid, file);
     Ok(pid)
@@ -525,7 +670,10 @@ fn exe_arch(paths: Vec<String>) -> Vec<String> {
             _ => "",
         })
     }
-    paths.iter().map(|p| machine(p).unwrap_or("").to_string()).collect()
+    paths
+        .iter()
+        .map(|p| machine(p).unwrap_or("").to_string())
+        .collect()
 }
 
 #[derive(Serialize)]
@@ -575,7 +723,12 @@ fn list_processes() -> Vec<ProcessInfo> {
             let len = e.exe.iter().position(|&c| c == 0).unwrap_or(e.exe.len());
             let mut session = u32::MAX;
             ProcessIdToSessionId(e.pid, &mut session);
-            out.push(ProcessInfo { pid: e.pid, ppid: e.ppid, name: String::from_utf16_lossy(&e.exe[..len]), session });
+            out.push(ProcessInfo {
+                pid: e.pid,
+                ppid: e.ppid,
+                name: String::from_utf16_lossy(&e.exe[..len]),
+                session,
+            });
             ok = Process32NextW(snap, &mut e);
         }
         CloseHandle(snap);
@@ -595,15 +748,28 @@ fn track_stop() -> Result<tracker::TrackResult, String> {
 
 /// Takes a snapshot of files/folders and registry keys/values into a compressed file.
 #[tauri::command]
-async fn take_snapshot(out: String, name: String, file_roots: Vec<String>, file_depth: u32, reg_roots: Vec<snapshot::RegRoot>, excludes: Vec<String>) -> Result<snapshot::SnapshotStats, String> {
-    tauri::async_runtime::spawn_blocking(move || snapshot::take(&out, &name, &file_roots, file_depth, &reg_roots, &excludes))
-        .await
-        .map_err(|e| e.to_string())?
+async fn take_snapshot(
+    out: String,
+    name: String,
+    file_roots: Vec<String>,
+    file_depth: u32,
+    reg_roots: Vec<snapshot::RegRoot>,
+    excludes: Vec<String>,
+) -> Result<snapshot::SnapshotStats, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        snapshot::take(&out, &name, &file_roots, file_depth, &reg_roots, &excludes)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Compares two snapshots: what was added, removed and changed from `before` to `after`.
 #[tauri::command]
-async fn compare_snapshots(before: String, after: String, limit: usize) -> Result<snapshot::Comparison, String> {
+async fn compare_snapshots(
+    before: String,
+    after: String,
+    limit: usize,
+) -> Result<snapshot::Comparison, String> {
     tauri::async_runtime::spawn_blocking(move || snapshot::compare(&before, &after, limit))
         .await
         .map_err(|e| e.to_string())?
@@ -624,13 +790,21 @@ async fn snapshot_subtree(path: String, key: String) -> Result<snapshot::Subtree
 fn portable_dir() -> Option<PathBuf> {
     let exe = std::env::current_exe().ok()?;
     let dir = exe.parent()?;
-    let named = exe.file_stem()?.to_string_lossy().to_lowercase().contains("portable");
+    let named = exe
+        .file_stem()?
+        .to_string_lossy()
+        .to_lowercase()
+        .contains("portable");
     if !named && !dir.join("portable").exists() {
         return None;
     }
     // A portable copy from before the rename keeps using its "SweepUninstall Data" folder.
     let old = dir.join("SweepUninstall Data");
-    let data = if old.is_dir() && !dir.join("Purgeon Data").exists() { old } else { dir.join("Purgeon Data") };
+    let data = if old.is_dir() && !dir.join("Purgeon Data").exists() {
+        old
+    } else {
+        dir.join("Purgeon Data")
+    };
     fs::create_dir_all(&data).ok().map(|_| data)
 }
 
@@ -662,8 +836,14 @@ fn sys_info(app: tauri::AppHandle) -> SysInfo {
     SysInfo {
         env: std::env::vars().collect(),
         home: std::env::var("USERPROFILE").unwrap_or_default(),
-        data_dir: portable.clone().or_else(|| app.path().app_data_dir().ok()).map(|p| p.display().to_string()).unwrap_or_default(),
-        exe: std::env::current_exe().map(|p| p.display().to_string()).unwrap_or_default(),
+        data_dir: portable
+            .clone()
+            .or_else(|| app.path().app_data_dir().ok())
+            .map(|p| p.display().to_string())
+            .unwrap_or_default(),
+        exe: std::env::current_exe()
+            .map(|p| p.display().to_string())
+            .unwrap_or_default(),
         portable: portable.is_some(),
         args: cli_args(),
         launch: std::env::args().skip(1).collect(),
@@ -799,7 +979,10 @@ fn refit(w: &tauri::WebviewWindow) {
         // Windows' remembered size can be the minimized one too: then use the last size the
         // window had on screen, or a normal size.
         if !sane(&p.normal) {
-            p.normal = LAST_NORMAL.lock().unwrap().unwrap_or([100, 100, 100 + 960, 100 + 720]);
+            p.normal = LAST_NORMAL
+                .lock()
+                .unwrap()
+                .unwrap_or([100, 100, 100 + 960, 100 + 720]);
         }
         p.flags = 0;
         p.show_cmd = SW_SHOWNORMAL;
@@ -829,10 +1012,20 @@ fn hide_to_tray(app: tauri::AppHandle) {
 
 #[tauri::command]
 fn set_tray(app: tauri::AppHandle, close: String, minimize: bool, visible: bool) {
-    CLOSE_MODE.store(match close.as_str() { "tray" => 1, "exit" => 2, _ => 0 }, Ordering::SeqCst);
+    CLOSE_MODE.store(
+        match close.as_str() {
+            "tray" => 1,
+            "exit" => 2,
+            _ => 0,
+        },
+        Ordering::SeqCst,
+    );
     let close = close == "tray";
     MINIMIZE_TO_TRAY.store(minimize, Ordering::SeqCst);
-    let hidden = app.get_webview_window("main").map(|w| !w.is_visible().unwrap_or(true)).unwrap_or(false);
+    let hidden = app
+        .get_webview_window("main")
+        .map(|w| !w.is_visible().unwrap_or(true))
+        .unwrap_or(false);
     if let Some(t) = app.tray_by_id("main") {
         // Never hide the icon while the window is hidden: it is the only way back.
         let _ = t.set_visible(close || minimize || visible || hidden);
@@ -875,13 +1068,24 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
     let open = MenuItem::with_id(app, "open", "Show Purgeon", true, None::<&str>)?;
     let sep1 = PredefinedMenuItem::separator(app)?;
-    let monitor = MenuItem::with_id(app, "monitor", "Monitor an Installation...", true, None::<&str>)?;
+    let monitor = MenuItem::with_id(
+        app,
+        "monitor",
+        "Monitor an Installation...",
+        true,
+        None::<&str>,
+    )?;
     let junk = MenuItem::with_id(app, "junk", "Cleaner", true, None::<&str>)?;
     let startup = MenuItem::with_id(app, "startup", "Startup && Services", true, None::<&str>)?;
     let updates = MenuItem::with_id(app, "updates", "Program Updates", true, None::<&str>)?;
     let sep2 = PredefinedMenuItem::separator(app)?;
     let quit = MenuItem::with_id(app, "quit", "Exit Purgeon", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &sep1, &monitor, &junk, &startup, &updates, &sep2, &quit])?;
+    let menu = Menu::with_items(
+        app,
+        &[
+            &open, &sep1, &monitor, &junk, &startup, &updates, &sep2, &quit,
+        ],
+    )?;
     let mut tray = TrayIconBuilder::with_id("main")
         .tooltip("Purgeon\nLeft-click: show the window\nRight-click: menu")
         .menu(&menu)
@@ -898,7 +1102,12 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
             }
         })
         .on_tray_icon_event(|tray, e| {
-            if let TrayIconEvent::Click { button: MouseButton::Left, button_state: MouseButtonState::Up, .. } = e {
+            if let TrayIconEvent::Click {
+                button: MouseButton::Left,
+                button_state: MouseButtonState::Up,
+                ..
+            } = e
+            {
                 show_main(tray.app_handle());
             }
         })
@@ -917,7 +1126,13 @@ pub fn run() {
         .setup(move |app| {
             // The window is created here so that in portable mode the browser data goes in the
             // portable data folder too.
-            let config = app.config().app.windows.first().cloned().ok_or("no window configured")?;
+            let config = app
+                .config()
+                .app
+                .windows
+                .first()
+                .cloned()
+                .ok_or("no window configured")?;
             let mut builder = tauri::WebviewWindowBuilder::from_config(app, &config)?;
             if let Some(dir) = portable_dir() {
                 builder = builder.data_directory(dir.join("WebView"));
@@ -929,30 +1144,37 @@ pub fn run() {
             build_tray(app)?;
             let hide = window.clone();
             window.on_window_event(move |e| match e {
-                tauri::WindowEvent::CloseRequested { api, .. } => match CLOSE_MODE.load(Ordering::SeqCst) {
-                    1 => {
-                        api.prevent_close();
-                        let _ = hide.hide();
+                tauri::WindowEvent::CloseRequested { api, .. } => {
+                    match CLOSE_MODE.load(Ordering::SeqCst) {
+                        1 => {
+                            api.prevent_close();
+                            let _ = hide.hide();
+                        }
+                        0 if !CLOSE_ASKING.swap(true, Ordering::SeqCst) => {
+                            api.prevent_close();
+                            let _ = hide.emit("close-requested", ());
+                        }
+                        _ => {}
                     }
-                    0 if !CLOSE_ASKING.swap(true, Ordering::SeqCst) => {
-                        api.prevent_close();
-                        let _ = hide.emit("close-requested", ());
-                    }
-                    _ => {}
-                },
+                }
                 // Minimizing shows up as a resize; with Minimize to Tray the window then hides
                 // so it leaves the taskbar, and the tray icon brings it back.
                 // (Purgeon's own minimize button hides straight to the tray instead; this
                 // covers Win+Down and the taskbar.) The hide waits until the minimize has finished:
                 // hiding from inside its resize event leaves the page at the minimized size later.
-                tauri::WindowEvent::Resized(_) if MINIMIZE_TO_TRAY.load(Ordering::SeqCst) && hide.is_minimized().unwrap_or(false) => {
+                tauri::WindowEvent::Resized(_)
+                    if MINIMIZE_TO_TRAY.load(Ordering::SeqCst)
+                        && hide.is_minimized().unwrap_or(false) =>
+                {
                     let w = hide.clone();
                     std::thread::spawn(move || {
                         std::thread::sleep(std::time::Duration::from_millis(150));
                         let _ = w.hide();
                     });
                 }
-                tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Moved(_) => remember_normal(&hide),
+                tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Moved(_) => {
+                    remember_normal(&hide)
+                }
                 _ => {}
             });
             let in_tray = start_in_tray(app);
@@ -961,7 +1183,10 @@ pub fn run() {
             if let Ok(Some(monitor)) = window.current_monitor() {
                 let scale = monitor.scale_factor();
                 let area = monitor.work_area();
-                let (w, h) = (area.size.width as f64 / scale, area.size.height as f64 / scale);
+                let (w, h) = (
+                    area.size.width as f64 / scale,
+                    area.size.height as f64 / scale,
+                );
                 let width = (w * 0.5).clamp(760.0, 1500.0).min(w * 0.95);
                 let height = (h * 0.7).clamp(560.0, 1100.0).min(h * 0.92);
                 let _ = window.set_size(tauri::LogicalSize::new(width, height));
@@ -981,8 +1206,45 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
-            run_ps, exec, run_command_line, launch, read_dir, stat, exists, read_text, write_text, make_dir, remove_path, move_to_trash, move_many_to_trash, list_junk, walk, folder_size, take_snapshot,
-            compare_snapshots, snapshot_subtree, sys_info, quit, cli_print, track_start, track_launch, track_running, track_stop, wait_process, sha256_files, append_text, uninstall_key_times, set_tray, set_on_top, show_window, hide_to_tray, close_answered, refit_window, list_processes, exe_arch, search_registry
+            run_ps,
+            exec,
+            run_command_line,
+            launch,
+            read_dir,
+            stat,
+            exists,
+            read_text,
+            write_text,
+            make_dir,
+            remove_path,
+            move_to_trash,
+            move_many_to_trash,
+            list_junk,
+            walk,
+            folder_size,
+            take_snapshot,
+            compare_snapshots,
+            snapshot_subtree,
+            sys_info,
+            quit,
+            cli_print,
+            track_start,
+            track_launch,
+            track_running,
+            track_stop,
+            wait_process,
+            sha256_files,
+            append_text,
+            uninstall_key_times,
+            set_tray,
+            set_on_top,
+            show_window,
+            hide_to_tray,
+            close_answered,
+            refit_window,
+            list_processes,
+            exe_arch,
+            search_registry
         ])
         .run(tauri::generate_context!())
         .expect("error while running Purgeon");

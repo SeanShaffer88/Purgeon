@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+  <Fragment>
+    <!-- Referencing this component links the uninstall actions into Tauri's MSI. -->
+    <DirectoryRef Id="INSTALLDIR">
+      <Component Id="TaskCleanupRegistration" Guid="*" Win64="no">
+        <RegistryValue Root="HKLM" Key="Software\Purgeon" Name="MsiTaskCleanup"
+                       Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </DirectoryRef>
+    <!-- Missing tasks are normal. Only a complete uninstall removes them; repairs
+         and major upgrades must preserve the user's scheduled operations. -->
+    <CustomAction Id="RemovePurgeonSignIn" Directory="SystemFolder" Execute="deferred"
+                  Impersonate="no" Return="ignore"
+                  ExeCommand='&quot;[SystemFolder]schtasks.exe&quot; /Delete /TN &quot;\Purgeon\Start at Sign-in&quot; /F' />
+    <CustomAction Id="RemovePurgeonMaintenance" Directory="SystemFolder" Execute="deferred"
+                  Impersonate="no" Return="ignore"
+                  ExeCommand='&quot;[SystemFolder]schtasks.exe&quot; /Delete /TN &quot;\Purgeon\Weekly Maintenance&quot; /F' />
+    <CustomAction Id="RemoveLegacySignIn" Directory="SystemFolder" Execute="deferred"
+                  Impersonate="no" Return="ignore"
+                  ExeCommand='&quot;[SystemFolder]schtasks.exe&quot; /Delete /TN &quot;\SweepUninstall\Start at Sign-in&quot; /F' />
+    <CustomAction Id="RemoveLegacyMaintenance" Directory="SystemFolder" Execute="deferred"
+                  Impersonate="no" Return="ignore"
+                  ExeCommand='&quot;[SystemFolder]schtasks.exe&quot; /Delete /TN &quot;\SweepUninstall\Weekly Maintenance&quot; /F' />
+    <InstallExecuteSequence>
+      <Custom Action="RemovePurgeonSignIn" Before="RemoveFiles">Installed AND REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+      <Custom Action="RemovePurgeonMaintenance" After="RemovePurgeonSignIn">Installed AND REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+      <Custom Action="RemoveLegacySignIn" After="RemovePurgeonMaintenance">Installed AND REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+      <Custom Action="RemoveLegacyMaintenance" After="RemoveLegacySignIn">Installed AND REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE</Custom>
+    </InstallExecuteSequence>
+  </Fragment>
+</Wix>

@@ -16,6 +16,7 @@
     "build": "vite build",
     "dev": "tauri dev",
     "dist": "tauri build",
+    "dist:windows": "pwsh -NoProfile -File scripts/package-windows.ps1",
     "test": "node --test \"test/*.test.js\""
   },
   "dependencies": {
