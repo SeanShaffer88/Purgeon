@@ -38,10 +38,16 @@ Invoke-Installer msiexec.exe "/x `"$msiPath`" /qn /norestart /L*v `"$uninstallLo
 if (Test-Path -LiteralPath "$msiInstall/purgeon.exe") { throw 'MSI uninstall left the executable behind.' }
 foreach ($task in $tasks) {
     & schtasks.exe /Query /TN $task 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) { throw "MSI uninstall left scheduled task: $task" }
+    if ($LASTEXITCODE -eq 0) {
+        Select-String -LiteralPath $uninstallLog -Pattern 'RemovePurgeon|RemoveLegacy|CustomActionSchedule|Return value 3' |
+            Select-Object -Last 30 | ForEach-Object { Write-Output $_.Line }
+        throw "MSI uninstall left scheduled task: $task"
+    }
     # A missing task is the expected result; do not leak its native exit code
     # into GitHub Actions' PowerShell wrapper after all checks have passed.
-    $LASTEXITCODE = 0
+    # Native commands update the global variable. A local assignment would hide
+    # the next query's real exit code and falsely report a surviving task.
+    $global:LASTEXITCODE = 0
 }
 
 # /S must reach the child, /D must preserve spaces, and native selection must pick x64.
