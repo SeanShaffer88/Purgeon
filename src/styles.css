@@ -170,6 +170,37 @@ select:focus-visible,
 }
 .setting-help strong { color: var(--cyan); }
 
+/* Keyboard shortcuts panel */
+.shortcuts { padding: 8px 12px; display: flex; flex-direction: column; gap: 12px; }
+.shortcut-group { border-top: 1px solid var(--border); padding-top: 8px; }
+.shortcut-group-title {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cyan);
+  margin-bottom: 6px;
+}
+.shortcut-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+.shortcut-table td { padding: 4px 8px; border-bottom: 1px solid #1a1a1a; }
+.shortcut-key {
+  font-family: var(--mono);
+  color: var(--green);
+  text-align: right;
+  white-space: nowrap;
+  width: 90px;
+}
+.shortcut-label { color: var(--text); }
+
+/* Primary action styling for the most common action in a view */
+.action-button.primary {
+  background: var(--green);
+  color: #000;
+  border-color: var(--green);
+}
+.action-button.primary:hover {
+  background: #5eea8a;
+}
+
 /* kbd for key shortcuts in tips */
 kbd {
   border: 1px solid var(--border-strong);

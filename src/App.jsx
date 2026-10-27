@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, planHtml } from './dialogs.jsx';
-import { WelcomeDialog, FirstRunTips, FIRST_RUN_TIPS, SettingHelp } from './onboarding.jsx';
+import { WelcomeDialog, FirstRunTips, FIRST_RUN_TIPS, SettingHelp, SHORTCUTS, ShortcutsDialog } from './onboarding.jsx';
 import { setConfirmUI } from './backend/api.js';
 import { iconPathFor } from './backend/programs.js';
 import { applyZoom, nextStep } from './zoom.js';
@@ -283,7 +283,7 @@ const MENUS = [
       ['portableapps', 'PortableApps.com Installer...'],
     ],
   ],
-  ['Help', [['palette', 'Command Palette...', 'Ctrl+K'], ['welcome', 'Welcome Back'], null, ['updates', 'Check for Updates...'], ['about', 'About']]],
+  ['Help', [['palette', 'Command Palette...', 'Ctrl+K'], ['shortcuts', 'Keyboard Shortcuts'], ['welcome', 'Welcome Back'], null, ['updates', 'Check for Updates...'], ['about', 'About']]],
 ];
 
 // Mouse or keyboard: Alt plus a menu's first letter opens it; arrow keys move between items and
@@ -2011,6 +2011,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     if (action.startsWith('view:')) return setView(action.slice(5));
     if (action.startsWith('close:')) return setCloseChoice(action.slice(6));
     if (action === 'welcome') return setWelcomeOpen(true);
+    if (action === 'shortcuts') return setModal({ type: 'shortcuts' });
     if (action.startsWith('theme:')) {
       const th = action.slice(6);
       setTheme(th);
@@ -2427,7 +2428,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {barItems.length > 0 && (
         <div className="action-bar" role="toolbar" aria-label="Actions">
           {barItems.map(([id, label]) => (
-            <button key={id} className={`action-button ${/^(uninstall|force|delete)/i.test(id) ? 'danger' : ''}`} disabled={!barReady(id)} onClick={() => dispatch(id)} title={ACTION_TIPS[id]} aria-label={shortLabel(label)}>
+            <button key={id} className={`action-button ${id === 'uninstall' ? 'primary' : ''} ${/^(force|delete)/i.test(id) ? 'danger' : ''}`} disabled={!barReady(id)} onClick={() => dispatch(id)} title={ACTION_TIPS[id]} aria-label={shortLabel(label)}>
               {shortLabel(label)}
             </button>
           ))}
@@ -2673,6 +2674,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {modal?.type === 'results' && <ResultsDialog {...modal} onClose={() => setModal(null)} />}
       {modal?.type === 'properties' && <PropertiesDialog program={modal.program} onClose={() => setModal(null)} />}
       {modal?.type === 'about' && <AboutDialog onClose={() => setModal(null)} />}
+      {modal?.type === 'shortcuts' && <ShortcutsDialog onClose={() => setModal(null)} />}
       {modal?.type === 'group' && (
         <GroupDialog programs={modal.programs} current={groups[modal.programs[0].key] || ''} grouped={modal.programs.some((p) => groups[p.key])} names={groupNames} onSave={(g) => saveGroup(modal.programs, g)} onClose={() => setModal(null)} />
       )}

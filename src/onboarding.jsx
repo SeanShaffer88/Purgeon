@@ -155,6 +155,77 @@ export function FirstRunTips({ visible, onTipAction, onClose }) {
   );
 }
 
+// ---- Keyboard shortcuts panel ------------------------------------------------
+
+export const SHORTCUTS = [
+  { group: 'Navigation', items: [
+    ['Ctrl+1', 'Programs (installed desktop apps)'],
+    ['Ctrl+2', 'Apps (Microsoft Store apps)'],
+    ['Ctrl+3', 'Monitored Programs'],
+    ['Ctrl+5', 'Debloat (Windows tweaks)'],
+    ['Ctrl+6', 'Startup & Services'],
+    ['Ctrl+7', 'Snapshots'],
+    ['Ctrl+8', 'Cleaner (junk files)'],
+    ['Ctrl+9', 'Uninstall Archive'],
+    ['Ctrl+T', 'Change Timeline'],
+    ['Ctrl+H', 'Change History'],
+  ]},
+  { group: 'Actions', items: [
+    ['Ctrl+K', 'Command Palette (find any command or program)'],
+    ['Del', 'Uninstall selected program'],
+    ['Shift+Del', 'Force uninstall (broken uninstaller)'],
+    ['Ctrl+L', 'Analyze Leftovers'],
+    ['Ctrl+I', 'Analyze Program'],
+    ['Ctrl+W', 'What’s This (all Windows hooks)'],
+    ['Ctrl+Q', 'Add to Uninstall Queue'],
+    ['Ctrl+G', 'Set Group'],
+    ['F5', 'Refresh the list'],
+    ['Alt+Enter', 'Properties'],
+  ]},
+  { group: 'View', items: [
+    ['Ctrl++', 'Zoom In'],
+    ['Ctrl+-', 'Zoom Out'],
+    ['Ctrl+0', 'Zoom Reset'],
+    ['Ctrl+F', 'Find (focus search box)'],
+    ['Ctrl+S', 'Export to HTML'],
+    ['Ctrl+M', 'Monitor an Installation'],
+    ['Ctrl+A', 'Select All visible rows'],
+  ]},
+];
+
+export function ShortcutsDialog({ onClose }) {
+  return (
+    <Dialog
+      title="Keyboard Shortcuts"
+      onClose={onClose}
+      width={560}
+      buttons={
+        <>
+          <button className="primary" autoFocus onClick={onClose}>Close</button>
+        </>
+      }
+    >
+      <div className="shortcuts">
+        {SHORTCUTS.map((g) => (
+          <div key={g.group} className="shortcut-group">
+            <div className="shortcut-group-title">{g.group}</div>
+            <table className="shortcut-table">
+              <tbody>
+                {g.items.map(([key, label]) => (
+                  <tr key={key}>
+                    <td className="shortcut-key">{key}</td>
+                    <td className="shortcut-label">{label}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ))}
+      </div>
+    </Dialog>
+  );
+}
+
 // ---- Settings explanations ---------------------------------------------------
 
 // Plain-language descriptions for each setting, shown in Settings dialogs.
