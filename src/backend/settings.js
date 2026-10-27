@@ -14,6 +14,7 @@ export const DEFAULT_SETTINGS = {
   requireSignature: false,
   encryptionKey: '',
   disabledConfirmations: [],
+  textScale: 1,
 };
 
 export const settingsFile = () => path.join(sys.info.dataDir, 'settings.json');

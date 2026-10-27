@@ -566,8 +566,9 @@ const [firstRunTipDismissed, setFirstRunTipDismissed] = useState(() => new Set()
   const [shellOn, setShellOn] = useState(false);
   const [palette, setPalette] = useState(false);
   const outsideChecked = useRef(false);
-  const [zoom, setZoom] = useState(1);
-  // Program groups ({ programKey: group }) and the group the program lists are filtered to.
+const [zoom, setZoom] = useState(1);
+const [textScale, setTextScale] = useState(1);
+// Program groups ({ programKey: group }) and the group the program lists are filtered to.
   const [groups, setGroups] = useState({});
   const [groupFilter, setGroupFilter] = useState(ALL_GROUPS);
   // Per-program insights (signature, installed together, offers, growth), loaded after the list.
@@ -647,6 +648,7 @@ const [firstRunTipDismissed, setFirstRunTipDismissed] = useState(() => new Set()
       api.invoke('backups:prune').catch(() => {});
       setZoom(s.zoom || 1);
       applyZoom(s.zoom || 1);
+      setTextScale(s.textScale || 1);
       // Update notification: checked once on startup, never nagging.
       updatecheck.check().then(({ enabled, update, error }) => {
         if (enabled && update && update.newer && !updateShown) {
@@ -711,7 +713,8 @@ const [firstRunTipDismissed, setFirstRunTipDismissed] = useState(() => new Set()
     // The theme lives on the root element so dialogs and menus follow it too.
     useEffect(() => {
       document.documentElement.dataset.theme = theme;
-    }, [theme]);
+      document.documentElement.style.setProperty('--text-scale', textScale);
+    }, [theme, textScale]);
 
   // Icons arrive in one batch after the list is shown; programs without one keep a placeholder.
   useEffect(() => {
@@ -2650,7 +2653,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
 
       {/* Messages sit at the bottom, just above the status bar. */}
       {error && (
-        <div className="error-bar">
+        <div className="error-bar" aria-live="polite" aria-label="Error">
           <span>{error.msg || error}</span>
           {error.retry && (
             <button onClick={error.retry} title="Try again">↻ Retry</button>
@@ -2659,7 +2662,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         </div>
       )}
       {notice && (
-        <div className={`notice-bar ${notice.tone}`}>
+        <div className={`notice-bar ${notice.tone}`} aria-live="polite" aria-label="Notice">
           <span>{notice.text}</span>
           <button onClick={() => setNotice(null)} aria-label="Dismiss">
             ✕
@@ -2667,7 +2670,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         </div>
       )}
       {undoStack.length > 0 && (
-        <div className="undo-toast">
+        <div className="undo-toast" aria-live="polite" aria-label="Undo available">
           <span>Undo: {undoStack[undoStack.length - 1].label}</span>
           <button className="primary" onClick={() => {
             const u = undoStack[undoStack.length - 1];

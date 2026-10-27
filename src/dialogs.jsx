@@ -4,14 +4,29 @@ import { SettingHelp } from './onboarding.jsx';
 const api = window.api;
 
 export function Dialog({ title, onClose, children, buttons, width = 520 }) {
+  const dialogRef = useRef(null);
   useEffect(() => {
-    const onKey = (e) => e.key === 'Escape' && onClose && onClose();
+    // Focus the dialog container on open so keyboard users land in the modal.
+    const el = dialogRef.current;
+    if (el) el.focus();
+    const onKey = (e) => {
+      if (e.key === 'Escape') { onClose && onClose(); }
+      else if (e.key === 'Enter') {
+        // Activate the primary button if focused element is not a button/input.
+        const active = document.activeElement;
+        const isButtonOrInput = /^(BUTTON|INPUT|TEXTAREA|SELECT)$/.test(active?.tagName || '');
+        if (!isButtonOrInput) {
+          const primary = el.querySelector('button.primary');
+          if (primary) primary.click();
+        }
+      }
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return (
     <div className="overlay">
-      <div className="dialog" role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined} style={{ width, maxWidth: '96vw' }}>
+      <div className="dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined} tabIndex="-1" style={{ width, maxWidth: '96vw' }}>
         <div className="dialog-title">
           <span>{title}</span>
           {onClose && (
@@ -92,7 +107,7 @@ export function Busy({ busy, onStop, onPause, onCancel }) {
 
   return (
     <div className="overlay">
-      <div className="dialog busy" style={{ width: 480 }}>
+      <div className="dialog busy" style={{ width: 480 }} aria-live="polite" aria-label="Busy">
         <div className="dialog-body">
           <div className="busy-msg">{msg}{timeText}</div>
           {pct != null && (

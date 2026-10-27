@@ -2,6 +2,7 @@
 :root {
   color-scheme: dark;
   --bg: #0c0c0c;
+  --text-scale: 1;
   --panel: #121212;
   --raised: #181818;
   --border: #262626;
@@ -23,7 +24,7 @@
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body {
-  font: 14px/1.4 var(--mono);
+  font: calc(14px * var(--text-scale))/1.4 var(--mono);
   color: var(--text);
   background: var(--bg);
   overflow: hidden;
@@ -100,6 +101,16 @@ select:focus-visible,
 [data-theme="contrast"] .context-menu,
 [data-theme="contrast"] .list-header {
   border: 1px solid #fff;
+}
+[data-theme="contrast"] button:disabled,
+[data-theme="contrast"] input:disabled,
+[data-theme="contrast"] select:disabled {
+  opacity: 0.4;
+  border: 1px solid #555;
+}
+[data-theme="contrast"] .action-button.danger {
+  border: 2px solid #fff;
+  color: #fff;
 }
 
 /* Welcome / onboarding styles */
