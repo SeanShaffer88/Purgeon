@@ -554,8 +554,8 @@ const [closeAsk, setCloseAsk] = useState(false);
 const [hasSeenWelcome, setHasSeenWelcome] = useState(null); // null = not yet loaded from settings
 const [welcomeOpen, setWelcomeOpen] = useState(false);
 const [updateShown, setUpdateShown] = useState(false);
-const [firstRunTips, setFirstRunTips] = useState([]);
 const [firstRunTipDismissed, setFirstRunTipDismissed] = useState(() => new Set());
+const [tipsActive, setTipsActive] = useState(false);
   // Window options (View menu); Start with Windows is read from Task Scheduler.
   const [win, setWin] = useState({ alwaysOnTop: false, minimizeToTray: false, startInTray: false });
   const [autostartOn, setAutostartOn] = useState(false);
@@ -726,6 +726,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
     // Store the welcome-seen flag so it doesn't show again.
     const markWelcomeSeen = useCallback(async () => {
       await api.invoke('settings:set', { hasSeenWelcome: true }).catch(() => {});
+      setHasSeenWelcome(true);
     }, []);
 
     // The theme lives on the root element so dialogs and menus follow it too.
@@ -2713,10 +2714,12 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         <WelcomeDialog
           onClose={() => {
             setWelcomeOpen(false);
+            if (hasSeenWelcome === false) setTipsActive(true);
             markWelcomeSeen();
           }}
           onGetStarted={(path) => {
             setWelcomeOpen(false);
+            if (hasSeenWelcome === false) setTipsActive(true);
             markWelcomeSeen();
             if (path === 'programs') setView('desktop');
             else if (path === 'monitor') setModal({ type: 'monitor' });
@@ -2724,15 +2727,16 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           }}
         />
       )}
-      {hasSeenWelcome === false && (
+      {tipsActive && !welcomeOpen && (
         <FirstRunTips
           visible={true}
+          dismissed={firstRunTipDismissed}
           onTipAction={(tipId) => {
             setFirstRunTipDismissed((d) => new Set([...d, tipId]));
-            if (tipId === 'find-anything') setModal({ type: 'palette' });
+            if (tipId === 'find-anything') setPalette(true);
           }}
           onClose={() => {
-            setFirstRunTipDismissed((d) => new Set([...d, FIRST_RUN_TIPS.map((t) => t.id)]));
+            setFirstRunTipDismissed((d) => new Set([...d, ...FIRST_RUN_TIPS.map((t) => t.id)]));
           }}
         />
       )}
