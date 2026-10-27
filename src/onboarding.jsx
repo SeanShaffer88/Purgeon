@@ -107,7 +107,7 @@ export const FIRST_RUN_TIPS = [
   {
     id: 'find-anything',
     title: 'Find any command or program',
-    body: 'Press <kbd>Ctrl+K</kbd> to open the command palette. Type a program name or a command like "uninstall" and press Enter.',
+    body: (<>Press <kbd>Ctrl+K</kbd> to open the command palette. Type a program name or a command like &quot;uninstall&quot; and press Enter.</>),
     action: 'Try it now',
   },
   {
@@ -124,13 +124,12 @@ export const FIRST_RUN_TIPS = [
   },
 ];
 
-export function FirstRunTips({ visible, onTipAction, onClose }) {
-  // Find the first tip the user hasn't seen yet
-  const [tipIndex, setTipIndex] = useState(0);
-  const [dismissed, setDismissed] = useState(new Set());
-
-  const tip = FIRST_RUN_TIPS[tipIndex];
-  if (!visible || !tip || dismissed.has(tip.id)) {
+export function FirstRunTips({ visible, dismissed, onTipAction, onClose }) {
+  // Controlled: the caller owns which tips are dismissed. (This component used to
+  // keep its own dismissed set that nothing ever updated, so Dismiss, the X and
+  // Escape all wrote into a void and the tip could never close.)
+  const tip = FIRST_RUN_TIPS.find((t) => !dismissed?.has(t.id));
+  if (!visible || !tip) {
     return null;
   }
 

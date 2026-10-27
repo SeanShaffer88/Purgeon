@@ -5,12 +5,27 @@ const api = window.api;
 
 export function Dialog({ title, onClose, children, buttons, width = 520 }) {
   const dialogRef = useRef(null);
+  // The latest onClose, read by the mount-once keyboard listener below. (With an
+  // inline onClose from the parent, an [onClose]-keyed effect re-ran on every
+  // parent render and stole focus back to the dialog container each time —
+  // including right after another layer, like the command palette, had opened
+  // and focused its input.)
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
   useEffect(() => {
     // Focus the dialog container on open so keyboard users land in the modal.
     const el = dialogRef.current;
     if (el) el.focus();
     const onKey = (e) => {
-      if (e.key === 'Escape') { onClose && onClose(); }
+      // Only the topmost layer answers the keyboard: when dialogs stack, Escape
+      // closes them one at a time from the top instead of every dialog at once.
+      // The topmost layer is the last dialog in the document (equal z-index,
+      // later in the tree paints on top). The command palette counts as a layer
+      // too, even though it is not a Dialog, so a dialog never closes from
+      // behind an open palette.
+      const layers = document.querySelectorAll('.dialog, .palette');
+      if (!el || layers[layers.length - 1] !== el) return;
+      if (e.key === 'Escape') { onCloseRef.current && onCloseRef.current(); }
       else if (e.key === 'Enter') {
         // Activate the primary button if focused element is not a button/input.
         const active = document.activeElement;
@@ -23,7 +38,7 @@ export function Dialog({ title, onClose, children, buttons, width = 520 }) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, []);
   return (
     <div className="overlay">
       <div className="dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined} tabIndex="-1" style={{ width, maxWidth: '96vw' }}>

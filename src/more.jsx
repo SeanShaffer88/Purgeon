@@ -604,7 +604,7 @@ export function CommandPalette({ commands, onRun, onClose }) {
             if (e.key === 'ArrowDown') (e.preventDefault(), setI((x) => Math.min(shown.length - 1, x + 1)));
             else if (e.key === 'ArrowUp') (e.preventDefault(), setI((x) => Math.max(0, x - 1)));
             else if (e.key === 'Enter' && shown[i]) onRun(shown[i]);
-            else if (e.key === 'Escape') onClose();
+            else if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
           }}
         />
         <div className="palette-list" ref={ref} role="listbox">
