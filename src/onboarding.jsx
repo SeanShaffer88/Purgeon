@@ -226,6 +226,95 @@ export function ShortcutsDialog({ onClose }) {
   );
 }
 
+// ---- User Guide --------------------------------------------------------------
+
+export function UserGuide({ onClose }) {
+  const sections = [
+    {
+      title: 'Uninstall a program',
+      steps: [
+        'Select the program in the Programs list.',
+        'Click Uninstall (or press Del). Purgeon runs the program’s own uninstaller.',
+        'Purgeon then scans for leftover files, registry keys, services and tasks.',
+        'Choose what to remove. Everything is backed up first and can be undone from Change History.',
+      ],
+    },
+    {
+      title: 'Monitor an installation',
+      steps: [
+        'Choose Tools › Monitor an Installation and pick the installer.',
+        'Purgeon takes a "before" snapshot, then you run the installer as usual.',
+        'When setup is done, come back and click Installation Finished.',
+        'Purgeon records everything the installer created, so you can remove it cleanly later.',
+      ],
+    },
+    {
+      title: 'Clean up junk files',
+      steps: [
+        'Open the Cleaner view (Ctrl+8).',
+        'Tick the categories you want to clean (temporary files, caches, crash dumps).',
+        'Click Clean Up Selected. Files go to the Recycle Bin, so you can get them back.',
+      ],
+    },
+    {
+      title: 'Turn off startup entries',
+      steps: [
+        'Open Startup & Services (Ctrl+6).',
+        'Turn off entries you don’t want starting with Windows. Nothing is deleted.',
+        'Turn them back on anytime from the same view.',
+      ],
+    },
+  ];
+
+  return (
+    <Dialog
+      title="User Guide"
+      onClose={onClose}
+      width={640}
+      buttons={
+        <>
+          <button className="primary" autoFocus onClick={onClose}>Close</button>
+        </>
+      }
+    >
+      <div className="user-guide">
+        {sections.map((s) => (
+          <div key={s.title} className="guide-section">
+            <div className="guide-title">{s.title}</div>
+            <ol className="guide-steps">
+              {s.steps.map((step, i) => (
+                <li key={i}>{step}</li>
+              ))}
+            </ol>
+          </div>
+        ))}
+      </div>
+    </Dialog>
+  );
+}
+
+// ---- What's New on update ----------------------------------------------------
+
+export function UpdateAvailableDialog({ version, onClose, onDownload }) {
+  return (
+    <Dialog
+      title="What’s New"
+      onClose={onClose}
+      width={560}
+      buttons={
+        <>
+          <button onClick={onClose}>Not Now</button>
+          <button className="primary" autoFocus onClick={onDownload}>Download v{version}</button>
+        </>
+      }
+    >
+      <p>A new version of Purgeon is available.</p>
+      <p>Visit the Purgeon releases page to see what’s changed and download the installer.</p>
+      <p className="footnote">Update checks are off by default and never nag after you dismiss them. Turn them on in Settings › Update Check.</p>
+    </Dialog>
+  );
+}
+
 // ---- Settings explanations ---------------------------------------------------
 
 // Plain-language descriptions for each setting, shown in Settings dialogs.

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, planHtml } from './dialogs.jsx';
-import { WelcomeDialog, FirstRunTips, FIRST_RUN_TIPS, SettingHelp, SHORTCUTS, ShortcutsDialog } from './onboarding.jsx';
+import { WelcomeDialog, FirstRunTips, FIRST_RUN_TIPS, SettingHelp, SHORTCUTS, ShortcutsDialog, UpdateAvailableDialog, UserGuide } from './onboarding.jsx';
 import { setConfirmUI } from './backend/api.js';
 import { iconPathFor } from './backend/programs.js';
 import { applyZoom, nextStep } from './zoom.js';
@@ -283,7 +283,7 @@ const MENUS = [
       ['portableapps', 'PortableApps.com Installer...'],
     ],
   ],
-  ['Help', [['palette', 'Command Palette...', 'Ctrl+K'], ['shortcuts', 'Keyboard Shortcuts'], ['welcome', 'Welcome Back'], null, ['updates', 'Check for Updates...'], ['about', 'About']]],
+  ['Help', [['palette', 'Command Palette...', 'Ctrl+K'], ['guide', 'User Guide'], ['shortcuts', 'Keyboard Shortcuts'], ['welcome', 'Welcome Back'], null, ['updates', 'Check for Updates...'], ['about', 'About']]],
 ];
 
 // Mouse or keyboard: Alt plus a menu's first letter opens it; arrow keys move between items and
@@ -484,6 +484,7 @@ const [closeAsk, setCloseAsk] = useState(false);
 // First-run onboarding state.
 const [hasSeenWelcome, setHasSeenWelcome] = useState(null); // null = not yet loaded from settings
 const [welcomeOpen, setWelcomeOpen] = useState(false);
+const [updateShown, setUpdateShown] = useState(false);
 const [firstRunTips, setFirstRunTips] = useState([]);
 const [firstRunTipDismissed, setFirstRunTipDismissed] = useState(() => new Set());
   // Window options (View menu); Start with Windows is read from Task Scheduler.
@@ -577,10 +578,11 @@ const [firstRunTipDismissed, setFirstRunTipDismissed] = useState(() => new Set()
       api.invoke('backups:prune').catch(() => {});
       setZoom(s.zoom || 1);
       applyZoom(s.zoom || 1);
-      // Update notification toast: checked once on startup, never nagging.
+      // Update notification: checked once on startup, never nagging.
       updatecheck.check().then(({ enabled, update, error }) => {
-        if (enabled && update && update.newer) {
-          setNotice({ tone: 'info', text: `Purgeon v${update.version} is available — download it from the Purgeon releases page.` });
+        if (enabled && update && update.newer && !updateShown) {
+          setUpdateShown(true);
+          setModal({ type: 'updateAvailable', version: update.version });
         }
       }).catch(() => {});
     });
@@ -2012,6 +2014,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     if (action.startsWith('close:')) return setCloseChoice(action.slice(6));
     if (action === 'welcome') return setWelcomeOpen(true);
     if (action === 'shortcuts') return setModal({ type: 'shortcuts' });
+    if (action === 'guide') return setModal({ type: 'guide' });
     if (action.startsWith('theme:')) {
       const th = action.slice(6);
       setTheme(th);
@@ -2675,6 +2678,17 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {modal?.type === 'properties' && <PropertiesDialog program={modal.program} onClose={() => setModal(null)} />}
       {modal?.type === 'about' && <AboutDialog onClose={() => setModal(null)} />}
       {modal?.type === 'shortcuts' && <ShortcutsDialog onClose={() => setModal(null)} />}
+      {modal?.type === 'guide' && <UserGuide onClose={() => setModal(null)} />}
+      {modal?.type === 'updateAvailable' && (
+        <UpdateAvailableDialog
+          version={modal.version}
+          onClose={() => setModal(null)}
+          onDownload={() => {
+            setModal(null);
+            api.invoke('program:openUrl', 'https://github.com/SeanShaffer88/Purgeon/releases').catch(() => {});
+          }}
+        />
+      )}
       {modal?.type === 'group' && (
         <GroupDialog programs={modal.programs} current={groups[modal.programs[0].key] || ''} grouped={modal.programs.some((p) => groups[p.key])} names={groupNames} onSave={(g) => saveGroup(modal.programs, g)} onClose={() => setModal(null)} />
       )}

@@ -201,6 +201,12 @@ select:focus-visible,
   background: #5eea8a;
 }
 
+/* User guide styles */
+.guide-section { margin-bottom: 16px; }
+.guide-title { font-weight: bold; color: var(--cyan); margin-bottom: 6px; font-size: 15px; }
+.guide-steps { margin: 6px 0 0 20px; padding: 0; color: var(--text); }
+.guide-steps li { margin: 4px 0; line-height: 1.4; }
+
 /* kbd for key shortcuts in tips */
 kbd {
   border: 1px solid var(--border-strong);

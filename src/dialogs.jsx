@@ -1,4 +1,5 @@
 import { useMemo, useState, useEffect } from 'react';
+import { SettingHelp } from './onboarding.jsx';
 
 const api = window.api;
 
@@ -601,7 +602,7 @@ export function BackupSettingsDialog({ settings, onSave, onClose }) {
     <Dialog
       title="Backup Settings"
       onClose={onClose}
-      width={520}
+      width={560}
       buttons={
         <>
           <button className="primary" disabled={!valid} onClick={() => onSave({ backupMaxDays: Number(days), backupMaxMB: Number(mb) })}>
@@ -616,10 +617,12 @@ export function BackupSettingsDialog({ settings, onSave, onClose }) {
         Remove backups older than (days)
         <input inputMode="numeric" title="Backups older than this many days are deleted (each program’s newest backup is always kept). Empty means no age limit." value={days} onChange={(e) => setDays(e.target.value.trim())} />
       </label>
+      <SettingHelp key="backupMaxDays" />
       <label className="field">
         Keep backups under this total size (MB)
         <input inputMode="numeric" title="When all backups together are larger than this, the oldest are deleted first (each program’s newest is always kept). Empty means no size limit." value={mb} onChange={(e) => setMb(e.target.value.trim())} />
       </label>
+      <SettingHelp key="backupMaxMB" />
       <p className="footnote">
         The newest backup of each program is always kept, so the last removal of anything can still be undone. Once a backup is removed, Change History can no longer undo that change. Files in the Recycle Bin are not counted or touched.
       </p>
