@@ -83,9 +83,18 @@ fn fnv(bytes: &[u8]) -> u64 {
     h
 }
 
-fn utf16(bytes: &[u8]) -> String {
-    let words: Vec<u16> = bytes.chunks_exact(2).map(|c| u16::from_le_bytes([c[0], c[1]])).collect();
-    String::from_utf16_lossy(&words).trim_end_matches('\0').to_string()
+// Registry UTF-16LE decoding keeps the existing behavior for malformed data:
+// discard a trailing byte, replace unpaired surrogates, and trim terminal NULs.
+pub(crate) fn utf16(bytes: &[u8]) -> String {
+    let words: Vec<u16> = bytes
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|c| u16::from_le_bytes(*c))
+        .collect();
+    String::from_utf16_lossy(&words)
+        .trim_end_matches('\0')
+        .to_string()
 }
 
 // Value data as text: strings as-is, numbers in decimal, everything else hex.
@@ -98,7 +107,9 @@ fn value_text(vtype: u32, bytes: &[u8]) -> String {
                 esc(&utf16(bytes))
             }
         }
-        4 if bytes.len() >= 4 => u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]).to_string(),
+        4 if bytes.len() >= 4 => {
+            u32::from_le_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]).to_string()
+        }
         11 if bytes.len() >= 8 => u64::from_le_bytes(bytes[..8].try_into().unwrap()).to_string(),
         _ => {
             if bytes.len() > MAX_DATA {
@@ -110,14 +121,24 @@ fn value_text(vtype: u32, bytes: &[u8]) -> String {
     }
 }
 
-pub fn take(out: &str, name: &str, file_roots: &[String], file_depth: u32, reg_roots: &[RegRoot], excludes: &[String]) -> Result<SnapshotStats, String> {
+pub fn take(
+    out: &str,
+    name: &str,
+    file_roots: &[String],
+    file_depth: u32,
+    reg_roots: &[RegRoot],
+    excludes: &[String],
+) -> Result<SnapshotStats, String> {
     let start = Instant::now();
     let excludes: Vec<String> = excludes.iter().map(|e| e.to_lowercase()).collect();
     let tmp = format!("{out}.part");
     let file = File::create(&tmp).map_err(|e| e.to_string())?;
     let mut w = BufWriter::new(GzEncoder::new(file, Compression::fast()));
     let mut st = SnapshotStats::default();
-    let created = std::time::SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+    let created = std::time::SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|d| d.as_millis())
+        .unwrap_or(0);
     writeln!(w, "#SWEEPSNAP\t1\t{}\t{created}", esc(name)).map_err(|e| e.to_string())?;
 
     // Files and folders.
@@ -141,7 +162,19 @@ pub fn take(out: &str, name: &str, file_roots: &[String], file_depth: u32, reg_r
                         stack.push((p, depth + 1));
                     }
                 } else if t.is_file() {
-                    let (size, modified) = e.metadata().map(|m| (m.len(), m.modified().ok().and_then(|t| t.duration_since(UNIX_EPOCH).ok()).map(|d| d.as_millis()).unwrap_or(0))).unwrap_or((0, 0));
+                    let (size, modified) = e
+                        .metadata()
+                        .map(|m| {
+                            (
+                                m.len(),
+                                m.modified()
+                                    .ok()
+                                    .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                                    .map(|d| d.as_millis())
+                                    .unwrap_or(0),
+                            )
+                        })
+                        .unwrap_or((0, 0));
                     st.files += 1;
                     let _ = writeln!(w, "F\t{}\t{size}\t{modified}", esc(&p));
                 }
@@ -159,7 +192,9 @@ pub fn take(out: &str, name: &str, file_roots: &[String], file_depth: u32, reg_r
         let base = RegKey::predef(hkey);
         let mut stack = vec![(root.path.clone(), 1u32)];
         while let Some((path, depth)) = stack.pop() {
-            let Ok(key) = base.open_subkey_with_flags(&path, KEY_READ | KEY_WOW64_64KEY) else { continue };
+            let Ok(key) = base.open_subkey_with_flags(&path, KEY_READ | KEY_WOW64_64KEY) else {
+                continue;
+            };
             let full = format!("{hive_name}\\{path}");
             if excluded(&full.to_lowercase(), &excludes) {
                 continue;
@@ -169,7 +204,13 @@ pub fn take(out: &str, name: &str, file_roots: &[String], file_depth: u32, reg_r
             for (vname, value) in key.enum_values().flatten() {
                 st.values += 1;
                 let vtype = value.vtype as u32;
-                let _ = writeln!(w, "V\t{}\t{}\t{vtype}\t{}", esc(&full), esc(&vname), value_text(vtype, &value.bytes));
+                let _ = writeln!(
+                    w,
+                    "V\t{}\t{}\t{vtype}\t{}",
+                    esc(&full),
+                    esc(&vname),
+                    value_text(vtype, &value.bytes)
+                );
             }
             if depth < root.depth {
                 for sub in key.enum_keys().flatten() {
@@ -180,21 +221,29 @@ pub fn take(out: &str, name: &str, file_roots: &[String], file_depth: u32, reg_r
     }
 
     w.flush().map_err(|e| e.to_string())?;
-    drop(w.into_inner().map_err(|e| e.to_string())?.finish().map_err(|e| e.to_string())?);
+    drop(
+        w.into_inner()
+            .map_err(|e| e.to_string())?
+            .finish()
+            .map_err(|e| e.to_string())?,
+    );
     fs::rename(&tmp, out).map_err(|e| e.to_string())?;
     st.bytes = fs::metadata(out).map(|m| m.len()).unwrap_or(0);
     st.ms = start.elapsed().as_millis() as u64;
     Ok(st)
 }
 
+type FileEntry = (String, u64, u64); // Original path, size, modified time.
+type ValueEntry = (String, String, u32, String); // Key, name, registry type, data.
+
 #[derive(Default)]
 struct Snap {
     name: String,
     created: u64,
     dirs: HashMap<String, String>,
-    files: HashMap<String, (String, u64, u64)>,
+    files: HashMap<String, FileEntry>,
     keys: HashMap<String, String>,
-    values: HashMap<String, (String, String, u32, String)>,
+    values: HashMap<String, ValueEntry>,
 }
 
 fn load(path: &str) -> Result<Snap, String> {
@@ -228,7 +277,10 @@ fn load(path: &str) -> Result<Snap, String> {
                 let name = unesc(p.next().unwrap_or(""));
                 let vtype = p.next().and_then(|x| x.parse().ok()).unwrap_or(0);
                 let data = p.next().unwrap_or("").to_string();
-                s.values.insert(format!("{}|{}", key.to_lowercase(), name.to_lowercase()), (key, name, vtype, data));
+                s.values.insert(
+                    format!("{}|{}", key.to_lowercase(), name.to_lowercase()),
+                    (key, name, vtype, data),
+                );
             }
             _ => {}
         }
@@ -301,31 +353,80 @@ fn under_any(lower: &str, set: &HashSet<String>) -> bool {
 
 // Entries present in `a` but not in `b`, collapsed to top-most folders and keys.
 fn only_in(a: &Snap, b: &Snap, limit: usize, truncated: &mut bool) -> Vec<Change> {
-    let dirs = topmost(a.dirs.iter().filter(|(l, _)| !b.dirs.contains_key(*l)).map(|(l, o)| (l.clone(), o.clone())).collect());
+    let dirs = topmost(
+        a.dirs
+            .iter()
+            .filter(|(l, _)| !b.dirs.contains_key(*l))
+            .map(|(l, o)| (l.clone(), o.clone()))
+            .collect(),
+    );
     let dir_set: HashSet<String> = dirs.iter().map(|d| d.to_lowercase()).collect();
-    let keys = topmost(a.keys.iter().filter(|(l, _)| !b.keys.contains_key(*l)).map(|(l, o)| (l.clone(), o.clone())).collect());
+    let keys = topmost(
+        a.keys
+            .iter()
+            .filter(|(l, _)| !b.keys.contains_key(*l))
+            .map(|(l, o)| (l.clone(), o.clone()))
+            .collect(),
+    );
     let key_set: HashSet<String> = keys.iter().map(|k| k.to_lowercase()).collect();
     let mut out: Vec<Change> = vec![];
     for d in dirs {
-        out.push(Change { kind: "dir", path: d, name: None, value_type: None, before: None, after: None });
+        out.push(Change {
+            kind: "dir",
+            path: d,
+            name: None,
+            value_type: None,
+            before: None,
+            after: None,
+        });
     }
-    let mut files: Vec<&(String, u64, u64)> = a.files.iter().filter(|(l, _)| !b.files.contains_key(*l) && !under_any(l, &dir_set)).map(|(_, v)| v).collect();
+    let mut files: Vec<&FileEntry> = a
+        .files
+        .iter()
+        .filter(|(l, _)| !b.files.contains_key(*l) && !under_any(l, &dir_set))
+        .map(|(_, v)| v)
+        .collect();
     files.sort_by_key(|f| f.0.to_lowercase());
     for f in files {
-        out.push(Change { kind: "file", path: f.0.clone(), name: None, value_type: None, before: None, after: Some(f.1.to_string()) });
+        out.push(Change {
+            kind: "file",
+            path: f.0.clone(),
+            name: None,
+            value_type: None,
+            before: None,
+            after: Some(f.1.to_string()),
+        });
     }
     for k in keys {
-        out.push(Change { kind: "key", path: k, name: None, value_type: None, before: None, after: None });
+        out.push(Change {
+            kind: "key",
+            path: k,
+            name: None,
+            value_type: None,
+            before: None,
+            after: None,
+        });
     }
-    let mut values: Vec<&(String, String, u32, String)> = a
+    let mut values: Vec<&ValueEntry> = a
         .values
         .iter()
-        .filter(|(id, v)| !b.values.contains_key(*id) && !key_set.contains(&v.0.to_lowercase()) && !under_any(&v.0.to_lowercase(), &key_set))
+        .filter(|(id, v)| {
+            !b.values.contains_key(*id)
+                && !key_set.contains(&v.0.to_lowercase())
+                && !under_any(&v.0.to_lowercase(), &key_set)
+        })
         .map(|(_, v)| v)
         .collect();
     values.sort_by_key(|v| (v.0.to_lowercase(), v.1.to_lowercase()));
     for v in values {
-        out.push(Change { kind: "value", path: v.0.clone(), name: Some(v.1.clone()), value_type: Some(v.2), before: None, after: Some(v.3.clone()) });
+        out.push(Change {
+            kind: "value",
+            path: v.0.clone(),
+            name: Some(v.1.clone()),
+            value_type: Some(v.2),
+            before: None,
+            after: Some(v.3.clone()),
+        });
     }
     if out.len() > limit {
         out.truncate(limit);
@@ -345,15 +446,32 @@ pub fn subtree(path: &str, key: &str) -> Result<Subtree, String> {
     let s = load(path)?;
     let k = key.to_lowercase();
     let inside = |p: &str| p == k || p.starts_with(&format!("{k}\\"));
-    let mut keys: Vec<String> = s.keys.iter().filter(|(l, _)| inside(l)).map(|(_, o)| o.clone()).collect();
+    let mut keys: Vec<String> = s
+        .keys
+        .iter()
+        .filter(|(l, _)| inside(l))
+        .map(|(_, o)| o.clone())
+        .collect();
     keys.sort_by_key(|x| x.len());
     let mut values: Vec<Change> = s
         .values
         .values()
         .filter(|v| inside(&v.0.to_lowercase()))
-        .map(|v| Change { kind: "value", path: v.0.clone(), name: Some(v.1.clone()), value_type: Some(v.2), before: Some(v.3.clone()), after: None })
+        .map(|v| Change {
+            kind: "value",
+            path: v.0.clone(),
+            name: Some(v.1.clone()),
+            value_type: Some(v.2),
+            before: Some(v.3.clone()),
+            after: None,
+        })
         .collect();
-    values.sort_by_key(|v| (v.path.to_lowercase(), v.name.clone().unwrap_or_default().to_lowercase()));
+    values.sort_by_key(|v| {
+        (
+            v.path.to_lowercase(),
+            v.name.clone().unwrap_or_default().to_lowercase(),
+        )
+    });
     Ok(Subtree { keys, values })
 }
 
@@ -371,20 +489,148 @@ pub fn compare(before_path: &str, after_path: &str, limit: usize) -> Result<Comp
         }
     }
     let mut changed: Vec<Change> = vec![];
-    let mut file_changes: Vec<(&(String, u64, u64), &(String, u64, u64))> = a.files.iter().filter_map(|(l, f)| b.files.get(l).filter(|g| g.1 != f.1 || g.2 != f.2).map(|g| (f, g))).collect();
+    let mut file_changes: Vec<(&FileEntry, &FileEntry)> = a
+        .files
+        .iter()
+        .filter_map(|(l, f)| {
+            b.files
+                .get(l)
+                .filter(|g| g.1 != f.1 || g.2 != f.2)
+                .map(|g| (f, g))
+        })
+        .collect();
     file_changes.sort_by_key(|(f, _)| f.0.to_lowercase());
     for (f, g) in file_changes {
-        changed.push(Change { kind: "file", path: g.0.clone(), name: None, value_type: None, before: Some(f.1.to_string()), after: Some(g.1.to_string()) });
+        changed.push(Change {
+            kind: "file",
+            path: g.0.clone(),
+            name: None,
+            value_type: None,
+            before: Some(f.1.to_string()),
+            after: Some(g.1.to_string()),
+        });
     }
-    let mut value_changes: Vec<(&(String, String, u32, String), &(String, String, u32, String))> =
-        a.values.iter().filter_map(|(id, v)| b.values.get(id).filter(|w| w.2 != v.2 || w.3 != v.3).map(|w| (v, w))).collect();
+    let mut value_changes: Vec<(&ValueEntry, &ValueEntry)> = a
+        .values
+        .iter()
+        .filter_map(|(id, v)| {
+            b.values
+                .get(id)
+                .filter(|w| w.2 != v.2 || w.3 != v.3)
+                .map(|w| (v, w))
+        })
+        .collect();
     value_changes.sort_by_key(|(v, _)| (v.0.to_lowercase(), v.1.to_lowercase()));
     for (v, w) in value_changes {
-        changed.push(Change { kind: "value", path: w.0.clone(), name: Some(w.1.clone()), value_type: Some(v.2), before: Some(v.3.clone()), after: Some(w.3.clone()) });
+        changed.push(Change {
+            kind: "value",
+            path: w.0.clone(),
+            name: Some(w.1.clone()),
+            value_type: Some(v.2),
+            before: Some(v.3.clone()),
+            after: Some(w.3.clone()),
+        });
     }
     if changed.len() > limit {
         changed.truncate(limit);
         truncated = true;
     }
-    Ok(Comparison { before: a.name, after: b.name, before_created: a.created, after_created: b.created, added, removed, changed, truncated, ms: start.elapsed().as_millis() as u64 })
+    Ok(Comparison {
+        before: a.name,
+        after: b.name,
+        before_created: a.created,
+        after_created: b.created,
+        added,
+        removed,
+        changed,
+        truncated,
+        ms: start.elapsed().as_millis() as u64,
+    })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    #[test]
+    fn registry_utf16_preserves_unicode_and_embedded_nuls() {
+        for text in ["", "Example", "日本語 😀", "first\0second", "trailing\0\0"] {
+            let bytes: Vec<u8> = text.encode_utf16().flat_map(u16::to_le_bytes).collect();
+            assert_eq!(utf16(&bytes), text.trim_end_matches('\0'));
+        }
+        assert_eq!(value_text(7, &[65, 0, 0, 0, 66, 0, 0, 0]), "A\\0B");
+    }
+
+    #[test]
+    fn registry_utf16_keeps_existing_malformed_input_behavior() {
+        assert_eq!(utf16(&[65]), "");
+        assert_eq!(utf16(&[65, 0, 66]), "A");
+        assert_eq!(utf16(&[0, 0xd8]), "\u{fffd}");
+        assert_eq!(utf16(&[0, 0xdc]), "\u{fffd}");
+    }
+
+    struct Fixture(PathBuf);
+
+    impl Fixture {
+        fn new(contents: &str) -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let id = NEXT.fetch_add(1, Ordering::Relaxed);
+            let now = std::time::SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "purgeon-snapshot-test-{}-{now}-{id}.snap",
+                std::process::id()
+            ));
+            let file = File::create_new(&path).unwrap();
+            let mut writer = GzEncoder::new(file, Compression::fast());
+            writer.write_all(contents.as_bytes()).unwrap();
+            writer.finish().unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_file(&self.0);
+        }
+    }
+
+    #[test]
+    fn snapshot_comparison_keeps_file_and_value_changes_sorted_and_truncated() {
+        let before = Fixture::new(concat!(
+            "#SWEEPSNAP\t1\tBefore\t1\n",
+            "F\tC:\\\\Z.exe\t10\t1\nF\tC:\\\\a.exe\t20\t1\n",
+            "V\tHKCU\\\\Software\\\\Example\tz\t1\told\n",
+            "V\tHKCU\\\\Software\\\\Example\ta\t4\t1\n",
+        ));
+        let after = Fixture::new(concat!(
+            "#SWEEPSNAP\t1\tAfter\t2\n",
+            "F\tC:\\\\Z.exe\t11\t2\nF\tC:\\\\a.exe\t21\t2\n",
+            "V\tHKCU\\\\Software\\\\Example\tz\t1\tnew\n",
+            "V\tHKCU\\\\Software\\\\Example\ta\t4\t2\n",
+        ));
+        let full = compare(before.0.to_str().unwrap(), after.0.to_str().unwrap(), 10).unwrap();
+        assert_eq!(full.before, "Before");
+        assert_eq!(full.after, "After");
+        assert!(full.added.is_empty() && full.removed.is_empty());
+        assert_eq!(full.changed.len(), 4);
+        assert_eq!(full.changed[0].path, r"C:\a.exe");
+        assert_eq!(full.changed[1].path, r"C:\Z.exe");
+        assert_eq!(full.changed[0].before.as_deref(), Some("20"));
+        assert_eq!(full.changed[0].after.as_deref(), Some("21"));
+        assert_eq!(full.changed[2].name.as_deref(), Some("a"));
+        assert_eq!(full.changed[2].value_type, Some(4));
+        assert_eq!(full.changed[2].before.as_deref(), Some("1"));
+        assert_eq!(full.changed[2].after.as_deref(), Some("2"));
+        assert_eq!(full.changed[3].name.as_deref(), Some("z"));
+        assert!(!full.truncated);
+        let limited = compare(before.0.to_str().unwrap(), after.0.to_str().unwrap(), 1).unwrap();
+        assert!(limited.truncated);
+        assert_eq!(limited.changed.len(), 1);
+        assert_eq!(limited.changed[0].path, r"C:\a.exe");
+    }
 }

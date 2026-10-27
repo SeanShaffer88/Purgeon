@@ -1,5 +1,4 @@
-# Builds the Windows installer and the portable exe. Pushing a tag like v0.4.0
-# publishes them as a GitHub Release; every push to main and every pull request just checks the build.
+# Every pull request builds and verifies the same three files used by tagged releases.
 name: Build
 
 on:
@@ -9,53 +8,92 @@ on:
   pull_request:
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
     runs-on: windows-latest
+    timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
         with:
-          node-version: 22
+          node-version: 24
           cache: npm
-
       - uses: dtolnay/rust-toolchain@stable
-
+        with:
+          targets: i686-pc-windows-msvc,x86_64-pc-windows-msvc
+          components: rustfmt,clippy
       - uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
-
+          key: windows-x86-x64
+          cache-on-failure: true
       - run: npm ci
-
       - name: Safety tests
         run: npm test
-
-      - name: Build app and installer
-        run: npm run dist
-
-      - name: Collect release files
+      - name: Build frontend for native checks
+        run: npm run build
+      - name: Native formatting
+        working-directory: src-tauri
+        run: cargo fmt --all --check
+      - name: Native lint and tests on both architectures
+        working-directory: src-tauri
         shell: pwsh
         run: |
-          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          New-Item -ItemType Directory -Force release | Out-Null
-          Copy-Item "src-tauri/target/release/bundle/nsis/Purgeon_${version}_x64-setup.exe" "release/Purgeon-Setup-$version.exe"
-          Copy-Item "src-tauri/target/release/purgeon.exe" "release/Purgeon-Portable-$version.exe"
-          Get-ChildItem release | Format-Table Name, Length
-
-      - name: Upload build artifacts
-        uses: actions/upload-artifact@v4
+          foreach ($target in @('i686-pc-windows-msvc', 'x86_64-pc-windows-msvc')) {
+            cargo clippy --locked --all-targets --target $target -- -D warnings
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+            cargo test --locked --all-targets --target $target
+            if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          }
+      - name: Build and verify the three release assets
+        run: npm run dist:windows
+      - name: Installer dispatch regression probes
+        run: ./scripts/test-setup-dispatch.ps1
+      - name: Package verification failure tests
+        run: ./scripts/test-package-verifier.ps1 -Directory release -Manifest release-manifest.json
+      - name: Installer smoke tests (disposable runner only)
+        run: ./scripts/test-windows-installers.ps1 -Directory release
+      - name: Upload build artifacts and internal hash evidence
+        uses: actions/upload-artifact@v7
         with:
           name: Purgeon-windows
-          path: release/*
+          if-no-files-found: error
+          path: |
+            release/
+            release-manifest.json
+      - name: Re-download build artifacts
+        uses: actions/download-artifact@v8
+        with:
+          name: Purgeon-windows
+          path: verified
+      - name: Verify downloaded contents and hashes
+        run: ./scripts/verify-windows-package.ps1 -Directory verified/release -Manifest release-manifest.json
 
-      - name: Publish release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
+  publish:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v8
+        with:
+          name: Purgeon-windows
+          path: verified
+      - name: Verify publication inputs
+        run: ./scripts/verify-windows-package.ps1 -Directory verified/release -Manifest verified/release-manifest.json
+      - uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
+          fail_on_unmatched_files: true
+          body: |
+            Unsigned Windows packages. Setup EXE selects the native x86/x64 build.
+            Setup MSI installs the x86 app on both x86 and x64 Windows.
+            Portable ZIP contains both architectures, LICENSE and PORTABLE.txt.
           files: |
-            release/Purgeon-Setup-*.exe
-            release/Purgeon-Portable-*.exe
+            verified/release/Purgeon-Setup.exe
+            verified/release/Purgeon-Setup.msi
+            verified/release/Purgeon-Portable.zip

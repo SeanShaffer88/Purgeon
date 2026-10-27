@@ -80,9 +80,16 @@ fn on_process(state: &Arc<Mutex<State>>, record: &EventRecord, locator: &SchemaL
     if record.event_id() != 1 {
         return;
     }
-    let Ok(schema) = locator.event_schema(record) else { return };
+    let Ok(schema) = locator.event_schema(record) else {
+        return;
+    };
     let parser = Parser::create(record, &schema);
-    let (Ok(pid), Ok(parent)) = (parser.try_parse::<u32>("ProcessID"), parser.try_parse::<u32>("ParentProcessID")) else { return };
+    let (Ok(pid), Ok(parent)) = (
+        parser.try_parse::<u32>("ProcessID"),
+        parser.try_parse::<u32>("ParentProcessID"),
+    ) else {
+        return;
+    };
     let image: String = parser.try_parse("ImageName").unwrap_or_default();
     let Ok(mut s) = state.lock() else { return };
     // Children of tracked processes, and Windows Installer's msiexec, which installs .msi packages for them.
@@ -97,7 +104,9 @@ fn on_file(state: &Arc<Mutex<State>>, record: &EventRecord, locator: &SchemaLoca
         return;
     }
     let id = record.event_id();
-    let Ok(schema) = locator.event_schema(record) else { return };
+    let Ok(schema) = locator.event_schema(record) else {
+        return;
+    };
     let parser = Parser::create(record, &schema);
     let field = if id == 30 { "FileName" } else { "FilePath" };
     let Ok(name) = parser.try_parse::<String>(field) else {
@@ -133,7 +142,11 @@ fn join_key(base: &str, relative: &str) -> String {
     match (base.is_empty(), relative.is_empty()) {
         (true, _) => relative.to_string(),
         (_, true) => base.to_string(),
-        _ => format!("{}\\{}", base.trim_end_matches('\\'), relative.trim_start_matches('\\')),
+        _ => format!(
+            "{}\\{}",
+            base.trim_end_matches('\\'),
+            relative.trim_start_matches('\\')
+        ),
     }
 }
 
@@ -142,7 +155,9 @@ fn on_registry(state: &Arc<Mutex<State>>, record: &EventRecord, locator: &Schema
         return;
     }
     let id = record.event_id();
-    let Ok(schema) = locator.event_schema(record) else { return };
+    let Ok(schema) = locator.event_schema(record) else {
+        return;
+    };
     let parser = Parser::create(record, &schema);
     if parser.try_parse::<u32>("Status").unwrap_or(0) != 0 {
         return; // failed operations change nothing
@@ -200,17 +215,31 @@ pub fn start() -> Result<(), String> {
     let _ = stop_trace_by_name(SESSION); // a session left over from a crash
     let state = Arc::new(Mutex::new(State::default()));
     let (s1, s2, s3) = (state.clone(), state.clone(), state.clone());
-    let process = Provider::by_guid(PROCESS).any(0x10).add_filter(EventFilter::ByEventIds(vec![1])).add_callback(move |r: &EventRecord, l: &SchemaLocator| on_process(&s1, r, l)).build();
+    let process = Provider::by_guid(PROCESS)
+        .any(0x10)
+        .add_filter(EventFilter::ByEventIds(vec![1]))
+        .add_callback(move |r: &EventRecord, l: &SchemaLocator| on_process(&s1, r, l))
+        .build();
     // FileName rundown, DeletePath, RenamePath and CreateNewFile keywords.
-    let file = Provider::by_guid(FILE).any(0x10 | 0x400 | 0x800 | 0x1000).add_filter(EventFilter::ByEventIds(vec![26, 27, 30])).add_callback(move |r: &EventRecord, l: &SchemaLocator| on_file(&s2, r, l)).build();
-    let registry = Provider::by_guid(REGISTRY).any(u64::MAX).add_filter(EventFilter::ByEventIds(vec![1, 3, 5, 6])).add_callback(move |r: &EventRecord, l: &SchemaLocator| on_registry(&s3, r, l)).build();
+    let file = Provider::by_guid(FILE)
+        .any(0x10 | 0x400 | 0x800 | 0x1000)
+        .add_filter(EventFilter::ByEventIds(vec![26, 27, 30]))
+        .add_callback(move |r: &EventRecord, l: &SchemaLocator| on_file(&s2, r, l))
+        .build();
+    let registry = Provider::by_guid(REGISTRY)
+        .any(u64::MAX)
+        .add_filter(EventFilter::ByEventIds(vec![1, 3, 5, 6]))
+        .add_callback(move |r: &EventRecord, l: &SchemaLocator| on_registry(&s3, r, l))
+        .build();
     let (trace, handle) = UserTrace::new()
         .named(SESSION.to_string())
         .enable(process)
         .enable(file)
         .enable(registry)
         .start()
-        .map_err(|e| format!("Live tracking could not start ({e:?}). It needs administrator rights."))?;
+        .map_err(|e| {
+            format!("Live tracking could not start ({e:?}). It needs administrator rights.")
+        })?;
     std::thread::spawn(move || {
         let _ = UserTrace::process_from_handle(handle);
     });
@@ -223,7 +252,11 @@ pub fn add_pid(pid: u32, image: String) {
         if let Some(Running(_, state)) = running.as_ref() {
             if let Ok(mut s) = state.lock() {
                 s.pids.insert(pid);
-                s.processes.push(TrackedProcess { pid, parent: std::process::id(), image });
+                s.processes.push(TrackedProcess {
+                    pid,
+                    parent: std::process::id(),
+                    image,
+                });
             }
         }
     }
@@ -266,11 +299,19 @@ fn to_drive_path(p: &str, devices: &[(String, String)]) -> Option<String> {
 
 /// Stops tracking and returns everything recorded, with file paths as drive paths.
 pub fn stop() -> Result<TrackResult, String> {
-    let Running(trace, state) = RUNNING.lock().map_err(|e| e.to_string())?.take().ok_or("Live tracking is not running")?;
+    let Running(trace, state) = RUNNING
+        .lock()
+        .map_err(|e| e.to_string())?
+        .take()
+        .ok_or("Live tracking is not running")?;
     let _ = trace.stop();
     let s = state.lock().map_err(|e| e.to_string())?;
     let devices = dos_devices();
-    let paths = |set: &BTreeSet<String>| set.iter().filter_map(|p| to_drive_path(p, &devices)).collect::<Vec<_>>();
+    let paths = |set: &BTreeSet<String>| {
+        set.iter()
+            .filter_map(|p| to_drive_path(p, &devices))
+            .collect::<Vec<_>>()
+    };
     Ok(TrackResult {
         processes: s.processes.clone(),
         created_files: paths(&s.created_files),
@@ -278,8 +319,20 @@ pub fn stop() -> Result<TrackResult, String> {
         deleted: paths(&s.deleted),
         created_keys: s.created_keys.iter().cloned().collect(),
         deleted_keys: s.deleted_keys.iter().cloned().collect(),
-        set_values: s.set_values.iter().map(|((key, name), new)| SetValue { key: key.clone(), name: name.clone(), new: *new }).collect(),
-        deleted_values: s.deleted_values.iter().map(|(k, v)| [k.clone(), v.clone()]).collect(),
+        set_values: s
+            .set_values
+            .iter()
+            .map(|((key, name), new)| SetValue {
+                key: key.clone(),
+                name: name.clone(),
+                new: *new,
+            })
+            .collect(),
+        deleted_values: s
+            .deleted_values
+            .iter()
+            .map(|(k, v)| [k.clone(), v.clone()])
+            .collect(),
         events: s.events.clone(),
     })
 }

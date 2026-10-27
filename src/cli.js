@@ -9,9 +9,14 @@ import * as monitor from './backend/monitor.js';
 import * as maintenance from './backend/maintenance.js';
 import * as autostart from './backend/autostart.js';
 import { runCommandLine } from './backend/shell.js';
+import { parseCliArgs } from './cli-args.js';
 
 const HELP = `Purgeon command line
 
+  --help, -h, /?
+        Shows this help. Use one command at a time; unknown, duplicate or
+        misplaced options are errors. Put quotes around names and paths
+        containing spaces. Values cannot start with a dash (-).
   --snapshot "<name>" [--preset quick|standard|deep]
         Takes a snapshot of files, folders and registry settings.
   --compare <before> <after|now> [--report <file.html|file.json|file.txt>]
@@ -38,11 +43,6 @@ to a file. Exit code 0 means success, 1 means an error.
 
 const fmt = (c) => `${c.path}${c.kind === 'value' ? ` › ${c.name || '(default)'}` : ''}`;
 
-function option(args, name) {
-  const i = args.findIndex((a) => a.toLowerCase() === name);
-  return i >= 0 ? args[i + 1] : undefined;
-}
-
 async function find(ref) {
   const list = await snapshots.list(); // newest first
   if (!ref) throw new Error('Name a snapshot (its id, name or "latest").');
@@ -63,27 +63,22 @@ function reportText(cmp, beforeName, afterName) {
   return lines.join('\r\n') + '\r\n';
 }
 
-async function run(args) {
-  const cmd = args.find((a) => a.startsWith('--') || a === '-h' || a === '/?')?.toLowerCase();
+async function run({ command: cmd, values, options }) {
   if (cmd === '--snapshot') {
-    const name = option(args, '--snapshot');
-    if (!name || name.startsWith('--')) throw new Error('Give the snapshot a name: --snapshot "Before installing X"');
-    const preset = option(args, '--preset') || 'standard';
-    if (!snapshots.PRESETS[preset]) throw new Error('--preset must be quick, standard or deep.');
+    const name = values[0];
+    const preset = options['--preset'] ?? 'standard';
     const meta = await snapshots.take(name, preset);
     const s = meta.stats;
     return `Snapshot "${meta.name}" (id ${meta.id}) taken: ${(s.dirs + s.files).toLocaleString()} files and folders, ${(s.keys + s.values).toLocaleString()} registry entries in ${(s.ms / 1000).toFixed(1)} s.\r\n`;
   }
   if (cmd === '--compare') {
-    const i = args.findIndex((a) => a.toLowerCase() === '--compare');
-    const before = await find(args[i + 1]);
-    const afterRef = args[i + 2];
-    if (!afterRef || afterRef.startsWith('--')) throw new Error('Name what to compare with: another snapshot, or "now".');
+    const before = await find(values[0]);
+    const afterRef = values[1];
     const after = afterRef.toLowerCase() === 'now' ? null : await find(afterRef);
     const cmp = await snapshots.compare(before.id, after ? after.id : 'now', 200000);
     const afterName = after ? after.name : 'Now';
     const text = reportText(cmp, before.name, afterName);
-    const report = option(args, '--report');
+    const report = options['--report'];
     if (report) {
       const all = Object.fromEntries(['added', 'removed', 'changed'].map((g) => [g, cmp[g].map((c) => ({ ...c, group: g }))]));
       // Loaded only when needed, so the command line also runs outside the app (tests).
@@ -94,8 +89,7 @@ async function run(args) {
     return text;
   }
   if (cmd === '--monitor') {
-    const installer = option(args, '--monitor');
-    if (!installer || installer.startsWith('--')) throw new Error('Name the installer: --monitor "C:\\Downloads\\setup.exe"');
+    const installer = values[0];
     if (!(await sys.exists(installer))) throw new Error(`Installer not found: ${installer}`);
     if (await monitor.status()) throw new Error('Another installation is being monitored. Finish or cancel it in Purgeon first.');
     const started = await monitor.start(installer);
@@ -107,7 +101,7 @@ async function run(args) {
     } else {
       await runCommandLine(`"${installer}"`);
     }
-    const name = option(args, '--name') || installer.split('\\').pop().replace(/\.[^.]+$/, '');
+    const name = options['--name'] ?? installer.split('\\').pop().replace(/\.[^.]+$/, '');
     const rec = await monitor.finish(name);
     const lines = [
       `Recorded the installation of ${rec.name} (${started.live ? 'live tracking and snapshots' : 'snapshots only; run as administrator for live tracking'}).`,
@@ -125,8 +119,7 @@ async function run(args) {
     return `${out.lines.join('\r\n')}\r\nReport: ${out.report}\r\n`;
   }
   if (cmd === '--autostart') {
-    const v = String(option(args, '--autostart') || '').toLowerCase();
-    if (v !== 'on' && v !== 'off') throw new Error('Use --autostart on or --autostart off.');
+    const v = values[0].toLowerCase();
     const on = await autostart.set(v === 'on');
     return on ? 'Purgeon now starts when you sign in to Windows.\r\n' : 'Purgeon no longer starts with Windows.\r\n';
   }
@@ -142,10 +135,13 @@ async function run(args) {
   return HELP.replace(/\n/g, '\r\n');
 }
 
-export async function runCli(args) {
+// Startup passes initBackend here so invalid input and help do not initialize stores/logs.
+export async function runCli(args, initialize = async () => {}) {
   let code = 0;
   try {
-    await sys.print(`\r\n${await run(args)}`);
+    const request = parseCliArgs(args);
+    if (request.command !== '--help') await initialize();
+    await sys.print(`\r\n${await run(request)}`);
   } catch (e) {
     await sys.print(`\r\nError: ${e?.message || e}\r\n`);
     code = 1;

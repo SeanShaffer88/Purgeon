@@ -1,5 +1,10 @@
 # Purgeon
 
+## TL;DR
+
+Purgeon helps you remove Windows programs and inspect what they leave behind.
+Review the proposed changes and backups before deleting anything.
+
 A Windows uninstaller that removes a program and then finds the files, folders, registry keys, startup entries and services it left behind.
 
 It can also:
@@ -16,7 +21,7 @@ It can also:
 
 Every change is backed up first and can be undone.
 
-It has a compact single-list window with a dark terminal theme. It is built with [Tauri](https://tauri.app/) and React on Windows' built-in WebView2, so the whole app is a **4.0 MB** exe in a **1.5 MB** installer.
+It has a compact single-list window with a dark terminal theme. It is built with [Tauri](https://tauri.app/) and React on Microsoft Edge WebView2.
 
 ![Purgeon main window](docs/screenshots/main.png)
 
@@ -458,12 +463,38 @@ Purgeon --help
 
 The exit code is 0 on success and 1 on an error. Run from an administrator terminal to see the output there.
 
+Use one command at a time. Put quotes around names and paths that contain spaces, and
+put the command before its options. Unknown options, repeated options, extra values,
+and missing values are errors; Purgeon checks the whole request before starting the
+operation. For example, `--maintenance --dry-run` is rejected: maintenance has no
+`--dry-run` option. `--help` (also `-h` or `/?`) must be used on its own.
+Names and other values cannot begin with a dash (`-`); use a full path for such a file.
+
+Development validation and outstanding build checks are recorded in
+[docs/DEVELOPMENT.md](docs/DEVELOPMENT.md).
+
 ## Download
 
-Get the latest version from [Releases](https://github.com/SeanShaffer88/Purgeon/releases/latest). It runs on Windows 10 and 11 (64-bit).
+Get published versions from [Releases](https://github.com/SeanShaffer88/Purgeon/releases/latest).
+The next release uses the three files below. Existing releases retain their original
+files. The new x86 build is tested on x64 Windows through Windows' compatibility
+layer; a separate 32-bit Windows 10 runtime test is still outstanding.
 
-- **`Purgeon-Setup-<version>.exe`** (about 1.5 MB) installs for all users, with a Start Menu shortcut. Its last page offers to start Purgeon with Windows (unticked).
-- **`Purgeon-Portable-<version>.exe`** (about 4.0 MB) runs without installing. It keeps its settings, backups, snapshots and browser data in a `Purgeon Data` folder next to the exe, so you can carry it on a USB drive. Any copy whose file name contains `portable`, or that has a file named `portable` next to it, works this way.
+- **`Purgeon-Setup.exe`** selects x86 on 32-bit Windows and x64 on 64-bit Windows.
+  It installs for all users, with a Start Menu shortcut. Its last page offers to
+  start Purgeon with Windows (unticked). Silent installation uses `/S`; an optional
+  `/D=C:\Your Folder` must be last and unquoted.
+- **`Purgeon-Setup.msi`** installs the **32-bit app on either x86 or x64 Windows**.
+  Windows Installer does not support a single MSI declaring both native platforms.
+  For the native x64 app, use the EXE. Silent installation uses
+  `msiexec /i Purgeon-Setup.msi /qn /norestart`. Uninstall the current installation
+  before switching installer formats. User data is retained.
+- **`Purgeon-Portable.zip`** contains `Purgeon-Portable-x86.exe`,
+  `Purgeon-Portable-x64.exe`, LICENSE, and PORTABLE.txt. Extract everything first,
+  then run the executable matching Windows. Both builds share the adjacent
+  `Purgeon Data` folder; run one at a time. Keep the whole folder when moving to
+  another PC. Names containing `portable`, or a neighboring file named `portable`,
+  enable this storage mode.
 
 **Upgrading from SweepUninstall:** Purgeon is the same program under a new name.
 - Your settings, backups, snapshots, groups and Change History carry over: Purgeon uses the same data folder.
@@ -472,8 +503,9 @@ Get the latest version from [Releases](https://github.com/SeanShaffer88/Purgeon/
 - Scheduled maintenance and Start with Windows tasks from SweepUninstall are replaced the next time you save those options.
 
 **Requirements and notes:**
-- **Administrator rights:** both ask for them when they start. Removing programs installed for all users, creating restore points, machine-wide tweaks and live install tracking all need them.
-- **WebView2:** Purgeon uses the Microsoft Edge WebView2 runtime, which is part of Windows 10 and 11. The installer downloads it if it's missing.
+- **Administrator rights:** release executables ask for them when they start. Removing programs installed for all users, creating restore points, machine-wide tweaks and live install tracking need them. Development and default test builds run with the caller's existing rights.
+- **WebView2:** Microsoft Edge WebView2 must be installed. Setup packages include its bootstrapper, which downloads the runtime if missing; that step needs internet access. Portable copies require an existing runtime.
+- **Platform coverage:** Windows 10/11 x64 is the existing target. Native ARM64 builds are not included; Windows 11 has no x86 edition.
 - **Lightweight:** while idle, Purgeon uses about 125–135 MB of memory, counting WebView2's helper processes.
 - **SmartScreen:** the exes are not code-signed yet, so Windows SmartScreen may show "Windows protected your PC". Click **More info › Run anyway**.
 
@@ -510,7 +542,7 @@ Get the latest version from [Releases](https://github.com/SeanShaffer88/Purgeon/
 
 ## Run from source
 
-Requirements: Windows 10 or 11, [Node.js](https://nodejs.org/) 20 or later, and [Rust](https://rustup.rs/) (stable).
+Requirements: Windows 10 or 11, [Node.js](https://nodejs.org/) 24, [Rust](https://rustup.rs/) (stable), and the MSVC desktop C++ build tools. Packaging also needs PowerShell 7 and the Windows VBScript optional component for WiX validation.
 
 ```bash
 git clone https://github.com/SeanShaffer88/Purgeon.git
@@ -519,7 +551,15 @@ npm install
 npm run dev
 ```
 
-`npm test` runs the safety tests and `npm run dist` builds the app and installer into `src-tauri/target/release/`. Pushing a tag like `v0.7.0` makes GitHub Actions run the tests and publish the installer and portable exe as a release.
+`npm test` runs the JavaScript safety tests. Native check commands are in
+[AGENTS.md](AGENTS.md). `npm run dist` builds a single native NSIS bundle.
+For the complete distribution, install both Rust targets with
+`rustup target add i686-pc-windows-msvc x86_64-pc-windows-msvc`, then run
+`npm run dist:windows`. The output directory must be empty; existing files are
+never silently removed. CI runs the native gates on both targets, builds the three
+assets, tests silent install/uninstall on its disposable x64 runner, then downloads
+and verifies the artifact again. A version tag publishes those three files only.
+The internal hash manifest is CI evidence and is not a separate release asset.
 
 ## How it works
 
