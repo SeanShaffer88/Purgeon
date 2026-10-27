@@ -568,6 +568,7 @@ const [firstRunTipDismissed, setFirstRunTipDismissed] = useState(() => new Set()
   const outsideChecked = useRef(false);
 const [zoom, setZoom] = useState(1);
 const [textScale, setTextScale] = useState(1);
+const [reducedMotion, setReducedMotion] = useState(false);
 // Program groups ({ programKey: group }) and the group the program lists are filtered to.
   const [groups, setGroups] = useState({});
   const [groupFilter, setGroupFilter] = useState(ALL_GROUPS);
@@ -649,6 +650,7 @@ const [textScale, setTextScale] = useState(1);
       setZoom(s.zoom || 1);
       applyZoom(s.zoom || 1);
       setTextScale(s.textScale || 1);
+      setReducedMotion(!!s.reducedMotion);
       // Update notification: checked once on startup, never nagging.
       updatecheck.check().then(({ enabled, update, error }) => {
         if (enabled && update && update.newer && !updateShown) {
@@ -714,7 +716,8 @@ const [textScale, setTextScale] = useState(1);
     useEffect(() => {
       document.documentElement.dataset.theme = theme;
       document.documentElement.style.setProperty('--text-scale', textScale);
-    }, [theme, textScale]);
+      document.documentElement.dataset.reducedMotion = reducedMotion;
+    }, [theme, textScale, reducedMotion]);
 
   // Icons arrive in one batch after the list is shown; programs without one keep a placeholder.
   useEffect(() => {

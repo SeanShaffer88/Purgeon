@@ -562,12 +562,13 @@ const baseName = (p) => (p || '').split('\\').pop().replace(/\.(exe|msi|msix|bat
 
 export function AboutDialog({ onClose }) {
   return (
-    <Dialog title="About Purgeon" onClose={onClose} width={420} buttons={<button className="primary" onClick={onClose}>OK</button>}>
+    <Dialog title="About Purgeon" onClose={onClose} width=560 buttons={<><button className="primary" onClick={onClose}>OK</button><button onClick={() => api.invoke('program:openUrl', 'https://github.com/SeanShaffer88/Purgeon/releases').catch(() => {})}>View Releases</button></>}>
       <p className="heading">Purgeon {__APP_VERSION__}</p>
       {window.__sweepPortable && <p className="muted">Portable mode: settings, backups and snapshots are kept in the "Purgeon Data" folder next to the program.</p>}
       <p>Uninstalls programs, then hunts down the leftover files, registry keys, startup entries and services they leave behind.</p>
       <p>It also monitors installations, compares system snapshots, cleans junk files and manages startup programs. Every change is backed up first and can be undone.</p>
       <p className="muted">An independent project, not affiliated with any other uninstaller.</p>
+      <p className="muted">See <a href="https://github.com/SeanShaffer88/Purgeon/releases" target="_blank" rel="noopener noreferrer">What's New</a> for the latest release notes.</p>
     </Dialog>
   );
 }
@@ -617,12 +618,46 @@ export function BackupSettingsDialog({ settings, onSave, onClose }) {
     <Dialog
       title="Backup Settings"
       onClose={onClose}
-      width={560}
+      width={640}
       buttons={
         <>
           <button className="primary" disabled={!valid} onClick={() => onSave({ backupMaxDays: Number(days), backupMaxMB: Number(mb) })}>
             Save
           </button>
+          <button onClick={() => {
+            const json = JSON.stringify(settings, null, 2);
+            const blob = new Blob([json], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'purgeon-settings.json';
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+          }}>Export Settings…</button>
+          <button onClick={() => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = '.json';
+            input.onchange = (e) => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = (ev) => {
+                try {
+                  const parsed = JSON.parse(ev.target.result);
+                  onSave(parsed);
+                } catch (err) {
+                  setError?.('Invalid settings file.');
+                }
+              };
+              reader.readAsText(file);
+            };
+            document.body.appendChild(input);
+            input.click();
+            document.body.removeChild(input);
+          }}>Import Settings…</button>
           <button onClick={onClose}>Cancel</button>
         </>
       }
@@ -640,6 +675,9 @@ export function BackupSettingsDialog({ settings, onSave, onClose }) {
       <SettingHelp key="backupMaxMB" />
       <p className="footnote">
         The newest backup of each program is always kept, so the last removal of anything can still be undone. Once a backup is removed, Change History can no longer undo that change. Files in the Recycle Bin are not counted or touched.
+      </p>
+      <p className="footnote">
+        Export saves all Purgeon settings (themes, confirmations, sync, safe mode) to a JSON file. Import restores them. Your programs and backups are not affected.
       </p>
     </Dialog>
   );

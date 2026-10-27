@@ -15,6 +15,7 @@ export const DEFAULT_SETTINGS = {
   encryptionKey: '',
   disabledConfirmations: [],
   textScale: 1,
+  reducedMotion: false,
 };
 
 export const settingsFile = () => path.join(sys.info.dataDir, 'settings.json');

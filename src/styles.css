@@ -381,6 +381,20 @@ kbd {
 }
 .recent-chip:hover { background: var(--panel); color: var(--text); }
 
+/* Reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .list-empty::after { animation: none; }
+  .progress-bar { transition: none; }
+}
+[data-reduced-motion="true"] .list-empty::after { animation: none; }
+[data-reduced-motion="true"] .progress-bar { transition: none; }
+
 /* Undo toast */
 .undo-toast {
   display: flex;
