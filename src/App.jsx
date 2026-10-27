@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, planHtml } from './dialogs.jsx';
+import { WelcomeDialog, FirstRunTips, FIRST_RUN_TIPS, SettingHelp } from './onboarding.jsx';
 import { setConfirmUI } from './backend/api.js';
 import { iconPathFor } from './backend/programs.js';
 import { applyZoom, nextStep } from './zoom.js';
@@ -282,7 +283,7 @@ const MENUS = [
       ['portableapps', 'PortableApps.com Installer...'],
     ],
   ],
-  ['Help', [['palette', 'Command Palette...', 'Ctrl+K'], ['updates', 'Check for Updates...'], ['about', 'About']]],
+  ['Help', [['palette', 'Command Palette...', 'Ctrl+K'], ['welcome', 'Welcome Back'], null, ['updates', 'Check for Updates...'], ['about', 'About']]],
 ];
 
 // Mouse or keyboard: Alt plus a menu's first letter opens it; arrow keys move between items and
@@ -478,8 +479,13 @@ export default function App() {
   const [syncFolder, setSyncFolder] = useState('');
   const [scheduleOn, setScheduleOn] = useState(false);
   // What the close button does: 'ask', 'tray' (keep running in the tray) or 'exit'.
-  const [closeAction, setCloseAction] = useState('ask');
-  const [closeAsk, setCloseAsk] = useState(false);
+const [closeAction, setCloseAction] = useState('ask');
+const [closeAsk, setCloseAsk] = useState(false);
+// First-run onboarding state.
+const [hasSeenWelcome, setHasSeenWelcome] = useState(null); // null = not yet loaded from settings
+const [welcomeOpen, setWelcomeOpen] = useState(false);
+const [firstRunTips, setFirstRunTips] = useState([]);
+const [firstRunTipDismissed, setFirstRunTipDismissed] = useState(() => new Set());
   // Window options (View menu); Start with Windows is read from Task Scheduler.
   const [win, setWin] = useState({ alwaysOnTop: false, minimizeToTray: false, startInTray: false });
   const [autostartOn, setAutostartOn] = useState(false);
@@ -566,6 +572,7 @@ export default function App() {
       setLang(s.language || 'en');
       setSyncOn(!!s.syncOn);
       setSyncFolder(s.syncFolder || '');
+      setHasSeenWelcome(!!s.hasSeenWelcome);
       applyWindow(s);
       api.invoke('backups:prune').catch(() => {});
       setZoom(s.zoom || 1);
@@ -617,10 +624,23 @@ export default function App() {
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The theme lives on the root element so dialogs and menus follow it too.
-  useEffect(() => {
-    document.documentElement.dataset.theme = theme;
-  }, [theme]);
+    // Show the welcome dialog on first launch, after settings are loaded.
+    useEffect(() => {
+      if (hasSeenWelcome === null) return; // settings not loaded yet
+      if (!hasSeenWelcome) {
+        setWelcomeOpen(true);
+      }
+    }, [hasSeenWelcome]);
+
+    // Store the welcome-seen flag so it doesn't show again.
+    const markWelcomeSeen = useCallback(async () => {
+      await api.invoke('settings:set', { hasSeenWelcome: true }).catch(() => {});
+    }, []);
+
+    // The theme lives on the root element so dialogs and menus follow it too.
+    useEffect(() => {
+      document.documentElement.dataset.theme = theme;
+    }, [theme]);
 
   // Icons arrive in one batch after the list is shown; programs without one keep a placeholder.
   useEffect(() => {
@@ -1989,6 +2009,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     setMenu(null);
     if (action.startsWith('view:')) return setView(action.slice(5));
     if (action.startsWith('close:')) return setCloseChoice(action.slice(6));
+    if (action === 'welcome') return setWelcomeOpen(true);
     if (action.startsWith('theme:')) {
       const th = action.slice(6);
       setTheme(th);
@@ -2232,6 +2253,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
 
   return (
     <div className={`app ${gridOn ? 'grid' : ''}`} onClick={() => menu && setMenu(null)}>
+      <a href="#main-content" className="skip-to-content">Skip to main content</a>
       <MenuBar onAction={dispatch} controls={<WindowControls pinned={win.alwaysOnTop} toTray={win.minimizeToTray} onPin={() => dispatch('toggleOnTop')} />} right={
           admin === false ? (
             <button className="link elevate" onClick={() => api.invoke('app:elevate')} title="Needed to remove programs installed for all users, and for machine-wide changes">
@@ -2252,7 +2274,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           </button>
         ))}
       </nav>
-      <div className="workspace-main">
+      <main className="workspace-main" id="main-content">
       {/* Row 1: one box that searches the list and finds commands. */}
       <div className="cmdbar">
         <div className="search">
@@ -2517,8 +2539,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           </button>
         </div>
       )}
-
-      </div>
+      </main>
       </div>
 
       <div className="statusbar">
@@ -2559,6 +2580,33 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       )}
 
       {busy && <Busy message={busy} onStop={busyStop} />}
+      {welcomeOpen && (
+        <WelcomeDialog
+          onClose={() => {
+            setWelcomeOpen(false);
+            markWelcomeSeen();
+          }}
+          onGetStarted={(path) => {
+            setWelcomeOpen(false);
+            markWelcomeSeen();
+            if (path === 'programs') setView('desktop');
+            else if (path === 'monitor') setModal({ type: 'monitor' });
+            else if (path === 'junk') setView('junk');
+          }}
+        />
+      )}
+      {hasSeenWelcome === false && (
+        <FirstRunTips
+          visible={true}
+          onTipAction={(tipId) => {
+            setFirstRunTipDismissed((d) => new Set([...d, tipId]));
+            if (tipId === 'find-anything') setModal({ type: 'palette' });
+          }}
+          onClose={() => {
+            setFirstRunTipDismissed((d) => new Set([...d, FIRST_RUN_TIPS.map((t) => t.id)]));
+          }}
+        />
+      )}
       {confirm && (
         <ConfirmDialog
           {...confirm}
