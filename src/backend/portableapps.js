@@ -86,19 +86,28 @@ export const setRoot = async (dir) => {
   await sys.makeDir(dir);
 };
 
-// List monitored programs eligible for portable packaging.
+// List monitored programs with their portable-packaging suitability.
+// Programs that add services, drivers, scheduled tasks, licensing data, or dependencies
+// outside the app folder are flagged as not portable with an explanation.
 export async function list() {
   const records = await monitor.list();
-  return records.map((r) => ({
-    id: r.id,
-    name: r.name,
-    installer: r.installer,
-    items: r.items.length,
-    finished: r.finished,
-    hasProgramFiles: r.items.some(
-      (i) => (i.kind === 'dir' || i.kind === 'file') && !isProtectedPath(i.path)
-    ),
-  }));
+  const out = [];
+  for (const r of records) {
+    const suitability = await classifyForPortable(r.items);
+    out.push({
+      id: r.id,
+      name: r.name,
+      installer: r.installer,
+      items: r.items.length,
+      finished: r.finished,
+      hasProgramFiles: r.items.some(
+        (i) => (i.kind === 'dir' || i.kind === 'file') && !isProtectedPath(i.path)
+      ),
+      portable: suitability.portable,
+      reasons: suitability.reasons,
+    });
+  }
+  return out;
 }
 
 // Check if a path is a protected system path (shouldn't be packaged).
@@ -140,11 +149,22 @@ export async function classifyForPortable(items) {
       reasons.push(`Writes licensing value "${item.name}" — licensing is tied to the machine.`);
     }
     // Files or dirs outside the install root are dependencies elsewhere on the system.
-    if ((item.kind === 'file' || item.kind === 'dir') && installRoot && item.path) {
+    if (item.kind === 'file' || item.kind === 'dir') {
+      if (!item.path) continue;
       const rel = item.path.toLowerCase();
-      const root = installRoot.toLowerCase();
-      if (!rel.startsWith(root) && !rel.startsWith('c:\\windows') && !rel.startsWith('c:\\programdata')) {
-        reasons.push(`Writes to "${item.path}" outside the app folder — not self-contained.`);
+      if (isProtectedPath(item.path)) continue;
+      if (installRoot) {
+        const root = installRoot.toLowerCase();
+        if (!rel.startsWith(root) && !rel.startsWith('c:\\windows') && !rel.startsWith('c:\\programdata')) {
+          reasons.push(`Writes to "${item.path}" outside the app folder — not self-contained.`);
+        }
+      } else {
+        // No common install root: the program writes to multiple unrelated
+        // locations. Flag anything not under a program-typical folder.
+        const nonAppRoots = ['c:\\users\\public\\', 'c:\\users\\all users\\'];
+        if (nonAppRoots.some((r) => rel.startsWith(r))) {
+          reasons.push(`Writes to "${item.path}" outside a program folder — not self-contained.`);
+        }
       }
     }
   }
@@ -196,7 +216,9 @@ function installRootOf(rec) {
   while (i < first.length && i < last.length && first[i] === last[i]) i++;
   const common = first.slice(0, i);
   const lastSep = common.lastIndexOf('\\');
-  return lastSep >= 0 ? common.slice(0, lastSep + 1) : common;
+  const root = lastSep >= 0 ? common.slice(0, lastSep + 1) : common;
+  // A bare drive root (e.g. "C:\\") is not a real install root.
+  return /^[a-z]:\\$/i.test(root) ? '' : root;
 }
 
 // Binary-safe file copy: reads as Uint8Array, writes as Uint8Array.
@@ -282,6 +304,8 @@ export async function generate({
     items = rec.items;
   }
 
+  const name = appName || (rec ? rec.name : 'Program');
+
   // Classify whether this program is suitable for portable packaging.
   // Programs that add services, drivers, scheduled tasks, licensing data, or dependencies
   // outside the app folder are excluded with an explanation.
@@ -289,11 +313,9 @@ export async function generate({
   if (!suitability.portable) {
     throw new Error(
       `"${name}" cannot be packaged as portable:\\n\\n${suitability.reasons.join('\\n')}\\n\\n` +
-      'Only programs that run entirely from their own folder can be made portable.'
+        'Only programs that run entirely from their own folder can be made portable.'
     );
   }
-
-  const name = appName || (rec ? rec.name : 'Program');
   const id = safeName(name);
   const version = appVersion || '1.0.0';
   const publisher = appPublisher || 'Unknown';
