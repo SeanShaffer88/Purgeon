@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## 1.0.3 - 2026-10-27
+
+### Fixed
+- The first-run tips could never be closed: the tip box kept its own dismissed list that nothing updated, while the rest of the app kept a second list the tip never read — and the dismiss-all update packed the tip ids into the set as one nested list, so Dismiss, the X button and Escape all dismissed nothing and the box stayed over the window. The tips also appeared at the same time as the Welcome dialog instead of after it. The tips are now controlled by the app's dismissed set, appear one at a time after the Welcome dialog finishes, and close properly by button, X and Escape.
+- Stacked dialogs no longer all answer Escape at once: only the topmost layer closes, one at a time (the command palette counts as a layer, and consumes its own Escape). Dialogs also keep keyboard focus where it belongs instead of taking it back on every redraw.
+- The first tip's "Try it now" button pointed at a window that does not exist and opened nothing; it now opens the command palette. The tip's text also showed the literal characters of a key tag instead of the styled key.
+
 ## 1.0.2 - 2026-10-27
 
 ### Fixed
