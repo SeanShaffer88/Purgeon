@@ -19,6 +19,8 @@ import * as safety from './safety.js';
 import * as log from './log.js';
 import * as owners from './owners.js';
 import * as winget from './winget.js';
+import * as trusted from './trusted.js';
+import * as updatecheck from './updatecheck.js';
 // Cold-path modules are loaded on first use (lazy) to speed up startup:
 // transfer, archive, insights, maintenance, queue, explore, browsers, portable,
 // shellmenu, report, ctxmenu, installwatch, trials.
@@ -392,6 +394,18 @@ const handlers = {
   'startup:list': () => startup.list(),
   'startup:set': ({ entry, enable }) => startup.setEnabled(entry, enable),
   'startup:delayed': ({ entry, delayed }) => startup.setDelayed(entry, delayed),
+  // Trusted publisher allowlist (Enhancement 5)
+  'trusted:list': () => trusted.list(),
+  'trusted:add': (name) => trusted.add(name),
+  'trusted:remove': (name) => trusted.remove(name),
+  'trusted:isTrusted': (signer) => trusted.isTrusted(signer),
+  'trusted:filterInsights': (insights) => trusted.filterInsights(insights),
+  // Opt-in update checker (Enhancement 6)
+  'update:settings': () => updatecheck.settings(),
+  'update:enable': (on) => updatecheck.enable(on),
+  'update:check': () => updatecheck.check(),
+  // Backup removal plan export (Enhancement 7)
+  'backups:exportPlan': ({ plan, format, fileName }) => backups.exportPlan({ plan, format, fileName }),
   'debloat:list': () => debloat.list(),
   'debloat:set': async ({ id, enable }) => {
     const t = debloat.TWEAKS?.find((x) => x.id === id);

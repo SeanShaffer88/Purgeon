@@ -12,6 +12,8 @@
 //   Purgeon --associations-for "<program>" [--json]
 //   Purgeon --schedule on|off [--scan-leftovers] [--check-startup] [--missed]
 //   Purgeon --startup list|on|off|delayed|notdelayed --id <id>
+//   Purgeon --trusted list|add|remove --name <publisher>
+//   Purgeon --update settings|enable|disable|check
 //         Turns background monitoring on or off. --missed marks the last scheduled scan as missed.
 //   Purgeon --sync status|apply|now [--files settings.json]
 //         Shows or configures cloud-synced settings. apply takes --folder <path> and --on|--off.
@@ -80,6 +82,10 @@ const HELP = `Purgeon command line
         Turns background monitoring on or off.
   --startup list|on|off|delayed|notdelayed --id <id>
         Lists startup entries, or enables/disables/delays one. id is type|name (e.g. service|Spooler).
+  --trusted list|add|remove --name <publisher>
+        Manages the trusted publisher allowlist (programs signed by these are never blocked).
+  --update settings|enable|disable|check
+        Opt-in update checker: shows settings, turns checking on/off, or checks GitHub for a newer release.
   --language <code> [--json]
         Sets the UI language (en, es, de, fr).
   --plugins list|enable|disable <id> [--json]
@@ -358,6 +364,45 @@ async function run(args) {
       return wrap(true, `PortableApps.com package generated for "${result.name}" (${result.id}).\n  Package: ${result.packageDir}\n  NSIS script: ${result.nsiScriptPath}\n  AppInfo: ${result.appInfoPath}\n  Start exe: ${result.startExe}\n  Files copied: ${result.files.length}\nTo build the .paf.exe: place a PortableApps.com launcher as ${result.packageDir}\\\\${result.launcherExe}, then compile ${result.nsiScriptPath} with NSIS (makensis).\\r\\n`);
     }
     throw new Error('Use --portableapps list|generate --monitor-id <id> --output <folder>.');
+  }
+  if (cmd === '--trusted') {
+    const sub = option(args, '--trusted');
+    const name = option(args, '--name');
+    if (sub === 'list') {
+      const list = await trusted.list();
+      if (j) return wrap(true, JSON.stringify(list, null, 2));
+      return wrap(true, list.length ? list.map((n) => `* ${n}\r\n`).join('') : 'No trusted publishers.\r\n');
+    }
+    if (sub === 'add' || sub === 'remove') {
+      if (!name || name.startsWith('--')) throw new Error(`Use --trusted ${sub} --name <publisher>.`);
+      const result = sub === 'add' ? await trusted.add(name) : await trusted.remove(name);
+      return wrap(true, `Publisher "${name}" ${sub === 'add' ? 'added to' : 'removed from'} trusted list.\r\n`);
+    }
+    throw new Error('Use --trusted list|add|remove --name <publisher>.');
+  }
+  if (cmd === '--update') {
+    const sub = option(args, '--update');
+    if (sub === 'settings') {
+      const s = await updatecheck.settings();
+      if (j) return wrap(true, JSON.stringify(s, null, 2));
+      return wrap(true, `Update checking: ${s.enabled ? 'on' : 'off'}${s.lastCheck ? ` · last checked ${s.lastCheck}` : ''}\r\n`);
+    }
+    if (sub === 'enable' || sub === 'disable') {
+      const result = await updatecheck.enable(sub === 'enable');
+      return wrap(true, `Update checking ${result.enabled ? 'enabled' : 'disabled'}.\r\n`);
+    }
+    if (sub === 'check') {
+      const result = await updatecheck.check();
+      if (j) return wrap(true, JSON.stringify(result, null, 2));
+      if (!result.enabled) return wrap(true, 'Update checking is off. Turn it on with: Purgeon --update enable\r\n');
+      if (result.error) return wrap(true, `Update check failed: ${result.error}\r\n`);
+      if (!result.update) return wrap(true, 'No update information available.\r\n');
+      if (result.update.newer) {
+        return wrap(true, `Update available: ${result.update.version} (current 0.8.0) · ${result.update.name}${result.update.body ? ` · ${result.update.body}` : ''}\r\n${result.update.url}\r\n`);
+      }
+      return wrap(true, `No update available (current 0.8.0, latest ${result.update.version}).\r\n`);
+    }
+    throw new Error('Use --update settings|enable|disable|check.');
   }
   if (cmd === '--settings') {
     const settings = await (await import('./backend/api.js')).readSettings();
