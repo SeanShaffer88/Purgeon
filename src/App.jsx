@@ -1008,18 +1008,19 @@ const [textScale, setTextScale] = useState(1);
     const infoFor = (p) => prep[list.filter((x) => !x.store).indexOf(p)];
     const line = (p) => {
       const info = infoFor(p);
-      const tags = [info?.installer.label, silentOn && info?.installer.silent ? 'silent' : '', info?.dependencies?.kind === 'runtime' ? '⚠ shared runtime' : info?.dependencies?.kind === 'driver' ? '⚠ driver' : '', info?.dependencies?.dependents?.length ? `⚠ needed by ${info.dependencies.dependents.join(', ')}` : ''].filter(Boolean);
-      return `• ${p.name}${tags.length ? `  (${tags.join(', ')})` : ''}`;
+      const tags = [info?.installer.label, silentOn && info?.installer.silent ? 'silent' : '', info?.dependencies?.kind === 'runtime' ? '\\u26a0 shared runtime' : info?.dependencies?.kind === 'driver' ? '\\u26a0 driver' : '', info?.dependencies?.dependents?.length ? `\\u26a0 needed by ${info.dependencies.dependents.join(', ')}` : ''].filter(Boolean);
+      return `\\u2022 ${p.name}${tags.length ? `  (${tags.join(', ')})` : ''}`;
     };
     const go = await confirmWithRestore(
       `Uninstall ${list.length} programs?`,
-      `${list.map(line).join('\n')}\n\nEach program's own uninstaller runs in turn${silentOn ? '; ones marked silent run without their windows' : ', so finish each uninstaller\'s window'}. Afterwards Purgeon scans all of them for leftovers.`,
+      ${list.map(line).join('\\n')}\\n\\nEach program's own uninstaller runs in turn${silentOn ? '; ones marked silent run without their windows' : ', so finish each uninstaller\\'s window'}. Afterwards Purgeon scans all of them for leftovers.`,
       'confirmBatchUninstall'
     );
     if (!go.ok) return;
     if (go.checked) await makeRestorePoint(`Purgeon: before uninstalling ${list.length} programs`, 'uninstall');
 
     stopBatch.current = false;
+    pausedBatch.current = false;
     setBusyStop(() => () => {
       stopBatch.current = true;
     });
@@ -1029,7 +1030,15 @@ const [textScale, setTextScale] = useState(1);
         outcomes.push({ p, skipped: true });
         continue;
       }
-      setBusy({ message: `Uninstalling ${i + 1} of ${list.length}: ${p.name}`, current: i + 1, total: list.length, canCancel: true, onCancel: () => { stopBatch.current = true; } });
+      while (pausedBatch.current) {
+        await new Promise((r) => setTimeout(r, 200));
+        if (stopBatch.current) break;
+      }
+      if (stopBatch.current) {
+        outcomes.push({ p, skipped: true });
+        continue;
+      }
+      setBusy({ message: `Uninstalling ${i + 1} of ${list.length}: ${p.name}`, current: i + 1, total: list.length, canPause: true, canCancel: true, onPause: (paused) => { pausedBatch.current = paused; }, onCancel: () => { stopBatch.current = true; } });
       try {
         outcomes.push({ p, result: await api.invoke('program:runUninstaller', p) });
       } catch (e) {
@@ -1041,29 +1050,17 @@ const [textScale, setTextScale] = useState(1);
     const ran = outcomes.filter((o) => !o.skipped && !o.p.store);
     const items = [];
     for (const [i, { p }] of ran.entries()) {
-      setBusy({ message: `Scanning for leftovers of ${p.name}`, current: i + 1, total: ran.length, canCancel: true, onCancel: () => { stopBatch.current = true; } });
+      if (stopBatch.current) break;
+      while (pausedBatch.current) {
+        await new Promise((r) => setTimeout(r, 200));
+        if (stopBatch.current) break;
+      }
+      if (stopBatch.current) break;
+      setBusy({ message: `Scanning for leftovers of ${p.name}`, current: i + 1, total: ran.length, canPause: true, canCancel: true, onPause: (paused) => { pausedBatch.current = paused; }, onCancel: () => { stopBatch.current = true; } });
       const found = await api.invoke('program:scan', { ...p, installerItems: infoFor(p)?.installerItems || [] }).catch(() => []);
       items.push(...found.map((it) => ({ ...it, program: p.name })));
     }
-    setBusy('');
-    load();
-
-    const ok = outcomes.filter((o) => o.result?.ok).length;
-    const problems = outcomes
-      .filter((o) => !o.result?.ok)
-      .map((o) => (o.skipped ? `${o.p.name}: skipped` : o.result.error ? `${o.p.name}: ${o.result.error}` : `${o.p.name}: uninstaller exited with code ${o.result.code}`));
-    const heading = `Uninstalled ${ok} of ${list.length} programs.${problems.length ? ` ${problems.join('; ')}.` : ''} Purgeon found ${items.length} leftover items.`;
-    setModal({
-      type: 'leftovers',
-      title: `Batch Uninstall – ${list.length} programs`,
-      heading,
-      items,
-      owners: list.map((p) => p.key),
-      onRemove: (sel) => removeWithBackup(`Batch uninstall (${list.length} programs)`, sel, ran.map((o) => o.p.location), list.map((p) => p.key)),
-    });
-  };
-
-  // ---- snapshots -----------------------------------------------------------
+    setBusy(''); -----------------------------------------------------------
 
   const takeSnapshot = async (name, preset) => {
     setModal(null);
@@ -2449,6 +2446,9 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         </div>
         <button className="palette-hint" onClick={() => dispatch('palette')} title="Every command and program in one list">
           All commands <kbd>Ctrl+K</kbd>
+        </button>
+        <button className={`safe-toggle ${safeOn ? 'on' : ''}`} onClick={() => { setSafeOn(!safeOn); api.invoke('settings:set', { safeMode: !safeOn }); }} title={safeOn ? 'Safe Mode is on: only high-confidence matches, no services/tasks/firewall' : 'Safe Mode is off: every finding can be selected'}>
+          {safeOn ? 'Safe Mode: On' : 'Safe Mode: Off'}
         </button>
       </div>
       {/* Row 2: what is selected (or what this view is for), and the group filter. */}

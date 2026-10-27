@@ -578,11 +578,21 @@ export const api = {
   async invoke(channel, arg) {
     const fn = handlers[channel];
     if (!fn) throw new Error(`Unknown request ${channel}`);
-    try {
-      return await fn(arg);
-    } catch (e) {
-      throw e instanceof Error ? e : new Error(String(e));
+    const RETRYABLE = /(file.*busy|registry.*locked|access.*denied|timeout)/i;
+    let lastErr;
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        return await fn(arg);
+      } catch (e) {
+        lastErr = e instanceof Error ? e : new Error(String(e));
+        if (attempt < 3 && RETRYABLE.test(lastErr.message)) {
+          await new Promise((r) => setTimeout(r, 300 * attempt));
+          continue;
+        }
+        throw lastErr;
+      }
     }
+    throw lastErr;
   },
   onMeasured(fn) {
     measuredListeners.add(fn);
