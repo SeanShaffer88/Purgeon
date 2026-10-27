@@ -36,6 +36,7 @@ export async function createTauriSys() {
     setTray: ({ close, minimize, visible }) => invoke('set_tray', { close: String(close || 'ask'), minimize: !!minimize, visible: !!visible }),
     hideToTray: () => invoke('hide_to_tray'),
     closeAnswered: () => invoke('close_answered'),
+    frontendReady: () => invoke('frontend_ready'),
     setOnTop: (on) => invoke('set_on_top', { on }),
     showWindow: () => invoke('show_window'),
     listProcesses: () => invoke('list_processes'),
