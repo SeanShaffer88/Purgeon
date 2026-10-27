@@ -638,3 +638,28 @@ button:focus-visible, select:focus-visible, input:focus-visible, .tweak:focus-vi
 .menubar-right { padding: 0 8px; white-space: nowrap; }
 .menubar-right .elevate { color: var(--amber); }
 .menubar-right .elevated { color: var(--green); }
+
+/* Quick filter chips in the program list toolbar. */
+.filter-chips {
+  display: flex;
+  gap: 6px;
+  margin-left: 12px;
+  padding-left: 12px;
+  border-left: 1px solid var(--border);
+  align-items: center;
+}
+.filter-chip {
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+  color: var(--muted);
+  padding: 1px 7px;
+  font-size: 11px;
+  cursor: default;
+  border-radius: 0;
+}
+.filter-chip:hover { border-color: var(--green); color: var(--green); }
+.filter-chip.on {
+  border-color: var(--green);
+  background: var(--green-dim);
+  color: var(--green);
+}

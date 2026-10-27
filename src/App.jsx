@@ -451,6 +451,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
+  const [quickFilter, setQuickFilter] = useState('all');
   const [sort, setSort] = useState({ col: 'name', dir: 1 });
   const [selected, setSelected] = useState(null);
   const [icons, setIcons] = useState({});
@@ -644,7 +645,28 @@ export default function App() {
     const inGroup = (r) =>
       !programs || groupFilter === ALL_GROUPS || (insightFilter ? !!insightFilter[2](insight[r.key]) : groupFilter === UNGROUPED ? !groups[r.key] : groups[r.key] === groupFilter);
     const shown = (r) => !programs || showHidden || !hidden[r.key];
-    const list = rows.filter((r) => shown(r) && inGroup(r) && (!q || `${r.name} ${r.publisher || ''} ${(programs && groups[r.key]) || ''}`.toLowerCase().includes(q)));
+    const thirtyDaysAgo = Date.now() - 30 * 86400000;
+    const list = rows.filter((r) => {
+      if (!shown(r) || !inGroup(r)) return false;
+      if (q && !`${r.name} ${r.publisher || ''} ${(programs && groups[r.key]) || ''}`.toLowerCase().includes(q)) return false;
+      if (quickFilter !== 'all') {
+        if (quickFilter === 'desktop' && r.store) return false;
+        if (quickFilter === 'store' && !r.store) return false;
+        if (quickFilter === 'recent') {
+          const d = r.date ? new Date(r.date).getTime() : 0;
+          if (!d || d < thirtyDaysAgo) return false;
+        }
+        if (quickFilter === 'large') {
+          const kb = r.sizeKB || r.sortSize || 0;
+          if (kb < 100 * 1024) return false;
+        }
+        if (quickFilter === 'unsigned') {
+          const sig = insight[r.key]?.signature;
+          if (!sig || sig === 'Valid') return false;
+        }
+      }
+      return true;
+    });
     const val = (r) => (sort.col === 'size' ? r.sortSize : sort.col === 'arch' ? archOf(r).text : sort.col === 'date' && r.sortDate ? r.sortDate : (r[sort.col] || '').toString().toLowerCase());
     return [...list].sort((a, b) => {
       const x = val(a);
@@ -2250,6 +2272,53 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             </optgroup>
           )}
         </select>
+        {/* Quick filter chips: one-click presets that narrow the program list. */}
+        {batchable && (
+          <div className="filter-chips" aria-label="Quick filters">
+            <button
+              className={`filter-chip ${quickFilter === 'all' ? 'on' : ''}`}
+              onClick={() => setQuickFilter('all')}
+              title="Show all programs"
+            >
+              All
+            </button>
+            <button
+              className={`filter-chip ${quickFilter === 'desktop' ? 'on' : ''}`}
+              onClick={() => setQuickFilter('desktop')}
+              title="Desktop programs only"
+            >
+              Desktop
+            </button>
+            <button
+              className={`filter-chip ${quickFilter === 'store' ? 'on' : ''}`}
+              onClick={() => setQuickFilter('store')}
+              title="Windows Store apps only"
+            >
+              Store Apps
+            </button>
+            <button
+              className={`filter-chip ${quickFilter === 'recent' ? 'on' : ''}`}
+              onClick={() => setQuickFilter('recent')}
+              title="Programs installed in the last 30 days"
+            >
+              Recent
+            </button>
+            <button
+              className={`filter-chip ${quickFilter === 'large' ? 'on' : ''}`}
+              onClick={() => setQuickFilter('large')}
+              title="Programs larger than 100 MB"
+            >
+              Large
+            </button>
+            <button
+              className={`filter-chip ${quickFilter === 'unsigned' ? 'on' : ''}`}
+              onClick={() => setQuickFilter('unsigned')}
+              title="Programs with missing or bad digital signatures"
+            >
+              Unsigned
+            </button>
+          </div>
+        )}
       </div>
       {/* Row 3: the actions for the selection; they continue on another row when they don't fit. */}
       {barItems.length > 0 && (

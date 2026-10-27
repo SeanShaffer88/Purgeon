@@ -30,6 +30,8 @@
 //         Saves the current startup profile as the baseline for regression detection.
 //   Purgeon --profiler regressions [--json]
 //         Compares the current profile against the baseline and reports regressions.
+//   Purgeon --export <type> --format <csv|json|html> --output <path>
+//         Exports a list to a file. Types: programs, startup, junk, backups.
 //   Purgeon --language <code> [--json]
 //   Purgeon --settings [--json]
 //
@@ -54,6 +56,9 @@ import * as profiler from './backend/profiler.js';
 import * as sync from './backend/sync.js';
 import * as startup from './backend/startup.js';
 import * as portableapps from './backend/portableapps.js';
+import * as programs from './backend/programs.js';
+import * as junk from './backend/junk.js';
+import * as backups from './backend/backups.js';
 import { runCommandLine } from './backend/shell.js';
 
 const HELP = `Purgeon command line
@@ -408,6 +413,53 @@ async function run(args) {
     const settings = await (await import('./backend/api.js')).readSettings();
     if (j) return wrap(true, JSON.stringify(settings, null, 2));
     return wrap(true, Object.entries(settings).map(([k, v]) => `${k}: ${v}\r\n`).join(''));
+  }
+  if (cmd === '--export') {
+    const type = option(args, '--export');
+    const format = option(args, '--format') || 'csv';
+    const output = option(args, '--output');
+    if (!type || type.startsWith('--')) throw new Error('Specify the list type: --export programs|startup|junk|backups');
+    if (!output || output.startsWith('--')) throw new Error('Specify the output file: --export programs --format csv --output list.csv');
+    if (!['csv', 'json', 'html'].includes(format)) throw new Error('--format must be csv, json or html.');
+    let data;
+    if (type === 'programs') {
+      const desktop = await programs.listDesktop();
+      const store = await programs.listStore();
+      data = [...desktop.map((p) => ({ type: 'desktop', ...p })), ...store.map((p) => ({ type: 'store', ...p }))];
+    } else if (type === 'startup') {
+      data = await startup.list();
+    } else if (type === 'junk') {
+      data = await junk.scan();
+    } else if (type === 'backups') {
+      data = await backups.list();
+    } else {
+      throw new Error('Unknown export type: use programs, startup, junk or backups.');
+    }
+    let body;
+    if (format === 'json') {
+      body = JSON.stringify(data, null, 2);
+    } else if (format === 'html') {
+      const esc = (s) => String(s ?? '').replace(/[&<>\"'\\]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+      const rows = Array.isArray(data) ? data.map((r) => `<tr>${Object.values(r).map((v) => `<td>${esc(v)}</td>`).join('')}</tr>`).join('\\n') : '';
+      const headers = Array.isArray(data) && data.length ? Object.keys(data[0]).map((h) => `<th>${esc(h)}</th>`).join('') : '';
+      body = `<!doctype html><meta charset="utf-8"><title>Purgeon Export – ${type}</title><style>body{font:14px var(--mono)}table{border-collapse:collapse}th,td{border:1px solid #333;padding:4px 8px}th{background:#1a1a1a}</style><h2>Purgeon Export – ${type}</h2><table><tr>${headers}</tr>${rows}</table>`;
+    } else {
+      if (Array.isArray(data) && data.length) {
+        const headers = Object.keys(data[0]);
+        const lines = [headers.join(',')];
+        for (const r of data) {
+          lines.push(headers.map((h) => {
+            const v = String(r[h] ?? '');
+            return /[",\\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+          }).join(','));
+        }
+        body = lines.join('\\r\\n');
+      } else {
+        body = JSON.stringify(data, null, 2);
+      }
+    }
+    await sys.writeText(output, body);
+    return wrap(true, `Exported ${type} to ${output} (${format}).\\r\\n`);
   }
   if (cmd === '-h' || cmd === '/?' || cmd === '--help' || !cmd) {
     return wrap(true, HELP.replace(/\n/g, '\r\n'));

@@ -30,6 +30,25 @@ const writeState = (s) => sys.writeText(stateFile, JSON.stringify(s, null, 2));
 // StartupApproved values are 12 bytes; an odd first byte means "disabled".
 const approvedEnabled = (hex) => !hex || parseInt(hex.slice(0, 2), 16) % 2 === 0;
 
+// Known heavy startup executables and their relative impact (1=light, 5=heavy).
+const HEAVY_STARTUPS = new Map([
+  ['chrome.exe', 5], ['msedge.exe', 5], ['firefox.exe', 5], ['opera.exe', 5],
+  ['outlook.exe', 4], ['excel.exe', 4], ['winword.exe', 4], ['powerpnt.exe', 4],
+  ['steam.exe', 4], ['discord.exe', 4], ['slack.exe', 4], ['teams.exe', 4],
+  ['spotify.exe', 3], ['skype.exe', 3], ['zoom.exe', 3], ['notion.exe', 3],
+  ['dropbox.exe', 2], ['onedrive.exe', 2], ['googledrivefs.exe', 2],
+]);
+
+// Scores a startup entry's likely boot impact from its command and company.
+const scoreImpact = (command, company) => {
+  const exe = (command || '').replace(/^"/, '').split('"')[0].split('\\').pop().toLowerCase();
+  if (HEAVY_STARTUPS.has(exe)) return HEAVY_STARTUPS.get(exe);
+  const c = (company || '').toLowerCase();
+  if (c.includes('google') || c.includes('microsoft') || c.includes('adobe')) return 3;
+  if (c.includes('apple') || c.includes('nvidia') || c.includes('amd') || c.includes('intel')) return 2;
+  return 1;
+};
+
 const LIST = `
 $in = [Console]::In.ReadToEnd() | ConvertFrom-Json
 function Company($cmd) {
@@ -116,10 +135,10 @@ async function list() {
 function shape(r, state) {
   const src = [...RUN_KEYS, ...STARTUP_FOLDERS].find((s) => s.id === r.source);
   if (r.type === 'run' || r.type === 'folder') {
-    return { ...r, id: `${r.source}|${r.name}`, enabled: approvedEnabled(r.approved), where: src.label, admin: !!src.admin, effect: 'signin' };
+    return { ...r, id: `${r.source}|${r.name}`, enabled: approvedEnabled(r.approved), where: src.label, admin: !!src.admin, effect: 'signin', impact: scoreImpact(r.command, r.company) };
   }
   // Tasks you created can often be toggled without admin, so they are tried rather than blocked.
-  if (r.type === 'task') return { ...r, id: `task|${r.path}`, where: `Task ${r.path}${r.triggers ? ` (${r.triggers.replace(/^,\s*/, '')})` : ''}`, admin: false, effect: 'signin' };
+  if (r.type === 'task') return { ...r, id: `task|${r.path}`, where: `Task ${r.path}${r.triggers ? ` (${r.triggers.replace(/^,\s*/, '')})` : ''}`, admin: false, effect: 'signin', impact: scoreImpact(r.command, r.company) };
   const remembered = state.services?.[r.name];
   const delayed = remembered === 'Automatic (delayed)';
   return {
@@ -132,6 +151,7 @@ function shape(r, state) {
     where: `Service ${r.name} · ${r.startMode === 'Auto' ? delayed ? 'Automatic (delayed)' : 'Automatic' : r.startMode}${remembered && !delayed ? ` (was ${remembered})` : ''}`,
     admin: true,
     effect: 'reboot',
+    impact: scoreImpact(r.command, r.company),
   };
 }
 
