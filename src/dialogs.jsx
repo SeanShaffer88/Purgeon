@@ -1,32 +1,16 @@
 import { useMemo, useState, useEffect } from 'react';
-import { SettingHelp } from './onboarding.jsx';
 
 const api = window.api;
 
 export function Dialog({ title, onClose, children, buttons, width = 520 }) {
-  const dialogRef = useRef(null);
   useEffect(() => {
-    // Focus the dialog container on open so keyboard users land in the modal.
-    const el = dialogRef.current;
-    if (el) el.focus();
-    const onKey = (e) => {
-      if (e.key === 'Escape') { onClose && onClose(); }
-      else if (e.key === 'Enter') {
-        // Activate the primary button if focused element is not a button/input.
-        const active = document.activeElement;
-        const isButtonOrInput = /^(BUTTON|INPUT|TEXTAREA|SELECT)$/.test(active?.tagName || '');
-        if (!isButtonOrInput) {
-          const primary = el.querySelector('button.primary');
-          if (primary) primary.click();
-        }
-      }
-    };
+    const onKey = (e) => e.key === 'Escape' && onClose && onClose();
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
   return (
     <div className="overlay">
-      <div className="dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined} tabIndex="-1" style={{ width, maxWidth: '96vw' }}>
+      <div className="dialog" role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined} style={{ width, maxWidth: '96vw' }}>
         <div className="dialog-title">
           <span>{title}</span>
           {onClose && (
@@ -43,29 +27,19 @@ export function Dialog({ title, onClose, children, buttons, width = 520 }) {
 }
 
 // Yes/No question, optionally with a checkbox (such as "Create a restore point first").
-// Yes/No question, optionally with checkboxes ("Create a restore point first" and/or "Don't show again").
-export function ConfirmDialog({ message, detail, checkboxLabel, checkboxChecked, confirmId, dontShowLabel, onAnswer }) {
+export function ConfirmDialog({ message, detail, checkboxLabel, checkboxChecked, onAnswer }) {
   const [checked, setChecked] = useState(!!checkboxChecked);
-  const [dontShow, setDontShow] = useState(false);
-  const handleAnswer = (ok) => {
-    if (confirmId && dontShow) {
-      api.invoke('settings:get').then((s) => {
-        const disabled = Array.isArray(s.disabledConfirmations) ? [...s.disabledConfirmations] : [];
-        if (!disabled.includes(confirmId)) disabled.push(confirmId);
-        return api.invoke('settings:set', { disabledConfirmations: disabled });
-      }).catch(() => {});
-    }
-    onAnswer({ ok, checked, dontShow });
-  };
   return (
     <Dialog
       title="Purgeon"
-      onClose={() => handleAnswer(false)}
+      onClose={() => onAnswer({ ok: false, checked })}
       width={500}
       buttons={
         <>
-          <button className="primary" autoFocus onClick={() => handleAnswer(true)}>Yes</button>
-          <button onClick={() => handleAnswer(false)}>No</button>
+          <button className="primary" autoFocus onClick={() => onAnswer({ ok: true, checked })}>
+            Yes
+          </button>
+          <button onClick={() => onAnswer({ ok: false, checked })}>No</button>
         </>
       }
     >
@@ -77,77 +51,34 @@ export function ConfirmDialog({ message, detail, checkboxLabel, checkboxChecked,
           {checkboxLabel}
         </label>
       )}
-      {confirmId && (
-        <label className="confirm-check">
-          <input type="checkbox" checked={dontShow} onChange={(e) => setDontShow(e.target.checked)} />
-          {dontShowLabel || 'Don\'t show again'}
-        </label>
-      )}
     </Dialog>
   );
 }
 
-export function Busy({ busy, onStop, onPause, onCancel }) {
-  // Accept either a string message or a rich busy object.
-  const msg = typeof busy === 'string' ? busy : busy?.message || '';
-  const progress = typeof busy === 'object' ? busy.progress : null;
-  const elapsed = typeof busy === 'object' ? busy.elapsed : null;
-  const current = typeof busy === 'object' ? busy.current : null;
-  const total = typeof busy === 'object' ? busy.total : null;
-  const canPause = typeof busy === 'object' ? !!busy.canPause : false;
-  const canCancel = typeof busy === 'object' ? !!busy.canCancel : false;
-
+export function Busy({ message, onStop }) {
   const [stopping, setStopping] = useState(false);
-  const [paused, setPaused] = useState(false);
-  const startTime = useRef(Date.now());
-
-  const pct = progress != null ? progress : (current != null && total ? Math.round((current / total) * 100) : null);
-  const displayElapsed = elapsed != null ? elapsed : Math.floor((Date.now() - startTime.current) / 1000);
-  const timeText = displayElapsed > 0 ? ` (${displayElapsed}s)` : '';
-
   return (
     <div className="overlay">
-      <div className="dialog busy" style={{ width: 480 }} aria-live="polite" aria-label="Busy">
+      <div className="dialog busy" style={{ width: 400 }}>
         <div className="dialog-body">
-          <div className="busy-msg">{msg}{timeText}</div>
-          {pct != null && (
-            <>
-              <div className="progress">
-                <div className="progress-bar" style={{ width: `${pct}%` }} />
-              </div>
-              <div className="progress-text">
-                {current != null && total ? `${current} of ${total}` : ''}
-                {pct != null ? ` · ${pct}%` : ''}
-              </div>
-            </>
-          )}
-          {paused && <div className="busy-paused">Paused</div>}
+          <div className="busy-msg">{message}</div>
+          <div className="progress">
+            <div className="progress-bar" />
+          </div>
         </div>
-        <div className="dialog-buttons">
-          {canPause && (
-            <button
-              disabled={stopping}
-              onClick={() => {
-                setPaused((p) => !p);
-                if (onPause) onPause(!p);
-              }}
-            >
-              {paused ? 'Resume' : 'Pause'}
-            </button>
-          )}
-          {(onStop || canCancel) && (
+        {onStop && (
+          <div className="dialog-buttons">
             <button
               disabled={stopping}
               onClick={() => {
                 setStopping(true);
-                if (onStop) onStop();
-                if (onCancel) onCancel();
+                onStop();
               }}
             >
-              {stopping ? 'Stopping…' : canCancel ? 'Cancel' : 'Stop After This One'}
+              {stopping ? 'Stopping after this one…' : 'Stop After This One'}
             </button>
-          )}
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -562,13 +493,12 @@ const baseName = (p) => (p || '').split('\\').pop().replace(/\.(exe|msi|msix|bat
 
 export function AboutDialog({ onClose }) {
   return (
-    <Dialog title="About Purgeon" onClose={onClose} width=560 buttons={<><button className="primary" onClick={onClose}>OK</button><button onClick={() => api.invoke('program:openUrl', 'https://github.com/SeanShaffer88/Purgeon/releases').catch(() => {})}>View Releases</button></>}>
+    <Dialog title="About Purgeon" onClose={onClose} width={420} buttons={<button className="primary" onClick={onClose}>OK</button>}>
       <p className="heading">Purgeon {__APP_VERSION__}</p>
       {window.__sweepPortable && <p className="muted">Portable mode: settings, backups and snapshots are kept in the "Purgeon Data" folder next to the program.</p>}
       <p>Uninstalls programs, then hunts down the leftover files, registry keys, startup entries and services they leave behind.</p>
       <p>It also monitors installations, compares system snapshots, cleans junk files and manages startup programs. Every change is backed up first and can be undone.</p>
       <p className="muted">An independent project, not affiliated with any other uninstaller.</p>
-      <p className="muted">See <a href="https://github.com/SeanShaffer88/Purgeon/releases" target="_blank" rel="noopener noreferrer">What's New</a> for the latest release notes.</p>
     </Dialog>
   );
 }
@@ -618,46 +548,12 @@ export function BackupSettingsDialog({ settings, onSave, onClose }) {
     <Dialog
       title="Backup Settings"
       onClose={onClose}
-      width={640}
+      width={520}
       buttons={
         <>
           <button className="primary" disabled={!valid} onClick={() => onSave({ backupMaxDays: Number(days), backupMaxMB: Number(mb) })}>
             Save
           </button>
-          <button onClick={() => {
-            const json = JSON.stringify(settings, null, 2);
-            const blob = new Blob([json], { type: 'application/json' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'purgeon-settings.json';
-            document.body.appendChild(a);
-            a.click();
-            document.body.removeChild(a);
-            URL.revokeObjectURL(url);
-          }}>Export Settings…</button>
-          <button onClick={() => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = '.json';
-            input.onchange = (e) => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onload = (ev) => {
-                try {
-                  const parsed = JSON.parse(ev.target.result);
-                  onSave(parsed);
-                } catch (err) {
-                  setError?.('Invalid settings file.');
-                }
-              };
-              reader.readAsText(file);
-            };
-            document.body.appendChild(input);
-            input.click();
-            document.body.removeChild(input);
-          }}>Import Settings…</button>
           <button onClick={onClose}>Cancel</button>
         </>
       }
@@ -667,17 +563,12 @@ export function BackupSettingsDialog({ settings, onSave, onClose }) {
         Remove backups older than (days)
         <input inputMode="numeric" title="Backups older than this many days are deleted (each program’s newest backup is always kept). Empty means no age limit." value={days} onChange={(e) => setDays(e.target.value.trim())} />
       </label>
-      <SettingHelp key="backupMaxDays" />
       <label className="field">
         Keep backups under this total size (MB)
         <input inputMode="numeric" title="When all backups together are larger than this, the oldest are deleted first (each program’s newest is always kept). Empty means no size limit." value={mb} onChange={(e) => setMb(e.target.value.trim())} />
       </label>
-      <SettingHelp key="backupMaxMB" />
       <p className="footnote">
         The newest backup of each program is always kept, so the last removal of anything can still be undone. Once a backup is removed, Change History can no longer undo that change. Files in the Recycle Bin are not counted or touched.
-      </p>
-      <p className="footnote">
-        Export saves all Purgeon settings (themes, confirmations, sync, safe mode) to a JSON file. Import restores them. Your programs and backups are not affected.
       </p>
     </Dialog>
   );

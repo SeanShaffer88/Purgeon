@@ -2,7 +2,6 @@
 :root {
   color-scheme: dark;
   --bg: #0c0c0c;
-  --text-scale: 1;
   --panel: #121212;
   --raised: #181818;
   --border: #262626;
@@ -24,211 +23,18 @@
 * { box-sizing: border-box; }
 html, body, #root { height: 100%; margin: 0; }
 body {
-  font: calc(14px * var(--text-scale))/1.4 var(--mono);
+  font: 14px/1.4 var(--mono);
   color: var(--text);
   background: var(--bg);
   overflow: hidden;
+  user-select: none;
 }
-/* Allow text selection so users can copy error messages, paths and other text. */
 button, input, select { font: inherit; color: inherit; }
-
-/* Skip to main content for keyboard users. */
-.skip-to-content {
-  position: absolute;
-  left: -9999px;
-  top: auto;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  z-index: 9999;
-}
-.skip-to-content:focus {
-  position: fixed;
-  top: 8px;
-  left: 8px;
-  width: auto;
-  height: auto;
-  padding: 6px 12px;
-  background: var(--green);
-  color: #000;
-  border-radius: 2px;
-  text-decoration: none;
-  font-weight: bold;
-  z-index: 10000;
-}
-
-/* Clear focus indicator for keyboard navigation. */
-:focus-visible {
-  outline: 2px solid var(--green);
-  outline-offset: 2px;
-}
 ::selection { background: var(--green); color: #000; }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
 ::-webkit-scrollbar-track { background: var(--bg); }
 ::-webkit-scrollbar-thumb { background: #2c2c2c; border: 2px solid var(--bg); }
 ::-webkit-scrollbar-thumb:hover { background: #3d3d3d; }
-
-/* Focus rings for interactive elements so keyboard users can see where they are. */
-button:focus-visible,
-input:focus-visible,
-select:focus-visible,
-[role="option"]:focus-visible,
-[tabindex]:focus-visible {
-  outline: 2px solid var(--green);
-  outline-offset: 2px;
-}
-
-/* Screen-reader-only text: visible to assistive tech, hidden visually. */
-.sr-only {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  padding: 0;
-  margin: -1px;
-  overflow: hidden;
-  clip: rect(0, 0, 0, 0);
-  white-space: nowrap;
-  border: 0;
-}
-
-/* High contrast theme: strong outlines, white on black. */
-[data-theme="contrast"] button,
-[data-theme="contrast"] input,
-[data-theme="contrast"] select {
-  border: 1px solid #fff;
-}
-[data-theme="contrast"] .dialog,
-[data-theme="contrast"] .context-menu,
-[data-theme="contrast"] .list-header {
-  border: 1px solid #fff;
-}
-[data-theme="contrast"] button:disabled,
-[data-theme="contrast"] input:disabled,
-[data-theme="contrast"] select:disabled {
-  opacity: 0.4;
-  border: 1px solid #555;
-}
-[data-theme="contrast"] .action-button.danger {
-  border: 2px solid #fff;
-  color: #fff;
-}
-
-/* Welcome / onboarding styles */
-.welcome-page { padding: 4px 8px; }
-.welcome-progress {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-.step-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: #333;
-  display: inline-block;
-}
-.step-dot.on { background: var(--green); }
-.welcome-step-text {
-  margin-left: 8px;
-  font-size: 12px;
-  color: var(--muted);
-}
-.welcome-body { margin: 8px 0; line-height: 1.5; }
-.welcome-safe {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  padding: 8px 10px;
-  margin: 8px 0;
-  border-left: 3px solid var(--green);
-}
-.welcome-list { margin: 8px 0; padding-left: 20px; line-height: 1.6; }
-.welcome-list li { margin: 6px 0; }
-.welcome-paths { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
-.welcome-path {
-  width: 100%;
-  text-align: left;
-  padding: 8px 12px;
-  border: 1px solid var(--border-strong);
-  background: var(--panel);
-  color: var(--text);
-  cursor: pointer;
-}
-.welcome-path:hover { border-color: var(--green); background: var(--hover); }
-.welcome-path.primary {
-  border-color: var(--green);
-  background: var(--green-dim);
-  color: var(--green);
-}
-.welcome-path.primary:hover { background: var(--green-sel); }
-.welcome-hint { margin-top: 10px; font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 8px; }
-
-/* Progress bar for busy dialogs */
-.progress { margin-top: 8px; height: 6px; background: #1a1a1a; border: 1px solid var(--border); overflow: hidden; }
-.progress-bar { height: 100%; background: var(--green); width: 0%; transition: width 0.2s ease; }
-.progress-text { font-size: 12px; color: var(--muted); margin-top: 4px; text-align: right; }
-
-/* Setting help text */
-.setting-help {
-  margin-top: 6px;
-  padding: 6px 8px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-left: 3px solid var(--cyan);
-  font-size: 12px;
-  color: var(--muted);
-  line-height: 1.4;
-}
-.setting-help strong { color: var(--cyan); }
-
-/* Keyboard shortcuts panel */
-.shortcuts { padding: 8px 12px; display: flex; flex-direction: column; gap: 12px; }
-.shortcut-group { border-top: 1px solid var(--border); padding-top: 8px; }
-.shortcut-group-title {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--cyan);
-  margin-bottom: 6px;
-}
-.shortcut-table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.shortcut-table td { padding: 4px 8px; border-bottom: 1px solid #1a1a1a; }
-.shortcut-key {
-  font-family: var(--mono);
-  color: var(--green);
-  text-align: right;
-  white-space: nowrap;
-  width: 90px;
-}
-.shortcut-label { color: var(--text); }
-
-/* Primary action styling for the most common action in a view */
-.action-button.primary {
-  background: var(--green);
-  color: #000;
-  border-color: var(--green);
-}
-.action-button.primary:hover {
-  background: #5eea8a;
-}
-
-/* User guide styles */
-.guide-section { margin-bottom: 16px; }
-.guide-title { font-weight: bold; color: var(--cyan); margin-bottom: 6px; font-size: 15px; }
-.guide-steps { margin: 6px 0 0 20px; padding: 0; color: var(--text); }
-.guide-steps li { margin: 4px 0; line-height: 1.4; }
-
-/* kbd for key shortcuts in tips */
-kbd {
-  border: 1px solid var(--border-strong);
-  border-radius: 2px;
-  padding: 1px 4px;
-  background: var(--panel);
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--green);
-  margin: 0 1px;
-}
 
 .app { display: flex; flex-direction: column; height: 100%; }
 
@@ -327,91 +133,6 @@ kbd {
 .generic-icon.backups::after { background: var(--amber); }
 .list-empty { padding: 24px; color: var(--muted); text-align: center; }
 .list-empty::after { content: '_'; color: var(--green); animation: blink 1s steps(1) infinite; margin-left: 2px; }
-.list-empty-actionable { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 32px 24px; }
-.list-empty-actionable span { font-size: 15px; color: var(--text); }
-.list-empty-action {
-  border: 1px solid var(--border-strong);
-  background: var(--panel);
-  color: var(--text);
-  padding: 8px 16px;
-  cursor: pointer;
-}
-.list-empty-action:hover { border-color: var(--green); background: var(--hover); }
-.list-empty-action.primary { border-color: var(--green); background: var(--green-dim); color: var(--green); }
-.list-empty-action.primary:hover { background: var(--green-sel); }
-
-/* Breadcrumb navigation */
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-}
-.breadcrumb-home { color: var(--green); cursor: pointer; }
-.breadcrumb-home:hover { text-decoration: underline; }
-.breadcrumb-sep { color: var(--dim); }
-.breadcrumb-current { color: var(--muted); }
-.breadcrumb-back, .breadcrumb-forward {
-  border: 1px solid var(--border-strong);
-  background: var(--panel);
-  color: var(--text);
-  padding: 2px 8px;
-  cursor: pointer;
-  font-size: 12px;
-  margin-left: auto;
-}
-.breadcrumb-back:hover, .breadcrumb-forward:hover { border-color: var(--green); }
-
-/* Recent programs in view bar */
-.view-bar-recent { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 8px; }
-.recent-header { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--cyan); margin-bottom: 6px; }
-.recent-chip {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 4px 8px;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 12px;
-}
-.recent-chip:hover { background: var(--panel); color: var(--text); }
-
-/* Reduced motion */
-@media (prefers-reduced-motion: reduce) {
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
-  }
-  .list-empty::after { animation: none; }
-  .progress-bar { transition: none; }
-}
-[data-reduced-motion="true"] .list-empty::after { animation: none; }
-[data-reduced-motion="true"] .progress-bar { transition: none; }
-
-/* Undo toast */
-.undo-toast {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: var(--panel);
-  border: 1px solid var(--border-strong);
-  padding: 8px 12px;
-  margin: 8px;
-  position: fixed;
-  bottom: 16px;
-  right: 16px;
-  max-width: 320px;
-  z-index: 1000;
-}
-.undo-toast span { flex: 1; font-size: 13px; color: var(--text); }
-.undo-toast button { margin-left: 8px; }
 @keyframes blink { 50% { opacity: 0; } }
 
 .statusbar {
@@ -610,8 +331,6 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .notice-bar.ok::before { content: '👍'; margin-right: 2px; font-family: 'Segoe UI Emoji', sans-serif; }
 .notice-bar.warn { background: #241d0c; color: var(--amber); }
 .notice-bar.warn::before { content: '⚠️'; margin-right: 2px; font-family: 'Segoe UI Emoji', sans-serif; }
-.notice-bar.info { background: #0c1d24; color: var(--blue); }
-.notice-bar.info::before { content: 'ℹ️'; margin-right: 2px; font-family: 'Segoe UI Emoji', sans-serif; }
 .notice-bar span { flex: 1; }
 .notice-bar button { border: 0; background: none; cursor: pointer; color: inherit; }
 .row.focused:not(.selected) { box-shadow: inset 0 0 0 1px var(--border-strong); }
@@ -919,28 +638,3 @@ button:focus-visible, select:focus-visible, input:focus-visible, .tweak:focus-vi
 .menubar-right { padding: 0 8px; white-space: nowrap; }
 .menubar-right .elevate { color: var(--amber); }
 .menubar-right .elevated { color: var(--green); }
-
-/* Quick filter chips in the program list toolbar. */
-.filter-chips {
-  display: flex;
-  gap: 6px;
-  margin-left: 12px;
-  padding-left: 12px;
-  border-left: 1px solid var(--border);
-  align-items: center;
-}
-.filter-chip {
-  border: 1px solid var(--border-strong);
-  background: var(--panel);
-  color: var(--muted);
-  padding: 1px 7px;
-  font-size: 11px;
-  cursor: default;
-  border-radius: 0;
-}
-.filter-chip:hover { border-color: var(--green); color: var(--green); }
-.filter-chip.on {
-  border-color: var(--green);
-  background: var(--green-dim);
-  color: var(--green);
-}

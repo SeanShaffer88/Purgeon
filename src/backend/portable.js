@@ -132,11 +132,3 @@ export async function checkUpdates(apps) {
   }
   return out;
 }
-
-// Auto-discover portable apps: scan the standard roots plus any folders the user has added,
-// and return only the ones not yet registered as Purgeon portable apps.
-// [{ folder, exe, name, publisher, version, registered: false }]
-export async function discover(folders = []) {
-  const all = await find(folders);
-  return all.filter((a) => !a.registered);
-}

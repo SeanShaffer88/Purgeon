@@ -1,11 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, planHtml } from './dialogs.jsx';
-import { WelcomeDialog, FirstRunTips, FIRST_RUN_TIPS, SettingHelp, SHORTCUTS, ShortcutsDialog, UpdateAvailableDialog, UserGuide } from './onboarding.jsx';
 import { setConfirmUI } from './backend/api.js';
-import { iconPathFor } from './backend/programs.js';
 import { applyZoom, nextStep } from './zoom.js';
 import { ACTION_TIPS, installTips } from './tips.js';
-import * as updatecheck from './backend/updatecheck.js';
 import { TakeSnapshotDialog, ComparisonDialog, SnapshotTimeline, comparisonHtml } from './snapshots.jsx';
 import { DebloatView } from './debloat.jsx';
 import { StartupView } from './startup.jsx';
@@ -13,7 +10,7 @@ import { JunkView, formatBytes } from './junk.jsx';
 import { GroupDialog } from './groups.jsx';
 import { ProgramBackupDialog, ProgramRestoreDialog } from './transfer.jsx';
 import { WhoOwnsDialog, UpdatesDialog, MaintenanceDialog } from './tools.jsx';
-import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, SheetDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, PortableAppsDialog, MakePortableDialog, TrustedPublishersDialog, UpdateCheckDialog, CommandPalette, ReportDialog, ContextMenuDialog, InstallerFoundDialog, AnalysisDialog, ProgramDetailDialog, ConfirmationSettingsDialog, ARCH_LABEL, CloseDialog } from './more.jsx';
+import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, SheetDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, CommandPalette, ReportDialog, ContextMenuDialog, InstallerFoundDialog, AnalysisDialog, ARCH_LABEL, CloseDialog } from './more.jsx';
 
 const api = window.api;
 
@@ -150,32 +147,6 @@ function InsightTags({ i }) {
   );
 }
 
-// Empty-state messages and actions for each view.
-// Actions are passed in from the component so they can call setState.
-const emptyStateMessage = (v, f) => {
-  if (v === 'timeline') return 'Nothing recorded yet.';
-  if (v === 'archive') return 'No programs removed yet. Every program you uninstall is recorded here.';
-  if (v === 'monitored') return 'No monitored programs yet.';
-  if (v === 'backups') return 'No backups yet.';
-  if (v === 'history') return 'No changes yet. Everything Purgeon changes will be listed here.';
-  if (v === 'desktop') return 'No programs found.';
-  if (v === 'store') return 'No store apps found.';
-  if (v === 'snapshots') return 'No snapshots yet.';
-  if (f) return 'No matches.';
-  return 'Nothing found.';
-};
-
-const emptyStateActions = (v, onMonitor, onSnapshot, onRefresh) => {
-  const actions = [];
-  if (v === 'monitored' && onMonitor)
-    actions.push({ label: 'Monitor an Installation…', onClick: onMonitor, title: 'Start monitoring an installer' });
-  if (v === 'backups' && onSnapshot)
-    actions.push({ label: 'Take a Snapshot', onClick: onSnapshot, title: 'Take a new snapshot' });
-  if ((v === 'desktop' || v === 'store') && onRefresh)
-    actions.push({ label: 'Refresh List', onClick: onRefresh, title: 'Reload the program list from Windows' });
-  return actions;
-};
-
 // What each menu holds, for the menu bar's tooltips.
 const MENU_TIPS = {
   File: 'Export and reports, moving programs to another PC, settings sync, and restarting as administrator (Alt+F)',
@@ -260,11 +231,6 @@ const MENUS = [
       ['close:exit', 'Close Button Exits'],
       ['toggleStartTray', 'Start Minimized to Tray'],
       ['toggleAutostart', 'Start with Windows'],
-      null,
-      ['schedule', 'Background Monitoring...'],
-      ['syncFolder', 'Choose Sync Folder...'],
-      null,
-      ['language', 'Language...'],
     ],
   ],
   [
@@ -300,16 +266,10 @@ const MENUS = [
       ['ctxmenu', 'Explorer Context Menu Items...'],
       null,
       ['backupSettings', 'Backup Settings...'],
-      ['confirmationPrompts', 'Confirmation Prompts...'],
       ['openLog', 'Open Command Log'],
-      null,
-      ['trustedPublishers', 'Trusted Publishers...'],
-      ['updateCheck', 'Check for Updates...'],
-      null,
-      ['portableapps', 'PortableApps.com Installer...'],
     ],
   ],
-  ['Help', [['palette', 'Command Palette...', 'Ctrl+K'], ['guide', 'User Guide'], ['shortcuts', 'Keyboard Shortcuts'], ['welcome', 'Welcome Back'], null, ['updates', 'Check for Updates...'], ['about', 'About']]],
+  ['Help', [['palette', 'Command Palette...', 'Ctrl+K'], ['about', 'About']]],
 ];
 
 // Mouse or keyboard: Alt plus a menu's first letter opens it; arrow keys move between items and
@@ -481,81 +441,27 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState('');
-  const [quickFilter, setQuickFilter] = useState('all');
   const [sort, setSort] = useState({ col: 'name', dir: 1 });
   const [selected, setSelected] = useState(null);
   const [icons, setIcons] = useState({});
   const [admin, setAdmin] = useState(null);
   const [modal, setModal] = useState(null);
-const [busy, setBusy] = useState(null); // { message, progress, current, total, canPause, canCancel, onPause, onCancel }
-const [menu, setMenu] = useState(null);
+  const [busy, setBusy] = useState('');
+  const [menu, setMenu] = useState(null);
   // Multi-selection (keys); `selected` is the focused row and the range anchor moves with plain clicks.
   const [marked, setMarked] = useState(() => new Set());
   const anchor = useRef(null);
   const [busyStop, setBusyStop] = useState(null);
   const stopBatch = useRef(false);
   const [notice, setNotice] = useState(null);
-// Undo toast: last removal/change can be undone within 30 seconds.
-const [undoStack, setUndoStack] = useState([]);
-const undoTimerRef = useRef(null);
-// View history for back/forward navigation.
-const [viewHistory, setViewHistory] = useState([]);
-const [historyIdx, setHistoryIdx] = useState(-1);
-// Recently viewed/acted-on programs (most recent first, max 10).
-const [recentPrograms, setRecentPrograms] = useState([]);
-
-// View history for back/forward navigation.
-useEffect(() => {
-  setViewHistory((prev) => {
-    const next = [...prev.slice(0, historyIdx + 1), view];
-    if (next.length > 50) next.shift();
-    return next;
-  });
-  setHistoryIdx((prev) => prev + 1);
-}, [view, historyIdx]);
-
-// Go back in view history.
-const goBack = useCallback(() => {
-  if (historyIdx > 0) {
-    setHistoryIdx((i) => i - 1);
-    setView(viewHistory[i - 1]);
-  }
-}, [historyIdx, viewHistory]);
-
-// Go forward in view history.
-const goForward = useCallback(() => {
-  if (historyIdx < viewHistory.length - 1) {
-    setHistoryIdx((i) => i + 1);
-    setView(viewHistory[i + 1]);
-  }
-}, [historyIdx, viewHistory]);
-
-// Add a program to recent programs.
-const addRecent = useCallback((program) => {
-  setRecentPrograms((prev) => {
-    const filtered = prev.filter((p) => p.key !== program.key);
-    return [program, ...filtered].slice(0, 10);
-  });
-}, []);
-
   const [restoreOn, setRestoreOn] = useState(true);
   const [silentOn, setSilentOn] = useState(false);
   const [safeOn, setSafeOn] = useState(false);
   const [gridOn, setGridOn] = useState(true);
   const [theme, setTheme] = useState('dark');
-  const [lang, setLang] = useState('en');
-  const [syncOn, setSyncOn] = useState(false);
-  const [syncFolder, setSyncFolder] = useState('');
-  const [scheduleOn, setScheduleOn] = useState(false);
   // What the close button does: 'ask', 'tray' (keep running in the tray) or 'exit'.
-const [closeAction, setCloseAction] = useState('ask');
-const [closeAsk, setCloseAsk] = useState(false);
-// First-run onboarding state.
-const [hasSeenWelcome, setHasSeenWelcome] = useState(null); // null = not yet loaded from settings
-const [welcomeOpen, setWelcomeOpen] = useState(false);
-const [updateShown, setUpdateShown] = useState(false);
-const [firstRunTips, setFirstRunTips] = useState([]);
-const [firstRunTipDismissed, setFirstRunTipDismissed] = useState(() => new Set());
+  const [closeAction, setCloseAction] = useState('ask');
+  const [closeAsk, setCloseAsk] = useState(false);
   // Window options (View menu); Start with Windows is read from Task Scheduler.
   const [win, setWin] = useState({ alwaysOnTop: false, minimizeToTray: false, startInTray: false });
   const [autostartOn, setAutostartOn] = useState(false);
@@ -566,10 +472,8 @@ const [firstRunTipDismissed, setFirstRunTipDismissed] = useState(() => new Set()
   const [shellOn, setShellOn] = useState(false);
   const [palette, setPalette] = useState(false);
   const outsideChecked = useRef(false);
-const [zoom, setZoom] = useState(1);
-const [textScale, setTextScale] = useState(1);
-const [reducedMotion, setReducedMotion] = useState(false);
-// Program groups ({ programKey: group }) and the group the program lists are filtered to.
+  const [zoom, setZoom] = useState(1);
+  // Program groups ({ programKey: group }) and the group the program lists are filtered to.
   const [groups, setGroups] = useState({});
   const [groupFilter, setGroupFilter] = useState(ALL_GROUPS);
   // Per-program insights (signature, installed together, offers, growth), loaded after the list.
@@ -641,25 +545,11 @@ const [reducedMotion, setReducedMotion] = useState(false);
       setSafeOn(!!s.safeMode);
       setGridOn(s.gridLines !== false);
       setTheme(s.theme || 'dark');
-      setLang(s.language || 'en');
-      setSyncOn(!!s.syncOn);
-      setSyncFolder(s.syncFolder || '');
-      setHasSeenWelcome(!!s.hasSeenWelcome);
       applyWindow(s);
       api.invoke('backups:prune').catch(() => {});
       setZoom(s.zoom || 1);
       applyZoom(s.zoom || 1);
-      setTextScale(s.textScale || 1);
-      setReducedMotion(!!s.reducedMotion);
-      // Update notification: checked once on startup, never nagging.
-      updatecheck.check().then(({ enabled, update, error }) => {
-        if (enabled && update && update.newer && !updateShown) {
-          setUpdateShown(true);
-          setModal({ type: 'updateAvailable', version: update.version });
-        }
-      }).catch(() => {});
     });
-    api.invoke('schedule:status').then((s) => s && setScheduleOn(!!s.registered)).catch(() => {});
     api.invoke('monitor:status').then((s) => s && setModal({ type: 'monitor', resume: s }));
     // A removal cut off by a crash or power cut comes first.
     api.invoke('backups:interrupted').then((p) => p && setModal({ type: 'interrupted', pending: p })).catch(() => {});
@@ -699,25 +589,10 @@ const [reducedMotion, setReducedMotion] = useState(false);
     };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Show the welcome dialog on first launch, after settings are loaded.
-    useEffect(() => {
-      if (hasSeenWelcome === null) return; // settings not loaded yet
-      if (!hasSeenWelcome) {
-        setWelcomeOpen(true);
-      }
-    }, [hasSeenWelcome]);
-
-    // Store the welcome-seen flag so it doesn't show again.
-    const markWelcomeSeen = useCallback(async () => {
-      await api.invoke('settings:set', { hasSeenWelcome: true }).catch(() => {});
-    }, []);
-
-    // The theme lives on the root element so dialogs and menus follow it too.
-    useEffect(() => {
-      document.documentElement.dataset.theme = theme;
-      document.documentElement.style.setProperty('--text-scale', textScale);
-      document.documentElement.dataset.reducedMotion = reducedMotion;
-    }, [theme, textScale, reducedMotion]);
+  // The theme lives on the root element so dialogs and menus follow it too.
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+  }, [theme]);
 
   // Icons arrive in one batch after the list is shown; programs without one keep a placeholder.
   useEffect(() => {
@@ -751,33 +626,8 @@ const [reducedMotion, setReducedMotion] = useState(false);
     const inGroup = (r) =>
       !programs || groupFilter === ALL_GROUPS || (insightFilter ? !!insightFilter[2](insight[r.key]) : groupFilter === UNGROUPED ? !groups[r.key] : groups[r.key] === groupFilter);
     const shown = (r) => !programs || showHidden || !hidden[r.key];
-    const thirtyDaysAgo = Date.now() - 30 * 86400000;
-    const list = rows.filter((r) => {
-      if (!shown(r) || !inGroup(r)) return false;
-      if (q && !`${r.name} ${r.publisher || ''} ${(programs && groups[r.key]) || ''}`.toLowerCase().includes(q)) return false;
-      if (quickFilter !== 'all') {
-        if (quickFilter === 'desktop' && r.store) return false;
-        if (quickFilter === 'store' && !r.store) return false;
-        if (quickFilter === 'recent') {
-          const d = r.date ? new Date(r.date).getTime() : 0;
-          if (!d || d < thirtyDaysAgo) return false;
-        }
-        if (quickFilter === 'large') {
-          const kb = r.sizeKB || r.sortSize || 0;
-          if (kb < 100 * 1024) return false;
-        }
-        if (quickFilter === 'unsigned') {
-          const sig = insight[r.key]?.signature;
-          if (!sig || sig === 'Valid') return false;
-        }
-        if (quickFilter === 'used') {
-          const t = insight[r.key]?.written;
-          if (!t || new Date(t).getTime() < thirtyDaysAgo) return false;
-        }
-      }
-      return true;
-    });
-    const val = (r) => (sort.col === 'size' ? r.sortSize : sort.col === 'arch' ? archOf(r).text : sort.col === 'date' && r.sortDate ? r.sortDate : sort.col === 'used' ? (insight[r.key]?.written || '').toString().toLowerCase() : (r[sort.col] || '').toString().toLowerCase());
+    const list = rows.filter((r) => shown(r) && inGroup(r) && (!q || `${r.name} ${r.publisher || ''} ${(programs && groups[r.key]) || ''}`.toLowerCase().includes(q)));
+    const val = (r) => (sort.col === 'size' ? r.sortSize : sort.col === 'arch' ? archOf(r).text : sort.col === 'date' && r.sortDate ? r.sortDate : (r[sort.col] || '').toString().toLowerCase());
     return [...list].sort((a, b) => {
       const x = val(a);
       const y = val(b);
@@ -800,7 +650,6 @@ const [reducedMotion, setReducedMotion] = useState(false);
     if (shift && anchor.current && keys.includes(anchor.current)) {
       const [a, b] = [keys.indexOf(anchor.current), keys.indexOf(key)].sort((x, y) => x - y);
       setMarked(new Set(keys.slice(a, b + 1)));
-      setSelected(key);
     } else if (ctrl) {
       setMarked((m) => {
         const n = new Set(m);
@@ -808,27 +657,17 @@ const [reducedMotion, setReducedMotion] = useState(false);
         return n;
       });
       anchor.current = key;
-      setSelected(key);
     } else {
-      // Clicking the same already-selected row again deselects it.
-      if (marked.size === 1 && marked.has(key)) {
-        setMarked(new Set());
-        setSelected(null);
-        anchor.current = null;
-      } else {
-        const program = visible.find((r) => r.key === key);
-        if (program) addRecent(program);
-        setMarked(new Set([key]));
-        anchor.current = key;
-        setSelected(key);
-      }
+      setMarked(new Set([key]));
+      anchor.current = key;
     }
+    setSelected(key);
   };
 
   // ---- restore points ------------------------------------------------------
 
-  const confirmWithRestore = (message, detail, confirmId) =>
-    api.invoke('dialog:confirm', { message, detail, confirmId, checkboxLabel: 'Create a restore point first', checkboxChecked: restoreOn });
+  const confirmWithRestore = (message, detail) =>
+    api.invoke('dialog:confirm', { message, detail, checkboxLabel: 'Create a restore point first', checkboxChecked: restoreOn });
 
   const makeRestorePoint = async (description, kind) => {
     setBusy('Creating a restore point…\nThis can take a minute.');
@@ -845,7 +684,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
   // Called by the Debloat view before a change; asks once per session.
   const beforeDebloatChange = async (title) => {
     if (debloatGatePassed.current || !restoreOn) return true;
-    const r = await confirmWithRestore('Change Windows settings?', `Purgeon will apply "${title}". This question appears only before your first debloat change of this session.`, 'confirmDebloat');
+    const r = await confirmWithRestore('Change Windows settings?', `Purgeon will apply "${title}". This question appears only before your first debloat change of this session.`);
     if (!r.ok) return false;
     if (r.checked) await makeRestorePoint('Purgeon: before Windows debloat changes', 'settings');
     debloatGatePassed.current = true;
@@ -924,7 +763,6 @@ const [reducedMotion, setReducedMotion] = useState(false);
       const procs = (await Promise.all(locations.map((l) => api.invoke('program:processes', l).catch(() => [])))).flat();
       if (procs.length) {
         const ok = await api.invoke('dialog:confirm', {
-          confirmId: 'closeRunningPrograms',
           message: 'Close running programs?',
           detail: `These are running from the install folder and would block deletion:\n\n${procs.map((p) => p.ProcessName).join('\n')}`,
         });
@@ -983,7 +821,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
   const uninstallMonitored = async (rec) => {
     const keys = new Set(rec.uninstallKeys.map(normKey));
     const registered = desktopCache.current.find((p) => keys.has(normKey(p.key)));
-    const run = registered && (await confirmWithRestore(`Run ${registered.name}'s own uninstaller first?`, 'Recommended. Afterwards Purgeon removes everything else the installation created.', 'confirmRunUninstaller'));
+    const run = registered && (await confirmWithRestore(`Run ${registered.name}'s own uninstaller first?`, 'Recommended. Afterwards Purgeon removes everything else the installation created.'));
     if (run?.ok) {
       if (run.checked) await makeRestorePoint(`Purgeon: before uninstalling ${registered.name}`, 'uninstall');
       setBusy(`Running the uninstaller for ${registered.name}…`);
@@ -1011,19 +849,17 @@ const [reducedMotion, setReducedMotion] = useState(false);
     const infoFor = (p) => prep[list.filter((x) => !x.store).indexOf(p)];
     const line = (p) => {
       const info = infoFor(p);
-      const tags = [info?.installer.label, silentOn && info?.installer.silent ? 'silent' : '', info?.dependencies?.kind === 'runtime' ? '\\u26a0 shared runtime' : info?.dependencies?.kind === 'driver' ? '\\u26a0 driver' : '', info?.dependencies?.dependents?.length ? `\\u26a0 needed by ${info.dependencies.dependents.join(', ')}` : ''].filter(Boolean);
-      return `\\u2022 ${p.name}${tags.length ? `  (${tags.join(', ')})` : ''}`;
+      const tags = [info?.installer.label, silentOn && info?.installer.silent ? 'silent' : '', info?.dependencies?.kind === 'runtime' ? '⚠ shared runtime' : info?.dependencies?.kind === 'driver' ? '⚠ driver' : '', info?.dependencies?.dependents?.length ? `⚠ needed by ${info.dependencies.dependents.join(', ')}` : ''].filter(Boolean);
+      return `• ${p.name}${tags.length ? `  (${tags.join(', ')})` : ''}`;
     };
     const go = await confirmWithRestore(
       `Uninstall ${list.length} programs?`,
-      ${list.map(line).join('\\n')}\\n\\nEach program's own uninstaller runs in turn${silentOn ? '; ones marked silent run without their windows' : ', so finish each uninstaller\\'s window'}. Afterwards Purgeon scans all of them for leftovers.`,
-      'confirmBatchUninstall'
+      `${list.map(line).join('\n')}\n\nEach program's own uninstaller runs in turn${silentOn ? '; ones marked silent run without their windows' : ', so finish each uninstaller\'s window'}. Afterwards Purgeon scans all of them for leftovers.`
     );
     if (!go.ok) return;
     if (go.checked) await makeRestorePoint(`Purgeon: before uninstalling ${list.length} programs`, 'uninstall');
 
     stopBatch.current = false;
-    pausedBatch.current = false;
     setBusyStop(() => () => {
       stopBatch.current = true;
     });
@@ -1033,15 +869,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
         outcomes.push({ p, skipped: true });
         continue;
       }
-      while (pausedBatch.current) {
-        await new Promise((r) => setTimeout(r, 200));
-        if (stopBatch.current) break;
-      }
-      if (stopBatch.current) {
-        outcomes.push({ p, skipped: true });
-        continue;
-      }
-      setBusy({ message: `Uninstalling ${i + 1} of ${list.length}: ${p.name}`, current: i + 1, total: list.length, canPause: true, canCancel: true, onPause: (paused) => { pausedBatch.current = paused; }, onCancel: () => { stopBatch.current = true; } });
+      setBusy(`Uninstalling ${i + 1} of ${list.length}: ${p.name}…\nFinish the uninstaller's window if one appears.`);
       try {
         outcomes.push({ p, result: await api.invoke('program:runUninstaller', p) });
       } catch (e) {
@@ -1053,17 +881,29 @@ const [reducedMotion, setReducedMotion] = useState(false);
     const ran = outcomes.filter((o) => !o.skipped && !o.p.store);
     const items = [];
     for (const [i, { p }] of ran.entries()) {
-      if (stopBatch.current) break;
-      while (pausedBatch.current) {
-        await new Promise((r) => setTimeout(r, 200));
-        if (stopBatch.current) break;
-      }
-      if (stopBatch.current) break;
-      setBusy({ message: `Scanning for leftovers of ${p.name}`, current: i + 1, total: ran.length, canPause: true, canCancel: true, onPause: (paused) => { pausedBatch.current = paused; }, onCancel: () => { stopBatch.current = true; } });
+      setBusy(`Scanning for leftovers (${i + 1} of ${ran.length}): ${p.name}…`);
       const found = await api.invoke('program:scan', { ...p, installerItems: infoFor(p)?.installerItems || [] }).catch(() => []);
       items.push(...found.map((it) => ({ ...it, program: p.name })));
     }
-    setBusy(''); -----------------------------------------------------------
+    setBusy('');
+    load();
+
+    const ok = outcomes.filter((o) => o.result?.ok).length;
+    const problems = outcomes
+      .filter((o) => !o.result?.ok)
+      .map((o) => (o.skipped ? `${o.p.name}: skipped` : o.result.error ? `${o.p.name}: ${o.result.error}` : `${o.p.name}: uninstaller exited with code ${o.result.code}`));
+    const heading = `Uninstalled ${ok} of ${list.length} programs.${problems.length ? ` ${problems.join('; ')}.` : ''} Purgeon found ${items.length} leftover items.`;
+    setModal({
+      type: 'leftovers',
+      title: `Batch Uninstall – ${list.length} programs`,
+      heading,
+      items,
+      owners: list.map((p) => p.key),
+      onRemove: (sel) => removeWithBackup(`Batch uninstall (${list.length} programs)`, sel, ran.map((o) => o.p.location), list.map((p) => p.key)),
+    });
+  };
+
+  // ---- snapshots -----------------------------------------------------------
 
   const takeSnapshot = async (name, preset) => {
     setModal(null);
@@ -1098,8 +938,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
   const cleanupComparison = async (comparison, beforeName, chosen) => {
     const go = await confirmWithRestore(
       `Clean up ${chosen.length} selected difference${chosen.length === 1 ? '' : 's'}?`,
-      'Added items are removed, and changed or removed registry values and keys are put back from the earlier snapshot. Everything is backed up first and can be undone.',
-      'confirmSnapshotCleanup'
+      'Added items are removed, and changed or removed registry values and keys are put back from the earlier snapshot. Everything is backed up first and can be undone.'
     );
     if (!go.ok) return;
     if (go.checked) await makeRestorePoint(`Purgeon: before cleaning up changes since ${beforeName}`, 'settings');
@@ -1120,7 +959,6 @@ const [reducedMotion, setReducedMotion] = useState(false);
   const cleanJunk = async (items, categories, bytes, system = []) => {
     if (items.length) {
       const ok = await api.invoke('dialog:confirm', {
-        confirmId: 'cleanJunk',
         message: `Clean ${formatBytes(bytes)} of junk files?`,
         detail: `${categories.map((c) => `• ${c.label}: ${formatBytes(c.bytes)}`).join('\n')}\n\n${items.length.toLocaleString()} items go to the Recycle Bin. You can undo this from Tools › Change History until the Recycle Bin is emptied.`,
       });
@@ -1130,7 +968,6 @@ const [reducedMotion, setReducedMotion] = useState(false);
     if (!system.length) return;
     // Windows' own clean-ups are permanent, so they get their own, explicit confirmation.
     const go = await api.invoke('dialog:confirm', {
-      confirmId: 'cleanSystemWindows',
       message: `Run ${system.length} permanent Windows clean-up${system.length === 1 ? '' : 's'}?`,
       detail: `${system.map((c) => `• ${c.label}: ${c.detail}`).join('\n')}\n\nWindows does these itself. They cannot be undone, and some take several minutes.`,
     });
@@ -1174,7 +1011,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
   };
   const runUpdates = async (list) => {
     setModal(null);
-    const go = await confirmWithRestore(`Update ${list.length} program${list.length === 1 ? '' : 's'}?`, `${list.map((u) => `• ${u.name}: ${u.version} → ${u.available}`).join('\n')}\n\nwinget updates them one after another, silently.`, 'confirmUpdate');
+    const go = await confirmWithRestore(`Update ${list.length} program${list.length === 1 ? '' : 's'}?`, `${list.map((u) => `• ${u.name}: ${u.version} → ${u.available}`).join('\n')}\n\nwinget updates them one after another, silently.`);
     if (!go.ok) return;
     if (go.checked) await makeRestorePoint(`Purgeon: before updating ${list.length} programs`, 'install');
     const results = [];
@@ -1299,7 +1136,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
     setModal(null);
     let q = await api.invoke('queue:get');
     if (!q) return;
-    const go = await confirmWithRestore(`Uninstall ${q.programs.filter((p) => p.status === 'pending').length} programs from the queue?`, 'They run one after another, silently where possible. If one needs a restart, Purgeon asks, then continues after you sign back in. Leftovers are shown at the end.', 'confirmQueueUninstall');
+    const go = await confirmWithRestore(`Uninstall ${q.programs.filter((p) => p.status === 'pending').length} programs from the queue?`, 'They run one after another, silently where possible. If one needs a restart, Purgeon asks, then continues after you sign back in. Leftovers are shown at the end.');
     if (!go.ok) return;
     if (go.checked) await makeRestorePoint('Purgeon: before the uninstall queue', 'uninstall');
     stopBatch.current = false;
@@ -1307,13 +1144,12 @@ const [reducedMotion, setReducedMotion] = useState(false);
       stopBatch.current = true;
     });
     try {
-      const pending = q.programs.filter((x) => x.status === 'pending');
-      for (const [i, p] of pending.entries()) {
+      for (const p of q.programs.filter((x) => x.status === 'pending')) {
         if (stopBatch.current) break;
-        setBusy({ message: `Uninstalling ${p.name}`, current: i + 1, total: pending.length, canCancel: true, onCancel: () => { stopBatch.current = true; } });
+        setBusy(`Uninstalling ${p.name}…`);
         const [info] = await Promise.all([api.invoke('program:prepare', p).catch(() => null)]);
         const r = await api.invoke('program:runUninstaller', p).catch((e) => ({ ok: false, error: e.message }));
-        setBusy({ message: `Scanning for leftovers of ${p.name}`, current: i + 1, total: pending.length, canCancel: true, onCancel: () => { stopBatch.current = true; } });
+        setBusy(`Scanning for leftovers of ${p.name}…`);
         const found = await api.invoke('program:scan', { ...p, installerItems: info?.installerItems || [] }).catch(() => []);
         p.status = r.ok || (r.code === 3010 || r.code === 1641) ? 'done' : 'failed';
         p.detail = r.error || (r.ok ? '' : `exit code ${r.code}`);
@@ -1325,7 +1161,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
           await api.invoke('queue:arm');
           setBusy('');
           setBusyStop(null);
-          const now = await api.invoke('dialog:confirm', { confirmId: 'queueRestart', message: `${p.name} needs a restart to finish.`, detail: 'Restart now? Purgeon continues the queue after you sign back in. Choose No to restart later yourself.' });
+          const now = await api.invoke('dialog:confirm', { message: `${p.name} needs a restart to finish.`, detail: 'Restart now? Purgeon continues the queue after you sign back in. Choose No to restart later yourself.' });
           if (now) await api.invoke('queue:restartNow');
           else setNotice({ tone: 'warn', text: 'The uninstall queue continues after your next restart.' });
           return;
@@ -1357,7 +1193,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
     setModal(null);
     const items = [];
     for (const [i, p] of list.entries()) {
-      setBusy({ message: `Scanning for leftovers of ${p.name}`, current: i + 1, total: list.length });
+      setBusy(`Scanning for leftovers (${i + 1} of ${list.length}): ${p.name}…`);
       items.push(...(await api.invoke('program:scan', { ...p, installerItems: [] }).catch(() => [])).map((x) => ({ ...x, program: p.name })));
     }
     setBusy('');
@@ -1416,7 +1252,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
       setBusy('');
     }
     if (!id) return setNotice({ tone: 'warn', text: `winget has no package for ${p.name}, so it can't be repaired that way. Use Force instead.` });
-    if (!(await api.invoke('dialog:confirm', { confirmId: 'repairUninstaller', message: `Repair ${p.name}'s uninstaller?`, detail: `winget reinstalls the package "${id}" over the existing copy, which puts a working uninstaller back. Then the normal uninstall runs. Reinstalling accepts the package's license terms.` }))) return;
+    if (!(await api.invoke('dialog:confirm', { message: `Repair ${p.name}'s uninstaller?`, detail: `winget reinstalls the package "${id}" over the existing copy, which puts a working uninstaller back. Then the normal uninstall runs. Reinstalling accepts the package's license terms.` }))) return;
     setBusy(`Reinstalling ${id}…`);
     const r = await api.invoke('winget:repair', id).catch((e) => ({ ok: false, detail: e.message }));
     setBusy('');
@@ -1576,7 +1412,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
     const lastPull = { ...((await api.invoke('settings:get')).lastPull || {}) };
     const newer = (await api.invoke('transfer:folder', s.syncFolder)).filter((p) => p.mtime > (lastPull[p.name] || 0));
     if (!newer.length) return setNotice({ tone: 'ok', text: 'Your settings are up to date.' });
-    if (!(await api.invoke('dialog:confirm', { confirmId: 'getNewerSettings', message: `Get newer settings for ${newer.length} program${newer.length === 1 ? '' : 's'}?`, detail: `${newer.map((p) => `• ${p.name}`).join('\n')}\n\nTheir current settings go to the Recycle Bin first, and each change can be undone from Change History. Close these programs first.` }))) return;
+    if (!(await api.invoke('dialog:confirm', { message: `Get newer settings for ${newer.length} program${newer.length === 1 ? '' : 's'}?`, detail: `${newer.map((p) => `• ${p.name}`).join('\n')}\n\nTheir current settings go to the Recycle Bin first, and each change can be undone from Change History. Close these programs first.` }))) return;
     const results = await restorePackages(newer, true);
     for (const p of newer) lastPull[p.name] = p.mtime;
     await api.invoke('settings:set', { lastPull });
@@ -1595,66 +1431,6 @@ const [reducedMotion, setReducedMotion] = useState(false);
     } finally {
       setBusy('');
     }
-  };
-
-  const openPortableApps = async () => {
-    setBusy('Reading monitored programs…');
-    try {
-      const programs = await api.invoke('portableapps:list');
-      setModal({ type: 'portableapps', programs });
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy('');
-    }
-  };
-
-  const openMakePortable = async (program) => {
-    // Bug notice: shown before any portable packaging.
-    const bugOk = await api.invoke('dialog:confirm', { confirmId: 'bugReport',
-      message: 'Portable compiler notice',
-      detail: 'The PortableApps.com compiler is new and may have bugs or make mistakes. The developer is actively polishing it to mitigate issues. Always test the resulting portable package before relying on it. Continue?',
-      checkboxLabel: "Don't show this notice again",
-    });
-    if (!bugOk.ok) return;
-    if (bugOk.checked) {
-      // Remember dismissal (stored in settings)
-      try {
-        await api.invoke('settings:set', { portableBugNoticeDismissed: true });
-      } catch {}
-    }
-
-    setBusy('Analyzing program for portable packaging…');
-    let items = null;
-    let recName = program.name;
-    let recPublisher = program.publisher || '';
-    let recVersion = program.version || '';
-
-    try {
-      // If this is a monitored program, it already has recorded items.
-      // Otherwise, scan the installed program to get its files/folders/registry.
-      if (program.items && program.items.length > 0) {
-        items = program.items;
-      } else {
-        const scanned = await api.invoke('program:scan', program);
-        items = scanned;
-      }
-    } catch (e) {
-      setError(`Failed to analyze program: ${e.message}`);
-      setBusy('');
-      return;
-    } finally {
-      setBusy('');
-    }
-
-    setModal({
-      type: 'makePortable',
-      program,
-      items,
-      name: recName,
-      publisher: recPublisher,
-      version: recVersion,
-    });
   };
 
   // ---- 16. Explorer right-click requests (from the command line) -----------------------------------------------
@@ -1692,7 +1468,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
     compareNow: (p) => view === 'snapshots' && runCompare(p, null),
     deleteSnapshot: async (p) => {
       if (view !== 'snapshots') return;
-      if (!(await api.invoke('dialog:confirm', { confirmId: 'deleteSnapshot', message: `Delete the snapshot "${p.name}"?`, detail: 'The snapshot file is deleted. Your files and settings are not affected.' }))) return;
+      if (!(await api.invoke('dialog:confirm', { message: `Delete the snapshot "${p.name}"?`, detail: 'The snapshot file is deleted. Your files and settings are not affected.' }))) return;
       await api.invoke('snapshots:remove', p.id);
       load();
     },
@@ -1705,40 +1481,24 @@ const [reducedMotion, setReducedMotion] = useState(false);
           text: p.type === 'Uninstall' ? 'An uninstall cannot be undone here. Reinstall the program, or use the restore point made before it.' : 'This change cannot be undone here.',
         });
       }
-      if (!(await api.invoke('dialog:confirm', { confirmId: 'undoChange', message: `Undo this change?`, detail: p.title }))) return;
+      if (!(await api.invoke('dialog:confirm', { message: `Undo this change?`, detail: p.title }))) return;
       await runUndo(p.id, p.title);
     },
     uninstall: async (p) => {
       if (view === 'history') return actions.undoChange(p);
       if (view === 'archive') return actions.deleteRecord(p);
       if (p.portable) {
-        if (!(await confirmWithRestore(`Remove the portable app ${p.name}?`, 'It has no uninstaller: Purgeon removes its folder, its entry and the files and settings it left, after you review them. Everything is backed up first.', 'confirmRemovePortable')).ok) return;
+        if (!(await confirmWithRestore(`Remove the portable app ${p.name}?`, 'It has no uninstaller: Purgeon removes its folder, its entry and the files and settings it left, after you review them. Everything is backed up first.')).ok) return;
         return scanFor(p, `Remove Portable App – ${p.name}`, (items) => `Purgeon found ${items.length} items belonging to ${p.name}.`);
       }
       if (view === 'snapshots') return actions.deleteSnapshot(p);
       if (view === 'monitored') return uninstallMonitored(p);
       if (view === 'backups') return actions.deleteBackup(p);
-      // Signature verification when required by settings.
-      if (!p.store && (await api.invoke('settings:get')).requireSignature) {
-        const exe = iconPathFor(p);
-        if (exe) {
-          const sig = await api.invoke('security:verifySignature', { path: exe });
-          if (sig.status !== 'Valid') {
-            const go = await api.invoke('dialog:confirm', {
-              confirmId: 'uninstallUnsigned',
-              message: `Uninstall ${p.name} without a valid signature?`,
-              detail: `The program's main executable (${exe}) is not digitally signed (status: ${sig.status}). Uninstalling an unsigned program carries a higher risk of removing the wrong thing. Proceed anyway?`,
-            });
-            if (!go) return;
-          }
-        }
-      }
       const prep = p.store ? null : await prepare([p]);
       const info = prep?.[0];
       const go = await confirmWithRestore(
         `Uninstall ${p.name}?`,
-        (p.store ? 'The app package will be removed.' : "The program's own uninstaller will run first, then Purgeon scans for leftovers.") + (info ? prepNote(info) : ''),
-        'confirmUninstall'
+        (p.store ? 'The app package will be removed.' : "The program's own uninstaller will run first, then Purgeon scans for leftovers.") + (info ? prepNote(info) : '')
       );
       if (!go.ok) return;
       if (go.checked) await makeRestorePoint(`Purgeon: before uninstalling ${p.name}`, 'uninstall');
@@ -1766,25 +1526,9 @@ const [reducedMotion, setReducedMotion] = useState(false);
     force: async (p) => {
       if (view !== 'desktop') return actions.uninstall(p);
       const [info] = await prepare([p]);
-      // Signature verification when required by settings.
-      if ((await api.invoke('settings:get')).requireSignature) {
-        const exe = iconPathFor(p);
-        if (exe) {
-          const sig = await api.invoke('security:verifySignature', { path: exe });
-          if (sig.status !== 'Valid') {
-            const go = await api.invoke('dialog:confirm', {
-              confirmId: 'forceUnsigned',
-              message: `Force removal of ${p.name} without a valid signature?`,
-              detail: `The program's main executable (${exe}) is not digitally signed (status: ${sig.status}). Force removal skips the uninstaller entirely. Proceed anyway?`,
-            });
-            if (!go) return;
-          }
-        }
-      }
       const go = await confirmWithRestore(
         `Force removal of ${p.name}?`,
-        "This skips the program's uninstaller and deletes its files and registry entries directly. Use it for programs whose uninstaller is broken or missing. Everything is backed up first." + prepNote(info, false),
-        'confirmForce'
+        "This skips the program's uninstaller and deletes its files and registry entries directly. Use it for programs whose uninstaller is broken or missing. Everything is backed up first." + prepNote(info, false)
       );
       if (!go.ok) return;
       if (go.checked) await makeRestorePoint(`Purgeon: before force removal of ${p.name}`, 'uninstall');
@@ -1811,10 +1555,6 @@ const [reducedMotion, setReducedMotion] = useState(false);
       const sizes = view === 'desktop' ? (await api.invoke('programs:sizeHistory').catch(() => ({})))[p.key] : null;
       setModal({ type: 'properties', program: { ...p, insight: insight[p.key], sizes } });
     },
-    programDetail: async (p) => {
-      const sizes = view === 'desktop' ? (await api.invoke('programs:sizeHistory').catch(() => ({})))[p.key] : null;
-      setModal({ type: 'programDetail', program: p, insight: insight[p.key], sizes });
-    },
     reinstall: async (p) => {
       if (view !== 'archive') return;
       setBusy(`Looking up ${p.name} in winget…`);
@@ -1826,7 +1566,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
       }
       if (!id) return setNotice({ tone: 'warn', text: `winget has no package named "${p.name}".${p.url ? ' Use Publisher Website instead.' : ''}` });
       await api.invoke('archive:setPackage', { id: p.id, wingetId: id });
-      if (!(await api.invoke('dialog:confirm', { confirmId: 'reinstallArchive', message: `Reinstall ${p.name}?`, detail: `winget installs the package "${id}". Its installer may show its own window. Installing accepts the package's license terms.` }))) return;
+      if (!(await api.invoke('dialog:confirm', { message: `Reinstall ${p.name}?`, detail: `winget installs the package "${id}". Its installer may show its own window. Installing accepts the package's license terms.` }))) return;
       setBusy(`Installing ${id}…`);
       try {
         const r = await api.invoke('winget:install', id);
@@ -1838,7 +1578,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
     openSite: (p) => (p.url ? api.invoke('open:url', p.url).catch((e) => setError(e.message)) : setNotice({ tone: 'warn', text: 'No website was recorded for this program.' })),
     restoreRemoval: async (p) => {
       if (!p.backups?.length) return setNotice({ tone: 'warn', text: 'No removal backup is linked to this entry.' });
-      if (!(await api.invoke('dialog:confirm', { confirmId: 'putBackLeftovers', message: `Put back what was removed for ${p.name}?`, detail: 'Its leftover files and settings are restored from the removal backup. This does not reinstall the program itself.' }))) return;
+      if (!(await api.invoke('dialog:confirm', { message: `Put back what was removed for ${p.name}?`, detail: 'Its leftover files and settings are restored from the removal backup. This does not reinstall the program itself.' }))) return;
       setBusy('Restoring…');
       try {
         const results = (await Promise.all(p.backups.map((b) => api.invoke('backups:restore', b).catch((e) => [{ kind: 'file', path: b, ok: false, detail: e.message }])))).flat();
@@ -1848,18 +1588,18 @@ const [reducedMotion, setReducedMotion] = useState(false);
       }
     },
     deleteRecord: async (p) => {
-      if (!(await api.invoke('dialog:confirm', { confirmId: 'deleteFromArchive', message: `Delete ${p.name} from the archive?`, detail: 'Only this record is deleted. Backups stay in Tools › Backups.' }))) return;
+      if (!(await api.invoke('dialog:confirm', { message: `Delete ${p.name} from the archive?`, detail: 'Only this record is deleted. Backups stay in Tools › Backups.' }))) return;
       await api.invoke('archive:remove', p.id);
       load();
     },
     restore: async (p) => {
-      if (!(await api.invoke('dialog:confirm', { confirmId: 'restoreBackup', message: `Restore the backup of ${p.name}?`, detail: 'Registry keys and values are re-imported. Files must be restored from the Recycle Bin.' }))) return;
+      if (!(await api.invoke('dialog:confirm', { message: `Restore the backup of ${p.name}?`, detail: 'Registry keys and values are re-imported. Files must be restored from the Recycle Bin.' }))) return;
       setBusy('Restoring…');
       const results = await api.invoke('backups:restore', p.id).finally(() => setBusy(''));
       setModal({ type: 'results', title: 'Restore Report', results });
     },
     deleteBackup: async (p) => {
-      if (await api.invoke('dialog:confirm', { confirmId: 'deleteBackup', message: `Delete the backup of ${p.name}?`, detail: 'This cannot be undone.' })) {
+      if (await api.invoke('dialog:confirm', { message: `Delete the backup of ${p.name}?`, detail: 'This cannot be undone.' })) {
         await api.invoke('backups:remove', p.id);
         load();
       }
@@ -1952,8 +1692,6 @@ const [reducedMotion, setReducedMotion] = useState(false);
     regSearch: () => setModal({ type: 'regSearch' }),
     browsers: () => openBrowsers(),
     portable: () => openPortable(),
-    portableapps: async () => openPortableApps(),
-    makePortable: async (p) => openMakePortable(p),
     migratePc: () => setModal({ type: 'migratePc' }),
     restoreFolder: () => restoreFolder(),
     sync: () => openSync(),
@@ -2003,7 +1741,6 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     refresh: () => load(),
     monitor: () => setModal({ type: 'monitor' }),
     about: () => setModal({ type: 'about' }),
-    updates: () => setModal({ type: 'updates' }),
     zoomIn: () => changeZoom(1),
     zoomOut: () => changeZoom(-1),
     zoomReset: () => changeZoom(0),
@@ -2019,16 +1756,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       setNotice({ tone: 'ok', text: s.safeMode ? 'Safe mode is on: leftover lists offer only items with a 90%+ match, and never services, scheduled tasks or firewall rules.' : 'Safe mode is off: every finding can be selected.' });
     },
     backupSettings: async () => setModal({ type: 'backupSettings', settings: await api.invoke('settings:get') }),
-    confirmationPrompts: async () => setModal({ type: 'confirmationPrompts', settings: await api.invoke('settings:get') }),
     openLog: () => api.invoke('log:open'),
-    trustedPublishers: async () => {
-      const list = await api.invoke('trusted:list');
-      setModal({ type: 'trustedPublishers', publishers: list });
-    },
-    updateCheck: async () => {
-      const s = await api.invoke('update:settings');
-      setModal({ type: 'updateCheck', enabled: s.enabled, lastCheck: s.lastCheck });
-    },
     toggleSilent: async () => {
       const s = await api.invoke('settings:set', { silentUninstall: !silentOn });
       setSilentOn(s.silentUninstall);
@@ -2045,50 +1773,12 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       api.invoke('backups:prune').catch(() => {});
       setNotice({ tone: 'ok', text: s.createRestorePoints ? 'Restore points are on: confirmations offer to create one first.' : 'Restore points are off: the checkbox starts unticked.' });
     },
-    setLanguage: async (code) => {
-      await api.invoke('i18n:set', code);
-      setLang(code);
-      setNotice({ tone: 'ok', text: `Language set to ${code}. Restart Purgeon for all menus to use it.` });
-    },
-    toggleSync: async () => {
-      const next = !syncOn;
-      await api.invoke('sync:apply', { folder: syncFolder || undefined, on: next });
-      setSyncOn(next);
-      setNotice({ tone: 'ok', text: next ? 'Settings sync is on.' : 'Settings sync is off.' });
-    },
-    pickSyncFolder: async () => {
-      const { open: openDialog } = await import('@tauri-apps/plugin-dialog');
-      const folder = await openDialog({ title: 'Choose the sync folder', directory: true, multiple: false });
-      if (typeof folder === 'string') {
-        setSyncFolder(folder);
-        await api.invoke('settings:set', { syncFolder: folder });
-        await api.invoke('sync:apply', { folder, on: syncOn });
-        setNotice({ tone: 'ok', text: 'Sync folder chosen.' });
-      }
-    },
-    toggleSchedule: async () => {
-      const next = !scheduleOn;
-      await api.invoke('schedule:apply', { enabled: next, scanLeftovers: true, checkStartup: true });
-      setScheduleOn(next);
-      setNotice({ tone: 'ok', text: next ? 'Background monitoring is on: Purgeon scans for leftovers while the PC is idle.' : 'Background monitoring is off.' });
-    },
-    schedule: async () => { await dispatch('toggleSchedule'); },
-    syncFolder: async () => { await pickSyncFolder(); },
-    language: async () => {
-      const next = lang === 'en' ? 'es' : lang === 'es' ? 'de' : lang === 'de' ? 'fr' : 'en';
-      await api.invoke('i18n:set', next);
-      setLang(next);
-      setNotice({ tone: 'ok', text: `Language switched to ${next}.` });
-    },
   };
 
   const dispatch = (action) => {
     setMenu(null);
     if (action.startsWith('view:')) return setView(action.slice(5));
     if (action.startsWith('close:')) return setCloseChoice(action.slice(6));
-    if (action === 'welcome') return setWelcomeOpen(true);
-    if (action === 'shortcuts') return setModal({ type: 'shortcuts' });
-    if (action === 'guide') return setModal({ type: 'guide' });
     if (action.startsWith('theme:')) {
       const th = action.slice(6);
       setTheme(th);
@@ -2104,21 +1794,6 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
   };
   const dispatchRef = useRef(dispatch);
   dispatchRef.current = dispatch;
-
-  // Undo stack: records the last removable action so it can be undone within 30 seconds.
-  const addUndo = useCallback(async (label, undoFn) => {
-    setUndoStack((prev) => [...prev.slice(-4), { label, undoFn, time: Date.now() }]);
-    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-    const t = setTimeout(() => setUndoStack([]), 30000);
-    undoTimerRef.current = t;
-  }, []);
-
-  const clearUndo = useCallback(() => {
-    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
-    setUndoStack([]);
-    undoTimerRef.current = null;
-  }, []);
-
   useEffect(() => installTips(), []);
 
   // Installers starting: checked every 3 seconds while Purgeon runs, in the tray too. Not
@@ -2183,8 +1858,6 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       else if (key === 'F5') action = 'refresh';
       else if (e.altKey && key === 'Enter') action = 'properties';
       else if (!typing && key === 'Delete') action = e.shiftKey ? 'force' : 'uninstall';
-      else if (e.altKey && key === 'ArrowLeft') { e.preventDefault(); goBack(); }
-      else if (e.altKey && key === 'ArrowRight') { e.preventDefault(); goForward(); }
       if (!action || document.querySelector('.overlay')) return;
       e.preventDefault();
       dispatchRef.current(action);
@@ -2250,9 +1923,9 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     : view === 'backups'
       ? [['restore', 'Restore'], ['properties', 'Show Contents'], null, ['deleteBackup', 'Delete Backup']]
       : view === 'monitored'
-        ? [['uninstall', 'Uninstall...'], ['makePortable', 'Make Portable...'], null, ['properties', 'Recorded Changes'], ['search', 'Search Online']]
+        ? [['uninstall', 'Uninstall...'], null, ['properties', 'Recorded Changes'], ['search', 'Search Online']]
         : view === 'store'
-          ? [['uninstall', 'Uninstall...'], ['setGroup', 'Set Group...', 'Ctrl+G'], ['makePortable', 'Make Portable...'], null, ['folder', 'Installation Folder'], ['search', 'Search Online'], null, ['properties', 'Properties']]
+          ? [['uninstall', 'Uninstall...'], ['setGroup', 'Set Group...', 'Ctrl+G'], null, ['folder', 'Installation Folder'], ['search', 'Search Online'], null, ['properties', 'Properties']]
           : [
               ['uninstall', 'Uninstall...', 'Del'],
               ['force', 'Force...', 'Shift+Del'],
@@ -2265,14 +1938,12 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               ['analyzeProgram', 'Analyze Program...', 'Ctrl+I'],
               ['sheet', 'What’s This...', 'Ctrl+W'],
               ['rescue', 'Rescue Broken Uninstall...'],
-              ['makePortable', 'Make Portable...'],
               null,
               ['registry', 'Registry Entry'],
               ['folder', 'Installation Folder'],
               ['search', 'Search Online'],
               null,
               ['properties', 'Properties', 'Alt+Enter'],
-              ['programDetail', 'Show Details...'],
             ];
 
   const totalKB = view === 'desktop' ? visible.reduce((s, r) => s + (r.sizeKB || 0), 0) : 0;
@@ -2349,7 +2020,6 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
 
   return (
     <div className={`app ${gridOn ? 'grid' : ''}`} onClick={() => menu && setMenu(null)}>
-      <a href="#main-content" className="skip-to-content">Skip to main content</a>
       <MenuBar onAction={dispatch} controls={<WindowControls pinned={win.alwaysOnTop} toTray={win.minimizeToTray} onPin={() => dispatch('toggleOnTop')} />} right={
           admin === false ? (
             <button className="link elevate" onClick={() => api.invoke('app:elevate')} title="Needed to remove programs installed for all users, and for machine-wide changes">
@@ -2359,7 +2029,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             <span className="elevated">Administrator</span>
           ) : null
         }
-        checked={{ toggleRestore: restoreOn, toggleSilent: silentOn, toggleSafe: safeOn, toggleGrid: gridOn, 'theme:dark': theme === 'dark', 'theme:light': theme === 'light', 'theme:contrast': theme === 'contrast', 'close:ask': closeAction === 'ask', 'close:tray': closeAction === 'tray', 'close:exit': closeAction === 'exit', toggleShell: shellOn, toggleOnTop: win.alwaysOnTop, toggleMinTray: win.minimizeToTray, toggleStartTray: win.startInTray, toggleAutostart: autostartOn, toggleDetect: detectOn, toggleHidden: showHidden, toggleSync: syncOn, toggleSchedule: scheduleOn }} />
+        checked={{ toggleRestore: restoreOn, toggleSilent: silentOn, toggleSafe: safeOn, toggleGrid: gridOn, 'theme:dark': theme === 'dark', 'theme:light': theme === 'light', 'theme:contrast': theme === 'contrast', 'close:ask': closeAction === 'ask', 'close:tray': closeAction === 'tray', 'close:exit': closeAction === 'exit', toggleShell: shellOn, toggleOnTop: win.alwaysOnTop, toggleMinTray: win.minimizeToTray, toggleStartTray: win.startInTray, toggleAutostart: autostartOn, toggleDetect: detectOn, toggleHidden: showHidden }} />
       <div className="workspace">
       {/* The views, as icons; each one's name and shortcut is in its tooltip. */}
       <nav className="view-bar-side" aria-label="Views">
@@ -2370,33 +2040,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           </button>
         ))}
       </nav>
-      {recentPrograms.length > 0 && (
-        <nav className="view-bar-side view-bar-recent" aria-label="Recent Programs">
-          <div className="recent-header">Recent</div>
-          {recentPrograms.map((p) => (
-            <button key={p.key} className="recent-chip" onClick={() => { setView('desktop'); setSelected(p.key); }} title={p.name}>
-              {p.name.length > 18 ? p.name.slice(0, 18) + '…' : p.name}
-            </button>
-          ))}
-        </nav>
-      )}
-      <main className="workspace-main" id="main-content">
-      {/* Breadcrumb navigation */}
-      <div className="breadcrumb">
-        <span className="breadcrumb-home" onClick={() => setView('desktop')} title="Programs">Programs</span>
-        {view !== 'desktop' && (
-          <>
-            <span className="breadcrumb-sep">›</span>
-            <span className="breadcrumb-current">{VIEWS[view]?.label || view}</span>
-          </>
-        )}
-        {historyIdx > 0 && (
-          <button className="breadcrumb-back" onClick={goBack} title="Back (Alt+Left)">‹ Back</button>
-        )}
-        {historyIdx < viewHistory.length - 1 && (
-          <button className="breadcrumb-forward" onClick={goForward} title="Forward (Alt+Right)">Forward ›</button>
-        )}
-      </div>
+      <div className="workspace-main">
       {/* Row 1: one box that searches the list and finds commands. */}
       <div className="cmdbar">
         <div className="search">
@@ -2450,9 +2094,6 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         <button className="palette-hint" onClick={() => dispatch('palette')} title="Every command and program in one list">
           All commands <kbd>Ctrl+K</kbd>
         </button>
-        <button className={`safe-toggle ${safeOn ? 'on' : ''}`} onClick={() => { setSafeOn(!safeOn); api.invoke('settings:set', { safeMode: !safeOn }); }} title={safeOn ? 'Safe Mode is on: only high-confidence matches, no services/tasks/firewall' : 'Safe Mode is off: every finding can be selected'}>
-          {safeOn ? 'Safe Mode: On' : 'Safe Mode: Off'}
-        </button>
       </div>
       {/* Row 2: what is selected (or what this view is for), and the group filter. */}
       <div className="toolbar details-bar" role="status" aria-label="Selection">
@@ -2485,73 +2126,12 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             </optgroup>
           )}
         </select>
-        {/* Quick filter chips: one-click presets that narrow the program list. */}
-        {batchable && (
-          <div className="filter-chips" aria-label="Quick filters">
-            <button
-              className={`filter-chip ${quickFilter === 'all' ? 'on' : ''}`}
-              onClick={() => setQuickFilter('all')}
-              title="Show all programs"
-              aria-label="Show all programs"
-            >
-              All
-            </button>
-            <button
-              className={`filter-chip ${quickFilter === 'desktop' ? 'on' : ''}`}
-              onClick={() => setQuickFilter('desktop')}
-              title="Desktop programs only"
-              aria-label="Desktop programs only"
-            >
-              Desktop
-            </button>
-            <button
-              className={`filter-chip ${quickFilter === 'store' ? 'on' : ''}`}
-              onClick={() => setQuickFilter('store')}
-              title="Windows Store apps only"
-              aria-label="Windows Store apps only"
-            >
-              Store Apps
-            </button>
-            <button
-              className={`filter-chip ${quickFilter === 'recent' ? 'on' : ''}`}
-              onClick={() => setQuickFilter('recent')}
-              title="Programs installed in the last 30 days"
-              aria-label="Programs installed in the last 30 days"
-            >
-              Recent
-            </button>
-            <button
-              className={`filter-chip ${quickFilter === 'large' ? 'on' : ''}`}
-              onClick={() => setQuickFilter('large')}
-              title="Programs larger than 100 MB"
-              aria-label="Programs larger than 100 MB"
-            >
-              Large
-            </button>
-            <button
-              className={`filter-chip ${quickFilter === 'unsigned' ? 'on' : ''}`}
-              onClick={() => setQuickFilter('unsigned')}
-              title="Programs with missing or bad digital signatures"
-              aria-label="Programs with missing or bad digital signatures"
-            >
-              Unsigned
-            </button>
-            <button
-              className={`filter-chip ${quickFilter === 'used' ? 'on' : ''}`}
-              onClick={() => setQuickFilter('used')}
-              title="Programs used in the last 30 days"
-              aria-label="Programs used in the last 30 days"
-            >
-              Recently Used
-            </button>
-          </div>
-        )}
       </div>
       {/* Row 3: the actions for the selection; they continue on another row when they don't fit. */}
       {barItems.length > 0 && (
         <div className="action-bar" role="toolbar" aria-label="Actions">
           {barItems.map(([id, label]) => (
-            <button key={id} className={`action-button ${id === 'uninstall' ? 'primary' : ''} ${/^(force|delete)/i.test(id) ? 'danger' : ''}`} disabled={!barReady(id)} onClick={() => dispatch(id)} title={ACTION_TIPS[id]} aria-label={shortLabel(label)}>
+            <button key={id} className={`action-button ${/^(uninstall|force|delete)/i.test(id) ? 'danger' : ''}`} disabled={!barReady(id)} onClick={() => dispatch(id)} title={ACTION_TIPS[id]}>
               {shortLabel(label)}
             </button>
           ))}
@@ -2572,7 +2152,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           onError={setError}
           onStatus={setCustomStatus}
           onRemoveRule={async (r) => {
-            if (!(await api.invoke('dialog:confirm', { confirmId: 'removeFirewallRules', message: `Remove ${r.names.length === 1 ? 'the firewall rule' : `${r.names.length} firewall rules`} for "${r.display}"?`, detail: `${r.program} will no longer accept incoming connections through ${r.names.length === 1 ? 'this rule' : 'these rules'}. Each rule is backed up first and can be restored from Change History.` }))) return;
+            if (!(await api.invoke('dialog:confirm', { message: `Remove ${r.names.length === 1 ? 'the firewall rule' : `${r.names.length} firewall rules`} for "${r.display}"?`, detail: `${r.program} will no longer accept incoming connections through ${r.names.length === 1 ? 'this rule' : 'these rules'}. Each rule is backed up first and can be restored from Change History.` }))) return;
             removeWithBackup(`Firewall rules for ${r.display}`, r.names.map((n) => ({ kind: 'firewall', path: n, name: r.display, confidence: 'high', reason: 'Inbound rule' })));
           }}
         />
@@ -2591,13 +2171,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         {loading ? (
           <div className="list-empty">Loading…</div>
         ) : visible.length === 0 ? (
-          <div className="list-empty list-empty-actionable">
-            <span>{emptyStateMessage(view, filter)}</span>
-            {emptyStateActions(view, () => setModal({ type: 'monitor' }), () => setModal({ type: 'snapshot' }), () => load()).map((a, i) => (
-              <button key={i} className="list-empty-action" onClick={a.onClick} title={a.title}>
-                {a.label}
-              </button>
-            ))}
+          <div className="list-empty">
+            {filter ? 'No matches.' : view === 'timeline' ? 'Nothing recorded yet.' : view === 'archive' ? 'No programs removed yet. Every program you uninstall is recorded here.' : view === 'monitored' ? 'No monitored programs yet. Use Tools › Monitor an Installation.' : view === 'backups' ? 'No backups yet.' : view === 'history' ? 'No changes yet. Everything Purgeon changes will be listed here.' : 'Nothing found.'}
           </div>
         ) : (
           visible.map((r, idx) => (
@@ -2656,33 +2231,21 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
 
       {/* Messages sit at the bottom, just above the status bar. */}
       {error && (
-        <div className="error-bar" aria-live="polite" aria-label="Error">
-          <span>{error.msg || error}</span>
-          {error.retry && (
-            <button onClick={error.retry} title="Try again">↻ Retry</button>
-          )}
+        <div className="error-bar">
+          <span>{error}</span>
           <button onClick={() => setError('')}>✕</button>
         </div>
       )}
       {notice && (
-        <div className={`notice-bar ${notice.tone}`} aria-live="polite" aria-label="Notice">
+        <div className={`notice-bar ${notice.tone}`}>
           <span>{notice.text}</span>
           <button onClick={() => setNotice(null)} aria-label="Dismiss">
             ✕
           </button>
         </div>
       )}
-      {undoStack.length > 0 && (
-        <div className="undo-toast" aria-live="polite" aria-label="Undo available">
-          <span>Undo: {undoStack[undoStack.length - 1].label}</span>
-          <button className="primary" onClick={() => {
-            const u = undoStack[undoStack.length - 1];
-            u.undoFn().then(() => clearUndo()).catch(() => setError('Undo failed.'));
-          }}>Undo</button>
-          <button onClick={clearUndo}>✕</button>
-        </div>
-      )}
-      </main>
+
+      </div>
       </div>
 
       <div className="statusbar">
@@ -2708,48 +2271,21 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       </div>
 
       {menu && current && (
-        <div className="context-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()} role="menu">
+        <div className="context-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           {contextItems.map((it, i) =>
             it ? (
-              <button key={i} className={i === 0 ? 'bold' : ''} role="menuitem" onClick={() => dispatch(it[0])} title={ACTION_TIPS[it[0]]} aria-label={it[1]}>
+              <button key={i} className={i === 0 ? 'bold' : ''} onClick={() => dispatch(it[0])} title={ACTION_TIPS[it[0]]}>
                 <span>{it[1]}</span>
                 <span className="accel">{it[2]}</span>
               </button>
             ) : (
-              <div key={i} className="sep" role="separator" />
+              <div key={i} className="sep" />
             )
           )}
         </div>
       )}
 
-      {busy && <Busy busy={busy} onStop={busyStop} onPause={busy?.onPause} onCancel={busy?.onCancel} />}
-      {welcomeOpen && (
-        <WelcomeDialog
-          onClose={() => {
-            setWelcomeOpen(false);
-            markWelcomeSeen();
-          }}
-          onGetStarted={(path) => {
-            setWelcomeOpen(false);
-            markWelcomeSeen();
-            if (path === 'programs') setView('desktop');
-            else if (path === 'monitor') setModal({ type: 'monitor' });
-            else if (path === 'junk') setView('junk');
-          }}
-        />
-      )}
-      {hasSeenWelcome === false && (
-        <FirstRunTips
-          visible={true}
-          onTipAction={(tipId) => {
-            setFirstRunTipDismissed((d) => new Set([...d, tipId]));
-            if (tipId === 'find-anything') setModal({ type: 'palette' });
-          }}
-          onClose={() => {
-            setFirstRunTipDismissed((d) => new Set([...d, FIRST_RUN_TIPS.map((t) => t.id)]));
-          }}
-        />
-      )}
+      {busy && <Busy message={busy} onStop={busyStop} />}
       {confirm && (
         <ConfirmDialog
           {...confirm}
@@ -2765,16 +2301,6 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           safeMode={safeOn}
           onDryRun={(sel) => api.invoke('backups:plan', { items: sel, owners: modal.owners || [] }).then((r) => r.results)}
           onExportPlan={(results) => api.invoke('export:html', { title: 'Export Dry Run', fileName: 'dry-run.html', html: planHtml(modal.title, results) })}
-          onClose={() => setModal(null)}
-        />
-      )}
-      {modal?.type === 'confirmationPrompts' && (
-        <ConfirmationSettingsDialog
-          settings={modal.settings}
-          onSave={async (patch) => {
-            await api.invoke('settings:set', patch);
-            setNotice({ tone: 'ok', text: 'Confirmation prompt settings saved.' });
-          }}
           onClose={() => setModal(null)}
         />
       )}
@@ -2812,18 +2338,6 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {modal?.type === 'results' && <ResultsDialog {...modal} onClose={() => setModal(null)} />}
       {modal?.type === 'properties' && <PropertiesDialog program={modal.program} onClose={() => setModal(null)} />}
       {modal?.type === 'about' && <AboutDialog onClose={() => setModal(null)} />}
-      {modal?.type === 'shortcuts' && <ShortcutsDialog onClose={() => setModal(null)} />}
-      {modal?.type === 'guide' && <UserGuide onClose={() => setModal(null)} />}
-      {modal?.type === 'updateAvailable' && (
-        <UpdateAvailableDialog
-          version={modal.version}
-          onClose={() => setModal(null)}
-          onDownload={() => {
-            setModal(null);
-            api.invoke('program:openUrl', 'https://github.com/SeanShaffer88/Purgeon/releases').catch(() => {});
-          }}
-        />
-      )}
       {modal?.type === 'group' && (
         <GroupDialog programs={modal.programs} current={groups[modal.programs[0].key] || ''} grouped={modal.programs.some((p) => groups[p.key])} names={groupNames} onSave={(g) => saveGroup(modal.programs, g)} onClose={() => setModal(null)} />
       )}
@@ -2847,7 +2361,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           onNew={newTrial}
           onTryOver={tryOver}
           onKeep={async (t) => {
-            if (!(await api.invoke('dialog:confirm', { confirmId: 'keepTrial', message: `Keep ${t.name}?`, detail: 'The trial ends and its snapshot is deleted. The program stays installed; you can still uninstall it normally later.' }))) return;
+            if (!(await api.invoke('dialog:confirm', { message: `Keep ${t.name}?`, detail: 'The trial ends and its snapshot is deleted. The program stays installed; you can still uninstall it normally later.' }))) return;
             await api.invoke('trials:finish', t.id);
             openTrials();
           }}
@@ -3002,90 +2516,13 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           onClose={() => setModal(null)}
         />
       )}
-      {modal?.type === 'portableapps' && (
-        <PortableAppsDialog
-          programs={modal.programs}
-          onGenerate={async (args) => {
-            try {
-              const f = await api.invoke('transfer:pickFolder', 'Choose the folder for the PortableApps.com package');
-              if (!f) return;
-              setBusy('Generating PortableApps.com package…');
-              const result = await api.invoke('portableapps:generate', { ...args, outputDir: f });
-              setBusy('');
-              setNotice({
-                tone: 'ok',
-                text: `PortableApps.com package generated for "${result.name}". NSIS script: ${result.nsiScriptPath}`,
-              });
-              setModal(null);
-            } catch (e) {
-              setError(e.message);
-            } finally {
-              setBusy('');
-            }
-          }}
-          onClose={() => setModal(null)}
-        />
-      )}
-      {modal?.type === 'makePortable' && (
-        <MakePortableDialog
-          program={modal.program}
-          items={modal.items}
-          name={modal.name}
-          publisher={modal.publisher}
-          version={modal.version}
-          onGenerate={async (args) => {
-            try {
-              const f = await api.invoke('transfer:pickFolder', 'Choose the folder for the PortableApps.com package');
-              if (!f) return;
-              setBusy('Creating PortableApps.com package…');
-              const result = await api.invoke('portableapps:generate', {
-                ...args,
-                outputDir: f,
-                items: modal.items,
-              });
-              setBusy('');
-              setNotice({
-                tone: 'ok',
-                text: `PortableApps.com package generated for "${result.name}". NSIS script: ${result.nsiScriptPath}`,
-              });
-              setModal(null);
-            } catch (e) {
-              setError(e.message);
-            } finally {
-              setBusy('');
-            }
-          }}
-          onClose={() => setModal(null)}
-        />
-      )}
-      {modal?.type === 'programDetail' && (
-        <ProgramDetailDialog
-          program={modal.program}
-          insight={modal.insight}
-          sizes={modal.sizes}
-          onClose={() => setModal(null)}
-        />
-      )}
-      {modal?.type === 'trustedPublishers' && (
-        <TrustedPublishersDialog
-          publishers={modal.publishers}
-          onClose={() => setModal(null)}
-        />
-      )}
-      {modal?.type === 'updateCheck' && (
-        <UpdateCheckDialog
-          enabled={modal.enabled}
-          lastCheck={modal.lastCheck}
-          onClose={() => setModal(null)}
-        />
-      )}
       {modal?.type === 'ctxmenu' && (
         <ContextMenuDialog
           entries={modal.entries}
           admin={admin}
           onToggle={async (e) => {
             if (e.admin && admin === false) return setError(`"${e.name}" needs administrator rights. Use File › Restart as Administrator.`);
-            if (e.enabled && e.windows && !(await api.invoke('dialog:confirm', { confirmId: 'turnOffCtxMenu', message: `Turn off "${e.name}"?`, detail: 'This entry is part of Windows or a Microsoft product (such as the virus scan entry). Turning it off is reversible.' }))) return;
+            if (e.enabled && e.windows && !(await api.invoke('dialog:confirm', { message: `Turn off "${e.name}"?`, detail: 'This entry is part of Windows or a Microsoft product (such as the virus scan entry). Turning it off is reversible.' }))) return;
             try {
               const now = await api.invoke('ctxmenu:set', { entry: e, enable: !e.enabled });
               setModal((m) => m?.type === 'ctxmenu' ? { ...m, entries: m.entries.map((x) => (x.id === now.id ? now : x)) } : m);

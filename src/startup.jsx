@@ -182,7 +182,6 @@ export function StartupView({ filter, admin, programs, onError, onStatus, onRemo
                 className={`tweak ${e.enabled ? 'on' : 'off'} ${busy ? 'busy' : ''}`}
                 onClick={() => toggle(e)}
                 aria-pressed={e.enabled}
-                aria-label={`${e.name}, ${e.enabled ? 'enabled' : 'disabled'}, ${e.where}. Click to turn ${e.enabled ? 'off' : 'on'}.`}
                 title={e.command}
               >
                 <span className={`pill ${e.enabled ? 'on' : 'off'}`}>{busy ? '…' : e.enabled ? 'ENABLED' : 'DISABLED'}</span>
@@ -199,29 +198,6 @@ export function StartupView({ filter, admin, programs, onError, onStatus, onRemo
                 <span className="tweak-tags">
                   <span className={`fx ${fx.className}`}>{fx.label}</span>
                   <span className="tag-row">
-                    {e.type === 'service' && e.enabled && (
-                      <button
-                        className={`link ${e.delayed ? 'on' : ''}`}
-                        onClick={() => {
-                          if (working.has(e.id)) return;
-                          setWorking((s) => new Set(s).add(e.id));
-                          api.invoke('startup:delayed', { entry: e, delayed: !e.delayed }).then(() => {
-                            setPending((p) => {
-                              const next = new Set(p.reboot);
-                              next.has(e.id) ? next.delete(e.id) : next.add(e.id);
-                              return { ...p, [e.effect]: next };
-                            });
-                            load();
-                          }).catch((err) => onError(err.message)).finally(() => {
-                            setWorking((s) => { const n = new Set(s); n.delete(e.id); return n; });
-                          });
-                        }}
-                        aria-label={`${e.name}, ${e.delayed ? 'delayed start on' : 'delayed start off'}. Click to turn ${e.delayed ? 'off' : 'on'} delayed start.`}
-                        title={e.delayed ? 'Service starts normally after boot' : 'Service starts after a short delay following boot'}
-                      >
-                        {e.delayed ? 'DELAYED' : 'DELAY'}
-                      </button>
-                    )}
                     {trust[e.id] && (
                       <span className="fx fx-unsigned" title={trust[e.id].join('\n')}>
                         ⚠ Check

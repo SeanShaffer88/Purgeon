@@ -10,7 +10,6 @@ import { runPS } from './shell.js';
 import { isProtected, isProtectedKey } from './paths.js';
 import { capture, revertible } from './snapshots.js';
 import { stillPresent } from './installers.js';
-import * as backups from './backups.js';
 
 let storeDir = '';
 const setRoot = async (dir) => {
@@ -49,24 +48,6 @@ const status = async () => {
   // A trace does not survive Purgeon closing, so a resumed session has snapshots only.
   const live = !!sys.trackRunning && (await sys.trackRunning());
   return { started, installer, name, attached: !!attached, live };
-};
-
-// Polls live tracking progress during an active monitoring session. Returns the running
-// event/process count so the UI can show a progress indicator while the installer runs.
-const poll = async () => {
-  if (!(await sys.exists(sessionFile()))) return null;
-  const session = JSON.parse(await sys.readText(sessionFile()));
-  if (!session.live) return { started: session.started, live: false };
-  const running = !!sys.trackRunning && (await sys.trackRunning());
-  if (!running) return { started: session.started, live: false };
-  // TrackStop returns the accumulated events; poll the count without stopping tracking.
-  const peek = typeof sys.trackPeek === 'function' ? await sys.trackPeek().catch(() => null) : null;
-  return {
-    started: session.started,
-    live: true,
-    processes: peek?.processes?.length || 0,
-    events: peek?.events?.length || 0,
-  };
 };
 
 const cancel = async () => {
@@ -125,9 +106,11 @@ function recordItems(comparison) {
   return items;
 }
 
-// Merges snapshot items with live tracking items and computes uninstall keys.
-// Used by both finish() (permanent record) and testInstallFinish() (disposable test).
-async function buildItems(session, comparison, tracked) {
+async function finish(name) {
+  const session = JSON.parse(await sys.readText(sessionFile()));
+  const tracked = sys.trackRunning && (await sys.trackRunning()) ? await sys.trackStop().catch(() => null) : null;
+  await capture(afterFile(), 'After installation', 'standard');
+  const comparison = await sys.compareSnapshots(beforeFile(), afterFile(), 100000);
   let items = recordItems(comparison);
   if (tracked) {
     const sid = (await runPS('[Security.Principal.WindowsIdentity]::GetCurrent().User.Value').catch(() => '')).trim();
@@ -135,15 +118,6 @@ async function buildItems(session, comparison, tracked) {
     items = mergeItems(items, live);
   }
   const uninstallKeys = items.filter((k) => k.kind === 'key' && /\\CurrentVersion\\Uninstall\\[^\\]+$/i.test(k.path)).map((k) => k.path);
-  return { items, uninstallKeys };
-}
-
-async function finish(name) {
-  const session = JSON.parse(await sys.readText(sessionFile()));
-  const tracked = sys.trackRunning && (await sys.trackRunning()) ? await sys.trackStop().catch(() => null) : null;
-  await capture(afterFile(), 'After installation', 'standard');
-  const comparison = await sys.compareSnapshots(beforeFile(), afterFile(), 100000);
-  const { items, uninstallKeys } = await buildItems(session, comparison, tracked);
 
   const record = {
     id: `${Date.now()}`,
@@ -159,78 +133,6 @@ async function finish(name) {
   await sys.writeText(path.join(storeDir, 'programs', `${record.id}.json`), JSON.stringify(record, null, 2));
   await cancel();
   return record;
-}
-
-// ---- disposable isolated test environment --------------------------------------
-
-// Starts a disposable test install: takes a "before" snapshot and optionally
-// starts live tracking. The installer is not started here; call launch() next.
-// Nothing is stored permanently — the session is marked as a test install so
-// finish() knows not to persist it.
-async function testInstallStart(installer, name) {
-  const stats = await capture(beforeFile(), 'Before installation (test)', 'standard');
-  const live = !!installer && !!sys.trackStart && (await sys.trackStart().then(() => true, () => false));
-  await sys.writeText(sessionFile(), JSON.stringify({ started: new Date().toISOString(), installer, name, live, testInstall: true }));
-  return { entries: stats.dirs + stats.files + stats.keys + stats.values, live };
-}
-
-// Finishes a disposable test install: takes an "after" snapshot, compares it
-// with the "before" snapshot, and returns the captured items WITHOUT storing
-// anything permanently. The session is cleaned up. A temp copy of the items is
-// kept so revertTestInstall can remove them without the user re-supplying them.
-const TEST_RESULT_FILE = () => path.join(sys.info.dataDir, 'test-install-last.json');
-
-async function testInstallFinish(name) {
-  const session = JSON.parse(await sys.readText(sessionFile()));
-  const tracked = sys.trackRunning && (await sys.trackRunning()) ? await sys.trackStop().catch(() => null) : null;
-  await capture(afterFile(), 'After installation (test)', 'standard');
-  const comparison = await sys.compareSnapshots(beforeFile(), afterFile(), 100000);
-  const { items, uninstallKeys } = await buildItems(session, comparison, tracked);
-  await cancel(); // clean up session files, do NOT store permanently
-  const result = {
-    name: name || path.basename(session.installer || 'Test install'),
-    installer: session.installer,
-    started: session.started,
-    finished: new Date().toISOString(),
-    uninstallKeys,
-    items,
-    changedFiles: comparison.changed.filter((c) => c.kind === 'file').length,
-    ...(tracked && { tracked: { processes: [...new Set(tracked.processes.map((p) => path.basename(p.image)))], events: tracked.events } }),
-  };
-  // Keep a temp copy so revertTestInstall can remove the captured changes.
-  await sys.writeText(TEST_RESULT_FILE(), JSON.stringify(result, null, 2));
-  return result;
-}
-
-// Reverts every change captured during a disposable test install: removes all
-// recorded files, directories, registry keys and values, and restores any
-// changed values to their earlier state. Uses the backup system so the revert
-// itself can be undone. Returns the removal results.
-async function revertTestInstall(items) {
-  if (!items || !items.length) {
-    // No items passed: try the last test install result.
-    try {
-      const saved = JSON.parse(await sys.readText(TEST_RESULT_FILE()));
-      items = saved.items;
-    } catch {
-      return { results: [], backupId: null, note: 'No test install items to revert.' };
-    }
-  }
-  if (!items.length) return { results: [], backupId: null };
-  const tempRoot = path.join(sys.info.dataDir, 'test-revert-' + Date.now());
-  await backups.setRoot(tempRoot);
-  try {
-    const result = await backups.removeItems({
-      title: 'Revert test install',
-      items,
-      owners: [],
-    });
-    await backups.prune({ maxDays: 0 }, Date.now()); // clean up the temp backup immediately
-    return result;
-  } finally {
-    await sys.removePath(tempRoot).catch(() => {});
-    await sys.removePath(TEST_RESULT_FILE()).catch(() => {});
-  }
 }
 
 async function list() {
@@ -303,4 +205,4 @@ export function mergeItems(snapshot, live) {
   return out;
 }
 
-export { setRoot, start, attach, launch, status, cancel, finish, list, remove, collapse, recordItems, buildItems, testInstallStart, testInstallFinish, revertTestInstall, poll };
+export { setRoot, start, attach, launch, status, cancel, finish, list, remove, collapse, recordItems };

@@ -4,7 +4,7 @@ Planned enhancements, grouped by area. Each is meant to be built the same way as
 Purgeon: original code, every change backed up and undoable, and nothing offered that
 Windows or another installed program still needs.
 
-## Released in 1.0.0
+## Added since 0.7.0 (next release)
 
 - **Uninstall queue.** Unattended uninstalls that continue after a restart, with all leftovers reviewed at the end.
 - **Removed elsewhere.** Programs uninstalled outside Purgeon are noticed and offered a leftover scan.
@@ -17,34 +17,27 @@ Windows or another installed program still needs.
 - **Startup trust check.** Entries from unusual folders, unsigned or newly added are tagged.
 - **New startup entry alerts.** A notification with Allow and Turn Off when a program adds itself.
 - **Browser clean-up.** Extensions that programs added to Chrome, Edge, Brave and Firefox, removable with a backup.
+- **Privacy traces.** Recent-files list, jump lists and the icon cache in the Cleaner, never pre-selected.
 - **Whole-PC migration.** Several programs packed into one folder, plus a winget list for the rest.
 - **Settings sync.** Chosen programs' settings kept in step through a shared folder.
-- **Portable apps.** Programs without an installer can be registered to get icons, groups and leftover scans; your own folders of portable apps are remembered, and Check for Updates finds newer versions through winget.
-- **Portable packaging.** Run installs in a disposable isolated test environment, capture every file and change, mark an app portable only when it runs from captured files without system-wide changes. Auto-exclude programs adding services, drivers, scheduled tasks, licensing data, or dependencies outside the app folder, and tell the user why. CLI: `--monitor test-install-start/finish/revert-test-install` and `--portableapps list|generate`.
+- **Portable apps.** Programs without an installer can be registered to get icons, groups and leftover scans.
 - **Explorer right-click entries.** "Uninstall with Purgeon" and "Who owns this?", fully removed when turned off.
-- **Command palette.** `Ctrl+K` for every command and program, with fuzzy search scoring.
+- **Command palette.** `Ctrl+K` for every command and program.
 - **Tray and notifications.** Optional tray icon for maintenance, updates, startup alerts and interrupted removals.
 - **Monthly report.** An HTML summary of a month's changes.
-- **Themes and accessibility.** Light and high-contrast themes, keyboard menus, focus outlines, screen-reader labels, skip-to-content link, reduced-motion option, font-size scaling.
+- **Themes and accessibility.** Light and high-contrast themes, keyboard menus, focus outlines and screen-reader labels.
 - **Explorer context menu manager.** Turn programs' right-click entries off and on without deleting them.
 - **Installer detection.** Installers starting while Purgeon runs (also from the tray) are noticed, with an offer to record them.
-- **Window and tray options.** Always on Top (also a 📌 thumbtack in Purgeon's own title bar), Minimize to Tray, a close button that asks whether to exit or keep running in the tray (with Remember my choice), Start Minimized to Tray; the tray icon shows the window on a left click and opens its menu on a right click.
+- **Window and tray options.** Always on Top (also a 📌 thumbtack in Purgeon’s own title bar), Minimize to Tray, a close button that asks whether to exit or keep running in the tray (with Remember my choice), Start Minimized to Tray; the tray icon shows the window on a left click and opens its menu on a right click.
 - **Start with Windows.** Off by default; a sign-in task, also offered unticked on the installer's last page, and removed on uninstall.
 - **Hidden programs.** Hide entries from the list and bring them back.
 - **Tooltips everywhere.** Every command, button and field explains what it does and how to undo it.
 - **Messages at the bottom.** Notices and errors appear just above the status bar, marked 👍, ⚠️ or ⛔.
-- **Analyze.** A one-page report on a program: removal, disk space, hooks, last use, dependencies, signature and architecture. "What It Does" is now "What's This", and "Force Removal" is now "Force".
-- **Architecture column.** 64-bit, 32-bit or ARM64, read from each program file's header.
-- **Wrapping action bar.** Buttons that don't fit continue on a second row instead of being cut off.
+- **Analyze.** A one-page report on a program: removal, disk space, hooks, last use, dependencies, signature and architecture. "What It Does" is now "What’s This", and "Force Removal" is now "Force".
+- **Architecture column.** 64-bit, 32-bit or ARM64, read from each program file’s header.
+- **Wrapping action bar.** Buttons that don’t fit continue on a second row instead of being cut off.
+- **Portable apps.** Your own folders of portable apps are remembered, and Check for Updates finds newer versions through winget.
 - **New toolbars.** A search box that also runs commands, a details row for the selection, an actions row, and the views as a column of icons on the left. Views renamed to Programs, Apps, Debloat and Cleaner.
-- **First-run onboarding.** Welcome dialog on first launch explaining what Purgeon does, with guided starting paths, dismissible tips, and Help › Welcome Back to reopen.
-- **Progress feedback.** Progress bars with percentage, items processed and elapsed time on long operations, with pause/resume and cancel where supported.
-- **Error recovery.** Error bar with retry action for recoverable errors; undo toast for the last removal within 30 seconds; auto-retry (3 attempts) for transient backend failures; Safe Mode one-click toolbar toggle; batch uninstall pause/resume.
-- **Navigation.** Breadcrumb navigation with Back/Forward (Alt+Left/Right), view history, and recent programs sidebar.
-- **Documentation.** User Guide dialog with common workflows, What's New on version update, settings explanations in dialogs, settings export/import as JSON.
-- **Confirmation management.** Option to disable confirmations with a warning; disable option on each confirmation window; restore disabled confirmation windows in settings.
-- **Toggle selection.** Clicking a program in the list selects it; clicking again deselects it.
-- **CLI.** `--uninstall` added to help text; `--monitor test-install-start/finish/revert-test-install` for disposable test installs.
 
 ## Added in 0.6.0
 
@@ -139,7 +132,6 @@ Windows or another installed program still needs.
 - More junk categories: browser caches (only while the browser is closed), Windows install leftovers,
   rotated logs, and Windows' own component cleanup.
 - Find old installer files in Downloads for programs that are already installed.
-- **Privacy traces.** Recent-files list, jump lists and the icon cache in the Cleaner, never pre-selected.
 - Report large folders in AppData and ProgramData that belong to no installed program.
 - Find empty folders in Program Files and AppData, within the protection rules.
 
