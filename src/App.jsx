@@ -10,7 +10,7 @@ import { JunkView, formatBytes } from './junk.jsx';
 import { GroupDialog } from './groups.jsx';
 import { ProgramBackupDialog, ProgramRestoreDialog } from './transfer.jsx';
 import { WhoOwnsDialog, UpdatesDialog, MaintenanceDialog } from './tools.jsx';
-import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, SheetDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, CommandPalette, ReportDialog, ContextMenuDialog, InstallerFoundDialog, AnalysisDialog, ARCH_LABEL, CloseDialog } from './more.jsx';
+import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, SheetDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, PortableAppsDialog, CommandPalette, ReportDialog, ContextMenuDialog, InstallerFoundDialog, AnalysisDialog, ARCH_LABEL, CloseDialog } from './more.jsx';
 
 const api = window.api;
 
@@ -272,6 +272,8 @@ const MENUS = [
       null,
       ['backupSettings', 'Backup Settings...'],
       ['openLog', 'Open Command Log'],
+      null,
+      ['portableapps', 'PortableApps.com Installer...'],
     ],
   ],
   ['Help', [['palette', 'Command Palette...', 'Ctrl+K'], ['about', 'About']]],
@@ -1446,6 +1448,18 @@ export default function App() {
     }
   };
 
+  const openPortableApps = async () => {
+    setBusy('Reading monitored programs…');
+    try {
+      const programs = await api.invoke('portableapps:list');
+      setModal({ type: 'portableapps', programs });
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
   // ---- 16. Explorer right-click requests (from the command line) -----------------------------------------------
 
   const uninstallTarget = async (target) => {
@@ -1705,6 +1719,7 @@ export default function App() {
     regSearch: () => setModal({ type: 'regSearch' }),
     browsers: () => openBrowsers(),
     portable: () => openPortable(),
+    portableapps: async () => openPortableApps(),
     migratePc: () => setModal({ type: 'migratePc' }),
     restoreFolder: () => restoreFolder(),
     sync: () => openSync(),
@@ -2561,6 +2576,30 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             }
           }}
           onOpenUrl={(url) => /^https?:\/\//i.test(url) && api.invoke('open:url', url)}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'portableapps' && (
+        <PortableAppsDialog
+          programs={modal.programs}
+          onGenerate={async (args) => {
+            try {
+              const f = await api.invoke('transfer:pickFolder', 'Choose the folder for the PortableApps.com package');
+              if (!f) return;
+              setBusy('Generating PortableApps.com package…');
+              const result = await api.invoke('portableapps:generate', { ...args, outputDir: f });
+              setBusy('');
+              setNotice({
+                tone: 'ok',
+                text: `PortableApps.com package generated for "${result.name}". NSIS script: ${result.nsiScriptPath}`,
+              });
+              setModal(null);
+            } catch (e) {
+              setError(e.message);
+            } finally {
+              setBusy('');
+            }
+          }}
           onClose={() => setModal(null)}
         />
       )}

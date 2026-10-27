@@ -16,6 +16,11 @@
 //         Shows or configures cloud-synced settings. apply takes --folder <path> and --on|--off.
 //   Purgeon --plugins list|enable|disable|validate <id> [--json]
 //         Manages user plugins; validate computes and stores script integrity hashes.
+//   Purgeon --portableapps list
+//         Lists monitored programs that can be packaged as PortableApps.com installers.
+//   Purgeon --portableapps generate --monitor-id <id> --output <folder>
+//         Creates a PortableApps.com directory structure and NSIS installer script
+//         from a monitored program's recorded files.
 //   Purgeon --profiler [--json]
 //         Startup performance profile.
 //   Purgeon --profiler baseline
@@ -44,6 +49,7 @@ import * as i18n from './backend/i18n.js';
 import * as plugins from './backend/plugins.js';
 import * as profiler from './backend/profiler.js';
 import * as sync from './backend/sync.js';
+import * as portableapps from './backend/portableapps.js';
 import { runCommandLine } from './backend/shell.js';
 
 const HELP = `Purgeon command line
@@ -301,6 +307,30 @@ async function run(args) {
       return wrap(true, `Plugin ${id} ${result.enabled ? 'enabled' : 'disabled'}.\r\n`);
     }
     throw new Error('Use --plugins list|enable|disable|validate <id>.');
+  }
+  if (cmd === '--portableapps') {
+    const sub = option(args, '--portableapps');
+    if (sub === 'list') {
+      const list = await portableapps.list();
+      if (j) return wrap(true, JSON.stringify(list, null, 2));
+      return wrap(true, list.map((p) => `${p.hasProgramFiles ? '[+]' : '[-]'} ${p.id} — ${p.name} (${p.items} items, monitored ${p.finished.slice(0, 10)})\\r\\n`).join('') || 'No monitored programs.\\r\\n');
+    }
+    if (sub === 'generate') {
+      const monitorId = option(args, '--monitor-id') || option(args, '--id');
+      const outputDir = option(args, '--output') || option(args, '--dir');
+      if (!monitorId || monitorId.startsWith('--')) throw new Error('Specify the monitored program id: --portableapps generate --monitor-id <id> --output <folder>');
+      if (!outputDir || outputDir.startsWith('--')) throw new Error('Specify the output folder: --portableapps generate --monitor-id <id> --output <folder>');
+      const appName = option(args, '--name');
+      const appVersion = option(args, '--version');
+      const appPublisher = option(args, '--publisher');
+      const appHomepage = option(args, '--homepage');
+      const appDescription = option(args, '--description');
+      const startExe = option(args, '--start-exe');
+      const result = await portableapps.generate({ monitorId, outputDir, appName, appVersion, appPublisher, appHomepage, appDescription, startExe });
+      if (j) return wrap(true, JSON.stringify(result, null, 2));
+      return wrap(true, `PortableApps.com package generated for "${result.name}" (${result.id}).\n  Package: ${result.packageDir}\n  NSIS script: ${result.nsiScriptPath}\n  AppInfo: ${result.appInfoPath}\n  Start exe: ${result.startExe}\n  Files copied: ${result.files.length}\nTo build the .paf.exe: place a PortableApps.com launcher as ${result.packageDir}\\\\${result.launcherExe}, then compile ${result.nsiScriptPath} with NSIS (makensis).\\r\\n`);
+    }
+    throw new Error('Use --portableapps list|generate --monitor-id <id> --output <folder>.');
   }
   if (cmd === '--settings') {
     const settings = await (await import('./backend/api.js')).readSettings();

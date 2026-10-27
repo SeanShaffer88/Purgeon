@@ -844,3 +844,122 @@ export function ContextMenuDialog({ entries, admin, onToggle, onRestartExplorer,
     </Dialog>
   );
 }
+
+// ---- PortableApps.com installer generator ---------------------------------------
+
+export function PortableAppsDialog({ programs, onGenerate, onClose }) {
+  const [chosen, setChosen] = useState(null);
+  const [fields, setFields] = useState({
+    name: '',
+    version: '1.0.0',
+    publisher: '',
+    homepage: '',
+    description: '',
+    startExe: '',
+  });
+
+  useEffect(() => {
+    if (chosen && !fields.name) setFields({ ...fields, name: chosen.name });
+  }, [chosen]);
+
+  const eligible = programs.filter((p) => p.hasProgramFiles);
+
+  return (
+    <Dialog
+      title="PortableApps.com Installer"
+      onClose={onClose}
+      width={760}
+      buttons={
+        <>
+          <button disabled={!chosen} onClick={() => onGenerate({ ...fields, monitorId: chosen.id })}>
+            Generate Package
+          </button>
+          <button className="primary" onClick={onClose}>
+            Close
+          </button>
+        </>
+      }
+    >
+      <p className="heading">
+        Create a PortableApps.com package from a monitored installation. Purgeon copies the
+        recorded program files into a PortableApps.com folder structure and writes an NSIS
+        installer script (.nsi) that you compile with makensis into a .paf.exe.
+      </p>
+      {!eligible.length && (
+        <div className="empty-box">
+          No monitored programs with portable files were found. Use Tools › Monitor an
+          Installation to record a program first.
+        </div>
+      )}
+      {eligible.length && (
+        <>
+          <div className="field-row">
+            <label>Monitored program</label>
+            <select value={chosen?.id || ''} onChange={(e) => setChosen(eligible.find((p) => p.id === e.value) || null)}>
+              <option value="">Choose a program…</option>
+              {eligible.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}{p.items > 0 ? ` (${p.items} items)` : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="field-row">
+            <label>Package name</label>
+            <input
+              value={fields.name}
+              onChange={(e) => setFields({ ...fields, name: e.target.value })}
+              placeholder="e.g. FooEditor"
+              title="The program name shown in the PortableApps.com menu"
+            />
+          </div>
+          <div className="field-row">
+            <label>Version</label>
+            <input
+              value={fields.version}
+              onChange={(e) => setFields({ ...fields, version: e.target.value })}
+              placeholder="1.0.0"
+            />
+          </div>
+          <div className="field-row">
+            <label>Publisher</label>
+            <input
+              value={fields.publisher}
+              onChange={(e) => setFields({ ...fields, publisher: e.target.value })}
+              placeholder="e.g. Example Corp"
+            />
+          </div>
+          <div className="field-row">
+            <label>Homepage (optional)</label>
+            <input
+              value={fields.homepage}
+              onChange={(e) => setFields({ ...fields, homepage: e.target.value })}
+              placeholder="https://example.com"
+            />
+          </div>
+          <div className="field-row">
+            <label>Description (optional)</label>
+            <input
+              value={fields.description}
+              onChange={(e) => setFields({ ...fields, description: e.target.value })}
+              placeholder="Portable version of Foo Editor"
+            />
+          </div>
+          <div className="field-row">
+            <label>Main executable (optional)</label>
+            <input
+              value={fields.startExe}
+              onChange={(e) => setFields({ ...fields, startExe: e.target.value })}
+              placeholder="e.g. FooEditor.exe"
+              title="If left blank, Purgeon picks the largest .exe from the recorded files"
+            />
+          </div>
+          <p className="footnote">
+            After generating, place a PortableApps.com launcher executable in the package folder
+            and compile the .nsi script with NSIS (makensis) to produce the .paf.exe installer.
+          </p>
+        </>
+      )}
+    </Dialog>
+  );
+}

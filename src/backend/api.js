@@ -48,6 +48,7 @@ import * as trials from './trials.js';
 import * as explore from './explore.js';
 import * as browsers from './browsers.js';
 import * as portable from './portable.js';
+import * as portableapps from './portableapps.js';
 import * as shellmenu from './shellmenu.js';
 import * as report from './report.js';
 import * as ctxmenu from './ctxmenu.js';
@@ -174,8 +175,9 @@ const handlers = {
   'backups:interrupted': () => backups.interrupted(),
   'backups:resolveInterrupted': (action) => backups.resolveInterrupted(action),
   'backups:prune': async () => {
-    const s = await readSettings();
-    return backups.prune({ maxDays: Number(s.backupMaxDays) || 0, maxMB: Number(s.backupMaxMB) || 0 });
+    const rp = await maybeCreateRestorePoint('prune', 'Purgeon: before pruning old backups under backup limits');
+    const result = await backups.prune({ maxDays: Number((await readSettings()).backupMaxDays) || 0, maxMB: Number((await readSettings()).backupMaxMB) || 0 });
+    return { ...result, restorePoint: rp };
   },
   'log:open': () => open(log.folder()),
   'backups:restore': (id) => backups.restore(id),
@@ -310,6 +312,9 @@ const handlers = {
   'portable:checkUpdates': (apps) => portable.checkUpdates(apps),
   'portable:register': (app) => portable.register(app),
   'portable:unregister': (key) => portable.unregister(key),
+  // PortableApps.com installer generation from monitored programs
+  'portableapps:list': () => portableapps.list(),
+  'portableapps:generate': (args) => portableapps.generate(args),
   // 16. Explorer right-click menu
   'shell:enabled': () => shellmenu.enabled(),
   'shell:enable': () => shellmenu.enable(),
@@ -521,6 +526,7 @@ export async function initBackend() {
     running.setRoot(path.join(data, 'startup')),
     schedule.setRoot(path.join(data, 'schedule')),
     plugins.setRoot(path.join(data, 'plugins')),
+    portableapps.setRoot(path.join(data, 'portableapps')),
     sync.setRoot(path.join(data, 'sync')),
     profiler.setRoot(path.join(data, 'profiles')),
   ]);

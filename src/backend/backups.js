@@ -542,4 +542,34 @@ function remove(id) {
   return sys.removePath(path.join(backupRoot, id));
 }
 
+// Export a removal plan (the output of planRemoval) to HTML, CSV or JSON so it can be
+// reviewed before anything is removed. Returns the file path written.
+export async function exportPlan({ plan, format = 'html', fileName }) {
+  const ext = format === 'csv' ? '.csv' : format === 'json' ? '.json' : '.html';
+  const file = fileName || `purgeon-removal-plan-${new Date().toISOString().slice(0, 10)}${ext}`;
+  let content = '';
+  if (format === 'csv') {
+    const lines = ['Kind,Path,Name,Detail,Ok'];
+    for (const r of plan.results) {
+      lines.push(`"${r.kind}","${(r.path || '').replace(/"/g, '""')}","${(r.name || '').replace(/"/g, '""')}","${(r.detail || '').replace(/"/g, '""')}","${r.ok}"`);
+    }
+    content = lines.join('\r\n');
+  } else if (format === 'json') {
+    content = JSON.stringify(plan, null, 2);
+  } else {
+    const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+    const rows = plan.results.map((r) => `<tr><td>${esc(r.kind)}</td><td>${esc(r.path)}</td><td>${esc(r.name)}</td><td>${esc(r.detail)}</td><td>${r.ok ? 'yes' : 'no'}</td></tr>`).join('\n');
+    content = `<!doctype html><meta charset="utf-8"><title>Purgeon Removal Plan</title>
+<style>body{font:13px Segoe UI,sans-serif;margin:24px}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:4px 8px;border-bottom:1px solid #ddd}th{background:#2a2a2a;color:#fff}tr:nth-child(even){background:#1a1a1a}</style>
+<h2>Purgeon Removal Plan</h2>
+<p>Generated ${new Date().toLocaleString()}. ${plan.results.length} items, ${plan.results.filter((r) => r.ok).length} would be removed, ${plan.results.filter((r) => !r.ok).length} would be skipped.</p>
+<table><tr><th>Kind</th><th>Path</th><th>Name</th><th>Detail</th><th>Ok</th></tr>
+${rows}
+</table>
+<p class="note">Review before approving. Nothing is changed until you confirm the removal in Purgeon.</p>`;
+  }
+  await sys.writeText(file, content);
+  return { file, format, items: plan.results.length };
+}
+
 export { setRoot, removeItems, planRemoval, interrupted, resolveInterrupted, prune, list, restore, remove, restoreFromRecycleBin, restoreManyFromRecycleBin };
