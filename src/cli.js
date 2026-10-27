@@ -95,6 +95,9 @@ const HELP = `Purgeon command line
         Manages the trusted publisher allowlist (programs signed by these are never blocked).
   --update settings|enable|disable|check
         Opt-in update checker: shows settings, turns checking on/off, or checks GitHub for a newer release.
+  --uninstall "<program name>"
+        Runs the named program's own uninstaller. Waits for it to finish, then
+        records the removal in the archive. Use quotes around the name.
   --language <code> [--json]
         Sets the UI language (en, es, de, fr).
   --plugins list|enable|disable <id> [--json]

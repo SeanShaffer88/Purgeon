@@ -45,10 +45,10 @@ export async function deleteDriver(inf) {
   return { ok: r.ok, detail: r.ok ? 'Driver package removed.' : `pnputil exited with code ${r.code}: ${String(r.stderr || r.stdout).trim()}` };
 }
 
-// Returns drivers grouped by inf file name, keeping only the newest version of each.
-// Old duplicates are candidates for removal.
-export async function oldDriverCandidates() {
-  const drivers = await listDrivers();
+// Groups parsed driver packages by inf file name and returns old duplicates
+// (all but the newest version of each inf) as candidates for removal.
+// Pure function: easy to test with mock driver data.
+export function findOldDriverCandidates(drivers) {
   const byInf = new Map();
   for (const d of drivers) {
     const key = String(d.InfFile || '').toLowerCase();
@@ -76,6 +76,13 @@ export async function oldDriverCandidates() {
     }
   }
   return candidates;
+}
+
+// Returns drivers grouped by inf file name, keeping only the newest version of each.
+// Old duplicates are candidates for removal.
+export async function oldDriverCandidates() {
+  const drivers = await listDrivers();
+  return findOldDriverCandidates(drivers);
 }
 
 export { DRIVER_STORE };
