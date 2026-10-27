@@ -150,6 +150,32 @@ function InsightTags({ i }) {
   );
 }
 
+// Empty-state messages and actions for each view.
+// Actions are passed in from the component so they can call setState.
+const emptyStateMessage = (v, f) => {
+  if (v === 'timeline') return 'Nothing recorded yet.';
+  if (v === 'archive') return 'No programs removed yet. Every program you uninstall is recorded here.';
+  if (v === 'monitored') return 'No monitored programs yet.';
+  if (v === 'backups') return 'No backups yet.';
+  if (v === 'history') return 'No changes yet. Everything Purgeon changes will be listed here.';
+  if (v === 'desktop') return 'No programs found.';
+  if (v === 'store') return 'No store apps found.';
+  if (v === 'snapshots') return 'No snapshots yet.';
+  if (f) return 'No matches.';
+  return 'Nothing found.';
+};
+
+const emptyStateActions = (v, onMonitor, onSnapshot, onRefresh) => {
+  const actions = [];
+  if (v === 'monitored' && onMonitor)
+    actions.push({ label: 'Monitor an Installation…', onClick: onMonitor, title: 'Start monitoring an installer' });
+  if (v === 'backups' && onSnapshot)
+    actions.push({ label: 'Take a Snapshot', onClick: onSnapshot, title: 'Take a new snapshot' });
+  if ((v === 'desktop' || v === 'store') && onRefresh)
+    actions.push({ label: 'Refresh List', onClick: onRefresh, title: 'Reload the program list from Windows' });
+  return actions;
+};
+
 // What each menu holds, for the menu bar's tooltips.
 const MENU_TIPS = {
   File: 'Export and reports, moving programs to another PC, settings sync, and restarting as administrator (Alt+F)',
@@ -469,6 +495,9 @@ const [menu, setMenu] = useState(null);
   const [busyStop, setBusyStop] = useState(null);
   const stopBatch = useRef(false);
   const [notice, setNotice] = useState(null);
+// Undo toast: last removal/change can be undone within 30 seconds.
+const [undoStack, setUndoStack] = useState([]);
+const undoTimerRef = useRef(null);
   const [restoreOn, setRestoreOn] = useState(true);
   const [silentOn, setSilentOn] = useState(false);
   const [safeOn, setSafeOn] = useState(false);
@@ -2030,6 +2059,21 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
   };
   const dispatchRef = useRef(dispatch);
   dispatchRef.current = dispatch;
+
+  // Undo stack: records the last removable action so it can be undone within 30 seconds.
+  const addUndo = useCallback(async (label, undoFn) => {
+    setUndoStack((prev) => [...prev.slice(-4), { label, undoFn, time: Date.now() }]);
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    const t = setTimeout(() => setUndoStack([]), 30000);
+    undoTimerRef.current = t;
+  }, []);
+
+  const clearUndo = useCallback(() => {
+    if (undoTimerRef.current) clearTimeout(undoTimerRef.current);
+    setUndoStack([]);
+    undoTimerRef.current = null;
+  }, []);
+
   useEffect(() => installTips(), []);
 
   // Installers starting: checked every 3 seconds while Purgeon runs, in the tray too. Not
@@ -2471,8 +2515,13 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         {loading ? (
           <div className="list-empty">Loading…</div>
         ) : visible.length === 0 ? (
-          <div className="list-empty">
-            {filter ? 'No matches.' : view === 'timeline' ? 'Nothing recorded yet.' : view === 'archive' ? 'No programs removed yet. Every program you uninstall is recorded here.' : view === 'monitored' ? 'No monitored programs yet. Use Tools › Monitor an Installation.' : view === 'backups' ? 'No backups yet.' : view === 'history' ? 'No changes yet. Everything Purgeon changes will be listed here.' : 'Nothing found.'}
+          <div className="list-empty list-empty-actionable">
+            <span>{emptyStateMessage(view, filter)}</span>
+            {emptyStateActions(view, () => setModal({ type: 'monitor' }), () => setModal({ type: 'snapshot' }), () => load()).map((a, i) => (
+              <button key={i} className="list-empty-action" onClick={a.onClick} title={a.title}>
+                {a.label}
+              </button>
+            ))}
           </div>
         ) : (
           visible.map((r, idx) => (
@@ -2545,6 +2594,16 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           <button onClick={() => setNotice(null)} aria-label="Dismiss">
             ✕
           </button>
+        </div>
+      )}
+      {undoStack.length > 0 && (
+        <div className="undo-toast">
+          <span>Undo: {undoStack[undoStack.length - 1].label}</span>
+          <button className="primary" onClick={() => {
+            const u = undoStack[undoStack.length - 1];
+            u.undoFn().then(() => clearUndo()).catch(() => setError('Undo failed.'));
+          }}>Undo</button>
+          <button onClick={clearUndo}>✕</button>
         </div>
       )}
       </main>

@@ -316,6 +316,36 @@ kbd {
 .generic-icon.backups::after { background: var(--amber); }
 .list-empty { padding: 24px; color: var(--muted); text-align: center; }
 .list-empty::after { content: '_'; color: var(--green); animation: blink 1s steps(1) infinite; margin-left: 2px; }
+.list-empty-actionable { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 32px 24px; }
+.list-empty-actionable span { font-size: 15px; color: var(--text); }
+.list-empty-action {
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+  color: var(--text);
+  padding: 8px 16px;
+  cursor: pointer;
+}
+.list-empty-action:hover { border-color: var(--green); background: var(--hover); }
+.list-empty-action.primary { border-color: var(--green); background: var(--green-dim); color: var(--green); }
+.list-empty-action.primary:hover { background: var(--green-sel); }
+
+/* Undo toast */
+.undo-toast {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: var(--panel);
+  border: 1px solid var(--border-strong);
+  padding: 8px 12px;
+  margin: 8px;
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  max-width: 320px;
+  z-index: 1000;
+}
+.undo-toast span { flex: 1; font-size: 13px; color: var(--text); }
+.undo-toast button { margin-left: 8px; }
 @keyframes blink { 50% { opacity: 0; } }
 
 .statusbar {
