@@ -498,6 +498,46 @@ const [menu, setMenu] = useState(null);
 // Undo toast: last removal/change can be undone within 30 seconds.
 const [undoStack, setUndoStack] = useState([]);
 const undoTimerRef = useRef(null);
+// View history for back/forward navigation.
+const [viewHistory, setViewHistory] = useState([]);
+const [historyIdx, setHistoryIdx] = useState(-1);
+// Recently viewed/acted-on programs (most recent first, max 10).
+const [recentPrograms, setRecentPrograms] = useState([]);
+
+// View history for back/forward navigation.
+useEffect(() => {
+  setViewHistory((prev) => {
+    const next = [...prev.slice(0, historyIdx + 1), view];
+    if (next.length > 50) next.shift();
+    return next;
+  });
+  setHistoryIdx((prev) => prev + 1);
+}, [view, historyIdx]);
+
+// Go back in view history.
+const goBack = useCallback(() => {
+  if (historyIdx > 0) {
+    setHistoryIdx((i) => i - 1);
+    setView(viewHistory[i - 1]);
+  }
+}, [historyIdx, viewHistory]);
+
+// Go forward in view history.
+const goForward = useCallback(() => {
+  if (historyIdx < viewHistory.length - 1) {
+    setHistoryIdx((i) => i + 1);
+    setView(viewHistory[i + 1]);
+  }
+}, [historyIdx, viewHistory]);
+
+// Add a program to recent programs.
+const addRecent = useCallback((program) => {
+  setRecentPrograms((prev) => {
+    const filtered = prev.filter((p) => p.key !== program.key);
+    return [program, ...filtered].slice(0, 10);
+  });
+}, []);
+
   const [restoreOn, setRestoreOn] = useState(true);
   const [silentOn, setSilentOn] = useState(false);
   const [safeOn, setSafeOn] = useState(false);
@@ -770,6 +810,8 @@ const [firstRunTipDismissed, setFirstRunTipDismissed] = useState(() => new Set()
         setSelected(null);
         anchor.current = null;
       } else {
+        const program = visible.find((r) => r.key === key);
+        if (program) addRecent(program);
         setMarked(new Set([key]));
         anchor.current = key;
         setSelected(key);
@@ -2138,6 +2180,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       else if (key === 'F5') action = 'refresh';
       else if (e.altKey && key === 'Enter') action = 'properties';
       else if (!typing && key === 'Delete') action = e.shiftKey ? 'force' : 'uninstall';
+      else if (e.altKey && key === 'ArrowLeft') { e.preventDefault(); goBack(); }
+      else if (e.altKey && key === 'ArrowRight') { e.preventDefault(); goForward(); }
       if (!action || document.querySelector('.overlay')) return;
       e.preventDefault();
       dispatchRef.current(action);
@@ -2323,7 +2367,33 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           </button>
         ))}
       </nav>
+      {recentPrograms.length > 0 && (
+        <nav className="view-bar-side view-bar-recent" aria-label="Recent Programs">
+          <div className="recent-header">Recent</div>
+          {recentPrograms.map((p) => (
+            <button key={p.key} className="recent-chip" onClick={() => { setView('desktop'); setSelected(p.key); }} title={p.name}>
+              {p.name.length > 18 ? p.name.slice(0, 18) + '…' : p.name}
+            </button>
+          ))}
+        </nav>
+      )}
       <main className="workspace-main" id="main-content">
+      {/* Breadcrumb navigation */}
+      <div className="breadcrumb">
+        <span className="breadcrumb-home" onClick={() => setView('desktop')} title="Programs">Programs</span>
+        {view !== 'desktop' && (
+          <>
+            <span className="breadcrumb-sep">›</span>
+            <span className="breadcrumb-current">{VIEWS[view]?.label || view}</span>
+          </>
+        )}
+        {historyIdx > 0 && (
+          <button className="breadcrumb-back" onClick={goBack} title="Back (Alt+Left)">‹ Back</button>
+        )}
+        {historyIdx < viewHistory.length - 1 && (
+          <button className="breadcrumb-forward" onClick={goForward} title="Forward (Alt+Right)">Forward ›</button>
+        )}
+      </div>
       {/* Row 1: one box that searches the list and finds commands. */}
       <div className="cmdbar">
         <div className="search">

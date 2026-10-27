@@ -329,6 +329,47 @@ kbd {
 .list-empty-action.primary { border-color: var(--green); background: var(--green-dim); color: var(--green); }
 .list-empty-action.primary:hover { background: var(--green-sel); }
 
+/* Breadcrumb navigation */
+.breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.breadcrumb-home { color: var(--green); cursor: pointer; }
+.breadcrumb-home:hover { text-decoration: underline; }
+.breadcrumb-sep { color: var(--dim); }
+.breadcrumb-current { color: var(--muted); }
+.breadcrumb-back, .breadcrumb-forward {
+  border: 1px solid var(--border-strong);
+  background: var(--panel);
+  color: var(--text);
+  padding: 2px 8px;
+  cursor: pointer;
+  font-size: 12px;
+  margin-left: auto;
+}
+.breadcrumb-back:hover, .breadcrumb-forward:hover { border-color: var(--green); }
+
+/* Recent programs in view bar */
+.view-bar-recent { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 8px; }
+.recent-header { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--cyan); margin-bottom: 6px; }
+.recent-chip {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 12px;
+}
+.recent-chip:hover { background: var(--panel); color: var(--text); }
+
 /* Undo toast */
 .undo-toast {
   display: flex;

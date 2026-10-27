@@ -555,8 +555,37 @@ export function CommandPalette({ commands, onRun, onClose }) {
   const [i, setI] = useState(0);
   const ref = useRef(null);
   const shown = useMemo(() => {
-    const words = q.toLowerCase().split(/\s+/).filter(Boolean);
-    return commands.filter((c) => words.every((w) => c.text.toLowerCase().includes(w))).slice(0, 40);
+  }, [q, commands]);
+
+  const fuzzyScore = (text, query) => {
+    const t = text.toLowerCase();
+    const q = query.toLowerCase();
+    let ti = 0;
+    let score = 0;
+    let consecutive = 0;
+    for (const ch of q) {
+      const idx = t.indexOf(ch, ti);
+      if (idx === -1) return 0;
+      if (idx === ti) consecutive++;
+      else consecutive = 0;
+      score += 1 + consecutive;
+      ti = idx + 1;
+    }
+    if (t.startsWith(q)) score *= 2;
+    return score;
+  };
+
+  const shown = useMemo(() => {
+    if (!q) return commands.slice(0, 40);
+    const query = q.toLowerCase();
+    return commands
+      .map((c) => {
+        const score = fuzzyScore(c.text, q);
+        return score > 0 ? { ...c, _score: score } : null;
+      })
+      .filter(Boolean)
+      .sort((a, b) => b._score - a._score || a.text.localeCompare(b.text))
+      .slice(0, 40);
   }, [q, commands]);
   useEffect(() => {
     setI(0);
