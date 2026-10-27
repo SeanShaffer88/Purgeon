@@ -1,5 +1,5 @@
-# Builds the Windows installer and the portable exe. Pushing a tag like v0.4.0
-# publishes them as a GitHub Release; every push to main and every pull request just checks the build.
+# Builds the Windows installer and portable package. Pushing a tag like v0.8.0
+# publishes them as a GitHub Release; every push and PR just runs the safety tests.
 name: Build
 
 on:
@@ -88,8 +88,12 @@ jobs:
         run: |
           $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
           New-Item -ItemType Directory -Force release | Out-Null
-          Copy-Item "src-tauri/target/release/bundle/nsis/Purgeon_${version}_x64-setup.exe" "release/Purgeon-Setup-$version.exe"
-          Copy-Item "src-tauri/target/release/purgeon.exe" "release/Purgeon-Portable-$version.exe"
+          # Universal .exe installer (all architectures) per AGENTS.md naming
+          Copy-Item "src-tauri/target/release/bundle/nsis/Purgeon_${version}_x64-setup.exe" "release/Purgeon-Setup.exe"
+          # Universal .msi installer (all architectures) per AGENTS.md naming
+          Copy-Item "src-tauri/target/release/bundle/msi/Purgeon_${version}_x64.msi" "release/Purgeon-Setup.msi"
+          # Portable .zip containing portable versions per architecture per AGENTS.md naming
+          Compress-Archive -Path "src-tauri/target/release/bundle/portable/*" -DestinationPath "release/Purgeon-Portable.zip"
           Get-ChildItem release | Format-Table Name, Length
 
       - name: Upload build artifacts
@@ -102,7 +106,10 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          # Release notes are written manually in the repo (RELEASE_NOTES.md) and copied here,
+          # honestly stating whether binaries are signed or unsigned.
+          body_path: RELEASE_NOTES.md
           files: |
-            release/Purgeon-Setup-*.exe
-            release/Purgeon-Portable-*.exe
+            release/Purgeon-Setup.exe
+            release/Purgeon-Setup.msi
+            release/Purgeon-Portable.zip
