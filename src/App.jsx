@@ -587,13 +587,13 @@ const [reducedMotion, setReducedMotion] = useState(false);
   useEffect(() => {
     const el = actionBarRef.current;
     if (!el) return undefined;
-    const update = () => setActionBarW(el.clientWidth);
+    const update = () => setActionBarW((w) => (w === el.clientWidth ? w : el.clientWidth));
     update();
     if (typeof ResizeObserver === 'undefined') return undefined;
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  });
+  }, []);
   const desktopCache = useRef([]);
   const lastListView = useRef('desktop');
   // Debloat and Startup views load their own data; their status text and remount key live here.
@@ -693,6 +693,9 @@ const [reducedMotion, setReducedMotion] = useState(false);
     // New startup entries: checked now and every 10 minutes while Purgeon runs (also from the tray).
     const first = setTimeout(() => checkStartup(), 8000);
     const every = setInterval(() => checkStartup(), 10 * 60 * 1000);
+    // The page is alive and about to listen for the close question: from here on the
+    // native side may intercept a close and ask; before this it must let it through.
+    api.invoke('app:ready').catch(() => {});
     // Tray menu choices.
     let unlisten = null;
     let unlistenClose = null;
@@ -741,7 +744,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
     api
       .invoke('icons:get', missing)
       .then((found) => {
-        if (!cancelled) setIcons((m) => ({ ...m, ...Object.fromEntries(missing.map((r) => [r.key, found[r.key] || null])) }));
+        if (!cancelled) setIcons((m) => ({ ...m, ...Object.fromEntries(missing.map((r) => [r.key, found?.[r.key] || null])) }));
       })
       .catch(() => {});
     return () => {

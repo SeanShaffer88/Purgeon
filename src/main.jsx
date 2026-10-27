@@ -2,6 +2,7 @@ import { createRoot } from 'react-dom/client';
 import { setSys, sys } from './backend/sys.js';
 import { createTauriSys } from './backend/tauri-sys.js';
 import { api, initBackend, __handlers } from './backend/api.js';
+import { ErrorBoundary } from './ErrorBoundary.jsx';
 import './styles.css';
 
 async function start() {
@@ -15,7 +16,11 @@ async function start() {
   window.__sweepPortable = !!sys.info.portable;
   window.__sweepLaunch = sys.info.launch || [];
   const { default: App } = await import('./App.jsx');
-  createRoot(document.getElementById('root')).render(<App />);
+  createRoot(document.getElementById('root')).render(
+    <ErrorBoundary>
+      <App />
+    </ErrorBoundary>
+  );
   // A window hidden while minimized can come back at Windows' minimized size (far below the
   // window's smallest size); then it is put back at its remembered size (refit in lib.rs).
   const refit = () => {
