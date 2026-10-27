@@ -11,6 +11,7 @@
 //   Purgeon --associations [--json]
 //   Purgeon --associations-for "<program>" [--json]
 //   Purgeon --schedule on|off [--scan-leftovers] [--check-startup] [--missed]
+//   Purgeon --startup list|on|off|delayed|notdelayed --id <id>
 //         Turns background monitoring on or off. --missed marks the last scheduled scan as missed.
 //   Purgeon --sync status|apply|now [--files settings.json]
 //         Shows or configures cloud-synced settings. apply takes --folder <path> and --on|--off.
@@ -49,6 +50,7 @@ import * as i18n from './backend/i18n.js';
 import * as plugins from './backend/plugins.js';
 import * as profiler from './backend/profiler.js';
 import * as sync from './backend/sync.js';
+import * as startup from './backend/startup.js';
 import * as portableapps from './backend/portableapps.js';
 import { runCommandLine } from './backend/shell.js';
 
@@ -76,6 +78,8 @@ const HELP = `Purgeon command line
         Lists extensions owned by the named program.
   --schedule on|off [--scan-leftovers] [--check-startup]
         Turns background monitoring on or off.
+  --startup list|on|off|delayed|notdelayed --id <id>
+        Lists startup entries, or enables/disables/delays one. id is type|name (e.g. service|Spooler).
   --language <code> [--json]
         Sets the UI language (en, es, de, fr).
   --plugins list|enable|disable <id> [--json]
@@ -225,6 +229,29 @@ async function run(args) {
     if (v !== 'on' && v !== 'off') throw new Error('Use --schedule on or --schedule off.');
     const status = await schedule.apply({ enabled: v === 'on', scanLeftovers: flag(args, '--scan-leftovers'), checkStartup: flag(args, '--check-startup') });
     return wrap(true, status.registered ? 'Background monitoring is now on.\r\n' : 'Background monitoring is now off.\r\n');
+  }
+  if (cmd === '--startup') {
+    const sub = option(args, '--startup');
+    const id = option(args, '--id');
+    if (!sub || sub.startsWith('--')) throw new Error('Use --startup list|on|off|delayed <id>.');
+    if (sub === 'list') {
+      const list = await startup.list();
+      if (j) return wrap(true, JSON.stringify(list, null, 2));
+      return wrap(true, list.map((e) => `${e.enabled ? '[x]' : '[ ]'} ${e.type === 'service' && e.delayed ? '[delayed] ' : ''}${e.name} — ${e.where}${e.admin ? ' (admin)' : ''}\r\n`).join('') || 'No startup entries.\r\n');
+    }
+    if (!id || id.startsWith('--')) throw new Error(`Use --startup ${sub} <id>.`);
+    const [type, name] = id.split('|');
+    const entry = { type, name, source: id, enabled: false };
+    if (sub === 'on' || sub === 'off') {
+      await startup.setEnabled(entry, sub === 'on');
+      return wrap(true, `Startup entry ${name} ${sub === 'on' ? 'enabled' : 'disabled'}.\r\n`);
+    }
+    if (sub === 'delayed' || sub === 'notdelayed') {
+      if (type !== 'service') throw new Error('Delayed start is only available for services.');
+      await startup.setDelayed(entry, sub === 'delayed');
+      return wrap(true, `Startup entry ${name} ${sub === 'delayed' ? 'delayed' : 'not delayed'}.\r\n`);
+    }
+    throw new Error('Use --startup list|on|off|delayed <id>.');
   }
   if (cmd === '--language') {
     const code = option(args, '--language');

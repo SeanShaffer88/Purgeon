@@ -88,6 +88,7 @@ export const ACTION_TIPS = {
   backupSettings: 'Limits how much space and how long backups are kept. Each program’s newest backup is always kept.',
   openLog: 'Opens the log of every command Purgeon ran in the last 14 days, with its result.',
   portableapps: 'Creates a PortableApps.com installer (.paf.exe) from a program you monitored with Tools › Monitor an Installation. Purgeon copies the recorded program files into a PortableApps.com folder structure and writes an NSIS installer script you compile with makensis.',
+  startupDelayed: 'Automatic (Delayed Start) lets the service begin a short while after boot instead of at boot, speeding up sign-in. Only for services set to Automatic.',
   about: 'Version, license and where Purgeon keeps its data.',
   // Other lists
   undoChange: 'Undoes this change, using the backup taken when it was made.',

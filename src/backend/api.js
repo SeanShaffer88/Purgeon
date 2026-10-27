@@ -391,6 +391,7 @@ const handlers = {
   'transfer:undo': async (id) => (await lazyTransfer.get()).undo(id),
   'startup:list': () => startup.list(),
   'startup:set': ({ entry, enable }) => startup.setEnabled(entry, enable),
+  'startup:delayed': ({ entry, delayed }) => startup.setDelayed(entry, delayed),
   'debloat:list': () => debloat.list(),
   'debloat:set': async ({ id, enable }) => {
     const t = debloat.TWEAKS?.find((x) => x.id === id);

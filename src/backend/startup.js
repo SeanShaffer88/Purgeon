@@ -121,13 +121,15 @@ function shape(r, state) {
   // Tasks you created can often be toggled without admin, so they are tried rather than blocked.
   if (r.type === 'task') return { ...r, id: `task|${r.path}`, where: `Task ${r.path}${r.triggers ? ` (${r.triggers.replace(/^,\s*/, '')})` : ''}`, admin: false, effect: 'signin' };
   const remembered = state.services?.[r.name];
+  const delayed = remembered === 'Automatic (delayed)';
   return {
     ...r,
     id: `service|${r.name}`,
     name: r.display || r.name,
     serviceName: r.name,
     enabled: r.startMode === 'Auto',
-    where: `Service ${r.name} · ${r.startMode === 'Auto' ? 'Automatic' : r.startMode}${remembered ? ` (was ${remembered})` : ''}`,
+    delayed,
+    where: `Service ${r.name} · ${r.startMode === 'Auto' ? delayed ? 'Automatic (delayed)' : 'Automatic' : r.startMode}${remembered && !delayed ? ` (was ${remembered})` : ''}`,
     admin: true,
     effect: 'reboot',
   };
@@ -171,4 +173,23 @@ async function setEnabled(entry, enable) {
   throw new Error(`Unknown startup entry type ${entry.type}`);
 }
 
-export { setRoot, list, setEnabled, approvedEnabled };
+// Set or clear Automatic (Delayed Start) for a service. Requires the service to be
+// Automatic; delayed start is stored as the DelayedAutostart DWORD under
+// HKLM\\SYSTEM\\CurrentControlSet\\Services\\<name>. Returns true when changed.
+async function setDelayed(entry, delayed) {
+  if (entry.type !== 'service') throw new Error('Delayed start is only available for services');
+  const denied = (msg) => (/access is denied|0x80070005|PermissionDenied/i.test(msg || '') ? `\"${entry.name}\" needs administrator rights. Use File › Restart as Administrator.` : msg);
+  const serviceName = entry.serviceName || entry.name;
+  const ps = `$p = Get-ItemProperty -LiteralPath ${psq(`Registry::HKEY_LOCAL_MACHINE\\\\SYSTEM\\\\CurrentControlSet\\\\Services\\\\${serviceName}`)} -ErrorAction SilentlyContinue; if (-not $p) { throw 'service not found' }; $p | Set-ItemProperty -Name 'DelayedAutostart' -Value ${delayed ? 1 : 0} -Type DWord -ErrorAction Stop`;
+  const r = await runPS(ps).catch((e) => ({ ok: false, stderr: e.message }));
+  if (!r.ok) throw new Error(denied(r.stderr.trim()));
+  // Remember the delayed preference so re-enabling restores it.
+  const state = await readState();
+  state.services = state.services || {};
+  if (delayed) state.services[serviceName] = 'Automatic (delayed)';
+  else if (state.services[serviceName] === 'Automatic (delayed)') state.services[serviceName] = 'Automatic';
+  await writeState(state);
+  return true;
+}
+
+export { setRoot, list, setEnabled, setDelayed, approvedEnabled };
