@@ -8,11 +8,21 @@ import * as path from './winpath.js';
 import { runPSJson } from './shell.js';
 import { iconPathFor } from './programs.js';
 import { publisherKey } from './leftovers.js';
+import { FileCache } from './filecache.js';
 
 let dir = '';
+// Per-file results (signature, processor architecture) keyed by each file's stamp,
+// so repeat list loads only redo the work for files that actually changed. Null
+// until setRoot runs, in which case the work is done uncached, as before.
+let fileCache = null;
+const sigKey = (p) => `sig:${p}`;
+const archKey = (p) => `arch:${p}`;
+
 export const setRoot = async (d) => {
   dir = d;
   await sys.makeDir(dir);
+  fileCache = new FileCache(path.join(dir, 'file-insights.json'));
+  await fileCache.init();
 };
 
 // ---- signatures --------------------------------------------------------------------
@@ -29,11 +39,44 @@ $in = [Console]::In.ReadToEnd() | ConvertFrom-Json  # assigned first so the arra
 `;
 
 // Signature of each file: Map(lowercased path -> { status: 'Valid' | 'NotSigned' | 'HashMismatch' | ..., signer }).
+// Files whose stamp still matches a cached result are not sent to PowerShell again.
 export async function signatures(paths) {
   const unique = [...new Set(paths.filter((p) => /^[a-z]:\\.+\.(exe|dll|sys)$/i.test(p || '')))];
   if (!unique.length) return new Map();
-  const rows = await runPSJson(SIGNATURES, { input: JSON.stringify(unique) }).catch(() => []);
-  return new Map(rows.map((r) => [r.path.toLowerCase(), { status: r.status, signer: r.signer }]));
+  const out = new Map();
+  const stamps = new Map();
+  let misses = unique;
+  if (fileCache) {
+    misses = [];
+    await Promise.all(
+      unique.map(async (p) => {
+        const stamp = await fileCache.stampFor(p);
+        if (stamp !== null) {
+          stamps.set(p, stamp);
+          const v = fileCache.hit(sigKey(p), stamp);
+          if (v !== undefined) {
+            out.set(p.toLowerCase(), v);
+            return;
+          }
+        }
+        misses.push(p);
+      })
+    );
+  }
+  if (misses.length) {
+    const rows = await runPSJson(SIGNATURES, { input: JSON.stringify(misses) }).catch(() => []);
+    for (const r of rows) {
+      const value = { status: r.status, signer: r.signer };
+      out.set(r.path.toLowerCase(), value);
+      if (fileCache) {
+        const original = misses.find((p) => p.toLowerCase() === r.path.toLowerCase());
+        const stamp = original && stamps.get(original);
+        if (stamp) fileCache.put(sigKey(original), stamp, value);
+      }
+    }
+    if (fileCache) await fileCache.save();
+  }
+  return out;
 }
 
 const HELPER_EXE = /(^|\\)(unins\d*|uninst\w*|uninstall\w*|setup|update\w*|helper|crashpad\w*|elevate\w*)\.exe$/i;
@@ -127,13 +170,54 @@ export function growth(history, day = today()) {
 // ---- all together ------------------------------------------------------------------
 
 // The program's main executable: the one its entry names, or the largest in its folder.
-export const programExe = async (p) => mainExe(p) || (await exeInFolder(p));
+// Memoized for the session: the answer depends only on the entry's own fields, and
+// finding it can mean reading the program's whole install folder.
+const exeMemo = new Map();
+export const programExe = async (p) => {
+  const memoKey = `${p.key}|${p.location || ''}|${p.icon || ''}|${p.uninstall || ''}`;
+  if (exeMemo.has(memoKey)) return exeMemo.get(memoKey);
+  const found = mainExe(p) || (await exeInFolder(p));
+  exeMemo.set(memoKey, found);
+  return found;
+};
 
 // The processor each file is built for ("x64", "x86", "arm64"), read from its header.
+// Cached per file stamp like signatures; even an unknown ('') result is cached.
 async function architectures(paths) {
   if (!sys.exeArch || !paths.length) return new Map();
-  const out = await sys.exeArch(paths).catch(() => []);
-  return new Map(paths.map((p, i) => [p.toLowerCase(), out[i] || '']));
+  const out = new Map();
+  const stamps = new Map();
+  let misses = [...new Set(paths)];
+  if (fileCache) {
+    misses = [];
+    await Promise.all(
+      [...new Set(paths)].map(async (p) => {
+        const stamp = await fileCache.stampFor(p);
+        if (stamp !== null) {
+          stamps.set(p, stamp);
+          const v = fileCache.hit(archKey(p), stamp);
+          if (v !== undefined) {
+            out.set(p.toLowerCase(), v);
+            return;
+          }
+        }
+        misses.push(p);
+      })
+    );
+  }
+  if (misses.length) {
+    const got = await sys.exeArch(misses).catch(() => []);
+    misses.forEach((p, i) => {
+      const arch = got[i] || '';
+      out.set(p.toLowerCase(), arch);
+      const stamp = stamps.get(p);
+      if (fileCache && stamp) fileCache.put(archKey(p), stamp, arch);
+    });
+    if (fileCache) await fileCache.save();
+  }
+  // Every requested path gets an entry, as before ('' when unknown).
+  for (const p of paths) if (!out.has(p.toLowerCase())) out.set(p.toLowerCase(), '');
+  return out;
 }
 
 // { [programKey]: { signature?, signer?, together?: [names], offer?: true, growth?, arch?, exe? } }
