@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+## 1.0.2 - 2026-10-27
+
+### Fixed
+- The window no longer opens empty and black on machines where a dialog is the first thing drawn: the shared dialog component used a standard building block it never imported, and the first dialog (such as the first-run Welcome box) emptied the whole window. The build could not see this mistake, so a permanent test now fails the suite if any window file ever uses one of those building blocks without importing it.
+- If drawing the window ever fails again, a readable error screen appears instead of an empty window, and the window can always be closed: the program no longer intercepts the close button until the page has loaded and confirmed it is ready.
+- Starting the program no longer creates a Windows restore point when there is nothing to prune; a restore point is now made only when an old backup is really about to be removed under the backup limits.
+
 ## 1.0.1 - 2026-10-27
 
 - Restore the main window to the layout in the README screenshot: menu bar,
