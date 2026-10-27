@@ -902,6 +902,10 @@ static CLOSE_MODE: AtomicU8 = AtomicU8::new(0);
 // Set while the question is showing: a second close then exits, so a page that stopped
 // responding can never keep the window from closing.
 static CLOSE_ASKING: AtomicBool = AtomicBool::new(false);
+// Set by the page once it has loaded and registered its close-question listener.
+// While it is unset, a close is never intercepted: a page that failed to load must
+// not be able to trap the window open.
+static FRONTEND_READY: AtomicBool = AtomicBool::new(false);
 static MINIMIZE_TO_TRAY: AtomicBool = AtomicBool::new(false);
 
 fn show_main(app: &tauri::AppHandle) {
@@ -1043,6 +1047,12 @@ fn close_answered() {
     CLOSE_ASKING.store(false, Ordering::SeqCst);
 }
 
+/// The page has loaded and is listening for the close question.
+#[tauri::command]
+fn frontend_ready() {
+    FRONTEND_READY.store(true, Ordering::SeqCst);
+}
+
 /// Brings the window back (from the tray too), for questions that need an answer now.
 #[tauri::command]
 fn show_window(app: tauri::AppHandle) {
@@ -1151,6 +1161,7 @@ pub fn run() {
             window.on_window_event(move |e| match e {
                 tauri::WindowEvent::CloseRequested { api, .. } => {
                     match CLOSE_MODE.load(Ordering::SeqCst) {
+                        0 if !FRONTEND_READY.load(Ordering::SeqCst) => {}
                         1 => {
                             api.prevent_close();
                             let _ = hide.hide();
@@ -1246,6 +1257,7 @@ pub fn run() {
             show_window,
             hide_to_tray,
             close_answered,
+            frontend_ready,
             refit_window,
             list_processes,
             exe_arch,
