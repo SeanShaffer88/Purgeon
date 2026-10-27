@@ -27,19 +27,29 @@ export function Dialog({ title, onClose, children, buttons, width = 520 }) {
 }
 
 // Yes/No question, optionally with a checkbox (such as "Create a restore point first").
-export function ConfirmDialog({ message, detail, checkboxLabel, checkboxChecked, onAnswer }) {
+// Yes/No question, optionally with checkboxes ("Create a restore point first" and/or "Don't show again").
+export function ConfirmDialog({ message, detail, checkboxLabel, checkboxChecked, confirmId, dontShowLabel, onAnswer }) {
   const [checked, setChecked] = useState(!!checkboxChecked);
+  const [dontShow, setDontShow] = useState(false);
+  const handleAnswer = (ok) => {
+    if (confirmId && dontShow) {
+      api.invoke('settings:get').then((s) => {
+        const disabled = Array.isArray(s.disabledConfirmations) ? [...s.disabledConfirmations] : [];
+        if (!disabled.includes(confirmId)) disabled.push(confirmId);
+        return api.invoke('settings:set', { disabledConfirmations: disabled });
+      }).catch(() => {});
+    }
+    onAnswer({ ok, checked, dontShow });
+  };
   return (
     <Dialog
       title="Purgeon"
-      onClose={() => onAnswer({ ok: false, checked })}
+      onClose={() => handleAnswer(false)}
       width={500}
       buttons={
         <>
-          <button className="primary" autoFocus onClick={() => onAnswer({ ok: true, checked })}>
-            Yes
-          </button>
-          <button onClick={() => onAnswer({ ok: false, checked })}>No</button>
+          <button className="primary" autoFocus onClick={() => handleAnswer(true)}>Yes</button>
+          <button onClick={() => handleAnswer(false)}>No</button>
         </>
       }
     >
@@ -49,6 +59,12 @@ export function ConfirmDialog({ message, detail, checkboxLabel, checkboxChecked,
         <label className="confirm-check">
           <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
           {checkboxLabel}
+        </label>
+      )}
+      {confirmId && (
+        <label className="confirm-check">
+          <input type="checkbox" checked={dontShow} onChange={(e) => setDontShow(e.target.checked)} />
+          {dontShowLabel || 'Don\'t show again'}
         </label>
       )}
     </Dialog>

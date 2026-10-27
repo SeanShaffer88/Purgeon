@@ -11,7 +11,7 @@ import { JunkView, formatBytes } from './junk.jsx';
 import { GroupDialog } from './groups.jsx';
 import { ProgramBackupDialog, ProgramRestoreDialog } from './transfer.jsx';
 import { WhoOwnsDialog, UpdatesDialog, MaintenanceDialog } from './tools.jsx';
-import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, SheetDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, PortableAppsDialog, MakePortableDialog, TrustedPublishersDialog, UpdateCheckDialog, CommandPalette, ReportDialog, ContextMenuDialog, InstallerFoundDialog, AnalysisDialog, ProgramDetailDialog, ARCH_LABEL, CloseDialog } from './more.jsx';
+import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, SheetDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, PortableAppsDialog, MakePortableDialog, TrustedPublishersDialog, UpdateCheckDialog, CommandPalette, ReportDialog, ContextMenuDialog, InstallerFoundDialog, AnalysisDialog, ProgramDetailDialog, ConfirmationSettingsDialog, ARCH_LABEL, CloseDialog } from './more.jsx';
 
 const api = window.api;
 
@@ -272,6 +272,7 @@ const MENUS = [
       ['ctxmenu', 'Explorer Context Menu Items...'],
       null,
       ['backupSettings', 'Backup Settings...'],
+      ['confirmationPrompts', 'Confirmation Prompts...'],
       ['openLog', 'Open Command Log'],
       null,
       ['trustedPublishers', 'Trusted Publishers...'],
@@ -691,6 +692,7 @@ export default function App() {
     if (shift && anchor.current && keys.includes(anchor.current)) {
       const [a, b] = [keys.indexOf(anchor.current), keys.indexOf(key)].sort((x, y) => x - y);
       setMarked(new Set(keys.slice(a, b + 1)));
+      setSelected(key);
     } else if (ctrl) {
       setMarked((m) => {
         const n = new Set(m);
@@ -698,17 +700,25 @@ export default function App() {
         return n;
       });
       anchor.current = key;
+      setSelected(key);
     } else {
-      setMarked(new Set([key]));
-      anchor.current = key;
+      // Clicking the same already-selected row again deselects it.
+      if (marked.size === 1 && marked.has(key)) {
+        setMarked(new Set());
+        setSelected(null);
+        anchor.current = null;
+      } else {
+        setMarked(new Set([key]));
+        anchor.current = key;
+        setSelected(key);
+      }
     }
-    setSelected(key);
   };
 
   // ---- restore points ------------------------------------------------------
 
-  const confirmWithRestore = (message, detail) =>
-    api.invoke('dialog:confirm', { message, detail, checkboxLabel: 'Create a restore point first', checkboxChecked: restoreOn });
+  const confirmWithRestore = (message, detail, confirmId) =>
+    api.invoke('dialog:confirm', { message, detail, confirmId, checkboxLabel: 'Create a restore point first', checkboxChecked: restoreOn });
 
   const makeRestorePoint = async (description, kind) => {
     setBusy('Creating a restore point…\nThis can take a minute.');
@@ -725,7 +735,7 @@ export default function App() {
   // Called by the Debloat view before a change; asks once per session.
   const beforeDebloatChange = async (title) => {
     if (debloatGatePassed.current || !restoreOn) return true;
-    const r = await confirmWithRestore('Change Windows settings?', `Purgeon will apply "${title}". This question appears only before your first debloat change of this session.`);
+    const r = await confirmWithRestore('Change Windows settings?', `Purgeon will apply "${title}". This question appears only before your first debloat change of this session.`, 'confirmDebloat');
     if (!r.ok) return false;
     if (r.checked) await makeRestorePoint('Purgeon: before Windows debloat changes', 'settings');
     debloatGatePassed.current = true;
@@ -804,6 +814,7 @@ export default function App() {
       const procs = (await Promise.all(locations.map((l) => api.invoke('program:processes', l).catch(() => [])))).flat();
       if (procs.length) {
         const ok = await api.invoke('dialog:confirm', {
+          confirmId: 'closeRunningPrograms',
           message: 'Close running programs?',
           detail: `These are running from the install folder and would block deletion:\n\n${procs.map((p) => p.ProcessName).join('\n')}`,
         });
@@ -862,7 +873,7 @@ export default function App() {
   const uninstallMonitored = async (rec) => {
     const keys = new Set(rec.uninstallKeys.map(normKey));
     const registered = desktopCache.current.find((p) => keys.has(normKey(p.key)));
-    const run = registered && (await confirmWithRestore(`Run ${registered.name}'s own uninstaller first?`, 'Recommended. Afterwards Purgeon removes everything else the installation created.'));
+    const run = registered && (await confirmWithRestore(`Run ${registered.name}'s own uninstaller first?`, 'Recommended. Afterwards Purgeon removes everything else the installation created.', 'confirmRunUninstaller'));
     if (run?.ok) {
       if (run.checked) await makeRestorePoint(`Purgeon: before uninstalling ${registered.name}`, 'uninstall');
       setBusy(`Running the uninstaller for ${registered.name}…`);
@@ -895,7 +906,8 @@ export default function App() {
     };
     const go = await confirmWithRestore(
       `Uninstall ${list.length} programs?`,
-      `${list.map(line).join('\n')}\n\nEach program's own uninstaller runs in turn${silentOn ? '; ones marked silent run without their windows' : ', so finish each uninstaller\'s window'}. Afterwards Purgeon scans all of them for leftovers.`
+      `${list.map(line).join('\n')}\n\nEach program's own uninstaller runs in turn${silentOn ? '; ones marked silent run without their windows' : ', so finish each uninstaller\'s window'}. Afterwards Purgeon scans all of them for leftovers.`,
+      'confirmBatchUninstall'
     );
     if (!go.ok) return;
     if (go.checked) await makeRestorePoint(`Purgeon: before uninstalling ${list.length} programs`, 'uninstall');
@@ -979,7 +991,8 @@ export default function App() {
   const cleanupComparison = async (comparison, beforeName, chosen) => {
     const go = await confirmWithRestore(
       `Clean up ${chosen.length} selected difference${chosen.length === 1 ? '' : 's'}?`,
-      'Added items are removed, and changed or removed registry values and keys are put back from the earlier snapshot. Everything is backed up first and can be undone.'
+      'Added items are removed, and changed or removed registry values and keys are put back from the earlier snapshot. Everything is backed up first and can be undone.',
+      'confirmSnapshotCleanup'
     );
     if (!go.ok) return;
     if (go.checked) await makeRestorePoint(`Purgeon: before cleaning up changes since ${beforeName}`, 'settings');
@@ -1000,6 +1013,7 @@ export default function App() {
   const cleanJunk = async (items, categories, bytes, system = []) => {
     if (items.length) {
       const ok = await api.invoke('dialog:confirm', {
+        confirmId: 'cleanJunk',
         message: `Clean ${formatBytes(bytes)} of junk files?`,
         detail: `${categories.map((c) => `• ${c.label}: ${formatBytes(c.bytes)}`).join('\n')}\n\n${items.length.toLocaleString()} items go to the Recycle Bin. You can undo this from Tools › Change History until the Recycle Bin is emptied.`,
       });
@@ -1009,6 +1023,7 @@ export default function App() {
     if (!system.length) return;
     // Windows' own clean-ups are permanent, so they get their own, explicit confirmation.
     const go = await api.invoke('dialog:confirm', {
+      confirmId: 'cleanSystemWindows',
       message: `Run ${system.length} permanent Windows clean-up${system.length === 1 ? '' : 's'}?`,
       detail: `${system.map((c) => `• ${c.label}: ${c.detail}`).join('\n')}\n\nWindows does these itself. They cannot be undone, and some take several minutes.`,
     });
@@ -1052,7 +1067,7 @@ export default function App() {
   };
   const runUpdates = async (list) => {
     setModal(null);
-    const go = await confirmWithRestore(`Update ${list.length} program${list.length === 1 ? '' : 's'}?`, `${list.map((u) => `• ${u.name}: ${u.version} → ${u.available}`).join('\n')}\n\nwinget updates them one after another, silently.`);
+    const go = await confirmWithRestore(`Update ${list.length} program${list.length === 1 ? '' : 's'}?`, `${list.map((u) => `• ${u.name}: ${u.version} → ${u.available}`).join('\n')}\n\nwinget updates them one after another, silently.`, 'confirmUpdate');
     if (!go.ok) return;
     if (go.checked) await makeRestorePoint(`Purgeon: before updating ${list.length} programs`, 'install');
     const results = [];
@@ -1177,7 +1192,7 @@ export default function App() {
     setModal(null);
     let q = await api.invoke('queue:get');
     if (!q) return;
-    const go = await confirmWithRestore(`Uninstall ${q.programs.filter((p) => p.status === 'pending').length} programs from the queue?`, 'They run one after another, silently where possible. If one needs a restart, Purgeon asks, then continues after you sign back in. Leftovers are shown at the end.');
+    const go = await confirmWithRestore(`Uninstall ${q.programs.filter((p) => p.status === 'pending').length} programs from the queue?`, 'They run one after another, silently where possible. If one needs a restart, Purgeon asks, then continues after you sign back in. Leftovers are shown at the end.', 'confirmQueueUninstall');
     if (!go.ok) return;
     if (go.checked) await makeRestorePoint('Purgeon: before the uninstall queue', 'uninstall');
     stopBatch.current = false;
@@ -1202,7 +1217,7 @@ export default function App() {
           await api.invoke('queue:arm');
           setBusy('');
           setBusyStop(null);
-          const now = await api.invoke('dialog:confirm', { message: `${p.name} needs a restart to finish.`, detail: 'Restart now? Purgeon continues the queue after you sign back in. Choose No to restart later yourself.' });
+          const now = await api.invoke('dialog:confirm', { confirmId: 'queueRestart', message: `${p.name} needs a restart to finish.`, detail: 'Restart now? Purgeon continues the queue after you sign back in. Choose No to restart later yourself.' });
           if (now) await api.invoke('queue:restartNow');
           else setNotice({ tone: 'warn', text: 'The uninstall queue continues after your next restart.' });
           return;
@@ -1293,7 +1308,7 @@ export default function App() {
       setBusy('');
     }
     if (!id) return setNotice({ tone: 'warn', text: `winget has no package for ${p.name}, so it can't be repaired that way. Use Force instead.` });
-    if (!(await api.invoke('dialog:confirm', { message: `Repair ${p.name}'s uninstaller?`, detail: `winget reinstalls the package "${id}" over the existing copy, which puts a working uninstaller back. Then the normal uninstall runs. Reinstalling accepts the package's license terms.` }))) return;
+    if (!(await api.invoke('dialog:confirm', { confirmId: 'repairUninstaller', message: `Repair ${p.name}'s uninstaller?`, detail: `winget reinstalls the package "${id}" over the existing copy, which puts a working uninstaller back. Then the normal uninstall runs. Reinstalling accepts the package's license terms.` }))) return;
     setBusy(`Reinstalling ${id}…`);
     const r = await api.invoke('winget:repair', id).catch((e) => ({ ok: false, detail: e.message }));
     setBusy('');
@@ -1453,7 +1468,7 @@ export default function App() {
     const lastPull = { ...((await api.invoke('settings:get')).lastPull || {}) };
     const newer = (await api.invoke('transfer:folder', s.syncFolder)).filter((p) => p.mtime > (lastPull[p.name] || 0));
     if (!newer.length) return setNotice({ tone: 'ok', text: 'Your settings are up to date.' });
-    if (!(await api.invoke('dialog:confirm', { message: `Get newer settings for ${newer.length} program${newer.length === 1 ? '' : 's'}?`, detail: `${newer.map((p) => `• ${p.name}`).join('\n')}\n\nTheir current settings go to the Recycle Bin first, and each change can be undone from Change History. Close these programs first.` }))) return;
+    if (!(await api.invoke('dialog:confirm', { confirmId: 'getNewerSettings', message: `Get newer settings for ${newer.length} program${newer.length === 1 ? '' : 's'}?`, detail: `${newer.map((p) => `• ${p.name}`).join('\n')}\n\nTheir current settings go to the Recycle Bin first, and each change can be undone from Change History. Close these programs first.` }))) return;
     const results = await restorePackages(newer, true);
     for (const p of newer) lastPull[p.name] = p.mtime;
     await api.invoke('settings:set', { lastPull });
@@ -1488,7 +1503,7 @@ export default function App() {
 
   const openMakePortable = async (program) => {
     // Bug notice: shown before any portable packaging.
-    const bugOk = await api.invoke('dialog:confirm', {
+    const bugOk = await api.invoke('dialog:confirm', { confirmId: 'bugReport',
       message: 'Portable compiler notice',
       detail: 'The PortableApps.com compiler is new and may have bugs or make mistakes. The developer is actively polishing it to mitigate issues. Always test the resulting portable package before relying on it. Continue?',
       checkboxLabel: "Don't show this notice again",
@@ -1569,7 +1584,7 @@ export default function App() {
     compareNow: (p) => view === 'snapshots' && runCompare(p, null),
     deleteSnapshot: async (p) => {
       if (view !== 'snapshots') return;
-      if (!(await api.invoke('dialog:confirm', { message: `Delete the snapshot "${p.name}"?`, detail: 'The snapshot file is deleted. Your files and settings are not affected.' }))) return;
+      if (!(await api.invoke('dialog:confirm', { confirmId: 'deleteSnapshot', message: `Delete the snapshot "${p.name}"?`, detail: 'The snapshot file is deleted. Your files and settings are not affected.' }))) return;
       await api.invoke('snapshots:remove', p.id);
       load();
     },
@@ -1582,14 +1597,14 @@ export default function App() {
           text: p.type === 'Uninstall' ? 'An uninstall cannot be undone here. Reinstall the program, or use the restore point made before it.' : 'This change cannot be undone here.',
         });
       }
-      if (!(await api.invoke('dialog:confirm', { message: `Undo this change?`, detail: p.title }))) return;
+      if (!(await api.invoke('dialog:confirm', { confirmId: 'undoChange', message: `Undo this change?`, detail: p.title }))) return;
       await runUndo(p.id, p.title);
     },
     uninstall: async (p) => {
       if (view === 'history') return actions.undoChange(p);
       if (view === 'archive') return actions.deleteRecord(p);
       if (p.portable) {
-        if (!(await confirmWithRestore(`Remove the portable app ${p.name}?`, 'It has no uninstaller: Purgeon removes its folder, its entry and the files and settings it left, after you review them. Everything is backed up first.')).ok) return;
+        if (!(await confirmWithRestore(`Remove the portable app ${p.name}?`, 'It has no uninstaller: Purgeon removes its folder, its entry and the files and settings it left, after you review them. Everything is backed up first.', 'confirmRemovePortable')).ok) return;
         return scanFor(p, `Remove Portable App – ${p.name}`, (items) => `Purgeon found ${items.length} items belonging to ${p.name}.`);
       }
       if (view === 'snapshots') return actions.deleteSnapshot(p);
@@ -1602,6 +1617,7 @@ export default function App() {
           const sig = await api.invoke('security:verifySignature', { path: exe });
           if (sig.status !== 'Valid') {
             const go = await api.invoke('dialog:confirm', {
+              confirmId: 'uninstallUnsigned',
               message: `Uninstall ${p.name} without a valid signature?`,
               detail: `The program's main executable (${exe}) is not digitally signed (status: ${sig.status}). Uninstalling an unsigned program carries a higher risk of removing the wrong thing. Proceed anyway?`,
             });
@@ -1613,7 +1629,8 @@ export default function App() {
       const info = prep?.[0];
       const go = await confirmWithRestore(
         `Uninstall ${p.name}?`,
-        (p.store ? 'The app package will be removed.' : "The program's own uninstaller will run first, then Purgeon scans for leftovers.") + (info ? prepNote(info) : '')
+        (p.store ? 'The app package will be removed.' : "The program's own uninstaller will run first, then Purgeon scans for leftovers.") + (info ? prepNote(info) : ''),
+        'confirmUninstall'
       );
       if (!go.ok) return;
       if (go.checked) await makeRestorePoint(`Purgeon: before uninstalling ${p.name}`, 'uninstall');
@@ -1648,6 +1665,7 @@ export default function App() {
           const sig = await api.invoke('security:verifySignature', { path: exe });
           if (sig.status !== 'Valid') {
             const go = await api.invoke('dialog:confirm', {
+              confirmId: 'forceUnsigned',
               message: `Force removal of ${p.name} without a valid signature?`,
               detail: `The program's main executable (${exe}) is not digitally signed (status: ${sig.status}). Force removal skips the uninstaller entirely. Proceed anyway?`,
             });
@@ -1657,7 +1675,8 @@ export default function App() {
       }
       const go = await confirmWithRestore(
         `Force removal of ${p.name}?`,
-        "This skips the program's uninstaller and deletes its files and registry entries directly. Use it for programs whose uninstaller is broken or missing. Everything is backed up first." + prepNote(info, false)
+        "This skips the program's uninstaller and deletes its files and registry entries directly. Use it for programs whose uninstaller is broken or missing. Everything is backed up first." + prepNote(info, false),
+        'confirmForce'
       );
       if (!go.ok) return;
       if (go.checked) await makeRestorePoint(`Purgeon: before force removal of ${p.name}`, 'uninstall');
@@ -1699,7 +1718,7 @@ export default function App() {
       }
       if (!id) return setNotice({ tone: 'warn', text: `winget has no package named "${p.name}".${p.url ? ' Use Publisher Website instead.' : ''}` });
       await api.invoke('archive:setPackage', { id: p.id, wingetId: id });
-      if (!(await api.invoke('dialog:confirm', { message: `Reinstall ${p.name}?`, detail: `winget installs the package "${id}". Its installer may show its own window. Installing accepts the package's license terms.` }))) return;
+      if (!(await api.invoke('dialog:confirm', { confirmId: 'reinstallArchive', message: `Reinstall ${p.name}?`, detail: `winget installs the package "${id}". Its installer may show its own window. Installing accepts the package's license terms.` }))) return;
       setBusy(`Installing ${id}…`);
       try {
         const r = await api.invoke('winget:install', id);
@@ -1711,7 +1730,7 @@ export default function App() {
     openSite: (p) => (p.url ? api.invoke('open:url', p.url).catch((e) => setError(e.message)) : setNotice({ tone: 'warn', text: 'No website was recorded for this program.' })),
     restoreRemoval: async (p) => {
       if (!p.backups?.length) return setNotice({ tone: 'warn', text: 'No removal backup is linked to this entry.' });
-      if (!(await api.invoke('dialog:confirm', { message: `Put back what was removed for ${p.name}?`, detail: 'Its leftover files and settings are restored from the removal backup. This does not reinstall the program itself.' }))) return;
+      if (!(await api.invoke('dialog:confirm', { confirmId: 'putBackLeftovers', message: `Put back what was removed for ${p.name}?`, detail: 'Its leftover files and settings are restored from the removal backup. This does not reinstall the program itself.' }))) return;
       setBusy('Restoring…');
       try {
         const results = (await Promise.all(p.backups.map((b) => api.invoke('backups:restore', b).catch((e) => [{ kind: 'file', path: b, ok: false, detail: e.message }])))).flat();
@@ -1721,18 +1740,18 @@ export default function App() {
       }
     },
     deleteRecord: async (p) => {
-      if (!(await api.invoke('dialog:confirm', { message: `Delete ${p.name} from the archive?`, detail: 'Only this record is deleted. Backups stay in Tools › Backups.' }))) return;
+      if (!(await api.invoke('dialog:confirm', { confirmId: 'deleteFromArchive', message: `Delete ${p.name} from the archive?`, detail: 'Only this record is deleted. Backups stay in Tools › Backups.' }))) return;
       await api.invoke('archive:remove', p.id);
       load();
     },
     restore: async (p) => {
-      if (!(await api.invoke('dialog:confirm', { message: `Restore the backup of ${p.name}?`, detail: 'Registry keys and values are re-imported. Files must be restored from the Recycle Bin.' }))) return;
+      if (!(await api.invoke('dialog:confirm', { confirmId: 'restoreBackup', message: `Restore the backup of ${p.name}?`, detail: 'Registry keys and values are re-imported. Files must be restored from the Recycle Bin.' }))) return;
       setBusy('Restoring…');
       const results = await api.invoke('backups:restore', p.id).finally(() => setBusy(''));
       setModal({ type: 'results', title: 'Restore Report', results });
     },
     deleteBackup: async (p) => {
-      if (await api.invoke('dialog:confirm', { message: `Delete the backup of ${p.name}?`, detail: 'This cannot be undone.' })) {
+      if (await api.invoke('dialog:confirm', { confirmId: 'deleteBackup', message: `Delete the backup of ${p.name}?`, detail: 'This cannot be undone.' })) {
         await api.invoke('backups:remove', p.id);
         load();
       }
@@ -1891,6 +1910,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       setNotice({ tone: 'ok', text: s.safeMode ? 'Safe mode is on: leftover lists offer only items with a 90%+ match, and never services, scheduled tasks or firewall rules.' : 'Safe mode is off: every finding can be selected.' });
     },
     backupSettings: async () => setModal({ type: 'backupSettings', settings: await api.invoke('settings:get') }),
+    confirmationPrompts: async () => setModal({ type: 'confirmationPrompts', settings: await api.invoke('settings:get') }),
     openLog: () => api.invoke('log:open'),
     trustedPublishers: async () => {
       const list = await api.invoke('trusted:list');
@@ -2379,7 +2399,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           onError={setError}
           onStatus={setCustomStatus}
           onRemoveRule={async (r) => {
-            if (!(await api.invoke('dialog:confirm', { message: `Remove ${r.names.length === 1 ? 'the firewall rule' : `${r.names.length} firewall rules`} for "${r.display}"?`, detail: `${r.program} will no longer accept incoming connections through ${r.names.length === 1 ? 'this rule' : 'these rules'}. Each rule is backed up first and can be restored from Change History.` }))) return;
+            if (!(await api.invoke('dialog:confirm', { confirmId: 'removeFirewallRules', message: `Remove ${r.names.length === 1 ? 'the firewall rule' : `${r.names.length} firewall rules`} for "${r.display}"?`, detail: `${r.program} will no longer accept incoming connections through ${r.names.length === 1 ? 'this rule' : 'these rules'}. Each rule is backed up first and can be restored from Change History.` }))) return;
             removeWithBackup(`Firewall rules for ${r.display}`, r.names.map((n) => ({ kind: 'firewall', path: n, name: r.display, confidence: 'high', reason: 'Inbound rule' })));
           }}
         />
@@ -2531,6 +2551,16 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           onClose={() => setModal(null)}
         />
       )}
+      {modal?.type === 'confirmationPrompts' && (
+        <ConfirmationSettingsDialog
+          settings={modal.settings}
+          onSave={async (patch) => {
+            await api.invoke('settings:set', patch);
+            setNotice({ tone: 'ok', text: 'Confirmation prompt settings saved.' });
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
       {modal?.type === 'interrupted' && (
         <InterruptedDialog
           pending={modal.pending}
@@ -2588,7 +2618,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           onNew={newTrial}
           onTryOver={tryOver}
           onKeep={async (t) => {
-            if (!(await api.invoke('dialog:confirm', { message: `Keep ${t.name}?`, detail: 'The trial ends and its snapshot is deleted. The program stays installed; you can still uninstall it normally later.' }))) return;
+            if (!(await api.invoke('dialog:confirm', { confirmId: 'keepTrial', message: `Keep ${t.name}?`, detail: 'The trial ends and its snapshot is deleted. The program stays installed; you can still uninstall it normally later.' }))) return;
             await api.invoke('trials:finish', t.id);
             openTrials();
           }}
@@ -2826,7 +2856,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           admin={admin}
           onToggle={async (e) => {
             if (e.admin && admin === false) return setError(`"${e.name}" needs administrator rights. Use File › Restart as Administrator.`);
-            if (e.enabled && e.windows && !(await api.invoke('dialog:confirm', { message: `Turn off "${e.name}"?`, detail: 'This entry is part of Windows or a Microsoft product (such as the virus scan entry). Turning it off is reversible.' }))) return;
+            if (e.enabled && e.windows && !(await api.invoke('dialog:confirm', { confirmId: 'turnOffCtxMenu', message: `Turn off "${e.name}"?`, detail: 'This entry is part of Windows or a Microsoft product (such as the virus scan entry). Turning it off is reversible.' }))) return;
             try {
               const now = await api.invoke('ctxmenu:set', { entry: e, enable: !e.enabled });
               setModal((m) => m?.type === 'ctxmenu' ? { ...m, entries: m.entries.map((x) => (x.id === now.id ? now : x)) } : m);

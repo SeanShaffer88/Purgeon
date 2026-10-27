@@ -13,6 +13,7 @@ export const DEFAULT_SETTINGS = {
   gridLines: true,
   requireSignature: false,
   encryptionKey: '',
+  disabledConfirmations: [],
 };
 
 export const settingsFile = () => path.join(sys.info.dataDir, 'settings.json');

@@ -1369,3 +1369,104 @@ export function ProgramDetailDialog({ program, insight = {}, sizes = {}, onClose
     </Dialog>
   );
 }
+
+// Confirmation settings: lets the user re-enable confirmation prompts they previously disabled.
+export function ConfirmationSettingsDialog({ settings, onSave, onClose }) {
+  const [disabled, setDisabled] = useState(Array.isArray(settings.disabledConfirmations) ? [...settings.disabledConfirmations] : []);
+
+  const allConfirmations = [
+    { id: 'confirmUninstall', label: 'Uninstall a program' },
+    { id: 'confirmForce', label: 'Force-remove a program' },
+    { id: 'confirmBatchUninstall', label: 'Batch uninstall several programs' },
+    { id: 'confirmBatchRemove', label: 'Batch remove leftover items' },
+    { id: 'confirmMonitoredUninstall', label: 'Uninstall a monitored program' },
+    { id: 'confirmRunUninstaller', label: "Run a monitored program's own uninstaller" },
+    { id: 'confirmDebloat', label: 'Apply Windows debloat tweaks' },
+    { id: 'confirmUpdate', label: 'Update programs via winget' },
+    { id: 'confirmQueueUninstall', label: 'Uninstall programs from the queue' },
+    { id: 'confirmRemovePortable', label: 'Remove a portable app' },
+    { id: 'confirmSnapshotCleanup', label: 'Clean up snapshot differences' },
+    { id: 'removeEntry', label: 'Remove a program from the list' },
+    { id: 'orphanCleanup', label: 'Clean up orphaned leftovers' },
+    { id: 'queueRestart', label: 'Restart after a queued uninstall' },
+    { id: 'repairUninstaller', label: 'Repair a program via winget' },
+    { id: 'getNewerSettings', label: 'Get newer settings from sync' },
+    { id: 'bugReport', label: 'Send a bug report' },
+    { id: 'deleteSnapshot', label: 'Delete a snapshot' },
+    { id: 'undoChange', label: 'Undo a recorded change' },
+    { id: 'reinstallArchive', label: 'Reinstall from the archive' },
+    { id: 'putBackLeftovers', label: 'Put back removed leftovers' },
+    { id: 'deleteFromArchive', label: 'Delete from the archive' },
+    { id: 'restoreBackup', label: 'Restore a backup' },
+    { id: 'deleteBackup', label: 'Delete a backup' },
+    { id: 'removeFirewallRules', label: 'Remove firewall rules' },
+    { id: 'keepTrial', label: 'Keep a trial program past expiry' },
+    { id: 'turnOffCtxMenu', label: 'Turn off a context menu entry' },
+    { id: 'uninstallUnsigned', label: 'Uninstall a program without a valid signature' },
+    { id: 'forceUnsigned', label: 'Force-remove a program without a valid signature' },
+    { id: 'closeRunningPrograms', label: 'Close running programs before removal' },
+    { id: 'cleanJunk', label: 'Clean junk files' },
+    { id: 'cleanSystemWindows', label: 'Run permanent Windows clean-up' },
+  ];
+
+  const isDisabled = (id) => disabled.includes(id);
+
+  const toggle = (id) => {
+    if (isDisabled(id)) setDisabled(disabled.filter((x) => x !== id));
+    else setDisabled([...disabled, id]);
+  };
+
+  const restoreAll = () => setDisabled([]);
+
+  const save = async () => {
+    await onSave({ disabledConfirmations: disabled });
+    onClose();
+  };
+
+  return (
+    <Dialog
+      title="Confirmation Prompts"
+      onClose={onClose}
+      width={700}
+      buttons={
+        <>
+          <button onClick={restoreAll}>Restore All</button>
+          <button className="primary" onClick={save}>Save</button>
+          <button onClick={onClose}>Cancel</button>
+        </>
+      }
+    >
+      <p className="heading">
+        Confirmations you disabled with "Don't show again" are listed below. Restore any you want
+        to see again. Disabled confirmations are answered automatically (as if you clicked Yes)
+        and a warning notice appears instead of the prompt.
+      </p>
+      <table>
+        <thead>
+          <tr>
+            <th style={{ textAlign: 'left', width: '60%' }}>Confirmation</th>
+            <th style={{ textAlign: 'left' }}>Status</th>
+          </tr>
+        </thead>
+        <tbody>
+          {allConfirmations.map((c) => (
+            <tr key={c.id}>
+              <td>{c.label}</td>
+              <td>
+                {isDisabled(c.id) ? (
+                  <button onClick={() => toggle(c.id)}>Disabled · Restore</button>
+                ) : (
+                  <span style={{ color: 'var(--muted)' }}>Enabled</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <p className="footnote">
+        To disable a confirmation again, check "Don't show again" when it appears. Changes take
+        effect immediately.
+      </p>
+    </Dialog>
+  );
+}

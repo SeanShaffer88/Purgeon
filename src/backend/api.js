@@ -90,6 +90,13 @@ const maybeCreateRestorePoint = async (kind, description) => {
   return restorepoint.create(description);
 };
 
+// A confirmation the user disabled is auto-approved. Returns true when the confirmation id
+// is in settings.disabledConfirmations.
+const isConfirmationDisabled = async (id) => {
+  const s = await readSettings();
+  return Array.isArray(s.disabledConfirmations) && s.disabledConfirmations.includes(id);
+};
+
 const handlers = {
   'app:isAdmin': isAdmin,
   'app:quit': () => sys.quit(),
@@ -418,7 +425,14 @@ const handlers = {
   },
   // Shown by the app's own dialog (see setConfirmUI). With checkboxLabel it resolves to
   // { ok, checked }, otherwise to a boolean.
-  'dialog:confirm': (options) => (confirmUI ? confirmUI(options) : Promise.resolve(options.checkboxLabel ? { ok: false, checked: false } : false)),
+  'dialog:confirm': async (options) => {
+    // A confirmation that the user disabled is auto-approved with a warning notice.
+    if (options.confirmId && await isConfirmationDisabled(options.confirmId)) {
+      api.notify?.({ tone: 'warn', text: `Confirmation “${options.message || options.confirmId}” was skipped (disabled in settings).` });
+      return options.checkboxLabel ? { ok: true, checked: false } : true;
+    }
+    return confirmUI ? confirmUI(options) : Promise.resolve(options.checkboxLabel ? { ok: false, checked: false } : false);
+  },
 };
 
 // Change History: what each change-making request records, with the request that undoes it.

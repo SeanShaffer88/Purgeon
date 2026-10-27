@@ -86,6 +86,7 @@ export const ACTION_TIPS = {
   toggleShell: 'Adds "Uninstall with Purgeon" and "Who owns this?" to Explorer’s right-click menu, for your user only. Turning it off removes exactly those entries.',
   ctxmenu: 'Lists the right-click entries other programs added to Explorer, and turns them off or on without deleting them.',
   backupSettings: 'Limits how much space and how long backups are kept. Each program’s newest backup is always kept.',
+  confirmationPrompts: 'Manage which confirmation prompts are skipped. Prompts you disabled with "Don\'t show again" are listed here and can be restored.',
   openLog: 'Opens the log of every command Purgeon ran in the last 14 days, with its result.',
   portableapps: 'Creates a PortableApps.com installer (.paf.exe) from a program you monitored with Tools › Monitor an Installation. Purgeon copies the recorded program files into a PortableApps.com folder structure and writes an NSIS installer script you compile with makensis.',
   startupDelayed: 'Automatic (Delayed Start) lets the service begin a short while after boot instead of at boot, speeding up sign-in. Only for services set to Automatic.',

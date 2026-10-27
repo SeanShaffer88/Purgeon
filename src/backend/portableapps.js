@@ -108,6 +108,54 @@ function isProtectedPath(p) {
   return roots.some((r) => lower.startsWith(r));
 }
 
+// ---- portable suitability classification -------------------------------------------
+
+// Checks whether a monitored program is suitable for portable packaging.
+// Programs that add services, drivers, scheduled tasks, licensing data, or dependencies
+// outside the app folder should be excluded, with an explanation of why.
+export async function classifyForPortable(items) {
+  const reasons = [];
+  const installRoot = installRootOf({ items });
+
+  for (const item of items) {
+    // Services and drivers are system-wide, not portable.
+    if (item.kind === 'service') {
+      reasons.push(`Installs the service "${item.path}" — services are system-wide and cannot be made portable.`);
+    }
+    if (item.kind === 'task') {
+      reasons.push(`Creates the scheduled task "${item.path}" — scheduled tasks run outside the app folder.`);
+    }
+    // Driver files (.sys) are kernel-level, not portable.
+    if (item.kind === 'file' && /\.sys$/i.test(item.path)) {
+      reasons.push(`Installs the driver "${item.path}" — drivers are system-wide and cannot be made portable.`);
+    }
+    // Licensing/activation data in the registry.
+    if (item.kind === 'key' && /\\Software\\Microsoft\\Windows\\CurrentVersion\\App Paths/i.test(item.path)) {
+      // App Paths is OK - it's just an app registration
+    }
+    if (item.kind === 'key' && /(licens|activat|productkey|registration)/i.test(item.path)) {
+      reasons.push(`Writes licensing data to "${item.path}" — licensing is tied to the machine.`);
+    }
+    if (item.kind === 'value' && /(licens|activat|productkey|registration)/i.test(item.name || '')) {
+      reasons.push(`Writes licensing value "${item.name}" — licensing is tied to the machine.`);
+    }
+    // Files or dirs outside the install root are dependencies elsewhere on the system.
+    if ((item.kind === 'file' || item.kind === 'dir') && installRoot && item.path) {
+      const rel = item.path.toLowerCase();
+      const root = installRoot.toLowerCase();
+      if (!rel.startsWith(root) && !rel.startsWith('c:\\windows') && !rel.startsWith('c:\\programdata')) {
+        reasons.push(`Writes to "${item.path}" outside the app folder — not self-contained.`);
+      }
+    }
+  }
+
+  return {
+    portable: reasons.length === 0,
+    reasons,
+  };
+}
+
+
 // Sanitize a name for use as a PortableApps.com package id/directory.
 function safeName(name) {
   return String(name ?? 'Program').replace(/[^a-z0-9]+/gi, '').replace(/^([0-9])/, 'P$1') || 'Program';
@@ -232,6 +280,17 @@ export async function generate({
     rec = records.find((r) => r.id === monitorId);
     if (!rec) throw new Error(`No monitored program with id ${monitorId}`);
     items = rec.items;
+  }
+
+  // Classify whether this program is suitable for portable packaging.
+  // Programs that add services, drivers, scheduled tasks, licensing data, or dependencies
+  // outside the app folder are excluded with an explanation.
+  const suitability = await classifyForPortable(items);
+  if (!suitability.portable) {
+    throw new Error(
+      `"${name}" cannot be packaged as portable:\\n\\n${suitability.reasons.join('\\n')}\\n\\n` +
+      'Only programs that run entirely from their own folder can be made portable.'
+    );
   }
 
   const name = appName || (rec ? rec.name : 'Program');
