@@ -71,30 +71,67 @@ export function ConfirmDialog({ message, detail, checkboxLabel, checkboxChecked,
   );
 }
 
-export function Busy({ message, onStop }) {
+export function Busy({ busy, onStop, onPause, onCancel }) {
+  // Accept either a string message or a rich busy object.
+  const msg = typeof busy === 'string' ? busy : busy?.message || '';
+  const progress = typeof busy === 'object' ? busy.progress : null;
+  const elapsed = typeof busy === 'object' ? busy.elapsed : null;
+  const current = typeof busy === 'object' ? busy.current : null;
+  const total = typeof busy === 'object' ? busy.total : null;
+  const canPause = typeof busy === 'object' ? !!busy.canPause : false;
+  const canCancel = typeof busy === 'object' ? !!busy.canCancel : false;
+
   const [stopping, setStopping] = useState(false);
+  const [paused, setPaused] = useState(false);
+  const startTime = useRef(Date.now());
+
+  const pct = progress != null ? progress : (current != null && total ? Math.round((current / total) * 100) : null);
+  const displayElapsed = elapsed != null ? elapsed : Math.floor((Date.now() - startTime.current) / 1000);
+  const timeText = displayElapsed > 0 ? ` (${displayElapsed}s)` : '';
+
   return (
     <div className="overlay">
-      <div className="dialog busy" style={{ width: 400 }}>
+      <div className="dialog busy" style={{ width: 480 }}>
         <div className="dialog-body">
-          <div className="busy-msg">{message}</div>
-          <div className="progress">
-            <div className="progress-bar" />
-          </div>
+          <div className="busy-msg">{msg}{timeText}</div>
+          {pct != null && (
+            <>
+              <div className="progress">
+                <div className="progress-bar" style={{ width: `${pct}%` }} />
+              </div>
+              <div className="progress-text">
+                {current != null && total ? `${current} of ${total}` : ''}
+                {pct != null ? ` · ${pct}%` : ''}
+              </div>
+            </>
+          )}
+          {paused && <div className="busy-paused">Paused</div>}
         </div>
-        {onStop && (
-          <div className="dialog-buttons">
+        <div className="dialog-buttons">
+          {canPause && (
+            <button
+              disabled={stopping}
+              onClick={() => {
+                setPaused((p) => !p);
+                if (onPause) onPause(!p);
+              }}
+            >
+              {paused ? 'Resume' : 'Pause'}
+            </button>
+          )}
+          {(onStop || canCancel) && (
             <button
               disabled={stopping}
               onClick={() => {
                 setStopping(true);
-                onStop();
+                if (onStop) onStop();
+                if (onCancel) onCancel();
               }}
             >
-              {stopping ? 'Stopping after this one…' : 'Stop After This One'}
+              {stopping ? 'Stopping…' : canCancel ? 'Cancel' : 'Stop After This One'}
             </button>
-          </div>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );

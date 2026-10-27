@@ -461,8 +461,8 @@ export default function App() {
   const [icons, setIcons] = useState({});
   const [admin, setAdmin] = useState(null);
   const [modal, setModal] = useState(null);
-  const [busy, setBusy] = useState('');
-  const [menu, setMenu] = useState(null);
+const [busy, setBusy] = useState(null); // { message, progress, current, total, canPause, canCancel, onPause, onCancel }
+const [menu, setMenu] = useState(null);
   // Multi-selection (keys); `selected` is the focused row and the range anchor moves with plain clicks.
   const [marked, setMarked] = useState(() => new Set());
   const anchor = useRef(null);
@@ -953,7 +953,7 @@ const [firstRunTipDismissed, setFirstRunTipDismissed] = useState(() => new Set()
         outcomes.push({ p, skipped: true });
         continue;
       }
-      setBusy(`Uninstalling ${i + 1} of ${list.length}: ${p.name}…\nFinish the uninstaller's window if one appears.`);
+      setBusy({ message: `Uninstalling ${i + 1} of ${list.length}: ${p.name}`, current: i + 1, total: list.length, canCancel: true, onCancel: () => { stopBatch.current = true; } });
       try {
         outcomes.push({ p, result: await api.invoke('program:runUninstaller', p) });
       } catch (e) {
@@ -965,7 +965,7 @@ const [firstRunTipDismissed, setFirstRunTipDismissed] = useState(() => new Set()
     const ran = outcomes.filter((o) => !o.skipped && !o.p.store);
     const items = [];
     for (const [i, { p }] of ran.entries()) {
-      setBusy(`Scanning for leftovers (${i + 1} of ${ran.length}): ${p.name}…`);
+      setBusy({ message: `Scanning for leftovers of ${p.name}`, current: i + 1, total: ran.length, canCancel: true, onCancel: () => { stopBatch.current = true; } });
       const found = await api.invoke('program:scan', { ...p, installerItems: infoFor(p)?.installerItems || [] }).catch(() => []);
       items.push(...found.map((it) => ({ ...it, program: p.name })));
     }
@@ -1231,12 +1231,13 @@ const [firstRunTipDismissed, setFirstRunTipDismissed] = useState(() => new Set()
       stopBatch.current = true;
     });
     try {
-      for (const p of q.programs.filter((x) => x.status === 'pending')) {
+      const pending = q.programs.filter((x) => x.status === 'pending');
+      for (const [i, p] of pending.entries()) {
         if (stopBatch.current) break;
-        setBusy(`Uninstalling ${p.name}…`);
+        setBusy({ message: `Uninstalling ${p.name}`, current: i + 1, total: pending.length, canCancel: true, onCancel: () => { stopBatch.current = true; } });
         const [info] = await Promise.all([api.invoke('program:prepare', p).catch(() => null)]);
         const r = await api.invoke('program:runUninstaller', p).catch((e) => ({ ok: false, error: e.message }));
-        setBusy(`Scanning for leftovers of ${p.name}…`);
+        setBusy({ message: `Scanning for leftovers of ${p.name}`, current: i + 1, total: pending.length, canCancel: true, onCancel: () => { stopBatch.current = true; } });
         const found = await api.invoke('program:scan', { ...p, installerItems: info?.installerItems || [] }).catch(() => []);
         p.status = r.ok || (r.code === 3010 || r.code === 1641) ? 'done' : 'failed';
         p.detail = r.error || (r.ok ? '' : `exit code ${r.code}`);
@@ -1280,7 +1281,7 @@ const [firstRunTipDismissed, setFirstRunTipDismissed] = useState(() => new Set()
     setModal(null);
     const items = [];
     for (const [i, p] of list.entries()) {
-      setBusy(`Scanning for leftovers (${i + 1} of ${list.length}): ${p.name}…`);
+      setBusy({ message: `Scanning for leftovers of ${p.name}`, current: i + 1, total: list.length });
       items.push(...(await api.invoke('program:scan', { ...p, installerItems: [] }).catch(() => [])).map((x) => ({ ...x, program: p.name })));
     }
     setBusy('');
@@ -2527,7 +2528,10 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {/* Messages sit at the bottom, just above the status bar. */}
       {error && (
         <div className="error-bar">
-          <span>{error}</span>
+          <span>{error.msg || error}</span>
+          {error.retry && (
+            <button onClick={error.retry} title="Try again">↻ Retry</button>
+          )}
           <button onClick={() => setError('')}>✕</button>
         </div>
       )}
@@ -2579,7 +2583,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         </div>
       )}
 
-      {busy && <Busy message={busy} onStop={busyStop} />}
+      {busy && <Busy busy={busy} onStop={busyStop} onPause={busy?.onPause} onCancel={busy?.onCancel} />}
       {welcomeOpen && (
         <WelcomeDialog
           onClose={() => {
