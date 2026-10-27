@@ -101,7 +101,10 @@ const isConfirmationDisabled = async (id) => {
 const handlers = {
   'app:isAdmin': isAdmin,
   'app:ready': () => (sys.frontendReady ? sys.frontendReady() : undefined),
-  'app:quit': () => sys.quit(),
+  'app:quit': async () => {
+    await log.flushNow().catch(() => {});
+    return sys.quit();
+  },
   'app:elevate': async () => {
     await runPS(`Start-Process -FilePath ${psq(sys.info.exe)} -Verb RunAs`);
     await sys.quit();
@@ -556,6 +559,7 @@ export async function initBackend() {
   log.write(`---- Purgeon ${sys.info.exe} started`);
   await Promise.all([
     backups.setRoot(path.join(data, 'backups')),
+    programs.setRoot(path.join(data, 'programs')),
     monitor.setRoot(path.join(data, 'monitor')),
     startup.setRoot(path.join(data, 'startup')),
     debloat.setRoot(path.join(data, 'debloat')),

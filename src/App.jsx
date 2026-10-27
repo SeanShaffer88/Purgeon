@@ -17,6 +17,13 @@ import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, SheetDialog, P
 
 const api = window.api;
 
+// Starts background work (measuring, insights, the outside check) only once the
+// list itself has had a chance to paint, so first paint is not competing with it.
+const defer = (fn) => {
+  if ('requestIdleCallback' in window) window.requestIdleCallback(fn, { timeout: 1200 });
+  else setTimeout(fn, 400);
+};
+
 const VIEWS = {
   desktop: { label: 'Programs', noun: 'programs', cols: [['name', 'Name'], ['arch', 'Arch'], ['size', 'Size'], ['date', 'Installed On']] },
   store: { label: 'Apps', noun: 'apps', cols: [['name', 'Name'], ['version', 'Version'], ['publisher', 'Publisher']] },
@@ -575,6 +582,9 @@ const [reducedMotion, setReducedMotion] = useState(false);
   // Per-program insights (signature, installed together, offers, growth), loaded after the list.
   const [insight, setInsight] = useState({});
   const sizeTimer = useRef(null);
+  // Measured sizes/dates waiting to be applied to the list (see the onMeasured effect).
+  const measuredPending = useRef(new Map());
+  const measuredTimer = useRef(null);
   const groupNames = useMemo(() => [...new Set(Object.values(groups))].sort((a, b) => a.localeCompare(b)), [groups]);
   const debloatGatePassed = useRef(false);
   const searchRef = useRef(null);
@@ -618,11 +628,15 @@ const [reducedMotion, setReducedMotion] = useState(false);
       else data = await api.invoke('programs:list', v);
       if (v === 'desktop') {
         desktopCache.current = data;
-        api.invoke('programs:measure', data).catch(() => {});
-        api.invoke('programs:insights', data).then(setInsight).catch(() => {});
+        defer(() => {
+          api.invoke('programs:measure', data).catch(() => {});
+          api.invoke('programs:insights', data).then(setInsight).catch(() => {});
+        });
         if (!outsideChecked.current) {
           outsideChecked.current = true;
-          api.invoke('programs:outside', data).then((gone) => gone.length && setModal((m) => m || { type: 'outside', programs: gone })).catch(() => {});
+          defer(() => {
+            api.invoke('programs:outside', data).then((gone) => gone.length && setModal((m) => m || { type: 'outside', programs: gone })).catch(() => {});
+          });
         }
       }
       setRows(data.map((r) => toRow(v, r)));
@@ -2243,18 +2257,32 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
   const [confirm, setConfirm] = useState(null);
   useEffect(() => setConfirmUI((options) => new Promise((resolve) => setConfirm({ ...options, resolve }))), []);
   // Sizes and dates measured from install folders arrive one program at a time.
-  useEffect(
-    () =>
-      api.onMeasured((m) => {
-        const merge = (p) => (p.key === m.key ? { ...p, ...m } : p);
-        // Sizes measured this session go into the size history once the measuring settles.
-        clearTimeout(sizeTimer.current);
-        sizeTimer.current = setTimeout(() => api.invoke('programs:recordSizes', desktopCache.current).catch(() => {}), 15000);
-        desktopCache.current = desktopCache.current.map(merge);
-        setRows((rs) => rs.map((r) => (r.key === m.key ? toRow('desktop', merge(r)) : r)));
-      }),
-    []
-  );
+  // They are applied to the list in batches (at most one pass every 250 ms), so a
+  // long measuring run does not re-render the list once per program.
+  useEffect(() => {
+    const flushMeasured = () => {
+      measuredTimer.current = null;
+      if (!measuredPending.current.size) return;
+      const byKey = measuredPending.current;
+      measuredPending.current = new Map();
+      const merge = (p) => (byKey.has(p.key) ? { ...p, ...byKey.get(p.key) } : p);
+      desktopCache.current = desktopCache.current.map(merge);
+      setRows((rs) => rs.map((r) => (byKey.has(r.key) ? toRow('desktop', merge(r)) : r)));
+    };
+    const off = api.onMeasured((m) => {
+      // Sizes measured this session go into the size history once the measuring settles.
+      clearTimeout(sizeTimer.current);
+      sizeTimer.current = setTimeout(() => api.invoke('programs:recordSizes', desktopCache.current).catch(() => {}), 15000);
+      const prev = measuredPending.current.get(m.key);
+      measuredPending.current.set(m.key, prev ? { ...prev, ...m } : m);
+      if (!measuredTimer.current) measuredTimer.current = setTimeout(flushMeasured, 250);
+    });
+    return () => {
+      off();
+      if (measuredTimer.current) clearTimeout(measuredTimer.current);
+      measuredTimer.current = null;
+    };
+  }, []);
 
   // ---- keyboard navigation ---------------------------------------------------
 

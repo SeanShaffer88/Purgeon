@@ -23,12 +23,27 @@ export async function setRoot(d) {
   }
 }
 
-function flush() {
-  timer = null;
+// Writes out whatever lines are waiting; shared by the timer flush and flushNow.
+async function flushPending() {
   if (!pending.length || !dir) return;
   const text = pending.join('');
   pending = [];
-  sys.appendText(path.join(dir, `${day()}.log`), text).catch(() => {});
+  await sys.appendText(path.join(dir, `${day()}.log`), text).catch(() => {});
+}
+
+function flush() {
+  timer = null;
+  flushPending();
+}
+
+// Flushes immediately and waits for the write, so quitting does not lose the
+// last fraction of a second of log lines still waiting on the timer.
+export async function flushNow() {
+  if (timer) {
+    clearTimeout(timer);
+    timer = null;
+  }
+  await flushPending();
 }
 
 // A short, single-line description of a call.

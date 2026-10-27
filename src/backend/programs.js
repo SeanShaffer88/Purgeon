@@ -1,5 +1,19 @@
 // Enumerates installed desktop programs (registry Uninstall keys) and Store apps.
 import { runPSJson, runPS, psq } from './shell.js';
+import { sys } from './sys.js';
+import * as path from './winpath.js';
+import { FileCache } from './filecache.js';
+
+// Icon cache: extracted PNGs keyed by each icon file's stamp, so repeat program-list
+// loads skip the PowerShell extraction for files that have not changed. Null until
+// setRoot runs (the CLI and tests), in which case icons are extracted uncached.
+let iconCache = null;
+
+export const setRoot = async (d) => {
+  await sys.makeDir(d);
+  iconCache = new FileCache(path.join(d, 'icons.json'));
+  await iconCache.init();
+};
 
 const LIST_DESKTOP = `
 $nativeArch = if ([Environment]::Is64BitOperatingSystem) { 'x64' } else { 'x86' }
@@ -99,12 +113,8 @@ function iconPathFor(p) {
   return null;
 }
 
-// 16x16 PNG icons for many programs in one PowerShell call: { [key]: dataURL }.
-async function iconsFor(programs) {
-  const wanted = programs.map((p) => ({ key: p.key, file: iconPathFor(p) })).filter((w) => w.file);
-  if (!wanted.length) return {};
-  const rows = await runPSJson(
-    `Add-Type -AssemblyName System.Drawing
+const ICONS_PS = `
+     Add-Type -AssemblyName System.Drawing
      $in = [Console]::In.ReadToEnd() | ConvertFrom-Json
      $out = foreach ($w in $in) {
        try {
@@ -120,10 +130,51 @@ async function iconsFor(programs) {
          $g.Dispose(); $bmp.Dispose(); $icon.Dispose()
        } catch {}
      }
-     @($out) | ConvertTo-Json -Compress`,
-    { input: JSON.stringify(wanted) }
-  ).catch(() => []);
-  return Object.fromEntries(rows.map((r) => [r.key, `data:image/png;base64,${r.png}`]));
+     @($out) | ConvertTo-Json -Compress`;
+
+// 16x16 PNG icons for many programs in one PowerShell call: { [key]: dataURL }.
+// Programs can share one icon file, so extraction (and the cache) work per file;
+// only files without a current-stamp cache entry go to PowerShell.
+async function iconsFor(programs) {
+  const wanted = programs.map((p) => ({ key: p.key, file: iconPathFor(p) })).filter((w) => w.file);
+  if (!wanted.length) return {};
+  const files = [...new Set(wanted.map((w) => w.file))];
+  const pngByFile = new Map();
+  const stamps = new Map();
+  // The script answers per input key, so misses are keyed by their own file path.
+  let misses = files.map((file) => ({ key: file, file }));
+  if (iconCache) {
+    misses = [];
+    await Promise.all(
+      files.map(async (file) => {
+        const stamp = await iconCache.stampFor(file);
+        if (stamp !== null) {
+          stamps.set(file, stamp);
+          const v = iconCache.hit(file, stamp);
+          if (v !== undefined) {
+            pngByFile.set(file, v);
+            return;
+          }
+        }
+        misses.push({ key: file, file });
+      })
+    );
+  }
+  if (misses.length) {
+    const rows = await runPSJson(ICONS_PS, { input: JSON.stringify(misses) }).catch(() => []);
+    for (const r of rows) {
+      pngByFile.set(r.key, r.png);
+      const stamp = stamps.get(r.key);
+      if (iconCache && stamp) iconCache.put(r.key, stamp, r.png);
+    }
+    if (iconCache) await iconCache.save();
+  }
+  const out = {};
+  for (const w of wanted) {
+    const png = pngByFile.get(w.file);
+    if (png) out[w.key] = `data:image/png;base64,${png}`;
+  }
+  return out;
 }
 
 export { iconsFor, listDesktop, listStore, removeStoreApp, iconPathFor, formatDate };
