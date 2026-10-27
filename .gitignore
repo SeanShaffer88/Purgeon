@@ -8,3 +8,7 @@ release/
 release-manifest.json
 src-tauri/target/
 src-tauri/gen/
+
+# Test artifacts created by test runs (not part of the source)
+\\tmp\\*
+purgeon-removal-plan-*

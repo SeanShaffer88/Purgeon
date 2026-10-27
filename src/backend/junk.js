@@ -5,6 +5,7 @@
 import { sys, env } from './sys.js';
 import * as path from './winpath.js';
 import { runPS, runPSJson, reg } from './shell.js';
+import * as programs from './programs.js';
 
 const DAY = 24 * 3600 * 1000;
 
@@ -49,6 +50,78 @@ export const CATEGORIES = [
     detail: 'Data folders of Microsoft Store apps that are no longer installed.',
     roots: () => [local('Packages')],
     orphanPackages: true,
+  },
+  // Browser caches — safe to clean, browsers rebuild them.
+  { id: 'chrome-cache',
+    label: 'Google Chrome cache',
+    detail: 'Chromium cache, code cache and GPU cache. Sites load again on next visit.',
+    roots: () => [
+      local('Google', 'Chrome', 'User Data', 'Default', 'Cache'),
+      local('Google', 'Chrome', 'User Data', 'Default', 'Code Cache'),
+      local('Google', 'Chrome', 'User Data', 'Default', 'GPUCache'),
+      local('Google', 'Chrome SxS', 'User Data', 'Default', 'Cache'),
+      local('Google', 'Chrome SxS', 'User Data', 'Default', 'Code Cache'),
+      local('Google', 'Chrome SxS', 'User Data', 'Default', 'GPUCache'),
+    ],
+    minAge: DAY,
+  },
+  { id: 'edge-cache',
+    label: 'Microsoft Edge cache',
+    detail: 'Chromium cache, code cache and GPU cache. Sites load again on next visit.',
+    roots: () => [
+      local('Microsoft', 'Edge', 'User Data', 'Default', 'Cache'),
+      local('Microsoft', 'Edge', 'User Data', 'Default', 'Code Cache'),
+      local('Microsoft', 'Edge', 'User Data', 'Default', 'GPUCache'),
+      local('Microsoft', 'Edge SxS', 'User Data', 'Default', 'Cache'),
+      local('Microsoft', 'Edge SxS', 'User Data', 'Default', 'Code Cache'),
+      local('Microsoft', 'Edge SxS', 'User Data', 'Default', 'GPUCache'),
+    ],
+    minAge: DAY,
+  },
+  { id: 'firefox-cache',
+    label: 'Mozilla Firefox cache',
+    detail: 'Firefox cache2 and startup cache. Pages re-fetch assets on next visit.',
+    roots: () => [local('Mozilla', 'Firefox', 'Profiles')],
+    match: /^(cache2|startupCache)$/i,
+    minAge: DAY,
+  },
+  // Browser cookies, history and site data — privacy traces, never selected by default.
+  { id: 'chrome-cookies',
+    label: 'Chrome cookies and history',
+    detail: 'Cookies, browsing history, visited links and top sites. Signs you out of sites.',
+    roots: () => [
+      local('Google', 'Chrome', 'User Data', 'Default'),
+      local('Google', 'Chrome SxS', 'User Data', 'Default'),
+    ],
+    match: /^(Cookies|History|Visited Links|Top Sites|Login Data|Web Data)$/i,
+    privacy: true,
+  },
+  { id: 'edge-cookies',
+    label: 'Edge cookies and history',
+    detail: 'Cookies, browsing history, visited links and top sites. Signs you out of sites.',
+    roots: () => [
+      local('Microsoft', 'Edge', 'User Data', 'Default'),
+      local('Microsoft', 'Edge SxS', 'User Data', 'Default'),
+    ],
+    match: /^(Cookies|History|Visited Links|Top Sites|Login Data|Web Data)$/i,
+    privacy: true,
+  },
+  { id: 'firefox-cookies',
+    label: 'Firefox cookies and history',
+    detail: 'Cookies, browsing history, favicons and site data. Signs you out of sites.',
+    roots: () => [local('Mozilla', 'Firefox', 'Profiles')],
+    match: /^(cookies\.sqlite|places\.sqlite|favicons\.sqlite|siteSecurityService\.txt)$/i,
+    privacy: true,
+  },
+  // Large folders in AppData and ProgramData that may belong to programs no longer installed.
+  // Offered unselected; the user reviews each one before cleaning.
+  {
+    id: 'orphan-large',
+    label: 'Large orphaned folders',
+    detail: 'Folders larger than 100 MB in AppData and ProgramData whose name does not match an installed program. Might be leftovers from uninstalled programs; review before removing.',
+    roots: () => [local(''), progData('')],  // LOCALAPPDATA and ProgramData roots
+    minBytes: 100 * 1024 * 1024,
+    orphan: true,
   },
 ];
 
@@ -192,6 +265,9 @@ export async function scan(now = Date.now()) {
   const own = [sys.info.dataDir].filter(Boolean).map((d) => path.resolve(d).toLowerCase());
   // App data is offered only for apps that are not installed; if that can't be read, none is offered.
   const families = await installedFamilies().catch(() => null);
+  // Desktop program names, to tell orphaned folders from live program folders.
+  const desktop = await programs.listDesktop().catch(() => []);
+  const programNames = new Set(desktop.map((p) => (p.name || '').toLowerCase()));
   return Promise.all(
     CATEGORIES.map(async (c) => {
       const items = [];
@@ -201,6 +277,8 @@ export async function scan(now = Date.now()) {
           if (c.match && !c.match.test(path.basename(e.path))) continue;
           if (c.orphanPackages && (!e.dir || families.has(path.basename(e.path).toLowerCase()) || !/_[a-z0-9]{13}$/i.test(path.basename(e.path)))) continue;
           if (c.minAge && now - e.newest < c.minAge) continue;
+          if (c.minBytes && e.bytes < c.minBytes) continue;
+          if (c.orphan && e.dir && programNames.has(path.basename(e.path).toLowerCase())) continue;
           if (own.some((o) => e.path.toLowerCase().startsWith(o))) continue;
           items.push({ path: e.path, dir: e.dir, bytes: e.bytes });
         }
