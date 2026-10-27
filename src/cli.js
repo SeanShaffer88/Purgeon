@@ -75,9 +75,14 @@ import * as junk from './backend/junk.js';
 import * as backups from './backend/backups.js';
 import { runUninstaller } from './backend/api.js';
 import { runCommandLine } from './backend/shell.js';
+import { parseCliArgs } from './cli-args.js';
 
 const HELP = `Purgeon command line
 
+  --help, -h, /?
+        Shows this help. Use one command at a time; unknown, duplicate or
+        misplaced options are errors. Put quotes around names and paths
+        containing spaces. Values cannot start with a dash (-).
   --snapshot "<name>" [--preset quick|standard|deep]
         Takes a snapshot of files, folders and registry settings.
   --compare <before> <after|now> [--report <file.html|file.json|file.txt>]
@@ -191,6 +196,15 @@ async function run(args) {
       return wrap(true, `${text.split('\r\n').slice(0, 2).join('\r\n')}\r\nReport saved to ${report}\r\n`);
     }
     return wrap(true, text);
+  }
+  if (cmd === '--list-snapshots') {
+    const list = await snapshots.list();
+    if (!list.length) return wrap(true, 'No snapshots yet.\r\n');
+    const local = (iso) => {
+      const t = new Date(iso);
+      return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')} ${t.toTimeString().slice(0, 5)}`;
+    };
+    return wrap(true, list.map((s) => `${s.id}  ${local(s.created)}  ${s.preset.padEnd(8)}  ${s.name}`).join('\r\n') + '\r\n');
   }
   if (cmd === '--monitor') {
     const sub = option(args, '--monitor');
@@ -539,10 +553,26 @@ async function run(args) {
   throw new Error(`Unknown command: ${cmd}.`);
 }
 
-export async function runCli(args) {
+// Commands validated completely by the pure parser (src/cli-args.js) before the
+// backend is initialized or anything runs. The remaining commands predate that
+// parser and keep their existing dispatch below; a disposable test install under
+// --monitor also stays on that path because it takes its own options.
+const PARSER_COMMANDS = new Set(['--snapshot', '--compare', '--list-snapshots', '--monitor', '--maintenance', '--autostart', '--help', '-h', '/?']);
+const LEGACY_COMMANDS = new Set(['--background-scan', '--restore-point', '--associations', '--associations-for', '--schedule', '--startup', '--trusted', '--update', '--sync', '--plugins', '--portableapps', '--export', '--uninstall', '--language', '--settings', '--profiler', '--quiet', '-q', '--json']);
+
+async function dispatch(args, initialize) {
+  const first = Array.isArray(args) && typeof args[0] === 'string' ? args[0].toLowerCase() : null;
+  const testInstall = first === '--monitor' && typeof args[1] === 'string' && args[1].toLowerCase().startsWith('test-install');
+  if (testInstall || (first && LEGACY_COMMANDS.has(first) && !PARSER_COMMANDS.has(first))) return run(args);
+  const request = parseCliArgs(args);
+  if (request.command !== '--help') await (initialize ?? (async () => {}))();
+  return run(args);
+}
+
+export async function runCli(args, initialize) {
   let code = EXIT_OK;
   try {
-    const output = await run(args);
+    const output = await dispatch(args, initialize);
     if (!quietMode(args)) await sys.print(`\r\n${output}`);
   } catch (e) {
     code = e.exitCode === EXIT_USAGE ? EXIT_USAGE : EXIT_ERROR;
