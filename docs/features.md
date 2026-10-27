@@ -242,9 +242,9 @@ Clicking a program in the list selects it; clicking again deselects it. Works al
 
 ## Navigation
 
-- **Breadcrumb navigation** — shows your current path (e.g. Programs › Apps) with Back/Forward buttons.
+- **Back/Forward navigation** — View › Back and View › Forward move through the views you opened (Alt+Left / Alt+Right do the same).
 - **View history** — Alt+Left/Right move back and forward through recently opened views.
-- **Recent programs** — the last 10 programs you viewed or acted on appear in the view-bar sidebar.
+- **Recent programs** — the last 10 programs you viewed or acted on are listed at the bottom of the View menu; picking one jumps back to it.
 - **Command palette** (`Ctrl+K`) — fuzzy-search every command and program; prefix matches score highest.
 
 ## Progress feedback
@@ -256,7 +256,7 @@ Long operations (batch uninstall, leftover scanning, snapshot comparison) show a
 - **Error bar** — shows errors with a Retry button for recoverable failures.
 - **Undo toast** — the last removal can be undone within 30 seconds.
 - **Auto-retry** — backend calls retry up to 3 times on transient failures (file busy, registry locked, access denied, timeout).
-- **Safe Mode toggle** — one-click toolbar button to enable/disable safe mode.
+- **Safe Mode** — Tools › Safe Mode turns safe mode on or off (only high-confidence matches are offered while it is on).
 - **Batch uninstall pause/resume** — pause a batch uninstall mid-flight and resume later.
 
 ## Documentation and help
