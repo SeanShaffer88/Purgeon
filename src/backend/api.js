@@ -86,6 +86,14 @@ async function uninstallerStillRunning() {
   return Number(out.trim()) > 0;
 }
 
+// Before a destructive operation, create a Windows restore point when createRestorePoints is on.
+// Returns { created, skipped, ...restorepoint fields }.
+const maybeCreateRestorePoint = async (kind, description) => {
+  const s = await readSettings();
+  if (!s.createRestorePoints) return { created: false, skipped: true };
+  return restorepoint.create(description);
+};
+
 const handlers = {
   'app:isAdmin': isAdmin,
   'app:quit': () => sys.quit(),
@@ -105,10 +113,11 @@ const handlers = {
   'programs:measure': (list) => measure.measure(list, (result) => measuredListeners.forEach((fn) => fn(result))),
   'icons:get': (list) => programs.iconsFor(list),
   'program:runUninstaller': async (program) => {
+    const rp = await maybeCreateRestorePoint('uninstall', `Purgeon: before uninstalling ${program.name}`);
     if (program.store) {
       await programs.removeStoreApp(program.key);
       await (await lazyArchive.get()).add(program, 'store').catch(() => {});
-      return { ok: true };
+      return { ok: true, restorePoint: rp };
     }
     // With Tools › Silent Uninstall turned on, uninstallers whose silent switches are known run without their windows.
     const silent = (await readSettings()).silentUninstall ? (await installers.describe(program)).silent : '';
@@ -125,7 +134,7 @@ const handlers = {
       if (i > 3 && !(await uninstallerStillRunning())) break;
     }
     if (!(await reg(['query', program.key])).ok) await (await lazyArchive.get()).add(program, 'uninstalled').catch(() => {});
-    return result;
+    return { ...result, restorePoint: rp };
   },
   'program:scan': (program) => leftovers.scan(program),
   // Read before uninstalling: the installer type and silent switches, the files its installer
@@ -136,7 +145,11 @@ const handlers = {
   },
   'program:processes': (location) => leftovers.processesIn(location),
   'program:killProcesses': (ids) => runPS(`Stop-Process -Id ${ids.map(Number).join(',')} -Force -ErrorAction SilentlyContinue`),
-  'items:remove': ({ title, items, owners }) => backups.removeItems({ title, items, owners }),
+  'items:remove': async ({ title, items, owners }) => {
+    const rp = await maybeCreateRestorePoint('removal', `Purgeon: before removing ${title}`);
+    const result = await backups.removeItems({ title, items, owners });
+    return { ...result, restorePoint: rp };
+  },
   'program:openFolder': async (location) => (location && (await sys.exists(location)) ? (await open(location), '') : 'Folder not found'),
   'program:openRegistry': async (key) => {
     const full = key.replace(/^HKLM\\/i, 'HKEY_LOCAL_MACHINE\\').replace(/^HKCU\\/i, 'HKEY_CURRENT_USER\\');
@@ -175,7 +188,11 @@ const handlers = {
   'snapshots:cleanupItems': ({ before, selected }) => snapshots.cleanupItems(before, selected),
   'junk:scan': () => junk.scan(),
   'junk:scanSystem': () => junk.scanSystem(),
-  'junk:cleanSystem': (ids) => junk.cleanSystem(ids),
+  'junk:cleanSystem': async (ids) => {
+    const rp = await maybeCreateRestorePoint('junk-clean', 'Purgeon: before junk clean-up');
+    const result = await junk.cleanSystem(ids);
+    return { ...result, restorePoint: rp };
+  },
   'programs:insights': async (list) => (await lazyInsights.get()).programInsights(list),
   'programs:recordSizes': async (list) => (await lazyInsights.get()).recordSizes(list).then(() => true),
   'programs:sizeHistory': async () => (await lazyInsights.get()).sizeHistory(),
@@ -231,7 +248,11 @@ const handlers = {
   'trials:list': () => trials.list(),
   'trials:start': ({ installer, name }) => trials.start(installer, name),
   'trials:launch': (installer) => open(installer),
-  'trials:tryOver': (id) => trials.tryOver(id),
+  'trials:tryOver': async (id) => {
+    const rp = await maybeCreateRestorePoint('trial', `Purgeon: before ending trial ${id}`);
+    const result = await trials.tryOver(id);
+    return { ...result, restorePoint: rp };
+  },
   'trials:finish': (id) => trials.finish(id),
   // 4. rescue a broken uninstaller
   'winget:repair': (id) => winget.repair(id),
@@ -328,6 +349,12 @@ const handlers = {
   'sync:syncNow': () => sync.syncNow(),
   // Enhancement 10: startup profiler
   'profiler:report': () => profiler.report(),
+  'profiler:baseline': () => profiler.saveBaseline(),
+  'profiler:regressions': () => profiler.detectRegressions(),
+  // Enhancement 3: mark a scheduled scan as missed (PC was offline/asleep)
+  'schedule:markMissed': () => schedule.markMissed(),
+  // Enhancement 3: plugin integrity validation (compute and store script hashes)
+  'plugins:validate': () => plugins.validate(),
   // Installers spotted as they start, and monitoring one that is already running
   'installers:check': () => installwatch.check(),
   'monitor:attach': ({ installer, name }) => monitor.attach(installer, name),
@@ -360,7 +387,12 @@ const handlers = {
   'startup:list': () => startup.list(),
   'startup:set': ({ entry, enable }) => startup.setEnabled(entry, enable),
   'debloat:list': () => debloat.list(),
-  'debloat:set': ({ id, enable }) => debloat.set(id, enable),
+  'debloat:set': async ({ id, enable }) => {
+    const t = debloat.TWEAKS?.find((x) => x.id === id);
+    const rp = await maybeCreateRestorePoint('debloat', `Purgeon: before debloat tweak ${t?.title || id}`);
+    const result = await debloat.set(id, enable);
+    return { ...result, restorePoint: rp };
+  },
   'debloat:restartExplorer': () => debloat.restartExplorer(),
   'export:html': async ({ title, html, fileName = 'installed-programs.html' }) => {
     const { save } = await import('@tauri-apps/plugin-dialog');
@@ -490,6 +522,7 @@ export async function initBackend() {
     schedule.setRoot(path.join(data, 'schedule')),
     plugins.setRoot(path.join(data, 'plugins')),
     sync.setRoot(path.join(data, 'sync')),
+    profiler.setRoot(path.join(data, 'profiles')),
   ]);
   // Record that the core modules loaded; cold modules are loaded on first use below.
   profiler.mark('backend:init');

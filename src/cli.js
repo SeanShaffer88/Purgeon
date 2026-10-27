@@ -10,10 +10,19 @@
 //   Purgeon --restore-point "<description>"
 //   Purgeon --associations [--json]
 //   Purgeon --associations-for "<program>" [--json]
-//   Purgeon --schedule on|off [--scan-leftovers] [--check-startup]
-//   Purgeon --language <code> [--json]
-//   Purgeon --plugins list|enable|disable <id> [--json]
+//   Purgeon --schedule on|off [--scan-leftovers] [--check-startup] [--missed]
+//         Turns background monitoring on or off. --missed marks the last scheduled scan as missed.
+//   Purgeon --sync status|apply|now [--files settings.json]
+//         Shows or configures cloud-synced settings. apply takes --folder <path> and --on|--off.
+//   Purgeon --plugins list|enable|disable|validate <id> [--json]
+//         Manages user plugins; validate computes and stores script integrity hashes.
 //   Purgeon --profiler [--json]
+//         Startup performance profile.
+//   Purgeon --profiler baseline
+//         Saves the current startup profile as the baseline for regression detection.
+//   Purgeon --profiler regressions [--json]
+//         Compares the current profile against the baseline and reports regressions.
+//   Purgeon --language <code> [--json]
 //   Purgeon --settings [--json]
 //
 // A snapshot is named by id, by name, or "latest". Run from an administrator
@@ -34,6 +43,7 @@ import * as associations from './backend/associations.js';
 import * as i18n from './backend/i18n.js';
 import * as plugins from './backend/plugins.js';
 import * as profiler from './backend/profiler.js';
+import * as sync from './backend/sync.js';
 import { runCommandLine } from './backend/shell.js';
 
 const HELP = `Purgeon command line
@@ -201,6 +211,10 @@ async function run(args) {
     return wrap(true, list.length ? list.map((e) => `${e.extension.padEnd(10)}  ${e.exe}\r\n`).join('') : `No extensions found for "${nameOrExe}".\r\n`);
   }
   if (cmd === '--schedule') {
+    if (flag(args, '--missed')) {
+      await schedule.markMissed();
+      return wrap(true, 'Marked the last scheduled scan as missed; next background scan will retry.\r\n');
+    }
     const v = String(option(args, '--schedule') || '').toLowerCase();
     if (v !== 'on' && v !== 'off') throw new Error('Use --schedule on or --schedule off.');
     const status = await schedule.apply({ enabled: v === 'on', scanLeftovers: flag(args, '--scan-leftovers'), checkStartup: flag(args, '--check-startup') });
@@ -228,9 +242,65 @@ async function run(args) {
     throw new Error('Use --plugins list|enable|disable <id>.');
   }
   if (cmd === '--profiler') {
+    const sub = option(args, '--profiler');
+    if (sub === 'baseline') {
+      const b = await profiler.saveBaseline();
+      return wrap(true, `Baseline saved: ${b.totalMs.toFixed(0)} ms total, ${b.entries.length} modules.\r\n`);
+    }
+    if (sub === 'regressions') {
+      const reg = await profiler.detectRegressions();
+      if (j) return wrap(true, JSON.stringify(reg, null, 2));
+      if (!reg.baseline) return wrap(true, 'No baseline saved yet. Run: Purgeon --profiler baseline\r\n');
+      if (!reg.regressions.length) return wrap(true, 'No startup regressions detected vs baseline.\r\n');
+      return wrap(true, reg.regressions.map((r) => `${r.label}: ${r.baselineMs.toFixed(0)} -> ${r.currentMs.toFixed(0)} ms (+${r.deltaPct}%)\r\n`).join(''));
+    }
     const report = profiler.report();
     if (j) return wrap(true, JSON.stringify(report, null, 2));
     return wrap(true, report.lines.join('\r\n') + '\r\n');
+  }
+  if (cmd === '--sync') {
+    const sub = option(args, '--sync');
+    if (sub === 'status') {
+      const st = await sync.status();
+      if (j) return wrap(true, JSON.stringify(st, null, 2));
+      return wrap(true, `Sync ${st.enabled ? 'on' : 'off'} · folder: ${st.folder || '(none)'} · last sync: ${st.lastSync || '(never)'} · conflict: ${st.conflict ? 'yes' : 'no'}\r\n`);
+    }
+    if (sub === 'apply') {
+      const folder = option(args, '--folder');
+      const on = option(args, '--on');
+      const off = option(args, '--off');
+      const files = option(args, '--files');
+      const enabled = on ? true : off ? false : undefined;
+      const fileList = files ? files.split(',').map((f) => f.trim()) : undefined;
+      const st = await sync.apply({ folder, on: enabled, files: fileList });
+      return wrap(true, `Sync ${st.enabled ? 'on' : 'off'} · folder: ${st.folder || '(none)'} · conflict: ${st.conflict ? 'yes' : 'no'}\r\n`);
+    }
+    if (sub === 'now') {
+      const result = await sync.syncNow();
+      if (j) return wrap(true, JSON.stringify(result, null, 2));
+      return wrap(true, `Synced ${result.synced} file${result.synced !== 1 ? 's' : ''}${result.conflicts.length ? ` · ${result.conflicts.length} conflict(s): ${result.conflicts.join(', ')}` : ''}${result.errors.length ? ` · ${result.errors.length} error(s)` : ''}\r\n`);
+    }
+    throw new Error('Use --sync status|apply|now.');
+  }
+  if (cmd === '--plugins') {
+    const sub = option(args, '--plugins');
+    if (sub === 'validate') {
+      const result = await plugins.validate();
+      if (j) return wrap(true, JSON.stringify(result, null, 2));
+      return wrap(true, result.map((r) => `${r.id}: ${r.integrity}${r.error ? ` (${r.error})` : ''}\r\n`).join(''));
+    }
+    if (sub === 'list') {
+      const list = await plugins.list();
+      if (j) return wrap(true, JSON.stringify(list, null, 2));
+      return wrap(true, list.map((p) => `${p.enabled ? '[x]' : '[ ]'} ${p.id} — ${p.name} (${p.description}) [${p.permission}] ${p.integrity}\r\n`).join('') || 'No plugins.\r\n');
+    }
+    if (sub === 'enable' || sub === 'disable') {
+      const id = option(args, `--${sub}`);
+      if (!id || id.startsWith('--')) throw new Error(`Use --plugins ${sub} <id>.`);
+      const result = await plugins.setEnabled(id, sub === 'enable');
+      return wrap(true, `Plugin ${id} ${result.enabled ? 'enabled' : 'disabled'}.\r\n`);
+    }
+    throw new Error('Use --plugins list|enable|disable|validate <id>.');
   }
   if (cmd === '--settings') {
     const settings = await (await import('./backend/api.js')).readSettings();
