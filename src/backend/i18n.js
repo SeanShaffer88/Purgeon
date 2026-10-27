@@ -3,7 +3,7 @@
 // The user's language is detected from Windows and stored in settings.
 // All user-facing strings go through t(); nothing is hard-coded in UI code.
 import { sys } from './sys.js';
-import { readSettings } from './api.js';
+import { readSettings } from './settings.js';
 
 const LOCALE = {
   // ---- English (default) ----

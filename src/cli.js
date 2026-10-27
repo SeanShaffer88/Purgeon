@@ -346,7 +346,7 @@ async function run(args) {
     if (sub === 'list') {
       const list = await portableapps.list();
       if (j) return wrap(true, JSON.stringify(list, null, 2));
-      return wrap(true, list.map((p) => `${p.hasProgramFiles ? '[+]' : '[-]'} ${p.id} — ${p.name} (${p.items} items, monitored ${p.finished.slice(0, 10)})\\r\\n`).join('') || 'No monitored programs.\\r\\n');
+      return wrap(true, list.map((p) => `${p.hasProgramFiles ? '[+]' : '[-]'} ${p.id} — ${p.name} (${p.items} items, monitored ${p.finished.slice(0, 10)})\r\n`).join('') || 'No monitored programs.\r\n');
     }
     if (sub === 'generate') {
       const monitorId = option(args, '--monitor-id') || option(args, '--id');
@@ -361,7 +361,7 @@ async function run(args) {
       const startExe = option(args, '--start-exe');
       const result = await portableapps.generate({ monitorId, outputDir, appName, appVersion, appPublisher, appHomepage, appDescription, startExe });
       if (j) return wrap(true, JSON.stringify(result, null, 2));
-      return wrap(true, `PortableApps.com package generated for "${result.name}" (${result.id}).\n  Package: ${result.packageDir}\n  NSIS script: ${result.nsiScriptPath}\n  AppInfo: ${result.appInfoPath}\n  Start exe: ${result.startExe}\n  Files copied: ${result.files.length}\nTo build the .paf.exe: place a PortableApps.com launcher as ${result.packageDir}\\\\${result.launcherExe}, then compile ${result.nsiScriptPath} with NSIS (makensis).\\r\\n`);
+      return wrap(true, `PortableApps.com package generated for "${result.name}" (${result.id}).\n  Package: ${result.packageDir}\n  NSIS script: ${result.nsiScriptPath}\n  AppInfo: ${result.appInfoPath}\n  Start exe: ${result.startExe}\n  Files copied: ${result.files.length}\nTo build the .paf.exe: place a PortableApps.com launcher as ${result.packageDir}\\${result.launcherExe}, then compile ${result.nsiScriptPath} with NSIS (makensis).\r\n`);
     }
     throw new Error('Use --portableapps list|generate --monitor-id <id> --output <folder>.');
   }

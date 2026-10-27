@@ -4,7 +4,7 @@
 // Only settings are synced, never full backups (too large, and backups are local).
 import { sys } from './sys.js';
 import * as winpath from './winpath.js';
-import { readSettings } from './api.js';
+import { readSettings } from './settings.js';
 import { createHash } from 'node:crypto';
 
 let syncRoot = '';

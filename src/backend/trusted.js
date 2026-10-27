@@ -1,49 +1,56 @@
-// Trusted publisher allowlist. Users can add digital-signing certificate subjects (e.g.
-// "Microsoft Corporation", "Adobe Inc.") that they trust. Programs signed by a trusted
-// publisher are never blocked by Safe Mode and are excluded from unsigned-program warnings.
-// Stored in settings.json under trustedPublishers.
+// Trusted publisher allowlist.
+// Users add certificate subject names (e.g. "Microsoft Corporation").
+// Programs signed by a trusted publisher are excluded from Safe Mode blocks
+// and unsigned-program warnings. Stored in settings.json under trustedPublishers.
 import { sys } from './sys.js';
-import { readSettings } from './api.js';
-import * as path from './winpath.js';
+import { readSettings, writeSettings } from './settings.js';
 
 const SETTING = 'trustedPublishers';
+const MAX_NAME_LEN = 200;
+
+const validateName = (name) => {
+  const n = String(name ?? '').trim();
+  if (!n) throw new Error('Publisher name is required.');
+  if (n.length > MAX_NAME_LEN) throw new Error('Publisher name is too long.');
+  return n;
+};
 
 export const list = async () => {
   const s = await readSettings();
-  return s.trustedPublishers || [];
+  return Array.isArray(s.trustedPublishers) ? [...s.trustedPublishers] : [];
 };
 
 export const add = async (name) => {
+  const n = validateName(name);
   const s = await readSettings();
-  const pubs = [...new Set([...(s.trustedPublishers || []), String(name).trim()]).filter(Boolean)];
-  await sys.writeText(path.join(sys.info.dataDir, 'settings.json'), JSON.stringify({ ...s, trustedPublishers: pubs }, null, 2));
+  const pubs = [...new Set([...(s.trustedPublishers || []), n])];
+  await writeSettings({ trustedPublishers: pubs });
   return pubs;
 };
 
 export const remove = async (name) => {
+  const n = validateName(name);
   const s = await readSettings();
-  const pubs = (s.trustedPublishers || []).filter((p) => p.toLowerCase() !== String(name).toLowerCase());
-  await sys.writeText(path.join(sys.info.dataDir, 'settings.json'), JSON.stringify({ ...s, trustedPublishers: pubs }, null, 2));
+  const pubs = (s.trustedPublishers || []).filter((p) => p.toLowerCase() !== n.toLowerCase());
+  await writeSettings({ trustedPublishers: pubs });
   return pubs;
 };
 
-// Check whether a signer is trusted. Returns the publisher name if trusted, null otherwise.
 export const isTrusted = async (signer) => {
   if (!signer) return null;
   const s = await readSettings();
   const pubs = s.trustedPublishers || [];
-  return pubs.find((p) => p.toLowerCase() === String(signer).toLowerCase()) || null;
+  const match = pubs.find((p) => p.toLowerCase() === String(signer).toLowerCase());
+  return match ?? null;
 };
 
-// Filter a program-insights map: mark entries whose signer is trusted.
 export const filterInsights = async (insights) => {
   const trusted = await list();
+  const lower = new Set(trusted.map((t) => t.toLowerCase()));
   const out = {};
-  for (const [key, info] of Object.entries(insights)) {
+  for (const [key, info] of Object.entries(insights ?? {})) {
     const next = { ...info };
-    if (info.signer && trusted.some((t) => t.toLowerCase() === info.signer.toLowerCase())) {
-      next.trusted = true;
-    }
+    if (info.signer && lower.has(info.signer.toLowerCase())) next.trusted = true;
     out[key] = next;
   }
   return out;

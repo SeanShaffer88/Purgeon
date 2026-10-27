@@ -391,7 +391,14 @@ async function prune({ maxDays = 0, maxMB = 0 } = {}, now = Date.now()) {
   }
   if (maxMB) {
     const sizes = new Map();
-    for (const m of all) if (!removed.includes(m.id)) sizes.set(m.id, (await sys.folderSize(path.join(backupRoot, m.id), 100000, 5000)).bytes);
+    await Promise.all(
+      all
+        .filter((m) => !removed.includes(m.id))
+        .map(async (m) => {
+          const bytes = (await sys.folderSize(path.join(backupRoot, m.id), 100000, 5000)).bytes;
+          sizes.set(m.id, bytes);
+        })
+    );
     let total = [...sizes.values()].reduce((a, b) => a + b, 0);
     for (const m of candidates) {
       if (total <= maxMB * 1048576) break;
@@ -538,8 +545,18 @@ async function restore(id) {
 
 // Deletes one backup folder. The id must be a single folder name inside the backup root.
 function remove(id) {
-  if (!id || /[\\/]|\.\./.test(id)) throw new Error('Invalid backup id');
-  return sys.removePath(path.join(backupRoot, id));
+  if (!id || typeof id !== 'string') throw new Error('Invalid backup id');
+  // Reject path separators and traversal sequences.
+  if (/[\\/]/.test(id)) throw new Error('Invalid backup id: path separators not allowed');
+  if (/^\.\.(\.|[\\/]|$)/i.test(id)) throw new Error('Invalid backup id: traversal not allowed');
+  // Reject Windows reserved device names.
+  if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i.test(id)) throw new Error('Invalid backup id: reserved device name');
+  const target = path.resolve(path.join(backupRoot, id));
+  const root = path.resolve(backupRoot);
+  if (target !== root && !target.startsWith(root + path.sep)) {
+    throw new Error('Invalid backup id: escapes backup root');
+  }
+  return sys.removePath(target);
 }
 
 // Export a removal plan (the output of planRemoval) to HTML, CSV or JSON so it can be

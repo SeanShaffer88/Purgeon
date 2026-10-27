@@ -21,6 +21,7 @@ import * as owners from './owners.js';
 import * as winget from './winget.js';
 import * as trusted from './trusted.js';
 import * as updatecheck from './updatecheck.js';
+import { readSettings, writeSettings, DEFAULT_SETTINGS } from './settings.js';
 // Cold-path modules are loaded on first use (lazy) to speed up startup:
 // transfer, archive, insights, maintenance, queue, explore, browsers, portable,
 // shellmenu, report, ctxmenu, installwatch, trials.
@@ -65,14 +66,6 @@ import * as plugins from './plugins.js';
 import * as sync from './sync.js';
 import * as profiler from './profiler.js';
 
-const DEFAULT_SETTINGS = { createRestorePoints: true, silentUninstall: false, safeMode: false, backupMaxDays: 0, backupMaxMB: 0, gridLines: true };
-const settingsFile = () => path.join(sys.info.dataDir, 'settings.json');
-export const readSettings = () =>
-  sys
-    .readText(settingsFile())
-    .then((t) => ({ ...DEFAULT_SETTINGS, ...JSON.parse(t) }))
-    .catch(() => ({ ...DEFAULT_SETTINGS }));
-
 const isAdmin = async () => (await sys.exec('net.exe', ['session'])).ok;
 
 // Explorer opens folders, documents, programs and web links with the user's defaults.
@@ -105,11 +98,7 @@ const handlers = {
     await sys.quit();
   },
   'settings:get': readSettings,
-  'settings:set': async (patch) => {
-    const next = { ...(await readSettings()), ...patch };
-    await sys.writeText(settingsFile(), JSON.stringify(next, null, 2));
-    return next;
-  },
+  'settings:set': async (patch) => writeSettings(patch),
   'restore:create': async ({ description, kind }) => restore.create(description, kind, await isAdmin()),
   'programs:list': (kind) => (kind === 'store' ? programs.listStore() : programs.listDesktop()),
   // Each result is delivered to onMeasured listeners as soon as it is ready.
@@ -227,9 +216,8 @@ const handlers = {
   'running:inbound': () => running.inboundRules(),
   'maintenance:status': () => maintenance.status(),
   'maintenance:apply': async (m) => {
-    const s = await readSettings();
-    const next = { ...s, maintenance: { ...maintenance.DEFAULTS, ...m } };
-    await sys.writeText(settingsFile(), JSON.stringify(next, null, 2));
+    const next = { ...(await readSettings()), maintenance: { ...maintenance.DEFAULTS, ...m } };
+    await writeSettings(next);
     return maintenance.apply(next.maintenance);
   },
   'maintenance:runNow': async () => {
@@ -302,13 +290,13 @@ const handlers = {
   'portable:addFolder': async (folder) => {
     const s = await readSettings();
     const folders = [...new Set([...(s.portableFolders || []), folder])];
-    await sys.writeText(settingsFile(), JSON.stringify({ ...s, portableFolders: folders }, null, 2));
+    await writeSettings({ portableFolders: folders });
     return folders;
   },
   'portable:removeFolder': async (folder) => {
     const s = await readSettings();
     const folders = (s.portableFolders || []).filter((f) => f.toLowerCase() !== String(folder).toLowerCase());
-    await sys.writeText(settingsFile(), JSON.stringify({ ...s, portableFolders: folders }, null, 2));
+    await writeSettings({ portableFolders: folders });
     return folders;
   },
   'portable:checkUpdates': (apps) => portable.checkUpdates(apps),
