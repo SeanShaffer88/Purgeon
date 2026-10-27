@@ -49,6 +49,9 @@ function isProtected(p) {
   // Only full drive paths are allowed: "C:" or "foo" would otherwise resolve against the current folder.
   if (!p || !/^[a-z]:[\\/]/i.test(p)) return true;
   const n = path.resolve(p).toLowerCase().replace(/[\\/]+$/, '');
+  // The Windows folder itself, on any drive: an env var must never be the only
+  // thing standing between a scan and the operating system folder.
+  if (/^[a-z]:\\windows(\\|$)/.test(n)) return true;
   const env = envs();
   const home = homeDir();
   if (n.length <= 3) return true; // drive roots
