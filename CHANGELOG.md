@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.1 - 2026-10-27
 
 - Restore the main window to the layout in the README screenshot: menu bar,
   command bar, selection bar, action bar, program list and status bar only.
@@ -33,5 +33,18 @@
   window. Keep tray, sign-in, queue-resume, and Explorer launches available.
 - Show help without initializing the application's backend stores and command log.
   The native application and WebView2 still start and may create their runtime data.
+
+- Restore command-line validation on the startup path the app actually uses,
+  including the restored `--list-snapshots` command: invalid requests are
+  rejected before the backend initializes instead of reaching it.
+- Treat the Windows folder on any drive as protected, instead of relying only
+  on the SystemRoot environment variable.
+- Add the missing tooltips for the User Guide, Keyboard Shortcuts and Welcome
+  commands.
+- Regenerate the Rust lock file, which still recorded the app at 0.7.0 and
+  blocked every locked build.
+- Run the release pipeline's tests on windows-latest and windows-2022, and
+  build the release files with the packaging script, which assembles and
+  verifies the universal installer, the MSI and the portable ZIP.
 
 Earlier feature history is in [the roadmap](docs/ROADMAP.md).
