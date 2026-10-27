@@ -3,9 +3,13 @@
 // restricted context and can register leftover-detection rules, custom commands, and menu items.
 // Plugins are opt-in: unsigned-by-default, the user must enable each one. They run with the full
 // power of the app, so only install plugins you trust.
+//
+// Plugin scripts execute in a V8 isolate created with node:vm so they cannot reach the host
+// global object (no `process`, no `require`, no escape through `constructor.constructor`).
 import { sys } from './sys.js';
 import * as winpath from './winpath.js';
 import { createHash } from 'node:crypto';
+import { createContext, runInContext } from 'node:vm';
 
 let pluginRoot = '';
 const MANIFEST = 'manifest.json';
@@ -130,14 +134,15 @@ export async function runLeftoverRules(pluginId) {
     path: winpath,
     console: { log: (...a) => {}, error: (...a) => {} },
   };
-  let items = [];
+  const ctx = createContext(sandbox);
+  const wrapped = `(async () => { ${src} return getLeftovers(); })()`;
+  let result;
   try {
-    const fn = new Function('sys', 'path', 'console', src + '\nreturn getLeftovers();');
-    const result = await fn(sandbox.sys, sandbox.path, sandbox.console);
-    items = Array.isArray(result) ? result : result.items || [];
+    result = await runInContext(wrapped, ctx, { timeout: 10000 });
   } catch (e) {
     return { id: pluginId, items: [], error: String(e) };
   }
+  const items = Array.isArray(result) ? result : result.items || [];
   // Tag each item with the plugin and permission tier so the UI can treat them differently.
   return {
     id: pluginId,
