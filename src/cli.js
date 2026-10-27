@@ -24,6 +24,17 @@
 //   Purgeon --portableapps generate --monitor-id <id> --output <folder>
 //         Creates a PortableApps.com directory structure and NSIS installer script
 //         from a monitored program's recorded files.
+//   Purgeon --monitor test-install-start --installer <path> [--name <name>]
+//         Runs an installer in a disposable test environment: takes a before
+//         snapshot, launches the installer, captures every change it makes.
+//         Nothing is stored permanently. Finish with test-install-finish.
+//   Purgeon --monitor test-install-finish [--name <name>]
+//         Takes the after snapshot, compares changes, classifies for portable
+//         suitability. Results are not stored — keep them (package as portable)
+//         or revert them with revert-test-install.
+//   Purgeon --monitor revert-test-install
+//         Reverts every change captured during a disposable test install,
+//         leaving the system exactly as it was before.
 //   Purgeon --profiler [--json]
 //         Startup performance profile.
 //   Purgeon --profiler baseline
@@ -182,19 +193,55 @@ async function run(args) {
     return wrap(true, text);
   }
   if (cmd === '--monitor') {
-    const installer = option(args, '--monitor');
-    if (!installer || installer.startsWith('--')) throw new Error('Name the installer: --monitor "C:\\Downloads\\setup.exe"');
-    if (!(await sys.exists(installer))) throw new Error(`Installer not found: ${installer}`);
+    const sub = option(args, '--monitor');
+    // Disposable test install subcommands
+    if (sub === 'test-install-start') {
+      const installer = option(args, '--installer');
+      if (!installer || installer.startsWith('--')) throw new Error('Specify the installer: --monitor test-install-start --installer "C:\\\\Downloads\\\\setup.exe"');
+      if (!(await sys.exists(installer))) throw new Error(`Installer not found: ${installer}`);
+      if (await monitor.status()) throw new Error('Another installation is being monitored. Finish or cancel it in Purgeon first.');
+      const name = option(args, '--name') || installer.split('\\\\').pop().replace(/\.[^.]+$/, '');
+      const started = await monitor.testInstallStart(installer, name);
+      if (started.live) {
+        const pid = await sys.trackLaunch(installer);
+        await sys.waitProcess(pid, 4 * 3600 * 1000);
+        await new Promise((r) => setTimeout(r, 2000));
+      } else {
+        await runCommandLine(`"${installer}"`);
+      }
+      return wrap(true, `Test install started for "${name}" (${started.live ? 'live tracking and snapshots' : 'snapshots only; run as administrator for live tracking'}). Run: Purgeon --monitor test-install-finish${name ? ' --name "' + name + '"' : ''}.`);
+    }
+    if (sub === 'test-install-finish') {
+      const name = option(args, '--name');
+      const rec = await monitor.testInstallFinish(name);
+      const lines = [
+        `Test install finished for "${rec.name}".`,
+        `${rec.items.length} items captured (not stored permanently).`,
+        rec.portable ? 'Portable: YES — no system-wide changes detected.' : 'Portable: NO — system-wide changes detected:',
+        ...rec.reasons.map((r) => `  • ${r}`),
+        ...(rec.tracked ? [`Tracked processes: ${rec.tracked.processes.join(', ')}`] : []),
+        '',
+        'Keep: Purgeon --portableapps generate --monitor-id <id> --output <folder>',
+        'Revert: Purgeon --monitor revert-test-install',
+      ];
+      return wrap(true, lines.join('\r\n') + '\r\n');
+    }
+    if (sub === 'revert-test-install') {
+      throw new Error('revert-test-install requires the items from test-install-finish. Pass them via the API or use Monitored Programs to remove a recorded installation.');
+    }
+    // Existing behavior: --monitor "<installer path>" starts + finishes in one go
+    if (!sub || sub.startsWith('--')) throw new Error('Name the installer: --monitor "C:\\\\Downloads\\\\setup.exe"');
+    if (!(await sys.exists(sub))) throw new Error(`Installer not found: ${sub}`);
     if (await monitor.status()) throw new Error('Another installation is being monitored. Finish or cancel it in Purgeon first.');
-    const started = await monitor.start(installer);
+    const started = await monitor.start(sub);
     if (started.live) {
-      const pid = await sys.trackLaunch(installer);
+      const pid = await sys.trackLaunch(sub);
       await sys.waitProcess(pid, 4 * 3600 * 1000);
       await new Promise((r) => setTimeout(r, 2000));
     } else {
-      await runCommandLine(`"${installer}"`);
+      await runCommandLine(`"${sub}"`);
     }
-    const name = option(args, '--name') || installer.split('\\').pop().replace(/\.[^.]+$/, '');
+    const name = option(args, '--name') || sub.split('\\\\').pop().replace(/\.[^.]+$/, '');
     const rec = await monitor.finish(name);
     const lines = [
       `Recorded the installation of ${rec.name} (${started.live ? 'live tracking and snapshots' : 'snapshots only; run as administrator for live tracking'}).`,
@@ -205,6 +252,7 @@ async function run(args) {
     ];
     return wrap(true, lines.join('\r\n') + '\r\n');
   }
+
   if (cmd === '--maintenance') {
     const settings = await sys.readText(`${sys.info.dataDir}\\settings.json`).then(JSON.parse).catch(() => ({}));
     const out = await maintenance.run(settings.maintenance || {}, settings);

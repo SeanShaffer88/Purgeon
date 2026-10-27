@@ -169,6 +169,17 @@ const handlers = {
   'monitor:poll': () => monitor.poll(),
   'monitor:list': () => monitor.list(),
   'monitor:remove': (id) => monitor.remove(id),
+  // Disposable isolated test environment for portable packaging.
+  // Runs an installer, captures every change it makes, but stores nothing
+  // permanently. Results can be kept (packaged as portable) or reverted.
+  'monitor:test-install-start': async ({ installer, name }) => monitor.testInstallStart(installer, name),
+  'monitor:test-install-finish': async (name) => {
+    const result = await monitor.testInstallFinish(name);
+    // Classify for portable suitability using the captured items.
+    const suitability = await portableapps.classifyForPortable(result.items);
+    return { ...result, portable: suitability.portable, reasons: suitability.reasons };
+  },
+  'monitor:revert-test-install': async (items) => monitor.revertTestInstall(items),
   'backups:list': () => backups.list(),
   'backups:plan': ({ items, owners }) => backups.planRemoval({ items, owners }),
   'backups:forecast': ({ items }) => backups.forecastSize(items),
