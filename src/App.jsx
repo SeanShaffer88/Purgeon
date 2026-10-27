@@ -10,7 +10,7 @@ import { JunkView, formatBytes } from './junk.jsx';
 import { GroupDialog } from './groups.jsx';
 import { ProgramBackupDialog, ProgramRestoreDialog } from './transfer.jsx';
 import { WhoOwnsDialog, UpdatesDialog, MaintenanceDialog } from './tools.jsx';
-import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, SheetDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, PortableAppsDialog, CommandPalette, ReportDialog, ContextMenuDialog, InstallerFoundDialog, AnalysisDialog, ARCH_LABEL, CloseDialog } from './more.jsx';
+import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, SheetDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, PortableAppsDialog, TrustedPublishersDialog, UpdateCheckDialog, CommandPalette, ReportDialog, ContextMenuDialog, InstallerFoundDialog, AnalysisDialog, ARCH_LABEL, CloseDialog } from './more.jsx';
 
 const api = window.api;
 
@@ -272,6 +272,9 @@ const MENUS = [
       null,
       ['backupSettings', 'Backup Settings...'],
       ['openLog', 'Open Command Log'],
+      null,
+      ['trustedPublishers', 'Trusted Publishers...'],
+      ['updateCheck', 'Check for Updates...'],
       null,
       ['portableapps', 'PortableApps.com Installer...'],
     ],
@@ -1785,6 +1788,14 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     },
     backupSettings: async () => setModal({ type: 'backupSettings', settings: await api.invoke('settings:get') }),
     openLog: () => api.invoke('log:open'),
+    trustedPublishers: async () => {
+      const list = await api.invoke('trusted:list');
+      setModal({ type: 'trustedPublishers', publishers: list });
+    },
+    updateCheck: async () => {
+      const s = await api.invoke('update:settings');
+      setModal({ type: 'updateCheck', enabled: s.enabled, lastCheck: s.lastCheck });
+    },
     toggleSilent: async () => {
       const s = await api.invoke('settings:set', { silentUninstall: !silentOn });
       setSilentOn(s.silentUninstall);
@@ -2600,6 +2611,19 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               setBusy('');
             }
           }}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'trustedPublishers' && (
+        <TrustedPublishersDialog
+          publishers={modal.publishers}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'updateCheck' && (
+        <UpdateCheckDialog
+          enabled={modal.enabled}
+          lastCheck={modal.lastCheck}
           onClose={() => setModal(null)}
         />
       )}

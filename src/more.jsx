@@ -963,3 +963,166 @@ export function PortableAppsDialog({ programs, onGenerate, onClose }) {
     </Dialog>
   );
 }
+
+// ---- Trusted publishers dialog -------------------------------------------------------
+
+export function TrustedPublishersDialog({ publishers, onClose }) {
+  const [list, setList] = useState(publishers);
+  const [newName, setNewName] = useState('');
+  const [working, setWorking] = useState(false);
+
+  const addPublisher = async () => {
+    const name = newName.trim();
+    if (!name) return;
+    setWorking(true);
+    try {
+      await api.invoke('trusted:add', name);
+      setList(await api.invoke('trusted:list'));
+      setNewName('');
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  const removePublisher = async (name) => {
+    setWorking(true);
+    try {
+      await api.invoke('trusted:remove', name);
+      setList(await api.invoke('trusted:list'));
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      setWorking(false);
+    }
+  };
+
+  return (
+    <Dialog
+      title="Trusted Publishers"
+      onClose={onClose}
+      width={620}
+      buttons={
+        <>
+          <button disabled={!newName.trim() || working} onClick={addPublisher}>
+            Add
+          </button>
+          <button className="primary" onClick={onClose}>
+            Close
+          </button>
+        </>
+      }
+    >
+      <p className="heading">
+        Programs signed by a trusted publisher are never blocked by Safe Mode and are
+        excluded from unsigned-program warnings. Add the certificate subject name as it
+        appears in the digital signature (for example \"Microsoft Corporation\").
+      </p>
+      <div className="field-row">
+        <input
+          value={newName}
+          onChange={(e) => setNewName(e.target.value)}
+          placeholder="Publisher name"
+          title="Certificate subject name of a trusted publisher"
+        />
+      </div>
+      {!list.length && <div className="empty-box">No trusted publishers yet.</div>}
+      {list.length && (
+        <div className="tree">
+          {list.map((name) => (
+            <div key={name} className="tree-item">
+              <span className="path">{name}</span>
+              <button className="link" onClick={() => removePublisher(name)}>Remove</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
+// ---- Update check dialog --------------------------------------------------------------
+
+export function UpdateCheckDialog({ enabled, lastCheck, onClose }) {
+  const [checking, setChecking] = useState(false);
+  const [result, setResult] = useState(null);
+
+  const toggle = async () => {
+    await api.invoke('update:enable', !enabled);
+    onClose();
+  };
+
+  const checkNow = async () => {
+    setChecking(true);
+    setResult(null);
+    try {
+      const r = await api.invoke('update:check');
+      setResult(r);
+    } catch (e) {
+      setResult({ enabled: true, update: null, error: e.message });
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  return (
+    <Dialog
+      title="Check for Updates"
+      onClose={onClose}
+      width={620}
+      buttons={
+        <>
+          <button disabled={checking} onClick={checkNow}>
+            {checking ? 'Checking…' : 'Check Now'}
+          </button>
+          <button className="primary" onClick={onClose}>
+            Close
+          </button>
+        </>
+      }
+    >
+      <p className="heading">
+        Purgeon can optionally ask GitHub whether a newer release exists. Checking is off
+        by default and never sends data except a standard HTTPS request to api.github.com.
+        It never nags after a dismissal.
+      </p>
+      <div className="field-row">
+        <label>Automatic update checks</label>
+        <button
+          className={`toggle ${enabled ? 'on' : 'off'}`}
+          onClick={toggle}
+          aria-pressed={enabled}
+          title={enabled ? 'Turn off automatic update checks' : 'Turn on automatic update checks'}
+        >
+          {enabled ? 'ON' : 'OFF'}
+        </button>
+      </div>
+      {lastCheck && <p className="muted">Last checked: {lastCheck}</p>}
+      {checking && <p>Checking GitHub for a newer release…</p>}
+      {result && !checking && (
+        <div className="tweak-group">
+          {result.error && (
+            <p className="muted" style={{ color: 'var(--red)' }}>
+              Check failed: {result.error}
+            </p>
+          )}
+          {result.update && result.update.newer && (
+            <>
+              <p>
+                <b>Update available:</b> {result.update.version}{result.update.name ? ` · ${result.update.name}` : ''}
+              </p>
+              {result.update.body && <p className="muted">{result.update.body}</p>}
+              <p>
+                <a href={result.update.url} target="_blank" rel="noopener noreferrer">Download from GitHub Releases</a>
+              </p>
+            </>
+          )}
+          {result.update && !result.update.newer && (
+            <p>No update available — you have the latest version.</p>
+          )}
+        </div>
+      )}
+    </Dialog>
+  );
+}
