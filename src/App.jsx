@@ -4,6 +4,7 @@ import { setConfirmUI } from './backend/api.js';
 import { iconPathFor } from './backend/programs.js';
 import { applyZoom, nextStep } from './zoom.js';
 import { ACTION_TIPS, installTips } from './tips.js';
+import * as updatecheck from './backend/updatecheck.js';
 import { TakeSnapshotDialog, ComparisonDialog, SnapshotTimeline, comparisonHtml } from './snapshots.jsx';
 import { DebloatView } from './debloat.jsx';
 import { StartupView } from './startup.jsx';
@@ -281,7 +282,7 @@ const MENUS = [
       ['portableapps', 'PortableApps.com Installer...'],
     ],
   ],
-  ['Help', [['palette', 'Command Palette...', 'Ctrl+K'], ['about', 'About']]],
+  ['Help', [['palette', 'Command Palette...', 'Ctrl+K'], ['updates', 'Check for Updates...'], ['about', 'About']]],
 ];
 
 // Mouse or keyboard: Alt plus a menu's first letter opens it; arrow keys move between items and
@@ -569,6 +570,12 @@ export default function App() {
       api.invoke('backups:prune').catch(() => {});
       setZoom(s.zoom || 1);
       applyZoom(s.zoom || 1);
+      // Update notification toast: checked once on startup, never nagging.
+      updatecheck.check().then(({ enabled, update, error }) => {
+        if (enabled && update && update.newer) {
+          setNotice({ tone: 'info', text: `Purgeon v${update.version} is available — download it from the Purgeon releases page.` });
+        }
+      }).catch(() => {});
     });
     api.invoke('schedule:status').then((s) => s && setScheduleOn(!!s.registered)).catch(() => {});
     api.invoke('monitor:status').then((s) => s && setModal({ type: 'monitor', resume: s }));
@@ -666,10 +673,14 @@ export default function App() {
           const sig = insight[r.key]?.signature;
           if (!sig || sig === 'Valid') return false;
         }
+        if (quickFilter === 'used') {
+          const t = insight[r.key]?.written;
+          if (!t || new Date(t).getTime() < thirtyDaysAgo) return false;
+        }
       }
       return true;
     });
-    const val = (r) => (sort.col === 'size' ? r.sortSize : sort.col === 'arch' ? archOf(r).text : sort.col === 'date' && r.sortDate ? r.sortDate : (r[sort.col] || '').toString().toLowerCase());
+    const val = (r) => (sort.col === 'size' ? r.sortSize : sort.col === 'arch' ? archOf(r).text : sort.col === 'date' && r.sortDate ? r.sortDate : sort.col === 'used' ? (insight[r.key]?.written || '').toString().toLowerCase() : (r[sort.col] || '').toString().toLowerCase());
     return [...list].sort((a, b) => {
       const x = val(a);
       const y = val(b);
@@ -1895,6 +1906,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     refresh: () => load(),
     monitor: () => setModal({ type: 'monitor' }),
     about: () => setModal({ type: 'about' }),
+    updates: () => setModal({ type: 'updates' }),
     zoomIn: () => changeZoom(1),
     zoomOut: () => changeZoom(-1),
     zoomReset: () => changeZoom(0),
@@ -2333,6 +2345,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               className={`filter-chip ${quickFilter === 'all' ? 'on' : ''}`}
               onClick={() => setQuickFilter('all')}
               title="Show all programs"
+              aria-label="Show all programs"
             >
               All
             </button>
@@ -2340,6 +2353,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               className={`filter-chip ${quickFilter === 'desktop' ? 'on' : ''}`}
               onClick={() => setQuickFilter('desktop')}
               title="Desktop programs only"
+              aria-label="Desktop programs only"
             >
               Desktop
             </button>
@@ -2347,6 +2361,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               className={`filter-chip ${quickFilter === 'store' ? 'on' : ''}`}
               onClick={() => setQuickFilter('store')}
               title="Windows Store apps only"
+              aria-label="Windows Store apps only"
             >
               Store Apps
             </button>
@@ -2354,6 +2369,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               className={`filter-chip ${quickFilter === 'recent' ? 'on' : ''}`}
               onClick={() => setQuickFilter('recent')}
               title="Programs installed in the last 30 days"
+              aria-label="Programs installed in the last 30 days"
             >
               Recent
             </button>
@@ -2361,6 +2377,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               className={`filter-chip ${quickFilter === 'large' ? 'on' : ''}`}
               onClick={() => setQuickFilter('large')}
               title="Programs larger than 100 MB"
+              aria-label="Programs larger than 100 MB"
             >
               Large
             </button>
@@ -2368,8 +2385,17 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               className={`filter-chip ${quickFilter === 'unsigned' ? 'on' : ''}`}
               onClick={() => setQuickFilter('unsigned')}
               title="Programs with missing or bad digital signatures"
+              aria-label="Programs with missing or bad digital signatures"
             >
               Unsigned
+            </button>
+            <button
+              className={`filter-chip ${quickFilter === 'used' ? 'on' : ''}`}
+              onClick={() => setQuickFilter('used')}
+              title="Programs used in the last 30 days"
+              aria-label="Programs used in the last 30 days"
+            >
+              Recently Used
             </button>
           </div>
         )}
@@ -2378,7 +2404,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {barItems.length > 0 && (
         <div className="action-bar" role="toolbar" aria-label="Actions">
           {barItems.map(([id, label]) => (
-            <button key={id} className={`action-button ${/^(uninstall|force|delete)/i.test(id) ? 'danger' : ''}`} disabled={!barReady(id)} onClick={() => dispatch(id)} title={ACTION_TIPS[id]}>
+            <button key={id} className={`action-button ${/^(uninstall|force|delete)/i.test(id) ? 'danger' : ''}`} disabled={!barReady(id)} onClick={() => dispatch(id)} title={ACTION_TIPS[id]} aria-label={shortLabel(label)}>
               {shortLabel(label)}
             </button>
           ))}
@@ -2518,15 +2544,15 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       </div>
 
       {menu && current && (
-        <div className="context-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
+        <div className="context-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()} role="menu">
           {contextItems.map((it, i) =>
             it ? (
-              <button key={i} className={i === 0 ? 'bold' : ''} onClick={() => dispatch(it[0])} title={ACTION_TIPS[it[0]]}>
+              <button key={i} className={i === 0 ? 'bold' : ''} role="menuitem" onClick={() => dispatch(it[0])} title={ACTION_TIPS[it[0]]} aria-label={it[1]}>
                 <span>{it[1]}</span>
                 <span className="accel">{it[2]}</span>
               </button>
             ) : (
-              <div key={i} className="sep" />
+              <div key={i} className="sep" role="separator" />
             )
           )}
         </div>

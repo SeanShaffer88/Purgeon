@@ -5,6 +5,7 @@
 import { sys, env } from './sys.js';
 import * as path from './winpath.js';
 import { runPS, runPSJson, reg } from './shell.js';
+import * as programs from './programs.js';
 
 const DAY = 24 * 3600 * 1000;
 
@@ -111,6 +112,16 @@ export const CATEGORIES = [
     roots: () => [local('Mozilla', 'Firefox', 'Profiles')],
     match: /^(cookies\.sqlite|places\.sqlite|favicons\.sqlite|siteSecurityService\.txt)$/i,
     privacy: true,
+  },
+  // Large folders in AppData and ProgramData that may belong to programs no longer installed.
+  // Offered unselected; the user reviews each one before cleaning.
+  {
+    id: 'orphan-large',
+    label: 'Large orphaned folders',
+    detail: 'Folders larger than 100 MB in AppData and ProgramData whose name does not match an installed program. Might be leftovers from uninstalled programs; review before removing.',
+    roots: () => [local(''), progData('')],  // LOCALAPPDATA and ProgramData roots
+    minBytes: 100 * 1024 * 1024,
+    orphan: true,
   },
 ];
 
@@ -254,6 +265,9 @@ export async function scan(now = Date.now()) {
   const own = [sys.info.dataDir].filter(Boolean).map((d) => path.resolve(d).toLowerCase());
   // App data is offered only for apps that are not installed; if that can't be read, none is offered.
   const families = await installedFamilies().catch(() => null);
+  // Desktop program names, to tell orphaned folders from live program folders.
+  const desktop = await programs.listDesktop().catch(() => []);
+  const programNames = new Set(desktop.map((p) => (p.name || '').toLowerCase()));
   return Promise.all(
     CATEGORIES.map(async (c) => {
       const items = [];
@@ -263,6 +277,8 @@ export async function scan(now = Date.now()) {
           if (c.match && !c.match.test(path.basename(e.path))) continue;
           if (c.orphanPackages && (!e.dir || families.has(path.basename(e.path).toLowerCase()) || !/_[a-z0-9]{13}$/i.test(path.basename(e.path)))) continue;
           if (c.minAge && now - e.newest < c.minAge) continue;
+          if (c.minBytes && e.bytes < c.minBytes) continue;
+          if (c.orphan && e.dir && programNames.has(path.basename(e.path).toLowerCase())) continue;
           if (own.some((o) => e.path.toLowerCase().startsWith(o))) continue;
           items.push({ path: e.path, dir: e.dir, bytes: e.bytes });
         }

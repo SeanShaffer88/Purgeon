@@ -331,6 +331,8 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .notice-bar.ok::before { content: '👍'; margin-right: 2px; font-family: 'Segoe UI Emoji', sans-serif; }
 .notice-bar.warn { background: #241d0c; color: var(--amber); }
 .notice-bar.warn::before { content: '⚠️'; margin-right: 2px; font-family: 'Segoe UI Emoji', sans-serif; }
+.notice-bar.info { background: #0c1d24; color: var(--blue); }
+.notice-bar.info::before { content: 'ℹ️'; margin-right: 2px; font-family: 'Segoe UI Emoji', sans-serif; }
 .notice-bar span { flex: 1; }
 .notice-bar button { border: 0; background: none; cursor: pointer; color: inherit; }
 .row.focused:not(.selected) { box-shadow: inset 0 0 0 1px var(--border-strong); }

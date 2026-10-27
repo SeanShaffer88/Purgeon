@@ -32,6 +32,9 @@
 //         Compares the current profile against the baseline and reports regressions.
 //   Purgeon --export <type> --format <csv|json|html> --output <path>
 //         Exports a list to a file. Types: programs, startup, junk, backups.
+//   Purgeon --uninstall "<program name>"
+//         Runs the named program's own uninstaller. Waits for it to finish, then
+//         records the removal in the archive. Use quotes around the name.
 //   Purgeon --language <code> [--json]
 //   Purgeon --settings [--json]
 //
@@ -59,6 +62,7 @@ import * as portableapps from './backend/portableapps.js';
 import * as programs from './backend/programs.js';
 import * as junk from './backend/junk.js';
 import * as backups from './backend/backups.js';
+import { runUninstaller } from './backend/api.js';
 import { runCommandLine } from './backend/shell.js';
 
 const HELP = `Purgeon command line
@@ -460,6 +464,23 @@ async function run(args) {
     }
     await sys.writeText(output, body);
     return wrap(true, `Exported ${type} to ${output} (${format}).\\r\\n`);
+  }
+  if (cmd === '--uninstall') {
+    const name = option(args, '--uninstall');
+    if (!name || name.startsWith('--')) throw new Error('Name the program: --uninstall "Foo Editor"');
+    const desktop = await programs.listDesktop();
+    const store = await programs.listStore();
+    const all = [...desktop, ...store];
+    const hit = all.find((p) => p.name.toLowerCase() === name.toLowerCase());
+    if (!hit) throw new Error(`No program named "${name}" found. Use --export programs --format json --output - to list them.`);
+    const result = await runUninstaller(hit);
+    if (!result.ok) return wrap(false, `Uninstall failed: ${result.error || 'unknown error'}\\r\\n`, EXIT_ERROR);
+    const lines = [
+      `Ran the uninstaller for "${hit.name}".${result.silent ? ' Ran silently.' : ''}`,
+      result.restorePoint ? 'Restore point created before uninstall.' : '',
+      'The program has been recorded in the Uninstall Archive.',
+    ].filter(Boolean).join('\\r\\n');
+    return wrap(true, lines + '\\r\\n');
   }
   if (cmd === '-h' || cmd === '/?' || cmd === '--help' || !cmd) {
     return wrap(true, HELP.replace(/\n/g, '\r\n'));

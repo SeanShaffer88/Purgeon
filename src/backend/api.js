@@ -47,6 +47,7 @@ const lazyInstallwatch = lazyModule('installwatch');
 import * as running from './running.js';
 import * as maintenance from './maintenance.js';
 import * as queue from './queue.js';
+import * as drivers from './drivers.js';
 import * as trials from './trials.js';
 import * as explore from './explore.js';
 import * as browsers from './browsers.js';
@@ -194,6 +195,9 @@ const handlers = {
     const result = await junk.cleanSystem(ids);
     return { ...result, restorePoint: rp };
   },
+  'drivers:list': () => drivers.listDrivers(),
+  'drivers:candidates': () => drivers.oldDriverCandidates(),
+  'drivers:delete': async ({ inf }) => drivers.deleteDriver(inf),
   'programs:insights': async (list) => (await lazyInsights.get()).programInsights(list),
   'programs:recordSizes': async (list) => (await lazyInsights.get()).recordSizes(list).then(() => true),
   'programs:sizeHistory': async () => (await lazyInsights.get()).sizeHistory(),
@@ -577,3 +581,9 @@ export const api = {
 
 // Exposed for the screenshot/demo harness, which swaps handlers for made-up data.
 export const __handlers = handlers;
+
+// CLI entry point: run a program's own uninstaller, wait for it to finish, then archive it.
+// Called directly by the CLI (not via api.invoke), so it does not need confirmUI.
+export async function runUninstaller(program) {
+  return handlers['program:runUninstaller'](program);
+}
