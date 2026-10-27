@@ -562,7 +562,7 @@ const baseName = (p) => (p || '').split('\\').pop().replace(/\.(exe|msi|msix|bat
 
 export function AboutDialog({ onClose }) {
   return (
-    <Dialog title="About Purgeon" onClose={onClose} width=560 buttons={<><button className="primary" onClick={onClose}>OK</button><button onClick={() => api.invoke('program:openUrl', 'https://github.com/SeanShaffer88/Purgeon/releases').catch(() => {})}>View Releases</button></>}>
+    <Dialog title="About Purgeon" onClose={onClose} width={560} buttons={<><button className="primary" onClick={onClose}>OK</button><button onClick={() => api.invoke('program:openUrl', 'https://github.com/SeanShaffer88/Purgeon/releases').catch(() => {})}>View Releases</button></>}>
       <p className="heading">Purgeon {__APP_VERSION__}</p>
       {window.__sweepPortable && <p className="muted">Portable mode: settings, backups and snapshots are kept in the "Purgeon Data" folder next to the program.</p>}
       <p>Uninstalls programs, then hunts down the leftover files, registry keys, startup entries and services they leave behind.</p>

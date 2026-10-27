@@ -202,16 +202,6 @@ select:focus-visible,
 }
 .shortcut-label { color: var(--text); }
 
-/* Primary action styling for the most common action in a view */
-.action-button.primary {
-  background: var(--green);
-  color: #000;
-  border-color: var(--green);
-}
-.action-button.primary:hover {
-  background: #5eea8a;
-}
-
 /* User guide styles */
 .guide-section { margin-bottom: 16px; }
 .guide-title { font-weight: bold; color: var(--cyan); margin-bottom: 6px; font-size: 15px; }
@@ -239,7 +229,7 @@ kbd {
 .menubar-item > button:hover, .menubar-item > button.open { background: var(--green-dim); color: var(--green); }
 /* Menu-bar dropdowns reuse the context-menu look but hang under their menu title;
    the doubled class outranks .context-menu's position: fixed further down. */
-.context-menu.dropdown { position: absolute; top: 100%; left: 0; }
+.context-menu.dropdown { position: absolute; top: 100%; left: 0; max-height: calc(100vh - 40px); overflow-y: auto; }
 .context-menu button > span { white-space: nowrap; }
 
 .toolbar {
@@ -339,47 +329,6 @@ kbd {
 .list-empty-action:hover { border-color: var(--green); background: var(--hover); }
 .list-empty-action.primary { border-color: var(--green); background: var(--green-dim); color: var(--green); }
 .list-empty-action.primary:hover { background: var(--green-sel); }
-
-/* Breadcrumb navigation */
-.breadcrumb {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
-  font-size: 13px;
-}
-.breadcrumb-home { color: var(--green); cursor: pointer; }
-.breadcrumb-home:hover { text-decoration: underline; }
-.breadcrumb-sep { color: var(--dim); }
-.breadcrumb-current { color: var(--muted); }
-.breadcrumb-back, .breadcrumb-forward {
-  border: 1px solid var(--border-strong);
-  background: var(--panel);
-  color: var(--text);
-  padding: 2px 8px;
-  cursor: pointer;
-  font-size: 12px;
-  margin-left: auto;
-}
-.breadcrumb-back:hover, .breadcrumb-forward:hover { border-color: var(--green); }
-
-/* Recent programs in view bar */
-.view-bar-recent { border-top: 1px solid var(--border); padding-top: 8px; margin-top: 8px; }
-.recent-header { font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--cyan); margin-bottom: 6px; }
-.recent-chip {
-  display: block;
-  width: 100%;
-  text-align: left;
-  padding: 4px 8px;
-  border: none;
-  background: transparent;
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 12px;
-}
-.recent-chip:hover { background: var(--panel); color: var(--text); }
 
 /* Reduced motion */
 @media (prefers-reduced-motion: reduce) {
@@ -736,11 +685,10 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .details-main.none { color: var(--dim); max-width: none; flex: 1; }
 .details-more { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
 .details-bar .group-picker { margin-left: auto; flex: none; width: 170px; font-size: 13px; height: 26px; border: 1px solid var(--border-strong); background: var(--panel); padding: 0 6px; cursor: pointer; }
-/* Row 3: only buttons, so it wraps the same way for a window width whatever is selected. Buttons
-   that don't fit on one row continue on the next instead of being cut off, and the buttons
-   stretch to fill every row they are on. */
-.action-bar { display: flex; flex-wrap: wrap; gap: 5px 6px; align-items: center; min-height: 37px; padding: 4px 8px 5px; background: var(--panel); border-bottom: 1px solid var(--border); }
-.action-button { flex: 1 0 auto; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); height: 26px; padding: 0 10px; cursor: pointer; white-space: nowrap; }
+/* Row 3: only buttons, in a grid whose column count App.jsx balances, so every row
+   holds the same number of equal-width buttons and fills the width of the window. */
+.action-bar { display: grid; grid-template-columns: repeat(auto-fit, minmax(128px, 1fr)); gap: 5px 6px; align-items: center; min-height: 37px; padding: 4px 8px 5px; background: var(--panel); border-bottom: 1px solid var(--border); }
+.action-button { min-width: 0; overflow: hidden; text-overflow: ellipsis; border: 1px solid var(--border-strong); background: var(--bg); color: var(--text); height: 26px; padding: 0 8px; cursor: pointer; white-space: nowrap; }
 .action-button:hover:not(:disabled) { border-color: var(--cyan); color: var(--cyan); }
 .action-button.danger:hover:not(:disabled) { border-color: var(--red); color: var(--red); }
 .action-button:disabled { color: var(--dim); cursor: default; }
@@ -920,27 +868,3 @@ button:focus-visible, select:focus-visible, input:focus-visible, .tweak:focus-vi
 .menubar-right .elevate { color: var(--amber); }
 .menubar-right .elevated { color: var(--green); }
 
-/* Quick filter chips in the program list toolbar. */
-.filter-chips {
-  display: flex;
-  gap: 6px;
-  margin-left: 12px;
-  padding-left: 12px;
-  border-left: 1px solid var(--border);
-  align-items: center;
-}
-.filter-chip {
-  border: 1px solid var(--border-strong);
-  background: var(--panel);
-  color: var(--muted);
-  padding: 1px 7px;
-  font-size: 11px;
-  cursor: default;
-  border-radius: 0;
-}
-.filter-chip:hover { border-color: var(--green); color: var(--green); }
-.filter-chip.on {
-  border-color: var(--green);
-  background: var(--green-dim);
-  color: var(--green);
-}

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog } from './dialogs.jsx';
-import * as path from './winpath.js';
+import * as path from './backend/winpath.js';
 
 const fmt = (b) => (!b ? '0 B' : b < 1048576 ? `${(b / 1024).toFixed(0)} KB` : b < 1073741824 ? `${(b / 1048576).toFixed(1)} MB` : `${(b / 1073741824).toFixed(2)} GB`);
 
@@ -554,9 +554,6 @@ export function CommandPalette({ commands, onRun, onClose }) {
   const [q, setQ] = useState('');
   const [i, setI] = useState(0);
   const ref = useRef(null);
-  const shown = useMemo(() => {
-  }, [q, commands]);
-
   const fuzzyScore = (text, query) => {
     const t = text.toLowerCase();
     const q = query.toLowerCase();

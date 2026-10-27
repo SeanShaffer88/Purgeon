@@ -378,7 +378,7 @@ function WindowControls({ pinned, onPin, toTray }) {
   );
 }
 
-function MenuBar({ onAction, checked = {}, right = null, controls = null }) {
+function MenuBar({ onAction, checked = {}, right = null, controls = null, menus = MENUS }) {
   const [open, setOpen] = useState(null);
   const bar = useRef(null);
   const focusItem = (step) => {
@@ -400,7 +400,7 @@ function MenuBar({ onAction, checked = {}, right = null, controls = null }) {
   useEffect(() => {
     const onKey = (e) => {
       if (e.altKey && !e.ctrlKey && /^[a-z]$/i.test(e.key)) {
-        const i = MENUS.findIndex(([label]) => label[0].toLowerCase() === e.key.toLowerCase());
+        const i = menus.findIndex(([label]) => label[0].toLowerCase() === e.key.toLowerCase());
         if (i >= 0 && !document.querySelector('.overlay')) {
           e.preventDefault();
           setOpen(i);
@@ -416,7 +416,7 @@ function MenuBar({ onAction, checked = {}, right = null, controls = null }) {
     else if (e.key === 'ArrowUp') (e.preventDefault(), focusItem(-1));
     else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       e.preventDefault();
-      setOpen((i + (e.key === 'ArrowRight' ? 1 : MENUS.length - 1)) % MENUS.length);
+      setOpen((i + (e.key === 'ArrowRight' ? 1 : menus.length - 1)) % menus.length);
       setTimeout(() => focusItem(1), 0);
     } else if (e.key === 'Escape') {
       e.preventDefault();
@@ -426,7 +426,7 @@ function MenuBar({ onAction, checked = {}, right = null, controls = null }) {
   };
   return (
     <div className="menubar" role="menubar" ref={bar} onMouseDown={(e) => e.stopPropagation()}>
-      {MENUS.map(([label, entries], i) => (
+      {menus.map(([label, entries], i) => (
         <div key={label} className="menubar-item">
           <button
             className={open === i ? 'open' : ''}
@@ -581,6 +581,19 @@ const [reducedMotion, setReducedMotion] = useState(false);
   const [cmdOpen, setCmdOpen] = useState(false);
   const [cmdIdx, setCmdIdx] = useState(-1);
   const listRef = useRef(null);
+  const actionBarRef = useRef(null);
+  const [actionBarW, setActionBarW] = useState(0);
+  // Keep the action bar's width measured so its buttons can be laid out in balanced rows.
+  useEffect(() => {
+    const el = actionBarRef.current;
+    if (!el) return undefined;
+    const update = () => setActionBarW(el.clientWidth);
+    update();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const ro = new ResizeObserver(update);
+    ro.observe(el);
+    return () => ro.disconnect();
+  });
   const desktopCache = useRef([]);
   const lastListView = useRef('desktop');
   // Debloat and Startup views load their own data; their status text and remount key live here.
@@ -1011,12 +1024,12 @@ const [reducedMotion, setReducedMotion] = useState(false);
     const infoFor = (p) => prep[list.filter((x) => !x.store).indexOf(p)];
     const line = (p) => {
       const info = infoFor(p);
-      const tags = [info?.installer.label, silentOn && info?.installer.silent ? 'silent' : '', info?.dependencies?.kind === 'runtime' ? '\\u26a0 shared runtime' : info?.dependencies?.kind === 'driver' ? '\\u26a0 driver' : '', info?.dependencies?.dependents?.length ? `\\u26a0 needed by ${info.dependencies.dependents.join(', ')}` : ''].filter(Boolean);
-      return `\\u2022 ${p.name}${tags.length ? `  (${tags.join(', ')})` : ''}`;
+      const tags = [info?.installer.label, silentOn && info?.installer.silent ? 'silent' : '', info?.dependencies?.kind === 'runtime' ? '\u26a0 shared runtime' : info?.dependencies?.kind === 'driver' ? '\u26a0 driver' : '', info?.dependencies?.dependents?.length ? `\u26a0 needed by ${info.dependencies.dependents.join(', ')}` : ''].filter(Boolean);
+      return `\u2022 ${p.name}${tags.length ? `  (${tags.join(', ')})` : ''}`;
     };
     const go = await confirmWithRestore(
       `Uninstall ${list.length} programs?`,
-      ${list.map(line).join('\\n')}\\n\\nEach program's own uninstaller runs in turn${silentOn ? '; ones marked silent run without their windows' : ', so finish each uninstaller\\'s window'}. Afterwards Purgeon scans all of them for leftovers.`,
+      `${list.map(line).join('\n')}\n\nEach program's own uninstaller runs in turn${silentOn ? '; ones marked silent run without their windows' : ', so finish each uninstaller\'s window'}. Afterwards Purgeon scans all of them for leftovers.`,
       'confirmBatchUninstall'
     );
     if (!go.ok) return;
@@ -1063,7 +1076,25 @@ const [reducedMotion, setReducedMotion] = useState(false);
       const found = await api.invoke('program:scan', { ...p, installerItems: infoFor(p)?.installerItems || [] }).catch(() => []);
       items.push(...found.map((it) => ({ ...it, program: p.name })));
     }
-    setBusy(''); -----------------------------------------------------------
+    setBusy('');
+    load();
+
+    const ok = outcomes.filter((o) => o.result?.ok).length;
+    const problems = outcomes
+      .filter((o) => !o.result?.ok)
+      .map((o) => (o.skipped ? `${o.p.name}: skipped` : o.result.error ? `${o.p.name}: ${o.result.error}` : `${o.p.name}: uninstaller exited with code ${o.result.code}`));
+    const heading = `Uninstalled ${ok} of ${list.length} programs.${problems.length ? ` ${problems.join('; ')}.` : ''} Purgeon found ${items.length} leftover items.`;
+    setModal({
+      type: 'leftovers',
+      title: `Batch Uninstall \u2013 ${list.length} programs`,
+      heading,
+      items,
+      owners: list.map((p) => p.key),
+      onRemove: (sel) => removeWithBackup(`Batch uninstall (${list.length} programs)`, sel, ran.map((o) => o.p.location), list.map((p) => p.key)),
+    });
+  };
+
+  // ---- snapshots -----------------------------------------------------------
 
   const takeSnapshot = async (name, preset) => {
     setModal(null);
@@ -2094,6 +2125,17 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       setTheme(th);
       return api.invoke('settings:set', { theme: th });
     }
+    if (action.startsWith('filter:')) return setQuickFilter(action.slice(7));
+    if (action === 'navBack') return goBack();
+    if (action === 'navForward') return goForward();
+    if (action.startsWith('recent:')) {
+      const p = recentPrograms.find((r) => r.key === action.slice(7));
+      if (p) {
+        setView('desktop');
+        setSelected(p.key);
+      }
+      return;
+    }
     if (global[action]) return global[action]();
     if (busy || modal) return;
     if (action === 'clearSelection') return setMarked(new Set(current ? [current.key] : []));
@@ -2347,10 +2389,41 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
   })();
   const barReady = (id) => (id === 'takeSnapshot' ? true : id === 'compareSelected' ? markedRows.length === 2 : isBatch || !!current);
 
+  // The main window keeps the layout of the README screenshot — menu bar, command bar,
+  // selection bar, action bar, list, status bar, and nothing else — so the quick list
+  // filters, Back/Forward and the recent programs live in the View menu instead of in
+  // extra bars and rails on the window. Safe Mode likewise lives in the Tools menu.
+  const filterItems = [
+    ['filter:all', 'Show All Programs'],
+    ['filter:desktop', 'Show Desktop Programs Only'],
+    ['filter:store', 'Show Store Apps Only'],
+    ['filter:recent', 'Show Recently Installed'],
+    ['filter:large', 'Show Large Programs (over 100 MB)'],
+    ['filter:unsigned', 'Show Unsigned Programs'],
+    ['filter:used', 'Show Recently Used Programs'],
+  ];
+  // Balanced action-bar rows: as many columns as fit at a width where the longest
+  // label ("Search Online") still fits whole, then the column count is rounded so
+  // every row holds the same number of buttons (13 actions lay out 7 + 6 at a wide
+  // window, 5 + 5 + 3 at a narrow one — never 10 + 3), for any view's actions.
+  const barCount = barItems.length;
+  const barFit = actionBarW > 0 ? Math.max(1, Math.floor((actionBarW + 6) / 134)) : barCount;
+  const barCols = barCount === 0 || barFit >= barCount ? barCount : Math.ceil(barCount / Math.ceil(barCount / barFit));
+  const menus = MENUS.map(([label, entries]) => {
+    if (label !== 'View') return [label, entries];
+    const out = [];
+    for (const it of entries) {
+      out.push(it);
+      if (it && it[0] === 'refresh') out.push(null, ['navBack', 'Back', 'Alt+Left'], ['navForward', 'Forward', 'Alt+Right'], null, ...filterItems);
+    }
+    if (recentPrograms.length) out.push(null, ...recentPrograms.map((p) => [`recent:${p.key}`, `Recent: ${p.name.length > 42 ? `${p.name.slice(0, 42)}…` : p.name}`]));
+    return [label, out];
+  });
+
   return (
     <div className={`app ${gridOn ? 'grid' : ''}`} onClick={() => menu && setMenu(null)}>
       <a href="#main-content" className="skip-to-content">Skip to main content</a>
-      <MenuBar onAction={dispatch} controls={<WindowControls pinned={win.alwaysOnTop} toTray={win.minimizeToTray} onPin={() => dispatch('toggleOnTop')} />} right={
+      <MenuBar menus={menus} onAction={dispatch} controls={<WindowControls pinned={win.alwaysOnTop} toTray={win.minimizeToTray} onPin={() => dispatch('toggleOnTop')} />} right={
           admin === false ? (
             <button className="link elevate" onClick={() => api.invoke('app:elevate')} title="Needed to remove programs installed for all users, and for machine-wide changes">
               Not Elevated – Restart as Administrator
@@ -2359,7 +2432,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             <span className="elevated">Administrator</span>
           ) : null
         }
-        checked={{ toggleRestore: restoreOn, toggleSilent: silentOn, toggleSafe: safeOn, toggleGrid: gridOn, 'theme:dark': theme === 'dark', 'theme:light': theme === 'light', 'theme:contrast': theme === 'contrast', 'close:ask': closeAction === 'ask', 'close:tray': closeAction === 'tray', 'close:exit': closeAction === 'exit', toggleShell: shellOn, toggleOnTop: win.alwaysOnTop, toggleMinTray: win.minimizeToTray, toggleStartTray: win.startInTray, toggleAutostart: autostartOn, toggleDetect: detectOn, toggleHidden: showHidden, toggleSync: syncOn, toggleSchedule: scheduleOn }} />
+        checked={{ toggleRestore: restoreOn, toggleSilent: silentOn, toggleSafe: safeOn, toggleGrid: gridOn, 'theme:dark': theme === 'dark', 'theme:light': theme === 'light', 'theme:contrast': theme === 'contrast', 'filter:all': quickFilter === 'all', 'filter:desktop': quickFilter === 'desktop', 'filter:store': quickFilter === 'store', 'filter:recent': quickFilter === 'recent', 'filter:large': quickFilter === 'large', 'filter:unsigned': quickFilter === 'unsigned', 'filter:used': quickFilter === 'used', 'close:ask': closeAction === 'ask', 'close:tray': closeAction === 'tray', 'close:exit': closeAction === 'exit', toggleShell: shellOn, toggleOnTop: win.alwaysOnTop, toggleMinTray: win.minimizeToTray, toggleStartTray: win.startInTray, toggleAutostart: autostartOn, toggleDetect: detectOn, toggleHidden: showHidden, toggleSync: syncOn, toggleSchedule: scheduleOn }} />
       <div className="workspace">
       {/* The views, as icons; each one's name and shortcut is in its tooltip. */}
       <nav className="view-bar-side" aria-label="Views">
@@ -2370,33 +2443,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           </button>
         ))}
       </nav>
-      {recentPrograms.length > 0 && (
-        <nav className="view-bar-side view-bar-recent" aria-label="Recent Programs">
-          <div className="recent-header">Recent</div>
-          {recentPrograms.map((p) => (
-            <button key={p.key} className="recent-chip" onClick={() => { setView('desktop'); setSelected(p.key); }} title={p.name}>
-              {p.name.length > 18 ? p.name.slice(0, 18) + '…' : p.name}
-            </button>
-          ))}
-        </nav>
-      )}
       <main className="workspace-main" id="main-content">
-      {/* Breadcrumb navigation */}
-      <div className="breadcrumb">
-        <span className="breadcrumb-home" onClick={() => setView('desktop')} title="Programs">Programs</span>
-        {view !== 'desktop' && (
-          <>
-            <span className="breadcrumb-sep">›</span>
-            <span className="breadcrumb-current">{VIEWS[view]?.label || view}</span>
-          </>
-        )}
-        {historyIdx > 0 && (
-          <button className="breadcrumb-back" onClick={goBack} title="Back (Alt+Left)">‹ Back</button>
-        )}
-        {historyIdx < viewHistory.length - 1 && (
-          <button className="breadcrumb-forward" onClick={goForward} title="Forward (Alt+Right)">Forward ›</button>
-        )}
-      </div>
       {/* Row 1: one box that searches the list and finds commands. */}
       <div className="cmdbar">
         <div className="search">
@@ -2450,9 +2497,6 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         <button className="palette-hint" onClick={() => dispatch('palette')} title="Every command and program in one list">
           All commands <kbd>Ctrl+K</kbd>
         </button>
-        <button className={`safe-toggle ${safeOn ? 'on' : ''}`} onClick={() => { setSafeOn(!safeOn); api.invoke('settings:set', { safeMode: !safeOn }); }} title={safeOn ? 'Safe Mode is on: only high-confidence matches, no services/tasks/firewall' : 'Safe Mode is off: every finding can be selected'}>
-          {safeOn ? 'Safe Mode: On' : 'Safe Mode: Off'}
-        </button>
       </div>
       {/* Row 2: what is selected (or what this view is for), and the group filter. */}
       <div className="toolbar details-bar" role="status" aria-label="Selection">
@@ -2485,73 +2529,12 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             </optgroup>
           )}
         </select>
-        {/* Quick filter chips: one-click presets that narrow the program list. */}
-        {batchable && (
-          <div className="filter-chips" aria-label="Quick filters">
-            <button
-              className={`filter-chip ${quickFilter === 'all' ? 'on' : ''}`}
-              onClick={() => setQuickFilter('all')}
-              title="Show all programs"
-              aria-label="Show all programs"
-            >
-              All
-            </button>
-            <button
-              className={`filter-chip ${quickFilter === 'desktop' ? 'on' : ''}`}
-              onClick={() => setQuickFilter('desktop')}
-              title="Desktop programs only"
-              aria-label="Desktop programs only"
-            >
-              Desktop
-            </button>
-            <button
-              className={`filter-chip ${quickFilter === 'store' ? 'on' : ''}`}
-              onClick={() => setQuickFilter('store')}
-              title="Windows Store apps only"
-              aria-label="Windows Store apps only"
-            >
-              Store Apps
-            </button>
-            <button
-              className={`filter-chip ${quickFilter === 'recent' ? 'on' : ''}`}
-              onClick={() => setQuickFilter('recent')}
-              title="Programs installed in the last 30 days"
-              aria-label="Programs installed in the last 30 days"
-            >
-              Recent
-            </button>
-            <button
-              className={`filter-chip ${quickFilter === 'large' ? 'on' : ''}`}
-              onClick={() => setQuickFilter('large')}
-              title="Programs larger than 100 MB"
-              aria-label="Programs larger than 100 MB"
-            >
-              Large
-            </button>
-            <button
-              className={`filter-chip ${quickFilter === 'unsigned' ? 'on' : ''}`}
-              onClick={() => setQuickFilter('unsigned')}
-              title="Programs with missing or bad digital signatures"
-              aria-label="Programs with missing or bad digital signatures"
-            >
-              Unsigned
-            </button>
-            <button
-              className={`filter-chip ${quickFilter === 'used' ? 'on' : ''}`}
-              onClick={() => setQuickFilter('used')}
-              title="Programs used in the last 30 days"
-              aria-label="Programs used in the last 30 days"
-            >
-              Recently Used
-            </button>
-          </div>
-        )}
       </div>
-      {/* Row 3: the actions for the selection; they continue on another row when they don't fit. */}
+      {/* Row 3: the actions for the selection, in balanced rows of equal-width buttons. */}
       {barItems.length > 0 && (
-        <div className="action-bar" role="toolbar" aria-label="Actions">
+        <div className="action-bar" role="toolbar" aria-label="Actions" ref={actionBarRef} style={barCols > 0 ? { gridTemplateColumns: `repeat(${barCols}, minmax(0, 1fr))` } : undefined}>
           {barItems.map(([id, label]) => (
-            <button key={id} className={`action-button ${id === 'uninstall' ? 'primary' : ''} ${/^(force|delete)/i.test(id) ? 'danger' : ''}`} disabled={!barReady(id)} onClick={() => dispatch(id)} title={ACTION_TIPS[id]} aria-label={shortLabel(label)}>
+            <button key={id} className={`action-button ${/^(force|delete)/i.test(id) ? 'danger' : ''}`} disabled={!barReady(id)} onClick={() => dispatch(id)} title={ACTION_TIPS[id]} aria-label={shortLabel(label)}>
               {shortLabel(label)}
             </button>
           ))}
