@@ -1,5 +1,7 @@
 // Windows path helpers (the webview has no Node.js "path" module).
 
+export const sep = '\\';
+
 const clean = (p) => String(p || '').replace(/\//g, '\\');
 
 // Joins parts with single backslashes.
@@ -42,4 +44,22 @@ export function extname(p) {
   const b = basename(p);
   const i = b.lastIndexOf('.');
   return i > 0 ? b.slice(i) : '';
+}
+
+// Relative path from one absolute Windows path to another, with Node's
+// path.win32.relative semantics for the cases this app meets: same drive
+// gives ".." steps plus the remaining segments (compared without case, as
+// Windows does); different drives give the target unchanged.
+export function relative(from, to) {
+  const f = resolve(from);
+  const t = resolve(to);
+  const fd = (f.match(/^([a-z]:)/i) || [])[1]?.toLowerCase();
+  const td = (t.match(/^([a-z]:)/i) || [])[1]?.toLowerCase();
+  if (!fd || !td || fd !== td) return t;
+  const fs = f.slice(2).split('\\').filter(Boolean);
+  const ts = t.slice(2).split('\\').filter(Boolean);
+  let i = 0;
+  while (i < fs.length && i < ts.length && fs[i].toLowerCase() === ts[i].toLowerCase()) i++;
+  const parts = [...Array(fs.length - i).fill('..'), ...ts.slice(i)];
+  return parts.length ? parts.join('\\') : '.';
 }

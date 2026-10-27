@@ -35,12 +35,12 @@ Windows or another installed program still needs.
 - **Messages at the bottom.** Notices and errors appear just above the status bar, marked 👍, ⚠️ or ⛔.
 - **Analyze.** A one-page report on a program: removal, disk space, hooks, last use, dependencies, signature and architecture. "What It Does" is now "What's This", and "Force Removal" is now "Force".
 - **Architecture column.** 64-bit, 32-bit or ARM64, read from each program file's header.
-- **Wrapping action bar.** Buttons that don't fit continue on a second row instead of being cut off.
+- **Balanced action bar.** Action buttons lay out in rows of equal-width buttons, balanced so every row holds the same number, at any window width.
 - **New toolbars.** A search box that also runs commands, a details row for the selection, an actions row, and the views as a column of icons on the left. Views renamed to Programs, Apps, Debloat and Cleaner.
 - **First-run onboarding.** Welcome dialog on first launch explaining what Purgeon does, with guided starting paths, dismissible tips, and Help › Welcome Back to reopen.
 - **Progress feedback.** Progress bars with percentage, items processed and elapsed time on long operations, with pause/resume and cancel where supported.
-- **Error recovery.** Error bar with retry action for recoverable errors; undo toast for the last removal within 30 seconds; auto-retry (3 attempts) for transient backend failures; Safe Mode one-click toolbar toggle; batch uninstall pause/resume.
-- **Navigation.** Breadcrumb navigation with Back/Forward (Alt+Left/Right), view history, and recent programs sidebar.
+- **Error recovery.** Error bar with retry action for recoverable errors; undo toast for the last removal within 30 seconds; auto-retry (3 attempts) for transient backend failures; Safe Mode toggle in the Tools menu; batch uninstall pause/resume.
+- **Navigation.** Back/Forward (View menu or Alt+Left/Right), view history, and recent programs in the View menu.
 - **Documentation.** User Guide dialog with common workflows, What's New on version update, settings explanations in dialogs, settings export/import as JSON.
 - **Confirmation management.** Option to disable confirmations with a warning; disable option on each confirmation window; restore disabled confirmation windows in settings.
 - **Toggle selection.** Clicking a program in the list selects it; clicking again deselects it.

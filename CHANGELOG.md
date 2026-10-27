@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+- Restore the main window to the layout in the README screenshot: menu bar,
+  command bar, selection bar, action bar, program list and status bar only.
+  The breadcrumb bar, the recent-programs rail, the Safe Mode button in the
+  command bar and the quick-filter chips no longer sit on the window; every
+  feature remains available — Back/Forward, the quick list filters and the
+  recent programs moved to the View menu, and Safe Mode stays in the Tools
+  menu. The Uninstall button is plain dark like the other action buttons,
+  and the action bar now lays its buttons out in balanced rows of equal
+  width (13 actions lay out 7 + 6, never 10 + 3) at any window width.
+- Fix a build-breaking typo in the About dialog (`width=560` for
+  `width={560}`) that stopped the front end from building at all.
+
 - Repair the native build gate: format the Rust sources, share UTF-16 registry
   decoding, name snapshot entry types, and run development/test binaries without
   requesting elevation. Production manifests retain their existing privileges.
