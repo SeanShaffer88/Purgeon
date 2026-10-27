@@ -482,7 +482,16 @@ async function resolveInterrupted(action) {
 
 // Deletes old backups beyond the limits (days, megabytes; 0 = no limit), oldest first, but
 // never the newest backup made for each title (each program), nor an unfinished one.
-async function prune({ maxDays = 0, maxMB = 0 } = {}, now = Date.now()) {
+async function prune({ maxDays = 0, maxMB = 0 } = {}, now = Date.now(), hooks = {}) {
+  // Called once, just before the first backup is actually removed (so a caller can
+  // take a safety snapshot only when something is really about to be deleted).
+  let hookDone = false;
+  const beforeRemove = async () => {
+    if (!hookDone) {
+      hookDone = true;
+      await hooks.beforeFirstRemove?.();
+    }
+  };
   if (!maxDays && !maxMB) return [];
   const all = await list(); // newest first
   const newest = new Set();
@@ -493,6 +502,7 @@ async function prune({ maxDays = 0, maxMB = 0 } = {}, now = Date.now()) {
   const removed = [];
   for (const m of candidates) {
     if (maxDays && now - new Date(m.created).getTime() > maxDays * 86400000) {
+      await beforeRemove();
       await remove(m.id);
       removed.push(m.id);
     }
@@ -511,6 +521,7 @@ async function prune({ maxDays = 0, maxMB = 0 } = {}, now = Date.now()) {
     for (const m of candidates) {
       if (total <= maxMB * 1048576) break;
       if (removed.includes(m.id)) continue;
+      await beforeRemove();
       await remove(m.id);
       removed.push(m.id);
       total -= sizes.get(m.id) || 0;

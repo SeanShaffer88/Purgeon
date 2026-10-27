@@ -100,6 +100,7 @@ const isConfirmationDisabled = async (id) => {
 
 const handlers = {
   'app:isAdmin': isAdmin,
+  'app:ready': () => (sys.frontendReady ? sys.frontendReady() : undefined),
   'app:quit': () => sys.quit(),
   'app:elevate': async () => {
     await runPS(`Start-Process -FilePath ${psq(sys.info.exe)} -Verb RunAs`);
@@ -186,8 +187,14 @@ const handlers = {
   'backups:interrupted': () => backups.interrupted(),
   'backups:resolveInterrupted': (action) => backups.resolveInterrupted(action),
   'backups:prune': async () => {
-    const rp = await maybeCreateRestorePoint('prune', 'Purgeon: before pruning old backups under backup limits');
-    const result = await backups.prune({ maxDays: Number((await readSettings()).backupMaxDays) || 0, maxMB: Number((await readSettings()).backupMaxMB) || 0 });
+    // The restore point is created only if a backup is really about to be removed:
+    // pruning with nothing to remove must not cost a system restore point.
+    let rp = { created: false, skipped: true };
+    const result = await backups.prune(
+      { maxDays: Number((await readSettings()).backupMaxDays) || 0, maxMB: Number((await readSettings()).backupMaxMB) || 0 },
+      Date.now(),
+      { beforeFirstRemove: async () => { rp = await maybeCreateRestorePoint('prune', 'Purgeon: before pruning old backups under backup limits'); } }
+    );
     return { ...result, restorePoint: rp };
   },
   'log:open': () => open(log.folder()),

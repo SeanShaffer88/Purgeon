@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect } from 'react';
+import { useMemo, useState, useEffect, useRef } from 'react';
 import { SettingHelp } from './onboarding.jsx';
 
 const api = window.api;
