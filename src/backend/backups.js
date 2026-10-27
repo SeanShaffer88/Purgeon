@@ -8,12 +8,88 @@ import { isProtected, isProtectedKey } from './paths.js';
 import { regAddArgs } from './snapshots.js';
 import { isJunkPath, installedFamilies } from './junk.js';
 import { readState, guardReason } from './safety.js';
+import { readSettings } from './settings.js';
 
 let backupRoot = '';
 const setRoot = async (dir) => {
   backupRoot = dir;
   await sys.makeDir(backupRoot);
 };
+
+// ---- AES-GCM encryption ----------------------------------------------------------
+// When settings.encryptionKey is set, backup manifests are encrypted at rest with AES-GCM.
+// The key is derived from the user's password with PBKDF2 (100k iterations, random salt).
+// Backups made without a key stay unencrypted; backups made with a key require the same key
+// to read or restore. Losing the key means losing the backup.
+
+const ENC_PREFIX = 'PURGEON-ENC1:';  // marks an encrypted manifest file
+
+async function encryptionKey() {
+  const s = await readSettings();
+  return s.encryptionKey || '';
+}
+
+async function deriveKey(password, salt) {
+  const keyMaterial = await globalThis.crypto.subtle.importKey(
+    'raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveKey']
+  );
+  return globalThis.crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+    keyMaterial,
+    { name: 'AES-GCM', length: 256 },
+    false, ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptText(text, password) {
+  const salt = globalThis.crypto.getRandomValues(new Uint8Array(16));
+  const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(password, salt);
+  const ct = await globalThis.crypto.subtle.encrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    new TextEncoder().encode(text)
+  );
+  const out = new Uint8Array(salt.length + iv.length + ct.byteLength);
+  out.set(salt, 0);
+  out.set(iv, salt.length);
+  out.set(new Uint8Array(ct), salt.length + iv.length);
+  return ENC_PREFIX + btoa(String.fromCharCode(...out));
+}
+
+async function decryptText(ciphertext, password) {
+  const raw = atob(ciphertext.slice(ENC_PREFIX.length));
+  const bytes = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i);
+  const salt = bytes.slice(0, 16);
+  const iv = bytes.slice(16, 28);
+  const ct = bytes.slice(28);
+  const key = await deriveKey(password, salt);
+  const pt = await globalThis.crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv },
+    key,
+    ct
+  );
+  return new TextDecoder().decode(pt);
+}
+
+function isEncrypted(text) {
+  return text.startsWith(ENC_PREFIX);
+}
+
+async function readEncryptedText(p) {
+  const raw = await sys.readText(p);
+  if (!isEncrypted(raw)) return raw;
+  const password = await encryptionKey();
+  if (!password) throw new Error('This backup is encrypted but no encryption key is set.');
+  return decryptText(raw, password);
+}
+
+async function writeEncryptedText(p, text) {
+  const password = await encryptionKey();
+  const toWrite = password ? await encryptText(text, password) : text;
+  await sys.writeText(p, toWrite);
+}
 
 const slug = (s) => (s || 'items').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').slice(0, 40);
 
@@ -47,6 +123,38 @@ const REG_TYPE = { String: 'REG_SZ', ExpandString: 'REG_EXPAND_SZ', DWord: 'REG_
 const pendingFile = () => path.join(backupRoot, 'pending.json');
 const manifestFile = (id) => path.join(backupRoot, id, 'manifest.json');
 
+// Estimates how many bytes a backup of the given items would occupy. Registry keys and values
+// are exported to .reg files (small), files and folders are measured from disk. This lets the
+// UI warn before a removal that would create an unusually large backup.
+export async function forecastSize(items) {
+  let bytes = 0;
+  for (const item of items) {
+    if (item.kind === 'key' || item.kind === 'value') {
+      // A registry export is typically well under 64 KB per key/value.
+      bytes += 64 * 1024;
+    } else if (item.kind === 'file' || item.kind === 'dir') {
+      if (!(await sys.exists(item.path))) continue;
+      try {
+        const s = await sys.stat(item.path);
+        if (!s) continue;
+        if (s.dir) {
+          const fs = await sys.folderSize(item.path, 50000, 10000);
+          bytes += fs.bytes;
+        } else {
+          bytes += s.size;
+        }
+      } catch {
+        // If we can't measure it, assume a modest placeholder.
+        bytes += 1024 * 1024;
+      }
+    } else {
+      // services, tasks, firewall, junk: small metadata records.
+      bytes += 4 * 1024;
+    }
+  }
+  return bytes;
+}
+
 async function sha256Text(text) {
   const digest = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
   return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
@@ -59,7 +167,7 @@ async function seal(dir, manifest) {
   manifest.complete = true;
   delete manifest.fingerprint;
   manifest.fingerprint = await sha256Text(JSON.stringify(manifest));
-  await sys.writeText(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+  await writeEncryptedText(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
 }
 
 // Checks a backup before restoring it. Throws when the manifest was changed; returns the
@@ -152,7 +260,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
   const manifest = { id, title, created: new Date().toISOString(), complete: false, entries: [] };
   const results = [];
   const log = (item, ok, detail) => results.push({ ...item, ok, detail });
-  const save = () => sys.writeText(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+  const save = async () => await writeEncryptedText(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
   // Each removal is in the manifest before the next one starts.
   const record = async (entry) => {
     manifest.entries.push(entry);
@@ -354,7 +462,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
 async function interrupted() {
   if (!(await sys.exists(pendingFile()))) return null;
   const p = JSON.parse(await sys.readText(pendingFile()));
-  const m = await sys.readText(manifestFile(p.id)).then(JSON.parse).catch(() => null);
+  const m = await readEncryptedText(manifestFile(p.id)).then(JSON.parse).catch(() => null);
   return { id: p.id, title: p.title, started: p.started, done: m?.entries.length || 0, total: p.items.length };
 }
 
@@ -363,7 +471,7 @@ async function interrupted() {
 async function resolveInterrupted(action) {
   const p = JSON.parse(await sys.readText(pendingFile()));
   const dir = path.join(backupRoot, p.id);
-  const m = await sys.readText(manifestFile(p.id)).then(JSON.parse).catch(() => null);
+  const m = await readEncryptedText(manifestFile(p.id)).then(JSON.parse).catch(() => null);
   if (m && m.entries.length) await seal(dir, m);
   else await sys.removePath(dir);
   await sys.removePath(pendingFile());
@@ -415,8 +523,7 @@ async function list() {
   const dirs = (await sys.readDir(backupRoot).catch(() => [])).filter((d) => d.dir);
   const manifests = await Promise.all(
     dirs.map((d) =>
-      sys
-        .readText(path.join(backupRoot, d.name, 'manifest.json'))
+      readEncryptedText(path.join(backupRoot, d.name, 'manifest.json'))
         .then(JSON.parse)
         .catch(() => null)
     )
@@ -484,7 +591,7 @@ const restoreFromRecycleBin = async (original) => (await restoreManyFromRecycleB
 async function restore(id) {
   const dir = path.join(backupRoot, id);
   if (!(await sys.exists(path.join(dir, 'manifest.json')))) throw new Error('This backup no longer exists. It may have been removed by the backup limits in Tools › Backup Settings.');
-  const manifest = JSON.parse(await sys.readText(path.join(dir, 'manifest.json')));
+  const manifest = JSON.parse(await readEncryptedText(path.join(dir, 'manifest.json')));
   const changed = await verify(dir, manifest);
   const results = [];
   const recycled = await restoreManyFromRecycleBin(manifest.entries.filter((e) => e.recycled).map((e) => e.path)).catch((err) => ({ error: `ERR ${err.message}` }));

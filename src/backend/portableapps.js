@@ -113,6 +113,28 @@ function safeName(name) {
   return String(name ?? 'Program').replace(/[^a-z0-9]+/gi, '').replace(/^([0-9])/, 'P$1') || 'Program';
 }
 
+// When the same program has been packaged before, auto-increment the build number so the
+// new package doesn't overwrite the previous one. Looks at existing package directories in
+// the outputDir for the same id.
+async function nextBuildNumber(outputDir, id) {
+  try {
+    const dirs = (await sys.readDir(outputDir).catch(() => [])).filter((d) => d.dir).map((d) => d.name);
+    return maxBuild(dirs, id);
+  } catch {
+    return 1;
+  }
+}
+
+async function maxBuild(dirs, id) {
+  const prefix = `${id}Portable v`;
+  let max = 0;
+  for (const d of dirs) {
+    const m = d.match(new RegExp(`^${prefix}(\\\\d+)$`));
+    if (m) max = Math.max(max, parseInt(m[1], 10));
+  }
+  return max + 1;
+}
+
 // Best-guess install root: the common parent of all recorded file/dir paths.
 function installRootOf(rec) {
   const paths = rec.items
@@ -218,7 +240,7 @@ export async function generate({
   const publisher = appPublisher || 'Unknown';
   const homepage = appHomepage || '';
   const description = appDescription || `Portable version of ${name}`;
-  const build = '1';
+  const build = String(await nextBuildNumber(outputDir, id));
 
   // Determine the main executable: prefer the provided startExe, else the largest .exe among recorded files.
   let launchExe = startExe;
@@ -235,7 +257,7 @@ export async function generate({
     launchExe = best?.path;
   }
 
-  const packageDir = path.join(outputDir, `${id}Portable`);
+  const packageDir = path.join(outputDir, `${id}Portable v${build}`);
   const appDir = path.join(packageDir, 'App');
   const appInfoDir = path.join(appDir, 'AppInfo');
   const programDir = path.join(appDir, id);

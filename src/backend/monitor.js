@@ -50,6 +50,24 @@ const status = async () => {
   return { started, installer, name, attached: !!attached, live };
 };
 
+// Polls live tracking progress during an active monitoring session. Returns the running
+// event/process count so the UI can show a progress indicator while the installer runs.
+const poll = async () => {
+  if (!(await sys.exists(sessionFile()))) return null;
+  const session = JSON.parse(await sys.readText(sessionFile()));
+  if (!session.live) return { started: session.started, live: false };
+  const running = !!sys.trackRunning && (await sys.trackRunning());
+  if (!running) return { started: session.started, live: false };
+  // TrackStop returns the accumulated events; poll the count without stopping tracking.
+  const peek = typeof sys.trackPeek === 'function' ? await sys.trackPeek().catch(() => null) : null;
+  return {
+    started: session.started,
+    live: true,
+    processes: peek?.processes?.length || 0,
+    events: peek?.events?.length || 0,
+  };
+};
+
 const cancel = async () => {
   if (sys.trackRunning && (await sys.trackRunning())) await sys.trackStop().catch(() => {});
   await sys.removePath(sessionFile());
@@ -205,4 +223,4 @@ export function mergeItems(snapshot, live) {
   return out;
 }
 
-export { setRoot, start, attach, launch, status, cancel, finish, list, remove, collapse, recordItems };
+export { setRoot, start, attach, launch, status, cancel, finish, list, remove, collapse, recordItems, poll };

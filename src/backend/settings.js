@@ -11,6 +11,8 @@ export const DEFAULT_SETTINGS = {
   backupMaxDays: 0,
   backupMaxMB: 0,
   gridLines: true,
+  requireSignature: false,
+  encryptionKey: '',
 };
 
 export const settingsFile = () => path.join(sys.info.dataDir, 'settings.json');

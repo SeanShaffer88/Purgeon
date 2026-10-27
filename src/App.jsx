@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, planHtml } from './dialogs.jsx';
 import { setConfirmUI } from './backend/api.js';
+import { iconPathFor } from './backend/programs.js';
 import { applyZoom, nextStep } from './zoom.js';
 import { ACTION_TIPS, installTips } from './tips.js';
 import { TakeSnapshotDialog, ComparisonDialog, SnapshotTimeline, comparisonHtml } from './snapshots.jsx';
@@ -10,7 +11,7 @@ import { JunkView, formatBytes } from './junk.jsx';
 import { GroupDialog } from './groups.jsx';
 import { ProgramBackupDialog, ProgramRestoreDialog } from './transfer.jsx';
 import { WhoOwnsDialog, UpdatesDialog, MaintenanceDialog } from './tools.jsx';
-import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, SheetDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, PortableAppsDialog, MakePortableDialog, TrustedPublishersDialog, UpdateCheckDialog, CommandPalette, ReportDialog, ContextMenuDialog, InstallerFoundDialog, AnalysisDialog, ARCH_LABEL, CloseDialog } from './more.jsx';
+import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, SheetDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, PortableAppsDialog, MakePortableDialog, TrustedPublishersDialog, UpdateCheckDialog, CommandPalette, ReportDialog, ContextMenuDialog, InstallerFoundDialog, AnalysisDialog, ProgramDetailDialog, ARCH_LABEL, CloseDialog } from './more.jsx';
 
 const api = window.api;
 
@@ -1594,6 +1595,20 @@ export default function App() {
       if (view === 'snapshots') return actions.deleteSnapshot(p);
       if (view === 'monitored') return uninstallMonitored(p);
       if (view === 'backups') return actions.deleteBackup(p);
+      // Signature verification when required by settings.
+      if (!p.store && (await api.invoke('settings:get')).requireSignature) {
+        const exe = iconPathFor(p);
+        if (exe) {
+          const sig = await api.invoke('security:verifySignature', { path: exe });
+          if (sig.status !== 'Valid') {
+            const go = await api.invoke('dialog:confirm', {
+              message: `Uninstall ${p.name} without a valid signature?`,
+              detail: `The program's main executable (${exe}) is not digitally signed (status: ${sig.status}). Uninstalling an unsigned program carries a higher risk of removing the wrong thing. Proceed anyway?`,
+            });
+            if (!go) return;
+          }
+        }
+      }
       const prep = p.store ? null : await prepare([p]);
       const info = prep?.[0];
       const go = await confirmWithRestore(
@@ -1626,6 +1641,20 @@ export default function App() {
     force: async (p) => {
       if (view !== 'desktop') return actions.uninstall(p);
       const [info] = await prepare([p]);
+      // Signature verification when required by settings.
+      if ((await api.invoke('settings:get')).requireSignature) {
+        const exe = iconPathFor(p);
+        if (exe) {
+          const sig = await api.invoke('security:verifySignature', { path: exe });
+          if (sig.status !== 'Valid') {
+            const go = await api.invoke('dialog:confirm', {
+              message: `Force removal of ${p.name} without a valid signature?`,
+              detail: `The program's main executable (${exe}) is not digitally signed (status: ${sig.status}). Force removal skips the uninstaller entirely. Proceed anyway?`,
+            });
+            if (!go) return;
+          }
+        }
+      }
       const go = await confirmWithRestore(
         `Force removal of ${p.name}?`,
         "This skips the program's uninstaller and deletes its files and registry entries directly. Use it for programs whose uninstaller is broken or missing. Everything is backed up first." + prepNote(info, false)
@@ -1654,6 +1683,10 @@ export default function App() {
       if (view === 'backups') return setModal({ type: 'results', title: `Backup – ${p.name}`, results: p.entries.map((e) => ({ ...e, ok: true, detail: e.kind === 'key' ? 'Exported .reg' : e.recycled ? 'In Recycle Bin' : '' })) });
       const sizes = view === 'desktop' ? (await api.invoke('programs:sizeHistory').catch(() => ({})))[p.key] : null;
       setModal({ type: 'properties', program: { ...p, insight: insight[p.key], sizes } });
+    },
+    programDetail: async (p) => {
+      const sizes = view === 'desktop' ? (await api.invoke('programs:sizeHistory').catch(() => ({})))[p.key] : null;
+      setModal({ type: 'programDetail', program: p, insight: insight[p.key], sizes });
     },
     reinstall: async (p) => {
       if (view !== 'archive') return;
@@ -2090,6 +2123,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               ['search', 'Search Online'],
               null,
               ['properties', 'Properties', 'Alt+Enter'],
+              ['programDetail', 'Show Details...'],
             ];
 
   const totalKB = view === 'desktop' ? visible.reduce((s, r) => s + (r.sizeKB || 0), 0) : 0;
@@ -2762,6 +2796,14 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               setBusy('');
             }
           }}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'programDetail' && (
+        <ProgramDetailDialog
+          program={modal.program}
+          insight={modal.insight}
+          sizes={modal.sizes}
           onClose={() => setModal(null)}
         />
       )}

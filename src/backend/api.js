@@ -158,11 +158,12 @@ const handlers = {
   'monitor:start': (installer) => monitor.start(installer),
   'monitor:launch': (installer) => monitor.launch(installer, open),
   'monitor:finish': (name) => monitor.finish(name),
-  'monitor:cancel': () => monitor.cancel(),
+  'monitor:poll': () => monitor.poll(),
   'monitor:list': () => monitor.list(),
   'monitor:remove': (id) => monitor.remove(id),
   'backups:list': () => backups.list(),
   'backups:plan': ({ items, owners }) => backups.planRemoval({ items, owners }),
+  'backups:forecast': ({ items }) => backups.forecastSize(items),
   'backups:interrupted': () => backups.interrupted(),
   'backups:resolveInterrupted': (action) => backups.resolveInterrupted(action),
   'backups:prune': async () => {
@@ -190,6 +191,11 @@ const handlers = {
   'programs:recordSizes': async (list) => (await lazyInsights.get()).recordSizes(list).then(() => true),
   'programs:sizeHistory': async () => (await lazyInsights.get()).sizeHistory(),
   'files:signatures': async (paths) => Object.fromEntries(await (await lazyInsights.get()).signatures(paths)),
+  'security:verifySignature': async ({ path }) => {
+    const sigs = await (await lazyInsights.get()).signatures([path]);
+    const sig = sigs.get(String(path).toLowerCase());
+    return sig ? { status: sig.status, signer: sig.signer } : { status: 'Unknown', signer: '' };
+  },
   'owners:who': (target) => owners.whoOwns(target),
   'owners:pick': async (folder) => {
     const { open: openDialog } = await import('@tauri-apps/plugin-dialog');

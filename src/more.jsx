@@ -1276,3 +1276,96 @@ export function MakePortableDialog({ program, items, name, publisher, version, o
     </Dialog>
   );
 }
+
+// Program detail pane: a read-only view of everything Purgeon knows about one program.
+export function ProgramDetailDialog({ program, insight = {}, sizes = {}, onClose }) {
+  const sig = insight?.signature || 'Unknown';
+  const signer = insight?.signer || '';
+  const days = insight?.lastUsed?.time
+    ? Math.floor((Date.now() - new Date(insight.lastUsed.time).getTime()) / 86400000)
+    : null;
+  const progSizes = sizes?.[program.key] || {};
+  const totalKB = program.sizeKB || progSizes.total || 0;
+  return (
+    <Dialog
+      title={`Program – ${program.name}`}
+      onClose={onClose}
+      width={760}
+      buttons={
+        <>
+          <button onClick={onClose}>Close</button>
+        </>
+      }
+    >
+      <p className="heading">
+        <b>{program.name}</b>
+        {program.version && ` (v${program.version})`}
+        {program.publisher ? ` · ${program.publisher}` : ''}
+      </p>
+      <table className="detail-table">
+        <tbody>
+          <tr>
+            <th>Type</th>
+            <td>{program.store ? 'Windows Store app' : 'Desktop program'}</td>
+          </tr>
+          <tr>
+            <th>Architecture</th>
+            <td>
+              {insight?.arch ? (ARCH_LABEL[insight.arch] || insight.arch) : program.arch === 'x86' ? '32-bit' : program.arch === 'x64' ? '64-bit' : 'Unknown'}
+            </td>
+          </tr>
+          <tr>
+            <th>Installed</th>
+            <td>{program.date || 'Not recorded'}</td>
+          </tr>
+          <tr>
+            <th>Location</th>
+            <td className="path">{program.location || 'Not recorded'}</td>
+          </tr>
+          <tr>
+            <th>Disk space</th>
+            <td>{totalKB ? `${(totalKB / 1024).toFixed(1)} MB` : 'Not measured'}</td>
+          </tr>
+          <tr>
+            <th>Uninstall entry</th>
+            <td className="path">{program.key}</td>
+          </tr>
+          <tr title="Digital signature status of the program's main executable">
+            <th>Signature</th>
+            <td>
+              {sig === 'Valid' ? `Valid — signed by ${signer || 'the publisher'}` : sig === 'NotSigned' ? 'Not digitally signed' : `Issue: ${sig}`}
+            </td>
+          </tr>
+          {days !== null && (
+            <tr>
+              <th>Last used</th>
+              <td>{days === 0 ? 'Today' : days === 1 ? 'Yesterday' : `${days} days ago`}</td>
+            </tr>
+          )}
+          {insight?.offer && (
+            <tr>
+              <th>Bundled offer</th>
+              <td>Its name matches programs often installed as bundled offers.</td>
+            </tr>
+          )}
+          {insight?.together?.length && (
+            <tr>
+              <th>Installed with</th>
+              <td>{insight.together.join(', ')}</td>
+            </tr>
+          )}
+          {insight?.growth && (
+            <tr>
+              <th>Size trend</th>
+              <td>Growing in size — may be accumulating data or logs.</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      <p className="footnote">
+        This is a read-only view. To uninstall, force-remove, or scan for leftovers, use the
+        action bar or right-click menu on the program list.
+      </p>
+    </Dialog>
+  );
+}
