@@ -62,6 +62,9 @@ export const ACTION_TIPS = {
   toggleTray: 'When you close the window, Purgeon keeps running in the notification area (tray), so it can still spot installers and new startup entries. Exit from the tray menu.',
   toggleStartTray: 'Purgeon starts hidden in the notification area (tray) instead of opening its window. Left-click the tray icon to open it.',
   toggleAutostart: 'Starts Purgeon when you sign in to Windows, through a scheduled task in Task Scheduler › Purgeon (needed because it runs as administrator). Off by default; turning it off deletes the task.',
+  schedule: 'Turns background monitoring on or off. When on, Purgeon runs quietly while the PC is idle: scans for leftovers of programs removed elsewhere and watches for new startup entries. Results appear in Change History.',
+  syncFolder: 'Chooses the shared folder (for example inside OneDrive, Dropbox or Google Drive) where Purgeon mirrors its settings so they are the same on your PCs.',
+  language: 'Switches Purgeon’s menus, buttons and messages between English, Spanish, German and French. Restart Purgeon for every menu to use the new language.',
   // Tools
   monitor: 'Records everything an installer creates or changes, using a snapshot before and after (and live tracking as administrator), so the program can be removed completely later.',
   toggleDetect: 'Watches for installers starting while Purgeon runs (also from the tray) and asks whether to record them. Nothing is recorded unless you say yes.',
@@ -83,7 +86,12 @@ export const ACTION_TIPS = {
   toggleShell: 'Adds "Uninstall with Purgeon" and "Who owns this?" to Explorer’s right-click menu, for your user only. Turning it off removes exactly those entries.',
   ctxmenu: 'Lists the right-click entries other programs added to Explorer, and turns them off or on without deleting them.',
   backupSettings: 'Limits how much space and how long backups are kept. Each program’s newest backup is always kept.',
+  confirmationPrompts: 'Manage which confirmation prompts are skipped. Prompts you disabled with "Don\'t show again" are listed here and can be restored.',
   openLog: 'Opens the log of every command Purgeon ran in the last 14 days, with its result.',
+  portableapps: 'Creates a PortableApps.com installer (.paf.exe) from a program you monitored with Tools › Monitor an Installation. Purgeon copies the recorded program files into a PortableApps.com folder structure and writes an NSIS installer script you compile with makensis.',
+  startupDelayed: 'Automatic (Delayed Start) lets the service begin a short while after boot instead of at boot, speeding up sign-in. Only for services set to Automatic.',
+  trustedPublishers: 'Manage the trusted publisher allowlist. Programs digitally signed by a listed publisher are never blocked by Safe Mode and are excluded from unsigned-program warnings. Add the certificate subject name as shown in the program’s digital signature.',
+  updateCheck: 'Purgeon can optionally ask GitHub whether a newer release exists. Off by default; turn it on in Settings. It sends only a standard HTTPS request to api.github.com and never nags after a dismissal.',
   about: 'Version, license and where Purgeon keeps its data.',
   // Other lists
   undoChange: 'Undoes this change, using the backup taken when it was made.',
