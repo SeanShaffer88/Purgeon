@@ -10,7 +10,7 @@ import { JunkView, formatBytes } from './junk.jsx';
 import { GroupDialog } from './groups.jsx';
 import { ProgramBackupDialog, ProgramRestoreDialog } from './transfer.jsx';
 import { WhoOwnsDialog, UpdatesDialog, MaintenanceDialog } from './tools.jsx';
-import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, SheetDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, PortableAppsDialog, TrustedPublishersDialog, UpdateCheckDialog, CommandPalette, ReportDialog, ContextMenuDialog, InstallerFoundDialog, AnalysisDialog, ARCH_LABEL, CloseDialog } from './more.jsx';
+import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, SheetDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, PortableAppsDialog, MakePortableDialog, TrustedPublishersDialog, UpdateCheckDialog, CommandPalette, ReportDialog, ContextMenuDialog, InstallerFoundDialog, AnalysisDialog, ARCH_LABEL, CloseDialog } from './more.jsx';
 
 const api = window.api;
 
@@ -1463,6 +1463,54 @@ export default function App() {
     }
   };
 
+  const openMakePortable = async (program) => {
+    // Bug notice: shown before any portable packaging.
+    const bugOk = await api.invoke('dialog:confirm', {
+      message: 'Portable compiler notice',
+      detail: 'The PortableApps.com compiler is new and may have bugs or make mistakes. The developer is actively polishing it to mitigate issues. Always test the resulting portable package before relying on it. Continue?',
+      checkboxLabel: "Don't show this notice again",
+    });
+    if (!bugOk.ok) return;
+    if (bugOk.checked) {
+      // Remember dismissal (stored in settings)
+      try {
+        await api.invoke('settings:set', { portableBugNoticeDismissed: true });
+      } catch {}
+    }
+
+    setBusy('Analyzing program for portable packaging…');
+    let items = null;
+    let recName = program.name;
+    let recPublisher = program.publisher || '';
+    let recVersion = program.version || '';
+
+    try {
+      // If this is a monitored program, it already has recorded items.
+      // Otherwise, scan the installed program to get its files/folders/registry.
+      if (program.items && program.items.length > 0) {
+        items = program.items;
+      } else {
+        const scanned = await api.invoke('program:scan', program);
+        items = scanned;
+      }
+    } catch (e) {
+      setError(`Failed to analyze program: ${e.message}`);
+      setBusy('');
+      return;
+    } finally {
+      setBusy('');
+    }
+
+    setModal({
+      type: 'makePortable',
+      program,
+      items,
+      name: recName,
+      publisher: recPublisher,
+      version: recVersion,
+    });
+  };
+
   // ---- 16. Explorer right-click requests (from the command line) -----------------------------------------------
 
   const uninstallTarget = async (target) => {
@@ -1723,6 +1771,7 @@ export default function App() {
     browsers: () => openBrowsers(),
     portable: () => openPortable(),
     portableapps: async () => openPortableApps(),
+    makePortable: async (p) => openMakePortable(p),
     migratePc: () => setModal({ type: 'migratePc' }),
     restoreFolder: () => restoreFolder(),
     sync: () => openSync(),
@@ -1997,9 +2046,9 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     : view === 'backups'
       ? [['restore', 'Restore'], ['properties', 'Show Contents'], null, ['deleteBackup', 'Delete Backup']]
       : view === 'monitored'
-        ? [['uninstall', 'Uninstall...'], null, ['properties', 'Recorded Changes'], ['search', 'Search Online']]
+        ? [['uninstall', 'Uninstall...'], ['makePortable', 'Make Portable...'], null, ['properties', 'Recorded Changes'], ['search', 'Search Online']]
         : view === 'store'
-          ? [['uninstall', 'Uninstall...'], ['setGroup', 'Set Group...', 'Ctrl+G'], null, ['folder', 'Installation Folder'], ['search', 'Search Online'], null, ['properties', 'Properties']]
+          ? [['uninstall', 'Uninstall...'], ['setGroup', 'Set Group...', 'Ctrl+G'], ['makePortable', 'Make Portable...'], null, ['folder', 'Installation Folder'], ['search', 'Search Online'], null, ['properties', 'Properties']]
           : [
               ['uninstall', 'Uninstall...', 'Del'],
               ['force', 'Force...', 'Shift+Del'],
@@ -2012,6 +2061,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               ['analyzeProgram', 'Analyze Program...', 'Ctrl+I'],
               ['sheet', 'What’s This...', 'Ctrl+W'],
               ['rescue', 'Rescue Broken Uninstall...'],
+              ['makePortable', 'Make Portable...'],
               null,
               ['registry', 'Registry Entry'],
               ['folder', 'Installation Folder'],
@@ -2599,6 +2649,38 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               if (!f) return;
               setBusy('Generating PortableApps.com package…');
               const result = await api.invoke('portableapps:generate', { ...args, outputDir: f });
+              setBusy('');
+              setNotice({
+                tone: 'ok',
+                text: `PortableApps.com package generated for "${result.name}". NSIS script: ${result.nsiScriptPath}`,
+              });
+              setModal(null);
+            } catch (e) {
+              setError(e.message);
+            } finally {
+              setBusy('');
+            }
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
+      {modal?.type === 'makePortable' && (
+        <MakePortableDialog
+          program={modal.program}
+          items={modal.items}
+          name={modal.name}
+          publisher={modal.publisher}
+          version={modal.version}
+          onGenerate={async (args) => {
+            try {
+              const f = await api.invoke('transfer:pickFolder', 'Choose the folder for the PortableApps.com package');
+              if (!f) return;
+              setBusy('Creating PortableApps.com package…');
+              const result = await api.invoke('portableapps:generate', {
+                ...args,
+                outputDir: f,
+                items: modal.items,
+              });
               setBusy('');
               setNotice({
                 tone: 'ok',

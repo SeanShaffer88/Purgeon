@@ -185,8 +185,12 @@ async function copyDirRecursive(source, target, seenDirs, copied) {
 
 // Generate the PortableApps.com directory structure for a monitored program.
 // Returns { packageDir, id, name, version, files, nsiScriptPath, appInfoPath, launcherExe, startExe, installRoot }.
+// Generate the PortableApps.com directory structure for a monitored program or a scanned program.
+// Accepts either monitorId (looks up from monitor.list()) or items (direct file/folder/registry items).
+// Returns { packageDir, id, name, version, files, nsiScriptPath, appInfoPath, launcherExe, startExe, installRoot }.
 export async function generate({
   monitorId,
+  items: directItems,
   outputDir,
   appName,
   appVersion,
@@ -195,14 +199,20 @@ export async function generate({
   appDescription,
   startExe,
 }) {
-  if (!monitorId) throw new Error('monitorId is required');
   if (!outputDir) throw new Error('outputDir is required');
 
-  const records = await monitor.list();
-  const rec = records.find((r) => r.id === monitorId);
-  if (!rec) throw new Error(`No monitored program with id ${monitorId}`);
+  let rec = null;
+  let items = directItems;
 
-  const name = appName || rec.name;
+  if (!items) {
+    if (!monitorId) throw new Error('monitorId or items is required');
+    const records = await monitor.list();
+    rec = records.find((r) => r.id === monitorId);
+    if (!rec) throw new Error(`No monitored program with id ${monitorId}`);
+    items = rec.items;
+  }
+
+  const name = appName || (rec ? rec.name : 'Program');
   const id = safeName(name);
   const version = appVersion || '1.0.0';
   const publisher = appPublisher || 'Unknown';

@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog } from './dialogs.jsx';
+import * as path from './winpath.js';
 
 const fmt = (b) => (!b ? '0 B' : b < 1048576 ? `${(b / 1024).toFixed(0)} KB` : b < 1073741824 ? `${(b / 1048576).toFixed(1)} MB` : `${(b / 1073741824).toFixed(2)} GB`);
 
@@ -1123,6 +1124,155 @@ export function UpdateCheckDialog({ enabled, lastCheck, onClose }) {
           )}
         </div>
       )}
+    </Dialog>
+  );
+}
+
+// ---- make portable dialog -------------------------------------------------------
+
+// ---- make portable dialog -------------------------------------------------------
+
+export function MakePortableDialog({ program, items, name, publisher, version, onGenerate, onClose }) {
+  const [bugDismissed, setBugDismissed] = useState(false);
+  const [fields, setFields] = useState({
+    name: name || program.name || '',
+    version: version || '1.0.0',
+    publisher: publisher || '',
+    homepage: '',
+    description: `Portable version of ${program.name || ''}`,
+    startExe: '',
+  });
+  const [saving, setSaving] = useState(false);
+
+  // Collect .exe candidates from the items for the main executable suggestion.
+  const exes = useMemo(() => {
+    if (!items || !items.length) return [];
+    return items
+      .filter((i) => i.kind === 'file' && /\.exe$/i.test(i.path || ''))
+      .map((i) => i.path)
+      .slice(0, 20);
+  }, [items]);
+
+  useEffect(() => {
+    if (exes.length && !fields.startExe) {
+      setFields({ ...fields, startExe: path.basename(exes[0]) });
+    }
+  }, [exes]);
+
+  const generatePackage = async () => {
+    if (!fields.name.trim()) return;
+    setSaving(true);
+    try {
+      await onGenerate({
+        monitorId: program.id || undefined,
+        appName: fields.name.trim(),
+        appVersion: fields.version.trim() || '1.0.0',
+        appPublisher: fields.publisher.trim() || 'Unknown',
+        appHomepage: fields.homepage.trim(),
+        appDescription: fields.description.trim(),
+        startExe: fields.startExe.trim(),
+      });
+    } finally {
+      setSaving(false);
+      onClose();
+    }
+  };
+
+  return (
+    <Dialog
+      title="Make PortableApps.com Package"
+      onClose={onClose}
+      width={760}
+      buttons={
+        <>
+          {!bugDismissed && (
+            <button onClick={() => setBugDismissed(true)}>
+              I understand – don't show this notice again
+            </button>
+          )}
+          <button disabled={saving} onClick={generatePackage}>
+            {saving ? 'Generating…' : 'Generate Package'}
+          </button>
+          <button className="primary" onClick={onClose}>
+            Cancel
+          </button>
+        </>
+      }
+    >
+      {!bugDismissed && (
+        <div className="safe-note" style={{ border: '1px solid var(--red)', padding: '10px', marginBottom: '12px', background: 'var(--red-dim)' }}>
+          <strong>⚠ Portable compiler is new – may have bugs.</strong>
+          <br />
+          The PortableApps.com package generator is recent and may make mistakes or produce
+          packages that don't work perfectly. The developer is actively polishing it to
+          mitigate issues. <strong>Always test the resulting portable package before relying on it.</strong>
+        </div>
+      )}
+      <p className="heading">
+        Create a PortableApps.com package from this program. Purgeon copies the program's
+        files into a PortableApps.com folder structure and writes an NSIS installer script
+        that you compile with makensis into a .paf.exe.
+      </p>
+      <div className="field-row">
+        <label>Package name</label>
+        <input
+          value={fields.name}
+          onChange={(e) => setFields({ ...fields, name: e.target.value })}
+          placeholder="e.g. FooEditor"
+          title="The program name shown in the PortableApps.com menu"
+        />
+      </div>
+      <div className="field-row">
+        <label>Version</label>
+        <input
+          value={fields.version}
+          onChange={(e) => setFields({ ...fields, version: e.target.value })}
+          placeholder="1.0.0"
+        />
+      </div>
+      <div className="field-row">
+        <label>Publisher (developer)</label>
+        <input
+          value={fields.publisher}
+          onChange={(e) => setFields({ ...fields, publisher: e.target.value })}
+          placeholder="e.g. Example Corp"
+        />
+      </div>
+      <div className="field-row">
+        <label>Homepage (optional)</label>
+        <input
+          value={fields.homepage}
+          onChange={(e) => setFields({ ...fields, homepage: e.target.value })}
+          placeholder="https://example.com"
+        />
+      </div>
+      <div className="field-row">
+        <label>Description (optional)</label>
+        <input
+          value={fields.description}
+          onChange={(e) => setFields({ ...fields, description: e.target.value })}
+          placeholder="Portable version of Foo Editor"
+        />
+      </div>
+      <div className="field-row">
+        <label>Main executable</label>
+        <select
+          value={fields.startExe}
+          onChange={(e) => setFields({ ...fields, startExe: e.target.value })}
+        >
+          <option value="">(auto-detect)</option>
+          {exes.map((exe) => (
+            <option key={exe} value={path.basename(exe)}>
+              {path.basename(exe)}
+            </option>
+          ))}
+        </select>
+        {exes.length === 0 && <span className="muted">No executable found in program files.</span>}
+      </div>
+      <p className="footnote">
+        After generating, place a PortableApps.com launcher executable in the package folder
+        and compile the .nsi script with NSIS (makensis) to produce the .paf.exe installer.
+      </p>
     </Dialog>
   );
 }
