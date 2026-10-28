@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.0.6 - 2026-10-28
+
 - Debloat grows from 26 to 93 tweaks. A new App Privacy section carries
   the same per-app permission switches as Settings › Privacy (account
   info, location, camera, microphone, contacts, calendar, email,
