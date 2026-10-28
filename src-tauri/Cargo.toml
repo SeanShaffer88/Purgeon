@@ -1,6 +1,6 @@
 [package]
 name = "purgeon"
-version = "1.0.3"
+version = "1.0.4"
 description = "Windows uninstaller with leftover scanning, install monitoring and backups"
 authors = ["Sean Shaffer"]
 license = "MIT"
