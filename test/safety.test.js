@@ -833,6 +833,12 @@ test('installer detection: setup programs count, uninstallers and Windows servic
   for (const n of ['unins000.exe', 'Uninstall.exe', 'uninst.exe', 'TrustedInstaller.exe', 'InstallAgent.exe', 'SetupHost.exe', 'msiexec.exe', 'chrome.exe', 'setup.dll']) assert.ok(!looksLikeInstaller(n), n);
 });
 
+test('installer watch backs off while the window is hidden', async () => {
+  const { nextWatchDelayMs } = await import('../src/backend/installwatch.js');
+  assert.equal(nextWatchDelayMs(false), 3000);
+  assert.equal(nextWatchDelayMs(true), 10000);
+});
+
 test('tooltips: every menu command and dialog button text has one', async () => {
   const { ACTION_TIPS, tipForLabel } = await import('../src/tips.js');
   const app = fs.readFileSync(path.join(path.dirname(fileURLToPath(import.meta.url)), '..', 'src', 'App.jsx'), 'utf8');
