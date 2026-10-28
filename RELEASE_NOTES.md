@@ -1,22 +1,28 @@
-# Purgeon 1.0.7
+# Purgeon 1.0.8
 
-Purgeon helps you remove Windows programs completely and clean up what they leave behind.
+## Disk Usage works now
 
-## What's in this release
+On real PCs, Disk Usage opened to "No drives found" and never scanned anything: the question it asks Windows for the drive list was missing a piece, the answer could not be read, and the failure stayed silent. The drive list now comes from the system's own drive information (with the repaired question as a fallback), and opening the view scans your system drive straight away, biggest folders and files first.
 
-- **New Disk Usage view.** See what is using the space on each drive, biggest first, and open folders to drill down — each item shows its size and its share of the folder it sits in. Links are listed but never counted, so nothing is double-counted, a folder whose counting stopped early is marked "at least", and the scan can be cancelled and keeps what it measured. Also available on the command line as `--disk`.
-- **The Apps view is now a full inventory.** Framework and system components are listed too, tagged "system component" and shown locked — never offered for removal — and the header counts them. Known pre-installed apps carry a short plain-words note about what they are. Apps with a provisioned copy (the copy Windows gives to new user accounts) are tagged, and removing one offers to remove the provisioned copy too. Removed Store apps can be brought back from the Uninstall Archive: Purgeon re-registers a copy still on the PC, or opens the app's Microsoft Store page when none remains.
-- **Built-in groups.** The group picker now leads with groups computed live from your programs: Bundled software (possible offers), Installed together, Unsigned, Bad signature, Growing in size, Large programs (1 GB or more), Recently installed (30 days), Microsoft, and No publisher listed.
-- **Every long task can be cancelled, and deletes go to the Recycle Bin.** Removing items with backup, the Windows clean-ups, and the Disk Map sweep now stop when you press Cancel, report anything not done as left in place, and keep what was already removed fully undoable. Deleting a backup or a snapshot sends it to the Recycle Bin instead of erasing it. This release also fixes the report that could fail to appear after a Windows clean-up run.
-- **Lighter running.** The Debloat, Startup & Services, Cleaner and Disk Usage screens load only when first opened, so the window paints sooner, and the installer watch backs off from every 3 seconds to every 10 while Purgeon is hidden or in the tray.
-- **Removed: the What's This page.** Its "what it hooks into Windows" list still appears inside Analyze Program, keeping everything in one place.
+## Slimmer menus
+
+The menu bar's long lists are grouped into flyouts: File gains Move & Sync; Action gains Repair, Program, and Open; View gains Go to, Zoom, Appearance, Window, and Background (the program filters and recent programs have their own groups too); Tools gains Records, Find & Fix, Lists & Portable, and Settings. No command was removed — the command palette still finds every one of them — and the arrow keys move into and out of a flyout.
+
+## Reliability fixes from a full audit
+
+- A removal interrupted at exactly the wrong moment (a crash or power cut while its record was being written) left a damaged record that was silently ignored — the interrupted removal never reappeared and could never be cleared. It is now reported, explains itself, and can be cleared.
+- Two settings changes made at the same moment could silently undo each other; settings writes now take turns.
+- A typed group name could impersonate a built-in group in the filter; that is no longer possible.
+- Disk Usage no longer lists drives that report no space at all, such as an empty card reader.
+- The `--help` text now lists the `--sync`, `--portableapps`, and `--export` commands, which worked but were undocumented.
+
+## Under the hood
+
+Leftover code and styles from features that no longer exist were removed (about 19 KB of source), which slightly shrinks the built program. Nothing about how Purgeon works changed with this tidy-up.
 
 ## Files
 
-- `Purgeon-Setup-x64.exe` — installer for 64-bit Windows 10 and 11
-- `Purgeon-Portable-x64.zip` — portable package with the 64-bit build; extract it and run `Purgeon-Portable-x64.exe`
+- `Purgeon-Setup-x64.exe` — the installer. If Purgeon is running, it is closed for the upgrade and reopened afterwards.
+- `Purgeon-Portable-x64.zip` — the portable build (the program, the license, and a short note).
 
-## Notes
-
-- The binaries are unsigned (there is no code-signing certificate), so Windows SmartScreen may warn on first run.
-- The portable build keeps its data in the `Purgeon Data` folder next to the executable.
+Both are unsigned; Windows may show a SmartScreen prompt.
