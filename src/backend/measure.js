@@ -45,10 +45,12 @@ async function measureOne(p) {
 }
 
 // Measures a few programs at a time; `onResult` gets each result as soon as it's ready.
-async function measure(programs, onResult) {
+// `shouldStop` is polled between programs so the sweep can be cancelled.
+async function measure(programs, onResult, shouldStop) {
   const queue = programs.filter((p) => !p.store && (!p.sizeKB || !p.installDate));
   const worker = async () => {
     while (queue.length) {
+      if (shouldStop && shouldStop()) return;
       const result = await measureOne(queue.shift()).catch(() => null);
       if (result && (result.sizeKB || result.installDate)) onResult(result);
     }

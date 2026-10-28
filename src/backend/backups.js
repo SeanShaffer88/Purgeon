@@ -253,13 +253,25 @@ async function planRemoval({ items, owners = [], state }) {
 
 // `owners`: uninstall keys of the programs being removed (see safety.js). `state` replaces the
 // live system state in tests.
-async function removeItems({ title, items, owners = [], state, trashItem = (p) => sys.trash(p) }) {
+async function removeItems({ title, items, owners = [], state, trashItem = (p) => sys.trash(p), shouldStop }) {
   const id = `${new Date().toISOString().replace(/[:.]/g, '-')}_${slug(title)}`;
   const dir = path.join(backupRoot, id);
   await sys.makeDir(dir);
   const manifest = { id, title, created: new Date().toISOString(), complete: false, entries: [] };
   const results = [];
-  const log = (item, ok, detail) => results.push({ ...item, ok, detail });
+  // Cancellation: `shouldStop` is polled between items. When it trips, everything
+  // not yet touched is reported as left in place and the backup seals with only
+  // what was actually removed, so a cancelled removal is still fully undoable.
+  const seen = new Set();
+  const log = (item, ok, detail) => {
+    seen.add(item);
+    results.push({ ...item, ok, detail });
+  };
+  let stopped = false;
+  const stopNow = () => {
+    if (!stopped && shouldStop && shouldStop()) stopped = true;
+    return stopped;
+  };
   const save = async () => await writeEncryptedText(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
   // Each removal is in the manifest before the next one starts.
   const record = async (entry) => {
@@ -277,6 +289,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
   // exported first; importing it back recreates the service after a reboot.
   let s = 0;
   for (const item of items.filter((i) => i.kind === 'service')) {
+    if (stopNow()) break;
     const guard = await serviceGuard(item.path);
     if (guard === 'GONE') {
       log(item, true, 'Already gone');
@@ -301,6 +314,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
   // Scheduled tasks: exported to XML, then unregistered.
   let t = 0;
   for (const item of items.filter((i) => i.kind === 'task')) {
+    if (stopNow()) break;
     if (/^\\Microsoft\\/i.test(item.path)) {
       log(item, false, 'Windows task, skipped');
       continue;
@@ -322,6 +336,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
   // Firewall rules: settings saved to JSON, then removed.
   let f = 0;
   for (const item of items.filter((i) => i.kind === 'firewall')) {
+    if (stopNow()) break;
     const file = path.join(dir, `firewall-${++f}.json`);
     const out = await runPS(`
       $r = Get-NetFirewallRule -Name ${psq(item.path)} -ErrorAction SilentlyContinue
@@ -342,6 +357,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
   const values = items.filter((i) => i.kind === 'value');
   const captured = await readValues(values).catch(() => []);
   for (const item of values) {
+    if (stopNow()) break;
     const v = captured.find((c) => c.path === item.path && c.name === item.name);
     if (!v) {
       log(item, true, 'Already gone');
@@ -354,6 +370,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
 
   let n = 0;
   for (const item of items.filter((i) => i.kind === 'key')) {
+    if (stopNow()) break;
     if (isProtectedKey(item.path)) {
       log(item, false, 'Protected Windows key, skipped');
       continue;
@@ -377,6 +394,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
 
   // Recreated keys (from a snapshot cleanup): only created when missing, so undo removes only ours.
   for (const item of items.filter((i) => i.kind === 'createkey')) {
+    if (stopNow()) break;
     if ((await reg(['query', item.path])).ok) {
       log(item, true, 'Already exists');
       continue;
@@ -390,6 +408,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
   const toSet = items.filter((i) => i.kind === 'setvalue');
   const current = await readValues(toSet).catch(() => []);
   for (const item of toSet) {
+    if (stopNow()) break;
     const args = regAddArgs(item.path, item.name, item.valueType, item.data);
     if (!args) {
       log(item, false, 'This value type cannot be written back');
@@ -402,6 +421,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
   }
 
   for (const item of items.filter((i) => i.kind === 'dir' || i.kind === 'file')) {
+    if (stopNow()) break;
     if (isProtected(item.path)) {
       log(item, false, 'Protected location, skipped');
       continue;
@@ -439,23 +459,25 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
       return !live;
     });
   }
-  const errors = sys.trashMany ? await sys.trashMany(allowed.map((i) => i.path)) : await Promise.all(allowed.map((i) => trashItem(i.path).then(() => '', (e) => String(e?.message || e))));
-  allowed.forEach((item, i) => {
+  const errors = stopped ? allowed.map(() => 'cancelled') : sys.trashMany ? await sys.trashMany(allowed.map((i) => i.path)) : await Promise.all(allowed.map((i) => trashItem(i.path).then(() => '', (e) => String(e?.message || e))));
+  if (!stopped)
+    allowed.forEach((item, i) => {
     if (!errors[i]) {
       manifest.entries.push({ kind: item.dir ? 'dir' : 'file', path: item.path, recycled: true });
       log(item, true, 'Moved to Recycle Bin');
     } else log(item, false, /being used|in use|access is denied|0x80070020|0x80070005/i.test(errors[i]) ? 'In use, skipped' : errors[i]);
   });
 
+  if (stopped) for (const item of items) if (!seen.has(item)) log(item, false, 'Left in place — the removal was cancelled');
   // Keep a backup only when something was actually removed.
   if (!manifest.entries.length) {
     await sys.removePath(dir);
     await sys.removePath(pendingFile());
-    return { backupId: null, results };
+    return { backupId: null, results, cancelled: stopped };
   }
   await seal(dir, manifest);
   await sys.removePath(pendingFile());
-  return { backupId: id, results };
+  return { backupId: id, results, cancelled: stopped };
 }
 
 // A removal that was cut off: { id, title, started, done, total } or null.
@@ -661,7 +683,8 @@ async function restore(id) {
   return results;
 }
 
-// Deletes one backup folder. The id must be a single folder name inside the backup root.
+// Deletes one backup folder (to the Recycle Bin, so it can be brought back).
+// The id must be a single folder name inside the backup root.
 function remove(id) {
   if (!id || typeof id !== 'string') throw new Error('Invalid backup id');
   // Reject path separators and traversal sequences.
@@ -674,7 +697,7 @@ function remove(id) {
   if (target !== root && !target.startsWith(root + path.sep)) {
     throw new Error('Invalid backup id: escapes backup root');
   }
-  return sys.removePath(target);
+  return sys.trash(target);
 }
 
 // Export a removal plan (the output of planRemoval) to HTML, CSV or JSON so it can be
