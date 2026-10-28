@@ -13,7 +13,12 @@ foreach ($name in $expected) {
         throw "Asset hash mismatch: $name"
     }
 }
-Assert-PeMachine "$directoryPath/Purgeon-Setup-x64.exe" 0x8664
+# The setup program is an NSIS installer: its own stub is a 32-bit PE (0x14C) even
+# though the application it installs is native x64. The x64 guarantee is enforced on
+# the application binary itself: package-windows.ps1 asserts it before copying, the
+# portable executable is asserted below, and the installer smoke tests assert the
+# installed purgeon.exe is 0x8664.
+Assert-PeMachine "$directoryPath/Purgeon-Setup-x64.exe" 0x14C
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
 $zip = [IO.Compression.ZipFile]::OpenRead("$directoryPath/Purgeon-Portable-x64.zip")
