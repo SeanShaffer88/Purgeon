@@ -64,7 +64,7 @@ Screenshots use demo data. QuickPDF Free, SearchBoost Toolbar and OldPhotoTool a
 Under the menu bar are three rows:
 - **Search and commands:** one box searches the open list as you type. It also lists menu commands whose names match; press `↓` and `Enter` to run one, or `Esc` to clear the box. **All commands** (`Ctrl+K`) opens the command palette with every command and program.
 - **Details:** the selected program with its version, publisher, size, architecture, install date and group, or what to do in the open view when nothing is selected. The group picker sits at the end of this row.
-- **Actions:** buttons only: Uninstall, Force, Analyze, Leftovers, What’s This, Migrate, Queue, Group, Hide, Folder, Registry, Search Online and Properties. When they don’t fit on one row, they continue on the next instead of being cut off. With several programs selected it shows the batch actions, and other views show their own (Take Snapshot and Compare in Snapshots, for example).
+- **Actions:** buttons only: Uninstall, Force, Analyze, Leftovers, Migrate, Queue, Group, Hide, Folder, Registry, Search Online and Properties. When they don’t fit on one row, they continue on the next instead of being cut off. With several programs selected it shows the batch actions, and other views show their own (Take Snapshot and Compare in Snapshots, for example).
 
 The menu bar is also the window’s title bar: drag its empty middle to move the window, and double-click it to maximize. At its right end are the elevation status (**Not Elevated – Restart as Administrator**, or **Administrator**), then a 📌 thumbtack that keeps Purgeon on top of other windows (green while on), and the minimize, maximize and close buttons. Messages (👍 for done, ⚠️ for warnings, ⛔ for errors) appear at the bottom, just above the status bar.
 
@@ -210,20 +210,14 @@ The menu bar is also the window’s title bar: drag its empty middle to move the
 - how it was installed;
 - what it hooks into Windows, with a count for each kind; click one to see them.
 
-From there, **Uninstall**, **Analyze Leftovers** and **What’s This** are one click away.
-
-## What a program does
-
-![What OBS Studio hooks into Windows](docs/screenshots/what-it-does.png)
-
-**What’s This** (`Ctrl+W`) lists, on one page, everything a program hooks into Windows: services, scheduled tasks, startup entries, firewall rules, file types and links it opens, Explorer menus and extensions, its folders, and other registry settings.
+From there, **Uninstall** and **Analyze Leftovers** are one click away.
 
 ## Disk space map
 
 ![Disk space map with Steam selected](docs/screenshots/disk-map.png)
 
 - **View › Disk Space Map** draws each program as a block sized by its install folder plus the data folders named after it in ProgramData and AppData.
-- Click a block to see its biggest folders, then open **What’s This** or **Analyze Leftovers** for that program.
+- Click a block to see its biggest folders, then open **Analyze Leftovers** for that program.
 
 ## Program migration and settings sync
 
@@ -515,7 +509,6 @@ original files. Purgeon is 64-bit only: it needs 64-bit Windows 10 or 11.
 | `Ctrl+K` | Command palette |
 | `Ctrl+G` | Set group |
 | `Ctrl+Q` | Add to the uninstall queue |
-| `Ctrl+W` | What’s This |
 | `Ctrl+I` | Analyze the selected program |
 | `Ctrl+1` / `Ctrl+2` | Programs / Apps |
 | `Ctrl+3` | Monitored Programs |

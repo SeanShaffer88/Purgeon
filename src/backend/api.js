@@ -333,7 +333,6 @@ const handlers = {
     return '';
   },
   'explore:timeline': async (list) => explore.timeline(list, sys.uninstallKeyTimes ? await sys.uninstallKeyTimes().catch(() => ({})) : {}),
-  'program:sheet': (program) => explore.sheet(program),
   'program:analyze': (program) => explore.analyze(program),
   'registry:search': (term) => explore.searchRegistry(term),
   // 9-10. startup trust and new entries

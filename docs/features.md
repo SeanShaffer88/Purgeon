@@ -84,13 +84,9 @@ Try a program and undo it completely — a snapshot is taken, the installer runs
 
 **Analyze** (`Ctrl+I`) — one read-only report: removal verdict (own uninstaller, silent or Force), whether it is running, whether other programs need it, signature status, whether it has gone unused for half a year, architecture, disk space (install folder plus data folders), last-used date from Prefetch, how it was installed, and what it hooks into Windows with counts per category.
 
-## What a program does
-
-**What's This** (`Ctrl+W`) — one page listing everything a program hooks into Windows: services, scheduled tasks, startup entries, firewall rules, file types and links it opens, Explorer menus and extensions, its folders, and other registry settings.
-
 ## Disk space map
 
-**Disk Space Map** — draws each program as a block sized by its install folder plus data folders named after it in ProgramData and AppData. Click a block to see its biggest folders, then open What's This or Analyze Leftovers.
+**Disk Space Map** — draws each program as a block sized by its install folder plus data folders named after it in ProgramData and AppData. Click a block to see its biggest folders, then open Analyze Leftovers.
 
 ## Program migration and settings sync
 
@@ -322,7 +318,6 @@ Purgeon --help
 | `Ctrl+K` | Command palette |
 | `Ctrl+G` | Set group |
 | `Ctrl+Q` | Add to the uninstall queue |
-| `Ctrl+W` | What's This |
 | `Ctrl+I` | Analyze the selected program |
 | `Ctrl+1` / `Ctrl+2` | Programs / Apps |
 | `Ctrl+3` | Monitored Programs |

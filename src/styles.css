@@ -854,7 +854,6 @@ button:focus-visible, select:focus-visible, input:focus-visible, .tweak:focus-vi
 .tm-box.on, .tm-box:hover { outline: 2px solid #fff; outline-offset: -2px; z-index: 1; }
 .tm-detail { margin-top: 8px; display: flex; flex-wrap: wrap; gap: 4px 12px; align-items: center; }
 .tm-data { flex-basis: 100%; }
-.sheet-section { margin-bottom: 8px; }
 .palette-overlay { align-items: flex-start; padding-top: 12vh; }
 .palette { width: min(620px, 92vw); background: var(--raised); border: 1px solid var(--border-strong); border-radius: 14px; overflow: hidden; box-shadow: 0 14px 44px rgba(0, 0, 0, 0.55); }
 .palette input { width: 100%; padding: 10px 12px; border: 0; border-bottom: 1px solid var(--border); background: var(--panel); outline: none; font-size: 15px; }
