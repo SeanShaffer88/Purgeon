@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, SystemInfoDialog, planHtml } from './dialogs.jsx';
 import { WelcomeDialog, FirstRunTips, FIRST_RUN_TIPS, SettingHelp, SHORTCUTS, ShortcutsDialog, UpdateAvailableDialog, UserGuide } from './onboarding.jsx';
 import { setConfirmUI } from './backend/api.js';
@@ -8,10 +8,14 @@ import { ACTION_TIPS, installTips } from './tips.js';
 import { BUILTIN_GROUPS } from './builtins.js';
 import * as updatecheck from './backend/updatecheck.js';
 import { TakeSnapshotDialog, ComparisonDialog, SnapshotTimeline, comparisonHtml } from './snapshots.jsx';
-import { DebloatView } from './debloat.jsx';
-import { DiskUsageView } from './disk.jsx';
-import { StartupView } from './startup.jsx';
-import { JunkView, formatBytes } from './junk.jsx';
+import { formatBytes } from './format.js';
+import { nextWatchDelayMs } from './backend/installwatch.js';
+
+// The heavy views load only when first opened, keeping first paint light.
+const DebloatView = lazy(() => import('./debloat.jsx').then((m) => ({ default: m.DebloatView })));
+const DiskUsageView = lazy(() => import('./disk.jsx').then((m) => ({ default: m.DiskUsageView })));
+const StartupView = lazy(() => import('./startup.jsx').then((m) => ({ default: m.StartupView })));
+const JunkView = lazy(() => import('./junk.jsx').then((m) => ({ default: m.JunkView })));
 import { GroupDialog } from './groups.jsx';
 import { ProgramBackupDialog, ProgramRestoreDialog } from './transfer.jsx';
 import { WhoOwnsDialog, UpdatesDialog, MaintenanceDialog } from './tools.jsx';
@@ -2275,29 +2279,36 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
 
   useEffect(() => installTips(), []);
 
-  // Installers starting: checked every 3 seconds while Purgeon runs, in the tray too. Not
-  // while Purgeon itself is busy (program updates run installers) or already monitoring,
-  // or during the first half hour of a trial install (that installation is the trial's).
+  // Installers starting: checked every 3 seconds while Purgeon runs, backing off to
+  // every 10 seconds while the window is hidden (in the tray too). Not while Purgeon
+  // itself is busy (program updates run installers) or already monitoring, or during
+  // the first half hour of a trial install (that installation is the trial's).
   const busyRef = useRef('');
   busyRef.current = busy;
   useEffect(() => {
     if (!detectOn) return undefined;
     let stopped = false;
+    let timer = null;
     api.invoke('installers:check').catch(() => {});
-    const timer = setInterval(async () => {
+    const tick = async () => {
       const found = await api.invoke('installers:check').catch(() => []);
-      if (stopped || !found.length || busyRef.current) return;
-      if (await api.invoke('monitor:status').catch(() => null)) return;
-      const trials = await api.invoke('trials:list').catch(() => []);
-      if (trials.some((t) => Date.now() - new Date(t.started).getTime() < 30 * 60 * 1000)) return;
-      const inst = found[0];
-      notify('Installer started', `${inst.name} is being installed. Purgeon can record what it installs.`);
-      api.invoke('app:show').catch(() => {});
-      setModal((m) => m || { type: 'installerFound', installer: inst });
-    }, 3000);
+      if (!stopped && found.length && !busyRef.current) {
+        if (!(await api.invoke('monitor:status').catch(() => null))) {
+          const trials = await api.invoke('trials:list').catch(() => []);
+          if (!trials.some((t) => Date.now() - new Date(t.started).getTime() < 30 * 60 * 1000)) {
+            const inst = found[0];
+            notify('Installer started', `${inst.name} is being installed. Purgeon can record what it installs.`);
+            api.invoke('app:show').catch(() => {});
+            setModal((m) => m || { type: 'installerFound', installer: inst });
+          }
+        }
+      }
+      if (!stopped) timer = setTimeout(tick, nextWatchDelayMs(document.hidden));
+    };
+    timer = setTimeout(tick, nextWatchDelayMs(document.hidden));
     return () => {
       stopped = true;
-      clearInterval(timer);
+      clearTimeout(timer);
     };
   }, [detectOn]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -2697,8 +2708,11 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       )}
 
       {view === 'debloat' ? (
-        <DebloatView key={customKey} filter={filter} admin={admin} onError={setError} onStatus={setCustomStatus} beforeChange={beforeDebloatChange} />
+        <Suspense fallback={<div className="list-empty">Loading…</div>}>
+          <DebloatView key={customKey} filter={filter} admin={admin} onError={setError} onStatus={setCustomStatus} beforeChange={beforeDebloatChange} />
+        </Suspense>
       ) : view === 'startup' ? (
+        <Suspense fallback={<div className="list-empty">Loading…</div>}>
         <StartupView
           key={customKey}
           filter={filter}
@@ -2711,10 +2725,15 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             removeWithBackup(`Firewall rules for ${r.display}`, r.names.map((n) => ({ kind: 'firewall', path: n, name: r.display, confidence: 'high', reason: 'Inbound rule' })));
           }}
         />
+        </Suspense>
       ) : view === 'junk' ? (
-        <JunkView key={customKey} filter={filter} admin={admin} onError={setError} onStatus={setCustomStatus} onClean={cleanJunk} />
+        <Suspense fallback={<div className="list-empty">Loading…</div>}>
+          <JunkView key={customKey} filter={filter} admin={admin} onError={setError} onStatus={setCustomStatus} onClean={cleanJunk} />
+        </Suspense>
       ) : view === 'disk' ? (
-        <DiskUsageView key={customKey} filter={filter} onError={setError} onStatus={setCustomStatus} />
+        <Suspense fallback={<div className="list-empty">Loading…</div>}>
+          <DiskUsageView key={customKey} filter={filter} onError={setError} onStatus={setCustomStatus} />
+        </Suspense>
       ) : (
       <div className={`list view-${view}`} tabIndex={0} ref={listRef} onKeyDown={onListKey}>
         <div className="list-header">

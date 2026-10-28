@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { formatBytes } from './junk.jsx';
+import { formatBytes } from './format.js';
 import { crumbsOf, parentOf, shareText } from './backend/diskusage.js';
 
 const api = window.api;
