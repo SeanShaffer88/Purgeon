@@ -211,6 +211,20 @@ fn write_text(path: String, contents: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+fn write_text_atomic(path: String, contents: String) -> Result<(), String> {
+    // Write a sibling temp file, then rename it over the target. A crash or power
+    // cut mid-write leaves the old complete file or the new one, never a torn one —
+    // the backend's JSON stores (settings, groups, the interrupted-removal record,
+    // and the rest) write through here so their data can never be half-written.
+    if let Some(parent) = Path::new(&path).parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let tmp = format!("{}.tmp-{}", path, std::process::id());
+    fs::write(&tmp, contents).map_err(|e| e.to_string())?;
+    fs::rename(&tmp, &path).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 fn make_dir(path: String) -> Result<(), String> {
     fs::create_dir_all(path).map_err(|e| e.to_string())
 }
@@ -780,6 +794,12 @@ async fn compare_snapshots(
         .map_err(|e| e.to_string())?
 }
 
+/// Asks an in-progress snapshot take or compare to stop at its next check.
+#[tauri::command]
+fn cancel_snapshot() {
+    snapshot::request_cancel();
+}
+
 /// All keys and values at or under `key` in a snapshot.
 #[tauri::command]
 async fn snapshot_subtree(path: String, key: String) -> Result<snapshot::Subtree, String> {
@@ -1347,6 +1367,7 @@ pub fn run() {
             exists,
             read_text,
             write_text,
+            write_text_atomic,
             make_dir,
             remove_path,
             move_to_trash,
@@ -1356,6 +1377,7 @@ pub fn run() {
             folder_size,
             take_snapshot,
             compare_snapshots,
+            cancel_snapshot,
             snapshot_subtree,
             sys_info,
             quit,
