@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+## 1.0.5 - 2026-10-27
+
+- Fixed the action bar breaking after switching views: it measured its
+  width once, from the first view's bar, and after a view change the stale
+  reading left every action squeezed into a single row with cut-off
+  labels. It now measures the bar that is actually on screen, on every
+  view change.
+- Program name tags (insights such as "unsigned" and "possible offer",
+  hidden and group tags) now sit at the far end of the name field instead
+  of crowding next to the program's name, and long names shorten with an
+  ellipsis instead of pushing the tags around.
+- The status bar now shows basic PC specs on its right side — Windows
+  edition, processor and memory — gathered once when Purgeon starts.
+  Hovering shows the full details, including the Windows build number.
+- Removed the Cleaner's "Large orphaned folders" category. It guessed by
+  folder name and flagged folders that belong to programs still
+  installed; the Cleaner now offers only categories that are safe to
+  clean. The cleanup scan also no longer loads the full program list.
+
 ## 1.0.4 - 2026-10-27
 
 ### Changed

@@ -1,13 +1,13 @@
-# Purgeon 1.0.4
+# Purgeon 1.0.5
 
 Purgeon helps you remove Windows programs completely and clean up what they leave behind.
 
 ## What's in this release
 
-- **64-bit only.** This release ships exactly two files (below) for 64-bit Windows 10 and 11. The 32-bit build, the universal installer and the MSI from earlier releases are discontinued.
-- **Faster repeat starts and refreshes.** Program signature and architecture results, and program icons, are remembered per program file and only recomputed when that file changes — refreshing the program list no longer re-checks every program from scratch.
-- **Smoother launch.** Background measuring starts after the window paints, and measured sizes reach the list in small batches instead of one update per program.
-- Settings are read once and kept in step with the settings file, and the command log is flushed before exit.
+- **Action bar fixed after switching views.** Changing to another view and coming back no longer squeezes all the action buttons into one row with cut-off labels.
+- **Name tags moved.** The small tags after a program's name (such as "unsigned" or "possible offer") now sit at the far end of the name field, away from the name itself.
+- **PC specs in the status bar.** The right side of the status bar shows your Windows edition, processor and memory; hover it for the full details.
+- **A safer Cleaner.** The "Large orphaned folders" category is gone — it guessed by folder name and flagged folders belonging to programs still installed. Every category the Cleaner offers is now a safe one.
 
 ## Files
 
