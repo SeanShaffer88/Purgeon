@@ -363,6 +363,167 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
   );
 }
 
+// Recovery Packages (Tools › Advanced Tools): every removal backup, whether
+// it was proven restorable, and selective restore of single items out of a
+// package. Reached only from the menu — nothing here lives in the main window.
+const ENTRY_LABEL = {
+  file: (e) => e.path,
+  dir: (e) => e.path,
+  key: (e) => `Registry key — ${e.path}`,
+  value: (e) => `${e.path} › ${e.name || '(default)'}`,
+  newkey: (e) => `Recreated key — ${e.path}`,
+  newvalue: (e) => `Recreated value — ${e.path} › ${e.name || '(default)'}`,
+  service: (e) => `Service — ${e.path}`,
+  task: (e) => `Scheduled task — ${e.path}`,
+  firewall: (e) => `Firewall rule — ${e.name || e.path}`,
+};
+
+export function RecoveryDialog({ onClose }) {
+  const [packages, setPackages] = useState(null);
+  const [selectedId, setSelectedId] = useState(null);
+  const [ticked, setTicked] = useState(new Set());
+  const [results, setResults] = useState(null);
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+
+  const load = async (keep) => {
+    const list = await api.invoke('backups:list').catch(() => []);
+    setPackages(list);
+    const sel = list.find((p) => p.id === (keep || selectedId)) || list[0];
+    if (sel) {
+      setSelectedId(sel.id);
+      setTicked(new Set(sel.entries.map((_, i) => i)));
+    }
+  };
+  useEffect(() => {
+    load();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selected = (packages || []).find((p) => p.id === selectedId) || null;
+  const pick = (p) => {
+    setSelectedId(p.id);
+    setResults(null);
+    setError('');
+    setTicked(new Set(p.entries.map((_, i) => i)));
+  };
+
+  const verify = async () => {
+    if (!selected) return;
+    setBusy('Verifying…');
+    setError('');
+    try {
+      const v = await api.invoke('backups:verifyPackage', selected.id);
+      await load(selected.id);
+      if (!v.ok) setError(`Verification found problems: ${v.problems.join('; ')}`);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const restore = async (indexes) => {
+    if (!selected || !indexes.length) return;
+    setBusy('Restoring…');
+    setError('');
+    try {
+      const out =
+        indexes.length === selected.entries.length
+          ? await api.invoke('backups:restore', selected.id)
+          : await api.invoke('backups:restoreEntries', { id: selected.id, indexes });
+      setResults(out);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy('');
+    }
+  };
+
+  const badge = (p) =>
+    p.verified === true ? (
+      <span className="pkg-badge ok">Restorable ✓ verified</span>
+    ) : p.verified === false ? (
+      <span className="pkg-badge bad">Verification failed</span>
+    ) : (
+      <span className="pkg-badge warn">Not verified</span>
+    );
+
+  return (
+    <Dialog title="Recovery Packages" onClose={onClose} width={880} buttons={<button className="primary" onClick={onClose}>Close</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>
+        Backups taken before removals. Each new package is test-restored when it is created, so “Restorable” means it was proven, not hoped.
+      </p>
+      {error && <div className="error-bar" style={{ marginBottom: 10 }}><span>{error}</span></div>}
+      {packages === null ? (
+        <p className="muted">Loading…</p>
+      ) : packages.length === 0 ? (
+        <p className="muted">No backups yet. Backups appear here when something is removed.</p>
+      ) : (
+        <div className="recovery-cols">
+          <div className="pkg-list">
+            {packages.map((p) => (
+              <button key={p.id} className={`pkg-row ${p.id === selectedId ? 'sel' : ''}`} onClick={() => pick(p)}>
+                <span className="pkg-name">{p.title}</span>
+                {badge(p)}
+              </button>
+            ))}
+            <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+              <button onClick={verify} disabled={!selected || !!busy} title="Re-check this package: seal, stored files, trial restore, Recycle Bin contents">
+                {busy === 'Verifying…' ? 'Verifying…' : 'Verify Selected'}
+              </button>
+            </div>
+            {selected && selected.verified === false && (selected.verifyProblems || []).length > 0 && (
+              <ul className="muted" style={{ marginTop: 8, paddingLeft: 16 }}>
+                {selected.verifyProblems.map((pr, i) => (
+                  <li key={i}>{pr}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          <div className="pkg-entries">
+            {selected && !results && (
+              <>
+                <div className="pkg-entries-head">Contents — {selected.title}</div>
+                {selected.entries.map((e, i) => (
+                  <label key={i} className="pkg-entry">
+                    <input
+                      type="checkbox"
+                      checked={ticked.has(i)}
+                      onChange={() => setTicked((t) => { const n = new Set(t); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
+                    />
+                    <span>{(ENTRY_LABEL[e.kind] || ((x) => x.path))(e)}{e.recycled ? ' (in the Recycle Bin)' : ''}</span>
+                  </label>
+                ))}
+                <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
+                  <button className="primary" onClick={() => restore([...ticked].sort((a, b) => a - b))} disabled={!ticked.size || !!busy} title="Restore only the ticked items">
+                    {busy === 'Restoring…' ? 'Restoring…' : 'Restore Ticked Items'}
+                  </button>
+                  <button onClick={() => restore(selected.entries.map((_, i) => i))} disabled={!!busy} title="Restore everything in this package">
+                    Restore Everything
+                  </button>
+                </div>
+              </>
+            )}
+            {selected && results && (
+              <>
+                <div className="pkg-entries-head">Restore results</div>
+                {results.map((r, i) => (
+                  <div key={i} className="pkg-entry">
+                    <span>{r.ok ? '✓' : '✗'} {(ENTRY_LABEL[r.kind] || ((x) => x.path))(r)} <span className="muted">— {r.detail}</span></span>
+                  </div>
+                ))}
+                <div style={{ marginTop: 12 }}>
+                  <button onClick={() => setResults(null)}>Back to Contents</button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
 export function ResultsDialog({ title, results, note, onClose, onUndo }) {
   const failed = results.filter((r) => !r.ok);
   return (
