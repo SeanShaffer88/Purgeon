@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Installing or uninstalling now closes a running Purgeon first: the
+  installer asks the open program to exit cleanly (with a forced close
+  as a fallback if it does not answer), and a silent install relaunches
+  it when finished, so upgrades never fail on locked files and never
+  need a manual close.
 - New premium look: a near-black design with red accents and white text.
   A gradient header band names the open view with its headline number,
   the program list sits in a recessed panel with rounded corners, view
