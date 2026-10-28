@@ -23,10 +23,10 @@ $verify = { & "$PSScriptRoot/verify-windows-package.ps1" -Directory $fixture -Ma
 Expect-Failure { & "$PSScriptRoot/package-windows.ps1" -SkipBuild -OutputDirectory $fixture } 'must be empty'
 $extra = Join-Path $fixture 'unexpected.txt'
 Set-Content -LiteralPath $extra -Value 'extra asset'
-Expect-Failure $verify 'exactly the three'
+Expect-Failure $verify 'exactly the two'
 Remove-Item -LiteralPath $extra
 
-$archivePath = Join-Path $fixture 'Purgeon-Portable.zip'
+$archivePath = Join-Path $fixture 'Purgeon-Portable-x64.zip'
 $archive = [IO.Compression.ZipFile]::Open($archivePath, [IO.Compression.ZipArchiveMode]::Update)
 try {
     $archive.GetEntry('PORTABLE.txt').Delete()
@@ -38,7 +38,7 @@ Expect-Failure $verify 'Asset hash mismatch'
 
 # Even if someone recomputes the outer ZIP hash, each original entry is checked.
 $evidence = Get-Content -LiteralPath $testManifest -Raw | ConvertFrom-Json
-$evidence.assets.'Purgeon-Portable.zip' = (Get-FileHash -LiteralPath $archivePath).Hash
+$evidence.assets.'Purgeon-Portable-x64.zip' = (Get-FileHash -LiteralPath $archivePath).Hash
 $evidence | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $testManifest -Encoding utf8
 Expect-Failure $verify 'Portable hash mismatch'
 Write-Output 'Passed 4 negative packaging checks: existing output, extra asset, changed ZIP and changed entry.'

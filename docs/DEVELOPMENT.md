@@ -25,21 +25,18 @@ milestone, not whole-product release certification.
 - Current branding is Purgeon. Two stale npm lockfile package names were corrected.
   Legacy SweepUninstall identifiers remain only for existing data, package identity,
   task cleanup, shell integration and documented migration compatibility.
-- `npm run dist:windows` builds x86 NSIS/MSI and x64 NSIS inputs, then emits exactly
-  `Purgeon-Setup.exe`, `Purgeon-Setup.msi`, `Purgeon-Portable.zip`. The outer EXE
-  delegates to the existing native NSIS installer. The x86 MSI runs on both OS
-  architectures and installs the x86 application; it does not select native x64.
-  MSI uninstall removes the same four current/legacy scheduled tasks as NSIS;
-  repair and major upgrade paths are excluded from that cleanup.
-- The ZIP has both portable executables, LICENSE and PORTABLE.txt at its root.
-  Both architectures share adjacent portable data. The package script rejects a
-  nonempty output folder and verifies PE architectures, MSI metadata, archive
-  membership and hashes. Hash evidence is internal to CI, outside the three assets.
+- `npm run dist:windows` builds the x64 NSIS installer, then emits exactly
+  `Purgeon-Setup-x64.exe` and `Purgeon-Portable-x64.zip`. Purgeon is x64-only:
+  there is no x86 build and no MSI.
+- The ZIP has the portable executable, LICENSE and PORTABLE.txt at its root.
+  Portable data lives beside the executable. The package script rejects a
+  nonempty output folder and verifies PE architecture, archive membership and
+  hashes. Hash evidence is internal to CI, outside the two assets.
 - Tauri bundles the WebView2 bootstrapper rather than generating a PowerShell
   download action. Missing WebView2 still requires network access at installation.
   No runtime Rust/JavaScript dependency was added; NSIS and WiX are Tauri build tools.
-- CI runs formatting, strict native lint and all-target tests on both architectures,
-  builds packages with MSI validation enabled, tests install/uninstall on a disposable
+- CI runs formatting, strict native lint and all-target tests for x86_64,
+  builds the packages, tests install/uninstall on a disposable
   x64 runner, uploads/downloads the packages and verifies their original hashes.
   Installer mutation tests refuse to run outside GitHub-hosted runners.
 

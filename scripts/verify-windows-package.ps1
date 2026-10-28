@@ -5,41 +5,26 @@ param(
 . "$PSScriptRoot/windows-package-tools.ps1"
 $directoryPath = (Resolve-Path -LiteralPath $Directory).Path
 $evidence = Get-Content -LiteralPath $Manifest -Raw | ConvertFrom-Json
-$expected = @('Purgeon-Portable.zip', 'Purgeon-Setup.exe', 'Purgeon-Setup.msi')
+$expected = @('Purgeon-Portable-x64.zip', 'Purgeon-Setup-x64.exe')
 $actual = @(Get-ChildItem -LiteralPath $directoryPath -Force | Select-Object -ExpandProperty Name)
-if (Compare-Object $expected $actual) { throw 'Release must contain exactly the three specified assets.' }
+if (Compare-Object $expected $actual) { throw 'Release must contain exactly the two specified assets.' }
 foreach ($name in $expected) {
     if ((Get-FileHash -LiteralPath "$directoryPath/$name" -Algorithm SHA256).Hash -ne $evidence.assets.$name) {
         throw "Asset hash mismatch: $name"
     }
 }
-Assert-PeMachine "$directoryPath/Purgeon-Setup.exe" 0x14C
-
-$installer = New-Object -ComObject WindowsInstaller.Installer
-$database = $installer.OpenDatabase("$directoryPath/Purgeon-Setup.msi", 0)
-if ($database.SummaryInformation(0).Property(7) -notmatch '^Intel;') {
-    throw 'The universal-compatible MSI must be an x86 package.'
-}
-if ((Get-MsiProperty $database 'ProductName') -ne 'Purgeon' -or
-    (Get-MsiProperty $database 'ProductVersion') -ne $evidence.version) {
-    throw 'MSI product name/version does not match the release.'
-}
-foreach ($action in @('RemovePurgeonSignIn', 'RemovePurgeonMaintenance', 'RemoveLegacySignIn', 'RemoveLegacyMaintenance')) {
-    $view = $database.OpenView("SELECT ``Condition`` FROM ``InstallExecuteSequence`` WHERE ``Action`` = '$action'")
-    try {
-        [void] $view.Execute()
-        $record = $view.Fetch()
-        if (-not $record -or $record.StringData(1) -ne 'Installed AND REMOVE="ALL" AND NOT UPGRADINGPRODUCTCODE') {
-            throw "Missing or unsafe MSI uninstall condition: $action"
-        }
-    } finally { [void] $view.Close() }
-}
+# The setup program is an NSIS installer: its own stub is a 32-bit PE (0x14C) even
+# though the application it installs is native x64. The x64 guarantee is enforced on
+# the application binary itself: package-windows.ps1 asserts it before copying, the
+# portable executable is asserted below, and the installer smoke tests assert the
+# installed purgeon.exe is 0x8664.
+Assert-PeMachine "$directoryPath/Purgeon-Setup-x64.exe" 0x14C
 
 Add-Type -AssemblyName System.IO.Compression.FileSystem
-$zip = [IO.Compression.ZipFile]::OpenRead("$directoryPath/Purgeon-Portable.zip")
+$zip = [IO.Compression.ZipFile]::OpenRead("$directoryPath/Purgeon-Portable-x64.zip")
 try {
-    $names = @('Purgeon-Portable-x86.exe', 'Purgeon-Portable-x64.exe', 'LICENSE', 'PORTABLE.txt')
-    if ($zip.Entries.Count -ne 4 -or (Compare-Object $names @($zip.Entries.FullName))) {
+    $names = @('Purgeon-Portable-x64.exe', 'LICENSE', 'PORTABLE.txt')
+    if ($zip.Entries.Count -ne 3 -or (Compare-Object $names @($zip.Entries.FullName))) {
         throw 'Portable ZIP has missing, extra, duplicate or nested entries.'
     }
     foreach ($entry in $zip.Entries) {
@@ -50,5 +35,14 @@ try {
             if ($hash -ne $evidence.portable.($entry.FullName)) { throw "Portable hash mismatch: $($entry.FullName)" }
         } finally { $sha.Dispose(); $stream.Dispose() }
     }
+    # The portable executable itself must be a native x64 build.
+    $portableEntry = $zip.GetEntry('Purgeon-Portable-x64.exe')
+    $tempExe = Join-Path ([IO.Path]::GetTempPath()) ('purgeon-portable-' + [Guid]::NewGuid().ToString('N') + '.exe')
+    try {
+        $in = $portableEntry.Open()
+        $out = [IO.File]::Create($tempExe)
+        try { $in.CopyTo($out) } finally { $out.Dispose(); $in.Dispose() }
+        Assert-PeMachine $tempExe 0x8664
+    } finally { Remove-Item -LiteralPath $tempExe -Force -ErrorAction SilentlyContinue }
 } finally { $zip.Dispose() }
-Write-Output "Verified three release assets, x86 MSI metadata/uninstall conditions, and all four portable ZIP entries ($($evidence.version))."
+Write-Output "Verified two release assets and all three portable ZIP entries ($($evidence.version))."
