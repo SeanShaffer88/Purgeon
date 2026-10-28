@@ -4,6 +4,8 @@
 
 ### Added
 
+- **Secure Erase** (Tools › Advanced Tools): overwrites files (1 pass of zeros, 1 pass of random data, or 3 passes) and then deletes them, so they cannot be undeleted. Folders are expanded into their files first; links and protected Windows locations are refused, and registry items are not offered. There is deliberately no backup and no undo — the file list is reviewed and the erase confirmed every time, and the window states the honest limit that overwriting on modern SSDs lowers the chance of recovery without promising it. The overwrite runs as a cancellable native command.
+
 - **Shared Components** (Tools › Advanced Tools): the shared runtimes, shared install folders and shared files (from the SharedDLLs counts Windows itself keeps) that Purgeon refuses to delete during a removal — with the programs that depend on each folder, and an honest note where Windows records a count but not the names.
 
 - **Recovery Packages** (Tools › Advanced Tools): every removal backup shows whether it was proven restorable — new backups are verified when they are made (seal check, a trial restore of the stored exports, and a Recycle Bin presence check, recorded beside the package) — and single items can be ticked and restored out of a package instead of restoring everything. Older backups can be verified on demand from the same window.
