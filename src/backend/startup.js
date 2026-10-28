@@ -25,7 +25,7 @@ const setRoot = async (dir) => {
   stateFile = path.join(dir, 'startup-state.json');
 };
 const readState = () => sys.readText(stateFile).then(JSON.parse).catch(() => ({ services: {} }));
-const writeState = (s) => sys.writeText(stateFile, JSON.stringify(s, null, 2));
+const writeState = (s) => sys.writeTextAtomic(stateFile, JSON.stringify(s, null, 2));
 
 // StartupApproved values are 12 bytes; an odd first byte means "disabled".
 const approvedEnabled = (hex) => !hex || parseInt(hex.slice(0, 2), 16) % 2 === 0;

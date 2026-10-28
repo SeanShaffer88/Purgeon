@@ -52,7 +52,7 @@ export const time = async (label, fn) => {
 export const saveBaseline = async () => {
   const r = report();
   const baseline = { totalMs: r.totalMs, entries: r.entries, savedAt: new Date().toISOString() };
-  await sys.writeText(baselineFile(), JSON.stringify(baseline, null, 2));
+  await sys.writeTextAtomic(baselineFile(), JSON.stringify(baseline, null, 2));
   return baseline;
 };
 

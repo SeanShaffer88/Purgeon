@@ -3,6 +3,7 @@
 // previously imported readSettings from api.js, which imported them back.
 import { sys } from './sys.js';
 import * as path from './winpath.js';
+import * as datadamage from './datadamage.js';
 
 export const DEFAULT_SETTINGS = {
   createRestorePoints: true,
@@ -41,11 +42,27 @@ export async function readSettings() {
   if (mtime === null) return { ...DEFAULT_SETTINGS };
   if (cachedValue && cachedMtime === mtime) return { ...cachedValue };
   let value;
+  let text;
   try {
-    const text = await sys.readText(settingsFile());
-    value = { ...DEFAULT_SETTINGS, ...JSON.parse(text) };
+    text = await sys.readText(settingsFile());
   } catch {
     value = { ...DEFAULT_SETTINGS };
+  }
+  if (text !== undefined) {
+    try {
+      value = { ...DEFAULT_SETTINGS, ...JSON.parse(text) };
+    } catch {
+      // The file is damaged (a crash mid-write used to do this; writes are
+      // atomic now, but older damage can still be on disk). Keep a copy of the
+      // damaged text, record it so the user is told, and start from defaults
+      // written back cleanly — never silently throw the user's settings away.
+      await datadamage.quarantine(settingsFile(), text).catch(() => {});
+      value = { ...DEFAULT_SETTINGS };
+      await sys.writeTextAtomic(settingsFile(), JSON.stringify(value, null, 2)).catch(() => {});
+      cachedValue = value;
+      cachedMtime = await statMtime();
+      return { ...value };
+    }
   }
   cachedValue = value;
   cachedMtime = mtime;
@@ -77,7 +94,7 @@ const serializeWrite = (fn) => {
 export function writeSettings(patch) {
   return serializeWrite(async () => {
     const next = { ...(await readSettings()), ...patch };
-    await sys.writeText(settingsFile(), JSON.stringify(next, null, 2));
+    await sys.writeTextAtomic(settingsFile(), JSON.stringify(next, null, 2));
     await refreshCache(next);
     return next;
   });
@@ -85,7 +102,7 @@ export function writeSettings(patch) {
 
 export function replaceSettings(next) {
   return serializeWrite(async () => {
-    await sys.writeText(settingsFile(), JSON.stringify(next, null, 2));
+    await sys.writeTextAtomic(settingsFile(), JSON.stringify(next, null, 2));
     await refreshCache(next);
     return next;
   });

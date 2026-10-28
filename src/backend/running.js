@@ -99,7 +99,7 @@ export async function newEntries(entries) {
   const base = await sys.readText(baselineFile).then(JSON.parse).catch(() => null);
   const now = Object.fromEntries(entries.map((e) => [e.id, e.command || '']));
   if (!base) {
-    await sys.writeText(baselineFile, JSON.stringify(now));
+    await sys.writeTextAtomic(baselineFile, JSON.stringify(now));
     return [];
   }
   return entries.filter((e) => e.enabled !== false && (base[e.id] === undefined || base[e.id] !== (e.command || '')));
@@ -109,5 +109,5 @@ export async function newEntries(entries) {
 export async function accept(entries) {
   const base = await sys.readText(baselineFile).then(JSON.parse).catch(() => ({}));
   for (const e of entries) base[e.id] = e.command || '';
-  await sys.writeText(baselineFile, JSON.stringify(base));
+  await sys.writeTextAtomic(baselineFile, JSON.stringify(base));
 }

@@ -2,6 +2,7 @@
 // Stored as { programKey: groupName } in groups.json.
 import { sys } from './sys.js';
 import * as path from './winpath.js';
+import * as datadamage from './datadamage.js';
 
 let file = '';
 export const setRoot = async (dir) => {
@@ -9,11 +10,23 @@ export const setRoot = async (dir) => {
   file = path.join(dir, 'groups.json');
 };
 
-export const get = () =>
-  sys
-    .readText(file)
-    .then(JSON.parse)
-    .catch(() => ({}));
+export const get = async () => {
+  let text;
+  try {
+    text = await sys.readText(file);
+  } catch {
+    return {};
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    // Damaged file: keep a copy of the text, record it so the user is told,
+    // and start from an empty set written back cleanly (see datadamage.js).
+    await datadamage.quarantine(file, text).catch(() => {});
+    await sys.writeTextAtomic(file, '{}').catch(() => {});
+    return {};
+  }
+};
 
 // Puts programs in a group ('' takes them out). Returns each program's previous group, for undo.
 export async function set(keys, group) {
@@ -26,7 +39,7 @@ export async function set(keys, group) {
     if (name) all[k] = name;
     else delete all[k];
   }
-  await sys.writeText(file, JSON.stringify(all, null, 2));
+  await sys.writeTextAtomic(file, JSON.stringify(all, null, 2));
   return previous;
 }
 
@@ -37,7 +50,7 @@ export async function restore(previous) {
     if (g) all[k] = g;
     else delete all[k];
   }
-  await sys.writeText(file, JSON.stringify(all, null, 2));
+  await sys.writeTextAtomic(file, JSON.stringify(all, null, 2));
   return previous;
 }
 

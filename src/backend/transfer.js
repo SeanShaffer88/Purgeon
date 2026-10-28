@@ -247,7 +247,7 @@ export async function restore(file, numbers, { replace = false } = {}) {
     results.push({ kind: 'value', path: i.target, name: i.name, ok: r.ok, detail: r.ok ? 'Restored' : r.stderr });
   }
 
-  await sys.writeText(path.join(dir, 'restore.json'), JSON.stringify(record, null, 2));
+  await sys.writeTextAtomic(path.join(dir, 'restore.json'), JSON.stringify(record, null, 2));
   return { id, name: record.name, results };
 }
 
