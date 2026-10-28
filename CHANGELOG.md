@@ -4,6 +4,8 @@
 
 ### Fixed
 
+- Disk Usage showed "No drives found" and never scanned anything: the drives script forgot to ask PowerShell for JSON, so its answer could not be read and the failure was silent. The view now reads drives through the system's drive information (with the older way as a fallback) and scans the system drive as soon as it opens.
+- The menus are slimmer: related commands now live in flyout groups (for example, the View menu's Zoom, Appearance, Window and Background groups, and the Tools menu's Records, Find & Fix, Lists & Portable and Settings groups) instead of one long list. Nothing was removed — every command is still there, and the command palette still finds them all.
 - A removal interrupted while Purgeon was writing its record down (a crash or power cut at exactly the wrong moment) left a damaged record that was silently ignored: the interrupted removal never reappeared and could never be cleared. The damaged record is now reported, explains itself, and can be cleared.
 - Two settings changes made at the same moment could silently undo each other; settings writes now take turns.
 - A group name typed with hidden control characters could impersonate a built-in group in the filter; leading control characters are stripped from group names.
