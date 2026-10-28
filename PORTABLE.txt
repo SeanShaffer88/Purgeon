@@ -1,18 +1,18 @@
 Purgeon Portable
 
-Extract the entire ZIP to a writable folder before running either executable.
-On 64-bit Windows, run Purgeon-Portable-x64.exe.
-On 32-bit Windows, run Purgeon-Portable-x86.exe.
-Both executables share the adjacent "Purgeon Data" folder. Run one at a time.
-Keep the executables' names: "Portable" enables portable storage automatically.
+Extract the entire ZIP to a writable folder before running the executable.
+Run Purgeon-Portable-x64.exe. Purgeon is 64-bit only: it needs 64-bit
+Windows 10 or 11.
+Settings and data live in the adjacent "Purgeon Data" folder. Keep the
+executable's name: "Portable" enables portable storage automatically.
 
 Settings, backups, snapshots and WebView2 data stay in that data folder. Carry
-the whole folder with you, and back it up before replacing the executables.
+the whole folder with you, and back it up before replacing the executable.
 An existing "SweepUninstall Data" folder remains supported for migration.
 
-Windows 10 or 11 and Microsoft Edge WebView2 are required. The portable package
-does not install WebView2. The current application requests administrator rights.
-The executables are unsigned. Native ARM64 builds are not included.
+Microsoft Edge WebView2 is required. The portable package does not install
+WebView2. The current application requests administrator rights.
+The executable is unsigned.
 
 Portable means no app installation is required. Uninstalling software, cleaning
 files, changing settings or enabling scheduled tasks still changes the host PC.

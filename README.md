@@ -476,25 +476,18 @@ Development validation and outstanding build checks are recorded in
 ## Download
 
 Get published versions from [Releases](https://github.com/SeanShaffer88/Purgeon/releases/latest).
-The next release uses the three files below. Existing releases retain their original
-files. The new x86 build is tested on x64 Windows through Windows' compatibility
-layer; a separate 32-bit Windows 10 runtime test is still outstanding.
+Releases from v1.0.4 on use the two files below. Earlier releases retain their
+original files. Purgeon is 64-bit only: it needs 64-bit Windows 10 or 11.
 
-- **`Purgeon-Setup.exe`** selects x86 on 32-bit Windows and x64 on 64-bit Windows.
-  It installs for all users, with a Start Menu shortcut. Its last page offers to
-  start Purgeon with Windows (unticked). Silent installation uses `/S`; an optional
+- **`Purgeon-Setup-x64.exe`** is the native x64 installer. It installs for all
+  users, with a Start Menu shortcut. Its last page offers to start Purgeon with
+  Windows (unticked). Silent installation uses `/S`; an optional
   `/D=C:\Your Folder` must be last and unquoted.
-- **`Purgeon-Setup.msi`** installs the **32-bit app on either x86 or x64 Windows**.
-  Windows Installer does not support a single MSI declaring both native platforms.
-  For the native x64 app, use the EXE. Silent installation uses
-  `msiexec /i Purgeon-Setup.msi /qn /norestart`. Uninstall the current installation
-  before switching installer formats. User data is retained.
-- **`Purgeon-Portable.zip`** contains `Purgeon-Portable-x86.exe`,
-  `Purgeon-Portable-x64.exe`, LICENSE, and PORTABLE.txt. Extract everything first,
-  then run the executable matching Windows. Both builds share the adjacent
-  `Purgeon Data` folder; run one at a time. Keep the whole folder when moving to
-  another PC. Names containing `portable`, or a neighboring file named `portable`,
-  enable this storage mode.
+- **`Purgeon-Portable-x64.zip`** contains `Purgeon-Portable-x64.exe`, LICENSE,
+  and PORTABLE.txt. Extract everything first, then run the executable. Its data
+  lives in the adjacent `Purgeon Data` folder. Keep the whole folder when moving
+  to another PC. Names containing `portable`, or a neighboring file named
+  `portable`, enable this storage mode.
 
 **Upgrading from SweepUninstall:** Purgeon is the same program under a new name.
 - Your settings, backups, snapshots, groups and Change History carry over: Purgeon uses the same data folder.
