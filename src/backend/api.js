@@ -8,6 +8,7 @@ import * as backups from './backups.js';
 import * as shared from './shared.js';
 import * as erase from './erase.js';
 import * as games from './games.js';
+import * as graph from './graph.js';
 import * as monitor from './monitor.js';
 import * as debloat from './debloat.js';
 import * as restore from './restore.js';
@@ -251,6 +252,15 @@ const handlers = {
     return sys.cancelErase ? sys.cancelErase() : undefined;
   },
   'games:list': () => games.list(),
+  'graph:graph': () => graph.graph(),
+  'graph:program': (program) => graph.programLinks(program),
+  // Orphan cleanup is limited to the kinds the standard removal can back up
+  // and restore: services and scheduled tasks. Startup entries are shown
+  // but not removed here (a Run value is not a whole key).
+  'graph:removeOrphan': async (orphan) => {
+    const item = orphan.type === 'service' ? { kind: 'service', path: orphan.serviceName || orphan.label } : { kind: 'task', path: orphan.taskPath };
+    return backups.removeItems({ title: `Orphaned entry: ${orphan.label}`, items: [item], owners: [] });
+  },
   // Cleaning up a gone game's entry goes through the standard backed-up
   // removal: the launcher manifest (or GOG key) is copied into a backup
   // package first, so the cleanup itself can be undone.
@@ -566,6 +576,11 @@ const recorders = {
     type: 'Restore',
     title: `Restored the backup of ${String(id).replace(/^[^_]*_/, '').replace(/-/g, ' ') || 'removed items'}`,
     detail: `${results.filter((r) => r.ok).length} of ${results.length} entries restored`,
+  }),
+  'graph:removeOrphan': (orphan, out) => ({
+    type: 'Orphan cleanup',
+    title: `Removed the orphaned ${orphan.kind.toLowerCase()}: ${orphan.label}`,
+    detail: out && out.backupId ? 'Backed up first — restore it from the Archive if needed' : 'The entry could not be removed',
   }),
   'games:cleanup': (game, out) => ({
     type: 'Game entry cleanup',
