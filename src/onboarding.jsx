@@ -175,7 +175,6 @@ export const SHORTCUTS = [
     ['Shift+Del', 'Force uninstall (broken uninstaller)'],
     ['Ctrl+L', 'Analyze Leftovers'],
     ['Ctrl+I', 'Analyze Program'],
-    ['Ctrl+W', 'What’s This (all Windows hooks)'],
     ['Ctrl+Q', 'Add to Uninstall Queue'],
     ['Ctrl+G', 'Set Group'],
     ['F5', 'Refresh the list'],

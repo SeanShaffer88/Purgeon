@@ -177,7 +177,7 @@ export function treemap(items, w, h) {
 }
 
 const COLORS = ['#2f6f4f', '#2b5f7a', '#6a4f8a', '#7a5a2b', '#7a2f3f', '#3f6f6a', '#5a6a2b', '#4f4f7a'];
-export function DiskMapDialog({ data, onAnalyze, onSheet, onClose }) {
+export function DiskMapDialog({ data, onAnalyze, onClose }) {
   const [sel, setSel] = useState(null);
   const top = data.slice(0, 60);
   const others = data.slice(60).reduce((n, x) => n + x.total, 0);
@@ -221,50 +221,10 @@ export function DiskMapDialog({ data, onAnalyze, onSheet, onClose }) {
             ))}
           </div>
           <span className="plan-actions">
-            <button onClick={() => onSheet(p.key)}>What’s This…</button>
             <button onClick={() => onAnalyze(p.key)}>Analyze Leftovers…</button>
           </span>
         </div>
       )}
-    </Dialog>
-  );
-}
-
-// ---- 7. what a program does ------------------------------------------------------------------------
-
-export function SheetDialog({ program, sections, onAnalyze, onClose }) {
-  return (
-    <Dialog
-      title={`What’s This – ${program.name}`}
-      onClose={onClose}
-      width={760}
-      buttons={
-        <>
-          <button onClick={onAnalyze}>Analyze Leftovers…</button>
-          <button className="primary" onClick={onClose}>
-            Close
-          </button>
-        </>
-      }
-    >
-      <p className="heading">Everything {program.name} hooks into Windows that Purgeon can see.</p>
-      {!sections.length && <div className="empty-box">Nothing beyond its own folder.</div>}
-      {sections.map((s) => (
-        <div key={s.id} className="sheet-section">
-          <div className="tree-group">
-            <b>{s.label}</b> <span className="muted">({s.items.length})</span>
-          </div>
-          {s.items.map((i, n) => (
-            <div key={n} className="tree-item">
-              <span className="path">
-                {i.path}
-                {i.name ? `  ›  ${i.name}` : ''}
-              </span>
-              <span className="muted">{i.reason}</span>
-            </div>
-          ))}
-        </div>
-      ))}
     </Dialog>
   );
 }
@@ -668,7 +628,7 @@ export function CloseDialog({ onAnswer }) {
 
 export const ARCH_LABEL = { x64: '64-bit (x64)', x86: '32-bit (x86)', arm64: 'ARM64', arm: 'ARM (32-bit)' };
 
-export function AnalysisDialog({ program, data, insight = {}, onUninstall, onSheet, onLeftovers, onClose }) {
+export function AnalysisDialog({ program, data, insight = {}, onUninstall, onLeftovers, onClose }) {
   const [open, setOpen] = useState(null);
   const days = data.lastUsed?.time ? Math.floor((Date.now() - new Date(data.lastUsed.time).getTime()) / 86400000) : null;
   const sig = insight.signature;
@@ -693,7 +653,6 @@ export function AnalysisDialog({ program, data, insight = {}, onUninstall, onShe
       width={780}
       buttons={
         <>
-          <button onClick={onSheet}>What’s This…</button>
           <button onClick={onLeftovers}>Analyze Leftovers…</button>
           <button onClick={onUninstall}>Uninstall…</button>
           <button className="primary" onClick={onClose}>
@@ -765,7 +724,7 @@ export function AnalysisDialog({ program, data, insight = {}, onUninstall, onShe
                   <span className="path">{t}</span>
                 </div>
               ))}
-              {h.count > h.items.length && <div className="muted">…and {h.count - h.items.length} more (What’s This lists them all)</div>}
+              {h.count > h.items.length && <div className="muted">…and {h.count - h.items.length} more</div>}
             </div>
           )}
         </div>

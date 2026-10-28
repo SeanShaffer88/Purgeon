@@ -19,7 +19,7 @@ const JunkView = lazy(() => import('./junk.jsx').then((m) => ({ default: m.JunkV
 import { GroupDialog } from './groups.jsx';
 import { ProgramBackupDialog, ProgramRestoreDialog } from './transfer.jsx';
 import { WhoOwnsDialog, UpdatesDialog, MaintenanceDialog } from './tools.jsx';
-import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, SheetDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, PortableAppsDialog, MakePortableDialog, TrustedPublishersDialog, UpdateCheckDialog, CommandPalette, ReportDialog, ContextMenuDialog, InstallerFoundDialog, AnalysisDialog, ProgramDetailDialog, ConfirmationSettingsDialog, ARCH_LABEL, CloseDialog } from './more.jsx';
+import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, PortableAppsDialog, MakePortableDialog, TrustedPublishersDialog, UpdateCheckDialog, CommandPalette, ReportDialog, ContextMenuDialog, InstallerFoundDialog, AnalysisDialog, ProgramDetailDialog, ConfirmationSettingsDialog, ARCH_LABEL, CloseDialog } from './more.jsx';
 
 const api = window.api;
 
@@ -90,7 +90,7 @@ const VIEW_NOTES = {
 };
 
 // The action bar's buttons for a desktop program, in order.
-const DESKTOP_BAR = ['uninstall', 'force', 'analyzeProgram', 'analyze', 'sheet', 'backupProgram', 'queueAdd', 'setGroup', 'hide', 'unhide', 'folder', 'registry', 'search', 'properties'];
+const DESKTOP_BAR = ['uninstall', 'force', 'analyzeProgram', 'analyze', 'backupProgram', 'queueAdd', 'setGroup', 'hide', 'unhide', 'folder', 'registry', 'search', 'properties'];
 const shortLabel = (label) => label.replace(/\.\.\.$/, '').replace('Migrate / Back Up Program', 'Migrate').replace('Analyze Leftovers', 'Leftovers').replace(/^Analyze Program$/, 'Analyze').replace('Add to Uninstall Queue', 'Queue').replace('Compare the Two Selected', 'Compare Selected').replace(/^Set Group$/, 'Group').replace('Hide From List', 'Hide').replace('Installation Folder', 'Folder').replace('Registry Entry', 'Registry');
 
 // Group-picker entries that filter by insight rather than by group.
@@ -232,7 +232,6 @@ const MENUS = [
       ['removeEntry', 'Remove Entry...'],
       null,
       ['analyzeProgram', 'Analyze Program...', 'Ctrl+I'],
-      ['sheet', 'What’s This...', 'Ctrl+W'],
       ['setGroup', 'Set Group...', 'Ctrl+G'],
       ['backupProgram', 'Migrate / Back Up Program...'],
       ['hide', 'Hide From List'],
@@ -1539,17 +1538,6 @@ const [reducedMotion, setReducedMotion] = useState(false);
       setBusy('');
     }
   };
-  const openSheet = async (p) => {
-    setModal(null);
-    setBusy(`Finding everything ${p.name} hooks into Windows…`);
-    try {
-      setModal({ type: 'sheet', program: p, sections: await api.invoke('program:sheet', p) });
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy('');
-    }
-  };
   const searchRegistry = async (term) => {
     setModal(null);
     setBusy(`Searching the registry for "${term}"…`);
@@ -1777,7 +1765,6 @@ const [reducedMotion, setReducedMotion] = useState(false);
   const actions = {
     backupProgram: (p) => view === 'desktop' && backupProgram(p),
     rescue: (p) => view === 'desktop' && rescue(p),
-    sheet: (p) => view === 'desktop' && openSheet(p),
     analyzeProgram: async (p) => {
       if (view !== 'desktop') return;
       setBusy(`Analyzing ${p.name}: measuring its folders and finding what it hooks into Windows…`);
@@ -2336,7 +2323,6 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       else if (e.ctrlKey && key === 't') action = 'view:timeline';
       else if (e.ctrlKey && key === 'k') action = 'palette';
       else if (e.ctrlKey && key === 'q') action = 'queueAdd';
-      else if (e.ctrlKey && key === 'w') action = 'sheet';
       else if (e.ctrlKey && key === 'i') action = 'analyzeProgram';
       else if (e.ctrlKey && key === 'f') action = 'find';
       else if (e.ctrlKey && key === 's') action = 'export';
@@ -2443,7 +2429,6 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               ['queueAdd', 'Add to Uninstall Queue', 'Ctrl+Q'],
               current && hidden[current.key] ? ['unhide', 'Unhide'] : ['hide', 'Hide From List'],
               ['analyzeProgram', 'Analyze Program...', 'Ctrl+I'],
-              ['sheet', 'What’s This...', 'Ctrl+W'],
               ['rescue', 'Rescue Broken Uninstall...'],
               ['makePortable', 'Make Portable...'],
               null,
@@ -3039,25 +3024,10 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {modal?.type === 'diskmap' && (
         <DiskMapDialog
           data={modal.data}
-          onSheet={(key) => {
-            const p = desktopCache.current.find((x) => x.key === key);
-            if (p) openSheet(p);
-          }}
           onAnalyze={(key) => {
             const p = desktopCache.current.find((x) => x.key === key);
             setModal(null);
             if (p) scanFor(p, `Analysis – ${p.name}`, (items) => `${items.length} files, folders and registry entries are associated with ${p.name}.`);
-          }}
-          onClose={() => setModal(null)}
-        />
-      )}
-      {modal?.type === 'sheet' && (
-        <SheetDialog
-          {...modal}
-          onAnalyze={() => {
-            const p = modal.program;
-            setModal(null);
-            scanFor(p, `Analysis – ${p.name}`, (items) => `${items.length} files, folders and registry entries are associated with ${p.name}.`);
           }}
           onClose={() => setModal(null)}
         />
@@ -3318,7 +3288,6 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           program={modal.program}
           data={modal.data}
           insight={insight[modal.program.key]}
-          onSheet={() => openSheet(modal.program)}
           onLeftovers={() => {
             const p = modal.program;
             setModal(null);
