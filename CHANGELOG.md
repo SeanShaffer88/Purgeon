@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+- Debloat grows from 26 to 93 tweaks. A new App Privacy section carries
+  the same per-app permission switches as Settings › Privacy (account
+  info, location, camera, microphone, contacts, calendar, email,
+  messages, files, passkeys, Bluetooth, eye tracking, screenshots and
+  more), plus new privacy, suggestions, search, Explorer and
+  settings-sync toggles — every one reversible the usual way, with the
+  previous value restored when switched off.
 - Installing or uninstalling now closes a running Purgeon first: the
   installer asks the open program to exit cleanly (with a forced close
   as a fallback if it does not answer), and a silent install relaunches
