@@ -93,6 +93,11 @@ const INSIGHT_FILTERS = [
 const ALL_GROUPS = '';
 const UNGROUPED = '\u0000ungrouped';
 
+// Compact PC specs for the status bar: the processor name without its trademark
+// marks and core-count suffix, and memory as a whole number of gigabytes.
+const shortCpu = (cpu) => (cpu || '').replace(/\(R\)|\(TM\)|™/gi, '').replace(/\s+\d+-Core Processor/i, '').replace(/\s+Processor$/i, '').replace(/\s+/g, ' ').trim();
+const ramTextOf = (bytes) => (bytes > 0 ? `${Math.round(bytes / 1073741824)} GB RAM` : '');
+
 const formatSize = (kb) => {
   if (!kb) return '';
   if (kb < 1024) return `${kb} KB`;
@@ -493,6 +498,7 @@ export default function App() {
   const [selected, setSelected] = useState(null);
   const [icons, setIcons] = useState({});
   const [admin, setAdmin] = useState(null);
+  const [specs, setSpecs] = useState(null);
   const [modal, setModal] = useState(null);
 const [busy, setBusy] = useState(null); // { message, progress, current, total, canPause, canCancel, onPause, onCancel }
 const [menu, setMenu] = useState(null);
@@ -594,16 +600,23 @@ const [reducedMotion, setReducedMotion] = useState(false);
   const actionBarRef = useRef(null);
   const [actionBarW, setActionBarW] = useState(0);
   // Keep the action bar's width measured so its buttons can be laid out in balanced rows.
+  // The bar element is re-created when the view changes (each view has its own actions),
+  // so this re-runs per view and measures the bar actually on screen. A width of 0 (the
+  // old bar, detached) must never overwrite a real measurement: with no measured width
+  // the layout falls back to every action in one squeezed row.
   useEffect(() => {
     const el = actionBarRef.current;
     if (!el) return undefined;
-    const update = () => setActionBarW((w) => (w === el.clientWidth ? w : el.clientWidth));
+    const update = () => {
+      const w = el.clientWidth;
+      if (w > 0) setActionBarW((prev) => (prev === w ? prev : w));
+    };
     update();
     if (typeof ResizeObserver === 'undefined') return undefined;
     const ro = new ResizeObserver(update);
     ro.observe(el);
     return () => ro.disconnect();
-  }, []);
+  }, [view]);
   const desktopCache = useRef([]);
   const lastListView = useRef('desktop');
   // Debloat and Startup views load their own data; their status text and remount key live here.
@@ -662,6 +675,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
 
   useEffect(() => {
     api.invoke('app:isAdmin').then(setAdmin);
+    api.invoke('app:specs').then(setSpecs).catch(() => {});
     api.invoke('settings:get').then((s) => {
       setRestoreOn(s.createRestorePoints);
       setSilentOn(!!s.silentUninstall);
@@ -2650,17 +2664,21 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
                     {cellFor(r, id)}
                     {id === 'size' && r.sizeTruncated ? '+' : ''}
                   </span>
-                  {id === 'name' && batchable && hidden[r.key] && (
-                    <span className="hidden-tag" title="Hidden from the list (Action › Hide From List). It is still installed; Action › Unhide shows it normally again.">
-                      hidden
+                  {id === 'name' && ((batchable && (hidden[r.key] || groups[r.key])) || (view === 'desktop' && insight[r.key])) && (
+                    <span className="cell-tags">
+                      {batchable && hidden[r.key] && (
+                        <span className="hidden-tag" title="Hidden from the list (Action › Hide From List). It is still installed; Action › Unhide shows it normally again.">
+                          hidden
+                        </span>
+                      )}
+                      {batchable && groups[r.key] && (
+                        <span className="group-tag" title={`In the group "${groups[r.key]}". Pick it in the group list to show only this group; Set Group (Ctrl+G) changes it.`}>
+                          {groups[r.key]}
+                        </span>
+                      )}
+                      {view === 'desktop' && <InsightTags i={insight[r.key]} />}
                     </span>
                   )}
-                  {id === 'name' && batchable && groups[r.key] && (
-                    <span className="group-tag" title={`In the group "${groups[r.key]}". Pick it in the group list to show only this group; Set Group (Ctrl+G) changes it.`}>
-                      {groups[r.key]}
-                    </span>
-                  )}
-                  {id === 'name' && view === 'desktop' && <InsightTags i={insight[r.key]} />}
                 </div>
               ))}
             </div>
@@ -2717,6 +2735,14 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           </span>
         )}
         <span className="status-right">
+          {specs && (specs.osName || specs.cpu || specs.ramBytes > 0) && (
+            <span
+              className="pc-specs"
+              title={[specs.osName && `Operating system: ${specs.osName}${specs.osVersion ? ` ${specs.osVersion}` : ''}${specs.osBuild ? ` (build ${specs.osBuild})` : ''}`, specs.cpu && `Processor: ${specs.cpu}`, specs.ramBytes > 0 && `Memory: ${ramTextOf(specs.ramBytes)}`].filter(Boolean).join('\n')}
+            >
+              {[specs.osName, shortCpu(specs.cpu), ramTextOf(specs.ramBytes)].filter(Boolean).join(' · ')}
+            </span>
+          )}
           {current && view === 'desktop' && <span className="muted" title="Publisher of the selected program, as its uninstall entry reports it">{current.publisher}</span>}
 
         </span>
