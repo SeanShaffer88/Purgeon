@@ -21,7 +21,11 @@ const REG = 'Windows Registry Editor Version 5.00\r\n\r\n[HKEY_LOCAL_MACHINE\\SO
 // single backslash-named files, on Windows real folders; both round-trip.
 const at = (root, ...parts) => winpath.join(root, ...parts);
 
-async function makePackage(root, id = 'test1') {
+// The recycled entry is opt-in: verifyPackage checks the Recycle Bin for
+// real on Windows, and a fixture file is never actually in the Bin — the
+// sound-package case would correctly report it missing. (On this machine the
+// Bin check cannot run at all and is skipped as "unchecked".)
+async function makePackage(root, id = 'test1', recycled = false) {
   const dir = at(root, id);
   await nodeSys.makeDir(dir);
   fs.writeFileSync(at(root, id, '0.reg'), REG);
@@ -33,7 +37,7 @@ async function makePackage(root, id = 'test1') {
     entries: [
       { kind: 'key', path: 'HKLM\\SOFTWARE\\Test', file: '0.reg' },
       { kind: 'key', path: 'HKLM\\SOFTWARE\\Other', file: '1.reg' },
-      { kind: 'file', path: 'C:\\Temp\\Gone.txt', recycled: true },
+      ...(recycled ? [{ kind: 'file', path: 'C:\\Temp\\Gone.txt', recycled: true }] : []),
     ],
   };
   fs.writeFileSync(at(root, id, 'manifest.json'), JSON.stringify(manifest, null, 2));
@@ -70,7 +74,7 @@ test('verifyPackage reports a damaged stored export instead of passing it', asyn
 test('restore with entry indexes restores only the chosen entries', async () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'purgeon-recovery-'));
   await backups.setRoot(root);
-  await makePackage(root);
+  await makePackage(root, 'test1', true);
   const only = await backups.restore('test1', [1]);
   assert.equal(only.length, 1, 'exactly one entry was attempted');
   assert.equal(only[0].path, 'HKLM\\SOFTWARE\\Other');
