@@ -583,6 +583,10 @@ export async function initBackend() {
     sync.setRoot(path.join(data, 'sync')),
     profiler.setRoot(path.join(data, 'profiles')),
   ]);
+  // The installer drops an exit marker next to the program when it needs
+  // this copy closed for an upgrade; watch for it from here on.
+  const { watchExitMarker } = await import('./updateexit.js');
+  watchExitMarker();
   // Record that the core modules loaded; cold modules are loaded on first use below.
   profiler.mark('backend:init');
 }
