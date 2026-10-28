@@ -4,6 +4,7 @@ import { parseCliArgs } from '../src/cli-args.js';
 import { runCli } from '../src/cli.js';
 import { setSys } from '../src/backend/sys.js';
 import * as snapshots from '../src/backend/snapshots.js';
+import { createNodeSys } from './node-sys.js';
 
 const invalid = [
   ['unknown command', ['--maintenence'], /Unknown command/],
@@ -112,7 +113,7 @@ test('snapshot dispatch preserves its name and selected depth', async () => {
     info: { env: {}, dataDir: 'C:\\unused' },
     makeDir: async () => {},
     takeSnapshot: async (...args) => { captures.push(args); return { dirs: 1, files: 2, keys: 3, values: 4, ms: 1000 }; },
-    writeText: async (...args) => { writes.push(args); },
+    writeTextAtomic: async (...args) => { writes.push(args); },
     print: async (text) => { output = text; },
     quit: async (code) => { assert.equal(code, 0); },
   });
@@ -170,4 +171,64 @@ test('adding an unknown option never turns a valid command into an accepted requ
     }
   }
   for (const args of [null, {}, ' --help ', [undefined]]) assert.throws(() => parseCliArgs(args), /must be text/);
+});
+
+test('--help and the dispatched commands cannot drift apart', async () => {
+  // Regression guard for the audit finding that --sync, --portableapps and
+  // --export worked but were missing from --help: the help text and the real
+  // command set are compared mechanically, in both directions.
+  const fs = await import('node:fs');
+  const cli = fs.readFileSync(new URL('../src/cli.js', import.meta.url), 'utf8');
+  const cliArgs = fs.readFileSync(new URL('../src/cli-args.js', import.meta.url), 'utf8');
+  const dispatched = new Set([...cli.matchAll(/cmd === '(--[a-z-]+)'/g)].map((m) => m[1]));
+  for (const m of cliArgs.matchAll(/^ {2}'(--[a-z-]+)':/gm)) dispatched.add(m[1]);
+  assert.ok(dispatched.size > 20, 'the dispatch set was actually found');
+  const help = cli.slice(cli.indexOf('const HELP = `') + 'const HELP = `'.length, cli.indexOf('`;', cli.indexOf('const HELP = `')));
+  const helpCommands = new Set([...help.matchAll(/^ {2}(--[a-z-]+)/gm)].map((m) => m[1]));
+  assert.ok(helpCommands.size > 20, 'the help command list was actually found');
+  for (const cmd of dispatched) assert.ok(helpCommands.has(cmd), `${cmd} is dispatched but missing from --help`);
+  for (const cmd of helpCommands) assert.ok(dispatched.has(cmd), `${cmd} is in --help but nothing dispatches it`);
+  // Every option flag the help mentions must be one the code really reads.
+  const knownOptions = new Set([...cli.matchAll(/(?:option|flag)\(args, '(--[a-z-]+)'\)/g)].map((m) => m[1]));
+  for (const m of cliArgs.matchAll(/'(--[a-z-]+)'/g)) knownOptions.add(m[1]);
+  knownOptions.add('--json').add('--quiet');
+  const helpTokens = new Set([...help.matchAll(/--[a-z-]+/g)].map((m) => m[0]));
+  for (const token of helpTokens) {
+    if (helpCommands.has(token)) continue;
+    assert.ok(knownOptions.has(token), `${token} is mentioned in --help but no code reads it`);
+  }
+});
+
+test('--history, --archive and --timeline dispatch and print their lists', async () => {
+  const fs = await import('node:fs');
+  const os = await import('node:os');
+  const path = await import('node:path');
+  const winpath = await import('../src/backend/winpath.js');
+  const history = await import('../src/backend/history.js');
+  const archive = await import('../src/backend/archive.js');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'purgeon-cli-'));
+  let output = '';
+  setSys({
+    ...createNodeSys(),
+    info: { env: {}, dataDir: dir },
+    print: async (text) => { output += text; },
+    quit: async () => {},
+    runPS: async () => '[]',
+  });
+  // Legacy commands dispatch straight to run(); in the real entry the backend
+  // roots are set before dispatch, so the test sets them the same way.
+  await history.setRoot(dir);
+  await archive.setRoot(dir);
+  const init = async () => {};
+  fs.writeFileSync(winpath.join(dir, 'history.json'), JSON.stringify([{ id: 1, time: '2026-10-28T10:00:00.000Z', type: 'Removal', title: 'Removed "Old App"', detail: '' }]));
+  fs.writeFileSync(winpath.join(dir, 'archive.json'), JSON.stringify([{ name: 'Old App', version: '1.0', how: 'uninstalled', removed: '2026-10-28T10:00:00.000Z', publisher: 'Example' }]));
+  await runCli(['--history'], init);
+  assert.match(output, /Removed "Old App"/);
+  output = '';
+  await runCli(['--archive'], init);
+  assert.match(output, /Old App 1\.0/);
+  output = '';
+  await runCli(['--timeline'], init);
+  assert.match(output, /Removed: Old App|Nothing recorded yet/);
+  fs.rmSync(dir, { recursive: true, force: true });
 });
