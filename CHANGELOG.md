@@ -1,5 +1,15 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- A removal interrupted while Purgeon was writing its record down (a crash or power cut at exactly the wrong moment) left a damaged record that was silently ignored: the interrupted removal never reappeared and could never be cleared. The damaged record is now reported, explains itself, and can be cleared.
+- Two settings changes made at the same moment could silently undo each other; settings writes now take turns.
+- A group name typed with hidden control characters could impersonate a built-in group in the filter; leading control characters are stripped from group names.
+- Disk Usage listed drives that report no space at all (such as an empty card reader); they are no longer shown.
+- The `--help` text now lists the `--sync`, `--portableapps` and `--export` commands, which worked but were undocumented.
+
 ## 1.0.7 - 2026-10-28
 
 - Removed the What's This page (it was on the Action menu, the action
