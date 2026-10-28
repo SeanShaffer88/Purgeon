@@ -71,7 +71,7 @@ export function guardReason(item, state, owners = []) {
 // ---- dependency warnings ------------------------------------------------------
 
 // Shared runtimes and hardware support software: removing one can break other programs or devices.
-const RUNTIMES = /visual c\+\+ .*redistributable|\bvc_?redist|\.net (framework|runtime|desktop runtime|core)|asp\.net core|windows desktop runtime|windows app ?(runtime|sdk)|java(\(tm\))? (\d|se)|\bjre\b|\bjdk\b|directx|webview2 runtime|xna framework|openal|vulkan ?run ?time|physx|access database engine|sql server .*(native client|odbc|localdb|clr types|shared management)|msxml|visual studio tools for office|universal crt|windows sdk|python launcher/i;
+export const RUNTIMES = /visual c\+\+ .*redistributable|\bvc_?redist|\.net (framework|runtime|desktop runtime|core)|asp\.net core|windows desktop runtime|windows app ?(runtime|sdk)|java(\(tm\))? (\d|se)|\bjre\b|\bjdk\b|directx|webview2 runtime|xna framework|openal|vulkan ?run ?time|physx|access database engine|sql server .*(native client|odbc|localdb|clr types|shared management)|msxml|visual studio tools for office|universal crt|windows sdk|python launcher/i;
 const DRIVERS = /\bdriver|chipset|graphics|audio|bluetooth|wireless|wi-?fi|ethernet|\blan\b|management engine|rapid storage|serial io|thunderbolt|control panel|touchpad|synaptics|elan|realtek|hd audio/i;
 const HARDWARE_MAKERS = /intel|nvidia|amd|advanced micro devices|realtek|qualcomm|broadcom|mediatek|synaptics|elan|conexant|dolby|waves|logitech|razer|corsair|steelseries/i;
 
