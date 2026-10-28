@@ -81,6 +81,32 @@ export function createNodeSys(dataDir = path.join(os.tmpdir(), 'purgeon-test-dat
       fs.mkdirSync(path.dirname(p), { recursive: true });
       fs.writeFileSync(p, s);
     },
+    // A faithful local stand-in for the native secure erase: overwrite the
+    // file's full length per pass, then delete it. Links are refused.
+    secureErase: async (p, passes) => {
+      const st = fs.lstatSync(p);
+      if (st.isSymbolicLink()) throw new Error('Links are not erased — erase the real file instead');
+      if (!st.isFile()) throw new Error('Not a file');
+      const len = st.size;
+      const fd = fs.openSync(p, 'r+');
+      try {
+        for (const pass of passes) {
+          const buf = Buffer.alloc(Math.min(len, 1 << 20));
+          if (pass === 'random') for (let i = 0; i < buf.length; i++) buf[i] = Math.floor(Math.random() * 256);
+          let written = 0;
+          while (written < len) {
+            const n = Math.min(buf.length, len - written);
+            fs.writeSync(fd, buf, 0, n, written);
+            written += n;
+          }
+          fs.fsyncSync(fd);
+        }
+      } finally {
+        fs.closeSync(fd);
+      }
+      fs.unlinkSync(p);
+    },
+    cancelErase: async () => {},
     writeTextAtomic: async (p, s) => {
       fs.mkdirSync(path.dirname(p), { recursive: true });
       const tmp = `${p}.tmp-${process.pid}`;
