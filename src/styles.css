@@ -723,7 +723,7 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .view-bar:not(.note) { display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); padding: 4px 8px 5px; }
 
 /* snapshot timeline */
-.timeline { padding: 6px 16px 4px; border-bottom: 1px solid var(--border); background: var(--bg); }
+.snapshot-timeline { padding: 6px 16px 4px; border-bottom: 1px solid var(--border); background: var(--bg); }
 .timeline-track { position: relative; height: 54px; }
 .timeline-line { position: absolute; left: 1%; right: 1%; top: 10px; border-top: 1px dashed var(--border-strong); }
 .timeline-dot {
