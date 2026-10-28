@@ -1,13 +1,13 @@
-# Purgeon 1.0.5
+# Purgeon 1.0.6
 
 Purgeon helps you remove Windows programs completely and clean up what they leave behind.
 
 ## What's in this release
 
-- **Action bar fixed after switching views.** Changing to another view and coming back no longer squeezes all the action buttons into one row with cut-off labels.
-- **Name tags moved.** The small tags after a program's name (such as "unsigned" or "possible offer") now sit at the far end of the name field, away from the name itself.
-- **PC specs in the status bar.** The right side of the status bar shows your Windows edition, processor and memory; hover it for the full details.
-- **A safer Cleaner.** The "Large orphaned folders" category is gone — it guessed by folder name and flagged folders belonging to programs still installed. Every category the Cleaner offers is now a safe one.
+- **A new premium look.** A near-black design with red accents and white text: a gradient band names the open view with its headline number, the program list sits in a recessed panel, view icons rest in a floating rail, and primary buttons are red. The light and high-contrast themes still work as before.
+- **System Info window.** A new button on the action bar (also in the Tools menu, and `--sysinfo` on the command line) shows your Windows edition, version and uptime, processor, memory, motherboard, graphics, every drive, optical drives and audio — with temperatures where Windows reports them.
+- **Upgrades close the old copy for you.** Installing or uninstalling now asks a running Purgeon to exit cleanly first (with a forced close as a fallback), and a silent install relaunches it afterwards — no more locked-file failures or manual closing.
+- **Debloat grows from 26 to 93 tweaks.** A new App Privacy section carries the same per-app permission switches as Settings › Privacy (account info, location, camera, microphone, contacts, calendar, email, messages, files, passkeys, Bluetooth, eye tracking, screenshots and more), plus new privacy, suggestions, search, Explorer and settings-sync toggles. Every tweak stays reversible, restoring the previous value when switched off.
 
 ## Files
 
