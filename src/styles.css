@@ -253,12 +253,6 @@ kbd {
   display: flex; align-items: center; justify-content: space-between; gap: 8px;
   padding: 5px 8px; background: var(--bg); border-bottom: 1px solid var(--border);
 }
-.view-picker {
-  border: 1px solid transparent; background: transparent; color: var(--text);
-  padding: 2px 4px; border-radius: 6px; outline: none; cursor: pointer;
-}
-.view-picker:hover, .view-picker:focus { border-color: var(--border-strong); }
-.view-picker option { background: var(--raised); color: var(--text); }
 .search { position: relative; width: 240px; }
 .search input {
   width: 100%; padding: 3px 22px 3px 10px;
@@ -498,10 +492,6 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .field-row input:focus, .field input:focus { border-color: var(--accent); }
 .field { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; color: var(--muted); }
 .field input { color: var(--text); }
-
-/* toolbar: view picker + Debloat button */
-.toolbar-left { display: flex; align-items: center; gap: 6px; }
-.view-picker.inactive { color: var(--muted); }
 .debloat-button {
   border: 1px solid var(--border-strong); border-radius: 9px; background: var(--panel); color: var(--text);
   padding: 2px 10px; cursor: pointer;
@@ -608,16 +598,6 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .confirm-detail { white-space: pre-line; color: var(--text); margin: 0 0 10px; line-height: 1.5; }
 .confirm-check { display: flex; align-items: center; gap: 8px; margin-top: 12px; color: var(--text); cursor: pointer; }
 
-/* second toolbar: Startup & Services and Monitored Programs */
-.toolbar2 { justify-content: flex-start; gap: 6px; padding: 4px 8px; background: var(--panel); }
-.tool-button {
-  border: 1px solid var(--border-strong); border-radius: 9px; background: var(--panel); color: var(--text);
-  padding: 2px 10px; cursor: pointer;
-}
-.tool-button:hover { border-color: var(--accent); color: #fff; }
-.tool-button.active { border-color: var(--accent-ink); background: var(--accent-dim); color: #fff; }
-.toolbar-note { margin-left: auto; color: var(--muted); }
-
 /* Change History shows date and time */
 .list.view-history .col-date, .list.view-snapshots .col-date, .list.view-archive .col-date { width: 168px; }
 
@@ -641,31 +621,18 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .compare-row.info { opacity: 0.7; }
 .compare-extra { flex: none; max-width: 45%; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-left: 8px; }
 .show-more { display: block; margin: 6px auto; }
-.kind-setvalue, .kind-createkey { background: var(--violet); }
-.tool-actions { margin-left: auto; display: flex; gap: 6px; }
-
-/* Toolbars: two rows of four equal columns that fill the window and line up with each other. */
-.toolbar-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; padding: 5px 8px; }
-.toolbar-grid > * { min-width: 0; height: 28px; }
-.toolbar-grid .view-picker, .toolbar-grid .group-picker {
+.kind-setvalue, .kind-createkey { background: var(--violet); }.toolbar-grid .group-picker {
   width: 100%; border: 1px solid var(--border-strong); border-radius: 9px; background: var(--panel); padding: 0 6px; cursor: pointer;
 }
-.toolbar-grid .view-picker:hover, .toolbar-grid .view-picker:focus { border-color: var(--green); }
 .toolbar-grid .search { width: auto; }
-.toolbar-grid .search input { height: 100%; }
-.toolbar-grid .debloat-button, .toolbar-grid .tool-button {
+.toolbar-grid .search input { height: 100%; }.toolbar-grid .debloat-button {
   width: 100%; padding: 0 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; text-align: center;
 }
-.toolbar2.toolbar-grid { padding: 4px 8px 5px; }
 .group-picker { color: var(--violet); outline: none; border-radius: 0; }
 .group-picker:hover:not(:disabled), .group-picker:focus { border-color: var(--violet); }
 .group-picker.active { border-color: var(--violet); background: #221a33; border-radius: 8px; }
 .group-picker:disabled { color: var(--dim); cursor: default; }
-.group-picker option { background: var(--raised); color: var(--text); }
-
-/* Actions and notes for the open list view, under the toolbars */
-.view-bar { display: flex; gap: 6px; align-items: center; padding: 4px 8px; background: var(--bg); border-bottom: 1px solid var(--border); }
-.view-bar .tool-button { height: 26px; }
+.group-picker option { background: var(--raised); color: var(--text); }/* Actions and notes for the open list view { display: flex; gap: 6px; align-items: center; padding: 4px 8px; background: var(--bg); border-bottom: 1px solid var(--border); }
 .view-bar.note { color: var(--muted); }
 
 /* Toolbars: a command bar, the view chips, and the action bar for the selection. */
@@ -706,7 +673,6 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .action-button.danger { color: #ff7a7e; border-color: rgba(229, 72, 77, 0.40); }
 .action-button.danger:hover:not(:disabled) { border-color: var(--accent); color: #ff8a8d; background: rgba(229, 72, 77, 0.10); }
 .action-button:disabled { color: var(--dim); cursor: default; }
-.action-note { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .action-note.right { margin-left: auto; }
 :root[data-theme='light'] .cmd-list { box-shadow: 0 6px 18px rgba(0, 0, 0, 0.15); }
 
@@ -839,7 +805,6 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 }
 :root[data-theme='light'] .list:not(:focus) .row.selected { background: #e8e8e4; }
 :root[data-theme='light'] .error-bar { background: #fbe9e9; border-color: #e7b9b9; }
-:root[data-theme='light'] .tool-button.active { background: #dcf0f2; }
 :root[data-theme='light'] .group-picker.active, :root[data-theme='light'] .chip.on { background: #ece4f7; }
 :root[data-theme='contrast'] .row.selected, :root[data-theme='contrast'] .list:not(:focus) .row.selected { outline: 2px solid var(--accent); outline-offset: -2px; }
 :root[data-theme='contrast'] *:focus-visible { outline: 3px solid #ffd23f !important; }
