@@ -2,6 +2,22 @@
 
 ## Unreleased
 
+- New premium look: a near-black design with red accents and white text.
+  A gradient header band names the open view with its headline number,
+  the program list sits in a recessed panel with rounded corners, view
+  icons rest in a floating rail, primary actions (Uninstall, dialog
+  confirmations) are red gradient buttons, selection washes red, and the
+  status bar carries the PC specs in a pill. The light and high-contrast
+  themes keep working as before.
+- New System Info window (action bar, Tools menu, or `--sysinfo` on the
+  command line): Windows edition, version and uptime; processor with
+  core, thread and clock details; memory size, type, speed and slots;
+  motherboard; graphics with memory and resolution; every drive with
+  its size, connection and type; optical drives; and audio devices.
+  Temperatures for the processor and drives are shown where Windows
+  reports them.
+
+
 ## 1.0.5 - 2026-10-27
 
 - Fixed the action bar breaking after switching views: it measured its
