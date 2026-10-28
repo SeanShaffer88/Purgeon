@@ -280,7 +280,7 @@ fn load(path: &str) -> Result<Snap, String> {
     let mut lines = 0u64;
     for line in BufReader::new(GzDecoder::new(f)).lines() {
         lines += 1;
-        if lines % 8192 == 0 && cancel_requested() {
+        if lines.is_multiple_of(8192) && cancel_requested() {
             return Err(CANCELLED_MSG.to_string());
         }
         let line = line.map_err(|e| e.to_string())?;
