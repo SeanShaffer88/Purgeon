@@ -975,7 +975,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
         if (ok) await api.invoke('program:killProcesses', procs.map((p) => p.Id));
       }
     }
-    setBusy('Backing up and removing selected items…');
+    setBusy({ message: 'Backing up and removing selected items…', canCancel: true, onCancel: () => api.invoke('items:removeCancel').catch(() => {}) });
     try {
       const { results, backupId } = await api.invoke('items:remove', { title, items, owners });
       if (backupId && owners.length) api.invoke('archive:attachBackup', { keys: owners, backupId }).catch(() => {});
@@ -1226,7 +1226,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
     });
     if (!go) return;
     setModal(null);
-    setBusy(`Running Windows clean-up…\nThis can take several minutes.`);
+    setBusy({ message: 'Running Windows clean-up…\nThis can take several minutes.', canCancel: true, onCancel: () => api.invoke('junk:cleanSystemCancel').catch(() => {}) });
     try {
       const results = await api.invoke('junk:cleanSystem', system.map((c) => c.id));
       setModal({
@@ -1520,7 +1520,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
   // ---- 5-8. disk map, sheet, registry search ---------------------------------------------------------------
 
   const openDiskMap = async () => {
-    setBusy('Measuring programs and their data folders…\nThis can take a minute.');
+    setBusy({ message: 'Measuring programs and their data folders…\nThis can take a minute.', canCancel: true, onCancel: () => api.invoke('explore:diskMapCancel').catch(() => {}) });
     try {
       setModal({ type: 'diskmap', data: await api.invoke('explore:diskMap', desktopCache.current) });
     } catch (e) {
@@ -1782,7 +1782,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
     compareNow: (p) => view === 'snapshots' && runCompare(p, null),
     deleteSnapshot: async (p) => {
       if (view !== 'snapshots') return;
-      if (!(await api.invoke('dialog:confirm', { confirmId: 'deleteSnapshot', message: `Delete the snapshot "${p.name}"?`, detail: 'The snapshot file is deleted. Your files and settings are not affected.' }))) return;
+      if (!(await api.invoke('dialog:confirm', { confirmId: 'deleteSnapshot', message: `Delete the snapshot "${p.name}"?`, detail: 'The snapshot files go to the Recycle Bin. Your files and settings are not affected.' }))) return;
       await api.invoke('snapshots:remove', p.id);
       load();
     },
@@ -1991,7 +1991,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
       setModal({ type: 'results', title: 'Restore Report', results });
     },
     deleteBackup: async (p) => {
-      if (await api.invoke('dialog:confirm', { confirmId: 'deleteBackup', message: `Delete the backup of ${p.name}?`, detail: 'This cannot be undone.' })) {
+      if (await api.invoke('dialog:confirm', { confirmId: 'deleteBackup', message: `Delete the backup of ${p.name}?`, detail: 'The backup folder goes to the Recycle Bin, so you can bring it back from there.' })) {
         await api.invoke('backups:remove', p.id);
         load();
       }

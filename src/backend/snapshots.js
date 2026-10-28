@@ -72,8 +72,8 @@ export async function list() {
 
 export async function remove(id) {
   if (!validId(id)) throw new Error('Invalid snapshot id');
-  await sys.removePath(snapFile(id));
-  await sys.removePath(metaFile(id));
+  // To the Recycle Bin, not a hard delete, so a snapshot deleted by mistake can be brought back.
+  for (const f of [snapFile(id), metaFile(id)]) if (await sys.exists(f)) await sys.trash(f);
 }
 
 export async function rename(id, name) {

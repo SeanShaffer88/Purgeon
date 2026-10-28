@@ -24,7 +24,7 @@ const under = (c, p) => c.toLowerCase() === p.toLowerCase() || c.toLowerCase().s
 
 // Each program's install folder plus its data folders (named after it, or after its publisher
 // inside a publisher folder), measured: [{ key, name, install, data: [{ path, bytes }], total }].
-export async function diskMap(programs) {
+export async function diskMap(programs, shouldStop) {
   const keys = programs.map((p) => ({ p, k: nameKey(p.name), pub: publisherKey(p.publisher), loc: clean(p.location) }));
   const found = new Map(programs.map((p) => [p.key, []]));
   for (const root of fileRoots()) {
@@ -47,6 +47,8 @@ export async function diskMap(programs) {
   }
   const out = [];
   for (const { p, loc } of keys) {
+    // Cancelled: return what was measured so far rather than nothing.
+    if (shouldStop && shouldStop()) break;
     const install = /^[a-z]:\\./i.test(loc) && !isProtected(loc) ? (await sys.folderSize(loc, 300000, 4000).catch(() => ({ bytes: 0 }))).bytes : 0;
     const dirs = [...new Set(found.get(p.key))].filter((d) => !(loc && under(d, loc)));
     const data = [];

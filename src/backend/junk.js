@@ -214,9 +214,14 @@ export async function scanSystem() {
 }
 
 // Runs the chosen Windows clean-up options one by one: [{ id, label, ok, detail, freed }].
-export async function cleanSystem(ids) {
+// `shouldStop` is polled between options; options not yet run are reported as cancelled.
+export async function cleanSystem(ids, shouldStop) {
   const results = [];
   for (const c of SYSTEM_CATEGORIES.filter((x) => ids.includes(x.id))) {
+    if (shouldStop && shouldStop()) {
+      results.push({ id: c.id, label: c.label, ok: false, detail: 'Cancelled', freed: 0 });
+      continue;
+    }
     const before = await freeBytes();
     const r = await c.clean().catch((e) => ({ ok: false, detail: String(e?.message || e) }));
     const freed = Math.max(0, (await freeBytes()) - before);

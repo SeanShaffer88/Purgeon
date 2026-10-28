@@ -76,6 +76,15 @@ const open = (target) => sys.launch('explorer.exe', [target]);
 const measuredListeners = new Set();
 let confirmUI = null;
 
+// Cancellation for the long operations the window can cancel: each run gets a
+// fresh stop flag, the matching cancel request flips it, and the operation
+// polls it between steps.
+const opStops = { measure: null, removeItems: null, cleanSystem: null, diskMap: null };
+const newStop = (name) => (opStops[name] = { stopped: false });
+const stopOp = (name) => {
+  if (opStops[name]) opStops[name].stopped = true;
+};
+
 // Inno Setup, NSIS and similar uninstallers keep running from %TEMP% under these names.
 async function uninstallerStillRunning() {
   const out = await runPS(
@@ -120,7 +129,12 @@ const handlers = {
   'programs:removeProvisioned': (pkgName) => programs.removeProvisionedPackage(pkgName),
   'programs:restoreStore': async ({ pkgName, family }) => ({ restored: await programs.restoreStoreApp(pkgName), storeUrl: `ms-windows-store://pdp/?PFN=${family || ''}` }),
   // Each result is delivered to onMeasured listeners as soon as it is ready.
-  'programs:measure': (list) => measure.measure(list, (result) => measuredListeners.forEach((fn) => fn(result))),
+  'programs:measure': (arg) => {
+    const list = Array.isArray(arg) ? arg : arg?.list || [];
+    const stop = !Array.isArray(arg) && arg?.manual ? newStop('measure') : null;
+    return measure.measure(list, (result) => measuredListeners.forEach((fn) => fn(result)), stop ? () => stop.stopped : undefined);
+  },
+  'programs:measureCancel': () => stopOp('measure'),
   'icons:get': (list) => programs.iconsFor(list),
   'program:runUninstaller': async (program) => {
     const rp = await maybeCreateRestorePoint('uninstall', `Purgeon: before uninstalling ${program.name}`);
@@ -157,9 +171,11 @@ const handlers = {
   'program:killProcesses': (ids) => runPS(`Stop-Process -Id ${ids.map(Number).join(',')} -Force -ErrorAction SilentlyContinue`),
   'items:remove': async ({ title, items, owners }) => {
     const rp = await maybeCreateRestorePoint('removal', `Purgeon: before removing ${title}`);
-    const result = await backups.removeItems({ title, items, owners });
+    const stop = newStop('removeItems');
+    const result = await backups.removeItems({ title, items, owners, shouldStop: () => stop.stopped });
     return { ...result, restorePoint: rp };
   },
+  'items:removeCancel': () => stopOp('removeItems'),
   'program:openFolder': async (location) => (location && (await sys.exists(location)) ? (await open(location), '') : 'Folder not found'),
   'program:openRegistry': async (key) => {
     const full = key.replace(/^HKLM\\/i, 'HKEY_LOCAL_MACHINE\\').replace(/^HKCU\\/i, 'HKEY_CURRENT_USER\\');
@@ -219,9 +235,13 @@ const handlers = {
   'junk:scanSystem': () => junk.scanSystem(),
   'junk:cleanSystem': async (ids) => {
     const rp = await maybeCreateRestorePoint('junk-clean', 'Purgeon: before junk clean-up');
-    const result = await junk.cleanSystem(ids);
-    return { ...result, restorePoint: rp };
+    const stop = newStop('cleanSystem');
+    const result = await junk.cleanSystem(ids, () => stop.stopped);
+    // The result is an array; attach the restore point without breaking it
+    // (spreading an array into an object would strip its array methods).
+    return Object.assign(result, { restorePoint: rp });
   },
+  'junk:cleanSystemCancel': () => stopOp('cleanSystem'),
   'drivers:list': () => drivers.listDrivers(),
   'drivers:candidates': () => drivers.oldDriverCandidates(),
   'drivers:delete': async ({ inf }) => drivers.deleteDriver(inf),
@@ -294,7 +314,11 @@ const handlers = {
   'winget:repair': (id) => winget.repair(id),
   'winget:exportTo': (file) => winget.exportList(file),
   // 5-8. exploring
-  'explore:diskMap': (list) => explore.diskMap(list),
+  'explore:diskMap': (list) => {
+    const stop = newStop('diskMap');
+    return explore.diskMap(list, () => stop.stopped);
+  },
+  'explore:diskMapCancel': () => stopOp('diskMap'),
   'explore:timeline': async (list) => explore.timeline(list, sys.uninstallKeyTimes ? await sys.uninstallKeyTimes().catch(() => ({})) : {}),
   'program:sheet': (program) => explore.sheet(program),
   'program:analyze': (program) => explore.analyze(program),
