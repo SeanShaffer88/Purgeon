@@ -7,6 +7,7 @@ import * as leftovers from './leftovers.js';
 import * as backups from './backups.js';
 import * as shared from './shared.js';
 import * as erase from './erase.js';
+import * as games from './games.js';
 import * as monitor from './monitor.js';
 import * as debloat from './debloat.js';
 import * as restore from './restore.js';
@@ -248,6 +249,15 @@ const handlers = {
   'erase:runCancel': () => {
     stopOp('eraseRun');
     return sys.cancelErase ? sys.cancelErase() : undefined;
+  },
+  'games:list': () => games.list(),
+  // Cleaning up a gone game's entry goes through the standard backed-up
+  // removal: the launcher manifest (or GOG key) is copied into a backup
+  // package first, so the cleanup itself can be undone.
+  'games:cleanup': async (game) => {
+    const item = game.entryKind === 'key' ? { kind: 'key', path: game.entryPath } : { kind: 'file', path: game.entryPath };
+    const result = await backups.removeItems({ title: `Leftover entry: ${game.name}`, items: [item], owners: [] });
+    return result;
   },
   'backups:remove': (id) => backups.remove(id),
   'snapshots:list': () => snapshots.list(),
@@ -556,6 +566,11 @@ const recorders = {
     type: 'Restore',
     title: `Restored the backup of ${String(id).replace(/^[^_]*_/, '').replace(/-/g, ' ') || 'removed items'}`,
     detail: `${results.filter((r) => r.ok).length} of ${results.length} entries restored`,
+  }),
+  'games:cleanup': (game, out) => ({
+    type: 'Game entry cleanup',
+    title: `Removed the leftover launcher entry for ${game.name}`,
+    detail: out && out.backupId ? 'The entry was backed up first — restore it from the Archive if needed' : 'The entry could not be removed',
   }),
   'erase:run': (_arg, out) => ({
     type: 'Secure erase',
