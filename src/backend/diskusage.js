@@ -58,7 +58,7 @@ export async function drives() {
     `@(Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue | ForEach-Object { [pscustomobject]@{ root = $_.Root; used = [int64]$_.Used; free = [int64]$_.Free } })`
   ).catch(() => []);
   return (Array.isArray(rows) ? rows : [])
-    .filter((d) => d && /^[a-z]:\\$/i.test(d.root || ''))
+    .filter((d) => d && /^[a-z]:\\$/i.test(d.root || '') && (Number(d.used) || 0) + (Number(d.free) || 0) > 0)
     .map((d) => ({ root: d.root, used: Number(d.used) || 0, free: Number(d.free) || 0 }))
     .sort((a, b) => a.root.localeCompare(b.root));
 }

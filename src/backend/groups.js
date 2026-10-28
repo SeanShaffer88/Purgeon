@@ -18,7 +18,9 @@ export const get = () =>
 // Puts programs in a group ('' takes them out). Returns each program's previous group, for undo.
 export async function set(keys, group) {
   const all = await get();
-  const name = String(group || '').trim().slice(0, 60);
+  // Leading control characters are stripped: the built-in groups are marked
+  // with one, and a typed name must never be able to impersonate them.
+  const name = String(group || '').replace(/^[\u0000-\u001f]+/, '').trim().slice(0, 60);
   const previous = Object.fromEntries(keys.map((k) => [k, all[k] || '']));
   for (const k of keys) {
     if (name) all[k] = name;
