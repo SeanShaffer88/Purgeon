@@ -5,6 +5,7 @@ import { setConfirmUI } from './backend/api.js';
 import { iconPathFor } from './backend/programs.js';
 import { applyZoom, nextStep } from './zoom.js';
 import { ACTION_TIPS, installTips } from './tips.js';
+import { BUILTIN_GROUPS } from './builtins.js';
 import * as updatecheck from './backend/updatecheck.js';
 import { TakeSnapshotDialog, ComparisonDialog, SnapshotTimeline, comparisonHtml } from './snapshots.jsx';
 import { DebloatView } from './debloat.jsx';
@@ -84,12 +85,7 @@ const DESKTOP_BAR = ['uninstall', 'force', 'analyzeProgram', 'analyze', 'sheet',
 const shortLabel = (label) => label.replace(/\.\.\.$/, '').replace('Migrate / Back Up Program', 'Migrate').replace('Analyze Leftovers', 'Leftovers').replace(/^Analyze Program$/, 'Analyze').replace('Add to Uninstall Queue', 'Queue').replace('Compare the Two Selected', 'Compare Selected').replace(/^Set Group$/, 'Group').replace('Hide From List', 'Hide').replace('Installation Folder', 'Folder').replace('Registry Entry', 'Registry');
 
 // Group-picker entries that filter by insight rather than by group.
-const INSIGHT_FILTERS = [
-  ['\u0001offer', 'Possible bundled offers', (i) => i?.offer],
-  ['\u0001together', 'Installed together with another', (i) => i?.together],
-  ['\u0001unsigned', 'Unsigned or bad signature', (i) => i?.signature && i.signature !== 'Valid'],
-  ['\u0001growing', 'Growing in size', (i) => i?.growth],
-];
+
 
 // Group filter values besides a group's name.
 const ALL_GROUPS = '';
@@ -795,9 +791,9 @@ const [reducedMotion, setReducedMotion] = useState(false);
   const visible = useMemo(() => {
     const q = filter.trim().toLowerCase();
     const programs = view === 'desktop' || view === 'store';
-    const insightFilter = INSIGHT_FILTERS.find(([id]) => id === groupFilter);
+    const builtin = BUILTIN_GROUPS.find(([id]) => id === groupFilter);
     const inGroup = (r) =>
-      !programs || groupFilter === ALL_GROUPS || (insightFilter ? !!insightFilter[2](insight[r.key]) : groupFilter === UNGROUPED ? !groups[r.key] : groups[r.key] === groupFilter);
+      !programs || groupFilter === ALL_GROUPS || (builtin ? !!builtin[2](r, insight[r.key]) : groupFilter === UNGROUPED ? !groups[r.key] : groups[r.key] === groupFilter);
     const shown = (r) => !programs || showHidden || !hidden[r.key];
     const thirtyDaysAgo = Date.now() - 30 * 86400000;
     const list = rows.filter((r) => {
@@ -2660,21 +2656,21 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           title={batchable ? 'Show one group of programs. Right-click a program › Set Group to add it to one (Ctrl+G).' : 'Groups apply to the program lists'}
         >
           <option value={ALL_GROUPS}>All Groups</option>
+          {batchable && (
+            <optgroup label="Built-in groups">
+              {BUILTIN_GROUPS.map(([id, label, test]) => (
+                <option key={id} value={id}>
+                  {label} ({rows.filter((r) => test(r, insight[r.key])).length})
+                </option>
+              ))}
+            </optgroup>
+          )}
           {groupNames.map((g) => (
             <option key={g} value={g}>
               {g} ({Object.values(groups).filter((x) => x === g).length})
             </option>
           ))}
           <option value={UNGROUPED}>Ungrouped</option>
-          {view === 'desktop' && (
-            <optgroup label="Insights">
-              {INSIGHT_FILTERS.map(([id, label, test]) => (
-                <option key={id} value={id}>
-                  {label} ({rows.filter((r) => test(insight[r.key])).length})
-                </option>
-              ))}
-            </optgroup>
-          )}
         </select>
       </div>
       {/* Row 3: the actions for the selection, in balanced rows of equal-width buttons. */}
