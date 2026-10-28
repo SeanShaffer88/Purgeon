@@ -50,6 +50,7 @@ import * as queue from './queue.js';
 import * as drivers from './drivers.js';
 import * as trials from './trials.js';
 import * as explore from './explore.js';
+import * as diskusage from './diskusage.js';
 import * as browsers from './browsers.js';
 import * as portable from './portable.js';
 import * as portableapps from './portableapps.js';
@@ -79,7 +80,7 @@ let confirmUI = null;
 // Cancellation for the long operations the window can cancel: each run gets a
 // fresh stop flag, the matching cancel request flips it, and the operation
 // polls it between steps.
-const opStops = { measure: null, removeItems: null, cleanSystem: null, diskMap: null };
+const opStops = { measure: null, removeItems: null, cleanSystem: null, diskMap: null, diskScan: null };
 const newStop = (name) => (opStops[name] = { stopped: false });
 const stopOp = (name) => {
   if (opStops[name]) opStops[name].stopped = true;
@@ -319,6 +320,18 @@ const handlers = {
     return explore.diskMap(list, () => stop.stopped);
   },
   'explore:diskMapCancel': () => stopOp('diskMap'),
+  'disk:drives': () => diskusage.drives(),
+  'disk:scan': (dir) => {
+    const stop = newStop('diskScan');
+    return diskusage.scan(dir, () => stop.stopped);
+  },
+  'disk:scanCancel': () => stopOp('diskScan'),
+  // Opens a folder (or a file's folder) in Explorer, from the Disk Usage view.
+  'disk:open': async (entry) => {
+    const target = entry?.dir ? entry.path : entry?.path ? entry.path.replace(/[\\/][^\\/]*$/, '') : '';
+    if (target) await open(target);
+    return '';
+  },
   'explore:timeline': async (list) => explore.timeline(list, sys.uninstallKeyTimes ? await sys.uninstallKeyTimes().catch(() => ({})) : {}),
   'program:sheet': (program) => explore.sheet(program),
   'program:analyze': (program) => explore.analyze(program),

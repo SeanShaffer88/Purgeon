@@ -917,3 +917,30 @@ button:focus-visible, select:focus-visible, input:focus-visible, .tweak:focus-vi
 .sysinfo-main { color: var(--text); }
 .sysinfo-temp { margin-left: 12px; color: var(--accent-soft); font-weight: 600; }
 .sysinfo-sub { color: var(--muted); font-size: 13px; }
+
+/* Disk Usage view */
+.disk { flex: 1; overflow-y: auto; background: var(--bg); padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.disk-drives { display: flex; flex-wrap: wrap; gap: 8px; }
+.drive-chip { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--line, #26262a); border-radius: 10px; background: var(--panel); color: var(--text); cursor: pointer; }
+.drive-chip:hover { border-color: var(--accent); }
+.drive-chip.on { border-color: var(--accent-ink); background: var(--accent-dim); }
+.drive-letter { font-weight: 600; }
+.drive-meta { color: var(--muted); font-size: 12px; }
+.drive-track { width: 70px; height: 6px; border-radius: 3px; background: #26262a; overflow: hidden; display: inline-block; }
+.drive-fill { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-bright), var(--accent-deep)); }
+.disk-nav { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.disk-crumbs { display: flex; align-items: center; flex-wrap: wrap; gap: 2px; flex: 1; min-width: 0; }
+.crumb { background: none; border: none; color: var(--text); cursor: pointer; padding: 3px 5px; border-radius: 6px; font: inherit; }
+.crumb:hover { background: var(--hover, #1d1d20); color: #fff; }
+.crumb-sep { color: var(--muted); padding: 0 1px; }
+.disk-note { color: var(--muted); font-size: 13px; }
+.disk-list { display: flex; flex-direction: column; gap: 4px; }
+.disk-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; border: 1px solid var(--line, #26262a); border-radius: 10px; background: var(--panel); }
+.disk-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; background: none; border: none; color: var(--text); text-align: left; font: inherit; padding: 0; }
+.disk-row.openable .disk-main { cursor: pointer; }
+.disk-name { display: flex; align-items: center; gap: 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.disk-tag { font-size: 11px; color: var(--muted); border: 1px solid var(--line, #26262a); border-radius: 999px; padding: 1px 7px; }
+.disk-bar { height: 8px; border-radius: 4px; background: #26262a; overflow: hidden; display: block; }
+.disk-fill { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-bright), var(--accent-deep)); border-radius: 4px; }
+.disk-size { min-width: 130px; text-align: right; font-variant-numeric: tabular-nums; }
+.disk-share { color: var(--muted); margin-left: 8px; font-size: 12px; }

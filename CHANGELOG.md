@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- New Disk Usage view (Ctrl+0): what is using the space on each drive,
+  biggest first. Open folders to drill down, with each item's share of
+  its folder; links are listed but never counted, so nothing is
+  double-counted, and a folder whose counting stopped early is marked
+  "at least". The scan can be cancelled and keeps what it measured.
+  Also on the command line as --disk.
 - Safety pass: the long operations that lacked one now have a Cancel —
   removing items with backup, the Windows clean-ups, and the Disk Map
   measuring sweep all stop between steps, report anything not yet done

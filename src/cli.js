@@ -77,6 +77,7 @@ import { runUninstaller } from './backend/api.js';
 import { runCommandLine } from './backend/shell.js';
 import { parseCliArgs } from './cli-args.js';
 import { collectSysInfo, sectionsToText } from './backend/sysinfo.js';
+import * as diskusage from './backend/diskusage.js';
 
 const HELP = `Purgeon command line
 
@@ -123,6 +124,11 @@ const HELP = `Purgeon command line
         Startup performance profile.
   --settings [--json]
         Shows current settings.
+  --sysinfo [--json]
+        Shows system information (the same report as Tools > System Info).
+  --disk ["<folder>"] [--json]
+        Shows what is using disk space: the drives, or the biggest folders
+        and files inside one folder (the system drive when none is named).
 
 Snapshots are named by id, by name, or "latest". Run from an administrator
 terminal to see the output there; with --report the results are also saved
@@ -305,6 +311,15 @@ async function run(args) {
     const { sections } = await collectSysInfo();
     if (j) return wrap(true, JSON.stringify(sections, null, 2));
     return wrap(true, sectionsToText(sections));
+  }
+  if (cmd === '--disk') {
+    const named = option(args, '--disk');
+    if (named && named.startsWith('--')) throw new Error('Name a folder: --disk "C:\\Users"');
+    const drives = await diskusage.drives();
+    const dir = named || diskusage.systemDriveRoot();
+    const scan = await diskusage.scan(dir);
+    if (j) return wrap(true, JSON.stringify({ drives, scan }, null, 2));
+    return wrap(true, diskusage.toText({ drives, scan }));
   }
   if (cmd === '--schedule') {
     if (flag(args, '--missed')) {
