@@ -575,6 +575,34 @@ export function MonitorWizard({ resume, onClose, onRecorded }) {
 
 const baseName = (p) => (p || '').split('\\').pop().replace(/\.(exe|msi|msix|bat|cmd)$/i, '').replace(/[-_.]?(setup|installer|install|x64|x86|win64|win32)\b/gi, '').replace(/[-_]+/g, ' ').trim();
 
+export function SystemInfoDialog({ data, onClose }) {
+  return (
+    <Dialog title="System Info" onClose={onClose} width={600} buttons={<button className="primary" onClick={onClose}>Close</button>}>
+      {!data ? (
+        <p className="footnote">Reading this PC's details…</p>
+      ) : (
+        <div className="sysinfo">
+          {(data.sections || []).map((s) => (
+            <div key={s.title} className="sysinfo-section">
+              <div className="sysinfo-title">{s.title}</div>
+              {s.rows.map((r, i) => (
+                <div key={i} className="sysinfo-row">
+                  <div className="sysinfo-main">
+                    {r.head}
+                    {r.tempC != null && <span className="sysinfo-temp">{r.tempC} °C</span>}
+                  </div>
+                  {r.sub && <div className="sysinfo-sub">{r.sub}</div>}
+                </div>
+              ))}
+            </div>
+          ))}
+          <p className="footnote">Temperatures appear only where Windows reports them.</p>
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
 export function AboutDialog({ onClose }) {
   return (
     <Dialog title="About Purgeon" onClose={onClose} width={560} buttons={<><button className="primary" onClick={onClose}>OK</button><button onClick={() => api.invoke('program:openUrl', 'https://github.com/SeanShaffer88/Purgeon/releases').catch(() => {})}>View Releases</button></>}>

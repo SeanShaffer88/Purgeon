@@ -76,6 +76,7 @@ import * as backups from './backend/backups.js';
 import { runUninstaller } from './backend/api.js';
 import { runCommandLine } from './backend/shell.js';
 import { parseCliArgs } from './cli-args.js';
+import { collectSysInfo, sectionsToText } from './backend/sysinfo.js';
 
 const HELP = `Purgeon command line
 
@@ -299,6 +300,11 @@ async function run(args) {
     const list = await associations.extensionsForProgram(nameOrExe);
     if (j) return wrap(true, JSON.stringify(list, null, 2));
     return wrap(true, list.length ? list.map((e) => `${e.extension.padEnd(10)}  ${e.exe}\r\n`).join('') : `No extensions found for "${nameOrExe}".\r\n`);
+  }
+  if (cmd === '--sysinfo') {
+    const { sections } = await collectSysInfo();
+    if (j) return wrap(true, JSON.stringify(sections, null, 2));
+    return wrap(true, sectionsToText(sections));
   }
   if (cmd === '--schedule') {
     if (flag(args, '--missed')) {
