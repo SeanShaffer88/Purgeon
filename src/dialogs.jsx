@@ -574,6 +574,115 @@ export function SharedDialog({ onClose }) {
   );
 }
 
+// Secure Erase (Tools › Advanced Tools): overwrite files, then delete them.
+// No backup and no undo — that is the point of the tool — so the list is
+// reviewed first and the erase is confirmed in a second step, every time
+// (the confirmation cannot be remembered away).
+export function EraseDialog({ onClose }) {
+  const [files, setFiles] = useState([]);
+  const [refused, setRefused] = useState([]);
+  const [pattern, setPattern] = useState('zero');
+  const [confirming, setConfirming] = useState(false);
+  const [running, setRunning] = useState(false);
+  const [results, setResults] = useState(null);
+  const [error, setError] = useState('');
+
+  const add = async (folder) => {
+    setError('');
+    try {
+      const picked = await api.invoke('erase:pick', folder);
+      if (!picked.length) return;
+      const out = await api.invoke('erase:collect', picked);
+      setFiles((f) => [...f, ...out.files.filter((n) => !f.some((x) => x.path.toLowerCase() === n.path.toLowerCase()))]);
+      setRefused((r) => [...r, ...out.refused]);
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const run = async () => {
+    setRunning(true);
+    setError('');
+    try {
+      const out = await api.invoke('erase:run', { files, pattern });
+      setResults(out.results);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setRunning(false);
+    }
+  };
+
+  const totalBytes = files.reduce((a, f) => a + (f.size || 0), 0);
+
+  return (
+    <Dialog title="Secure Erase" onClose={onClose} width={760} buttons={<button className="primary" onClick={onClose}>Close</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>
+        Overwrites each file’s contents before deleting it, so the data cannot be undeleted. There is no backup and no undo — that is the point of this tool. Registry items are not offered: overwriting has no meaning there.
+      </p>
+      {error && <div className="error-bar" style={{ marginBottom: 10 }}><span>{error}</span></div>}
+      {!results && !confirming && (
+        <>
+          <button className="erase-drop" onClick={() => add(false)} title="Choose files to erase">
+            Add files to erase…
+          </button>
+          <div style={{ display: 'flex', gap: 8, margin: '10px 0' }}>
+            <button onClick={() => add(false)}>Add Files…</button>
+            <button onClick={() => add(true)}>Add Folder…</button>
+            {files.length > 0 && <button className="ghost" onClick={() => { setFiles([]); setRefused([]); }}>Clear List</button>}
+          </div>
+          {files.map((f) => (
+            <div key={f.path} className="pkg-entry"><span>{f.path} <span className="muted">{f.size ? `${(f.size / 1048576).toFixed(1)} MB` : ''}</span></span></div>
+          ))}
+          {refused.map((r) => (
+            <div key={r.path} className="pkg-entry"><span className="muted">✗ {r.path} — {r.reason}</span></div>
+          ))}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
+            <span className="muted">Overwrite:</span>
+            <span className="seg">
+              {[['zero', '1 pass · zeros'], ['random', '1 pass · random'], ['three', '3 passes']].map(([id, label]) => (
+                <button key={id} className={pattern === id ? 'sel' : ''} onClick={() => setPattern(id)}>{label}</button>
+              ))}
+            </span>
+            <span style={{ flex: 1 }} />
+            <button className="primary danger" disabled={!files.length} onClick={() => setConfirming(true)} title="Review the list once more, then erase">
+              Erase {files.length || ''} File{files.length === 1 ? '' : 's'}…
+            </button>
+          </div>
+          <div className="note" style={{ marginTop: 14 }}>
+            Honest limit: on modern SSDs the drive moves data around internally, so overwriting lowers the chance of recovery but cannot promise it. For total certainty, encrypt the drive or destroy it physically.
+          </div>
+        </>
+      )}
+      {!results && confirming && (
+        <>
+          <p style={{ fontSize: 13, marginBottom: 8 }}>
+            <strong>This cannot be undone.</strong> {files.length} file{files.length === 1 ? '' : 's'} ({(totalBytes / 1048576).toFixed(1)} MB) will be overwritten and deleted, with no backup:
+          </p>
+          {files.map((f) => (
+            <div key={f.path} className="pkg-entry"><span>{f.path}</span></div>
+          ))}
+          <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
+            <button className="primary danger" onClick={run} disabled={running} title="Overwrite and delete the listed files">
+              {running ? 'Erasing…' : 'Confirm Erase'}
+            </button>
+            {running && <button onClick={() => api.invoke('erase:runCancel')} title="Stop after the current file (a file mid-overwrite is left partially overwritten)">Cancel</button>}
+            {!running && <button onClick={() => setConfirming(false)}>Back</button>}
+          </div>
+        </>
+      )}
+      {results && (
+        <>
+          <div className="pkg-entries-head">Erase results</div>
+          {results.map((r, i) => (
+            <div key={i} className="pkg-entry"><span>{r.ok ? '✓' : '✗'} {r.path} <span className="muted">— {r.detail}</span></span></div>
+          ))}
+        </>
+      )}
+    </Dialog>
+  );
+}
+
 export function ResultsDialog({ title, results, note, onClose, onUndo }) {
   const failed = results.filter((r) => !r.ok);
   return (

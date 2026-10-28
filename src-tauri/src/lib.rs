@@ -800,6 +800,78 @@ fn cancel_snapshot() {
     snapshot::request_cancel();
 }
 
+static ERASE_CANCELLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Asks an in-progress secure erase to stop; the file being erased is left
+/// partially overwritten and is NOT deleted.
+#[tauri::command]
+fn cancel_erase() {
+    ERASE_CANCELLED.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Securely erases one file: overwrites its full length once per entry in
+/// `passes` ("zero" or "random"), flushing to disk after each pass, then
+/// deletes it. Links are refused (erase the real file instead) and so is
+/// anything that is not a plain file. Random bytes come from a small
+/// xorshift generator seeded from the clock and process id — good enough to
+/// overwrite with, and it keeps the crate free of a random-number dependency.
+#[tauri::command]
+fn secure_erase_file(path: String, passes: Vec<String>) -> Result<(), String> {
+    use std::io::{Seek, SeekFrom, Write};
+    ERASE_CANCELLED.store(false, std::sync::atomic::Ordering::SeqCst);
+    let cancelled = || ERASE_CANCELLED.load(std::sync::atomic::Ordering::SeqCst);
+    let md = std::fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
+    if md.file_type().is_symlink() {
+        return Err("Links are not erased — erase the real file instead".to_string());
+    }
+    if !md.is_file() {
+        return Err("Not a file".to_string());
+    }
+    let len = md.len();
+    let mut seed = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos() as u64)
+        .unwrap_or(0x9e37_79b9_7f4a_7c15)
+        ^ (std::process::id() as u64) << 32
+        ^ 0x2545_f491_4f6c_dd1d;
+    let mut next_random = move || {
+        seed ^= seed >> 12;
+        seed ^= seed << 25;
+        seed ^= seed >> 27;
+        seed.wrapping_mul(0x2545_f491_4f6c_dd1d)
+    };
+    let mut file = std::fs::OpenOptions::new()
+        .write(true)
+        .open(&path)
+        .map_err(|e| e.to_string())?;
+    let mut buf = vec![0u8; 1 << 20];
+    for pass in &passes {
+        if cancelled() {
+            return Err("cancelled".to_string());
+        }
+        file.seek(SeekFrom::Start(0)).map_err(|e| e.to_string())?;
+        let mut written: u64 = 0;
+        while written < len {
+            if cancelled() {
+                return Err("cancelled".to_string());
+            }
+            let n = ((len - written).min(buf.len() as u64)) as usize;
+            if pass == "random" {
+                for chunk in buf[..n].chunks_mut(8) {
+                    let bytes = next_random().to_le_bytes();
+                    chunk.copy_from_slice(&bytes[..chunk.len()]);
+                }
+            }
+            file.write_all(&buf[..n]).map_err(|e| e.to_string())?;
+            written += n as u64;
+        }
+        file.sync_all().map_err(|e| e.to_string())?;
+    }
+    drop(file);
+    std::fs::remove_file(&path).map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// All keys and values at or under `key` in a snapshot.
 #[tauri::command]
 async fn snapshot_subtree(path: String, key: String) -> Result<snapshot::Subtree, String> {
@@ -1378,6 +1450,8 @@ pub fn run() {
             take_snapshot,
             compare_snapshots,
             cancel_snapshot,
+            secure_erase_file,
+            cancel_erase,
             snapshot_subtree,
             sys_info,
             quit,

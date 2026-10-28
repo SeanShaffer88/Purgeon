@@ -23,6 +23,8 @@ export async function createTauriSys() {
     takeSnapshot: (out, name, fileRoots, fileDepth, regRoots, excludes) => invoke('take_snapshot', { out, name, fileRoots, fileDepth, regRoots, excludes }),
     compareSnapshots: (before, after, limit) => invoke('compare_snapshots', { before, after, limit }),
     cancelSnapshot: () => invoke('cancel_snapshot'),
+    secureErase: (path, passes) => invoke('secure_erase_file', { path, passes }),
+    cancelErase: () => invoke('cancel_erase'),
     snapshotSubtree: (path, key) => invoke('snapshot_subtree', { path, key }),
     trashMany: (paths) => invoke('move_many_to_trash', { paths }),
     listJunk: (root, maxMs) => invoke('list_junk', { root, maxMs }),
