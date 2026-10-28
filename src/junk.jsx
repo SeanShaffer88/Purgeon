@@ -1,15 +1,10 @@
 import { useEffect, useMemo, useState } from 'react';
 import { cleanupItems } from './backend/junk.js';
+import { formatBytes } from './format.js';
+
+export { formatBytes };
 
 const api = window.api;
-
-export const formatBytes = (b) => {
-  if (!b) return '0 B';
-  if (b < 1024) return `${b} B`;
-  if (b < 1048576) return `${(b / 1024).toFixed(1)} KB`;
-  if (b < 1073741824) return `${(b / 1048576).toFixed(1)} MB`;
-  return `${(b / 1073741824).toFixed(2)} GB`;
-};
 
 // Junk Files: scans the known junk folders and cleans the chosen categories to the Recycle Bin.
 export function JunkView({ filter, admin, onError, onStatus, onClean }) {
