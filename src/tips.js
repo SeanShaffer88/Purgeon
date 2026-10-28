@@ -38,6 +38,7 @@ export const ACTION_TIPS = {
   'view:debloat': 'Safe, reversible Windows tweaks: ads, telemetry, suggestions, taskbar and Explorer settings. Each can be turned back off.',
   'view:startup': 'Everything that runs without you starting it: Run entries, startup shortcuts, scheduled tasks and services. Turning one off never deletes it.',
   'view:junk': 'Temporary files, caches, crash dumps and other files Windows and programs recreate. Cleaned files go to the Recycle Bin.',
+  'view:disk': 'What is using the space on each drive: the biggest folders and files, with each one’s share of its folder. Open a folder to look inside it. Nothing is changed here.',
   'view:archive': 'A permanent record of every program removed, with how, when, and its backups. Reinstall or put leftovers back from here.',
   'view:timeline': 'Everything that changed on this PC that Purgeon knows of, newest first: installs, removals, snapshots, trials and changes.',
   'view:backups': 'Every removal’s backup. Double-click one to restore what it removed.',

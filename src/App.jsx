@@ -9,6 +9,7 @@ import { BUILTIN_GROUPS } from './builtins.js';
 import * as updatecheck from './backend/updatecheck.js';
 import { TakeSnapshotDialog, ComparisonDialog, SnapshotTimeline, comparisonHtml } from './snapshots.jsx';
 import { DebloatView } from './debloat.jsx';
+import { DiskUsageView } from './disk.jsx';
 import { StartupView } from './startup.jsx';
 import { JunkView, formatBytes } from './junk.jsx';
 import { GroupDialog } from './groups.jsx';
@@ -36,6 +37,7 @@ const VIEWS = {
   startup: { label: 'Startup & Services', noun: 'entries', cols: [], custom: true, button: true },
   debloat: { label: 'Debloat', noun: 'tweaks', cols: [], button: true, custom: true },
   junk: { label: 'Cleaner', noun: 'categories', cols: [], button: true, custom: true },
+  disk: { label: 'Disk Usage', noun: 'items', cols: [], button: true, custom: true },
   timeline: { label: 'Change Timeline', noun: 'events', cols: [['name', 'Event'], ['size', 'Type'], ['date', 'When']], button: true },
   archive: { label: 'Uninstall Archive', noun: 'removed programs', cols: [['name', 'Removed Program'], ['size', 'How'], ['date', 'Removed On']], button: true },
 };
@@ -48,6 +50,7 @@ const VIEW_CHIPS = [
   ['startup', 'Startup', 'Startup & Services: programs, tasks and services that start with Windows (Ctrl+6)'],
   ['debloat', 'Debloat', 'Debloat Windows: safe, reversible tweaks that remove Windows ads, telemetry and clutter (Ctrl+5)'],
   ['junk', 'Cleaner', 'Cleaner: temporary files, crash dumps and caches that can be cleaned (Ctrl+8)'],
+  ['disk', 'Disk Usage', 'Disk Usage: what is using the space on each drive, biggest first (Ctrl+0)'],
   ['snapshots', 'Snapshots', 'Take snapshots and compare them to see what changed (Ctrl+7)'],
   ['archive', 'Archive', 'Uninstall archive: programs removed so far, with how to get them back (Ctrl+9)'],
   ['timeline', 'Timeline', 'Change timeline: everything that changed, newest first (Ctrl+T)'],
@@ -61,6 +64,7 @@ const VIEW_ICON_PATHS = {
   startup: 'M10 2.5v7M6.2 5.2a6 6 0 1 0 7.6 0',
   debloat: 'M4 3v14M10 3v14M16 3v14M2 7h4M8 13h4M14 9h4',
   junk: 'M4 6h12M8 6V4h4v2M5.5 6l1 11h7l1-11M8.5 9v5M11.5 9v5',
+  disk: 'M10 3.5V10h6.5A7 7 0 1 0 10 3.5zM13.2 2.9a7 7 0 0 1 3.9 3.9h-3.9z',
   snapshots: 'M3 6h3l1.5-2h5L14 6h3v10H3zM10 8.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
   archive: 'M2.5 4h15v4h-15zM4 8v9h12V8M8 11h4',
   timeline: 'M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15zM10 6v4.5l3 2',
@@ -78,6 +82,7 @@ const VIEW_NOTES = {
   startup: 'Startup & Services · turn entries off and on; nothing is deleted',
   debloat: 'Debloat · every tweak can be undone',
   junk: 'Cleaner · tick categories, then clean; files go to the Recycle Bin',
+  disk: 'Disk Usage · biggest folders and files first; nothing is changed here',
 };
 
 // The action bar's buttons for a desktop program, in order.
@@ -245,6 +250,7 @@ const MENUS = [
       ['view:debloat', 'Debloat', 'Ctrl+5'],
       ['view:startup', 'Startup & Services', 'Ctrl+6'],
       ['view:junk', 'Cleaner', 'Ctrl+8'],
+      ['view:disk', 'Disk Usage', 'Ctrl+0'],
       ['view:archive', 'Uninstall Archive', 'Ctrl+9'],
       ['view:timeline', 'Change Timeline', 'Ctrl+T'],
       ['diskMap', 'Disk Space Map...'],
@@ -2314,6 +2320,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       let action = null;
       if (e.ctrlKey && !e.altKey && /^[1-9]$/.test(key)) action = `view:${['desktop', 'store', 'monitored', 'backups', 'debloat', 'startup', 'snapshots', 'junk', 'archive'][Number(key) - 1]}`;
+      else if (e.ctrlKey && !e.altKey && key === '0') action = 'view:disk';
       else if (e.ctrlKey && key === 'g') action = 'setGroup';
       else if (e.ctrlKey && key === 't') action = 'view:timeline';
       else if (e.ctrlKey && key === 'k') action = 'palette';
@@ -2567,6 +2574,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               'Safe, reversible Windows tweaks. Every tweak can be undone here.'
             ) : view === 'junk' ? (
               'Only safe categories — caches, dumps and temporary files Windows rebuilds.'
+            ) : view === 'disk' ? (
+              'What is using the space on each drive, biggest first. Open a folder to look inside it.'
             ) : (
               `${visible.length} ${VIEWS[view].noun}`
             )}
@@ -2704,6 +2713,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         />
       ) : view === 'junk' ? (
         <JunkView key={customKey} filter={filter} admin={admin} onError={setError} onStatus={setCustomStatus} onClean={cleanJunk} />
+      ) : view === 'disk' ? (
+        <DiskUsageView key={customKey} filter={filter} onError={setError} onStatus={setCustomStatus} />
       ) : (
       <div className={`list view-${view}`} tabIndex={0} ref={listRef} onKeyDown={onListKey}>
         <div className="list-header">
