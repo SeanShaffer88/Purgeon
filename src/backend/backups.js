@@ -525,7 +525,7 @@ async function prune({ maxDays = 0, maxMB = 0 } = {}, now = Date.now(), hooks = 
   for (const m of candidates) {
     if (maxDays && now - new Date(m.created).getTime() > maxDays * 86400000) {
       await beforeRemove();
-      await remove(m.id);
+      await destroy(m.id);
       removed.push(m.id);
     }
   }
@@ -544,7 +544,7 @@ async function prune({ maxDays = 0, maxMB = 0 } = {}, now = Date.now(), hooks = 
       if (total <= maxMB * 1048576) break;
       if (removed.includes(m.id)) continue;
       await beforeRemove();
-      await remove(m.id);
+      await destroy(m.id);
       removed.push(m.id);
       total -= sizes.get(m.id) || 0;
     }
@@ -683,9 +683,9 @@ async function restore(id) {
   return results;
 }
 
-// Deletes one backup folder (to the Recycle Bin, so it can be brought back).
-// The id must be a single folder name inside the backup root.
-function remove(id) {
+// The folder for one backup id, validated. The id must be a single folder name
+// inside the backup root.
+function backupDir(id) {
   if (!id || typeof id !== 'string') throw new Error('Invalid backup id');
   // Reject path separators and traversal sequences.
   if (/[\\/]/.test(id)) throw new Error('Invalid backup id: path separators not allowed');
@@ -697,7 +697,18 @@ function remove(id) {
   if (target !== root && !target.startsWith(root + path.sep)) {
     throw new Error('Invalid backup id: escapes backup root');
   }
-  return sys.trash(target);
+  return target;
+}
+
+// Deletes one backup folder by hand (to the Recycle Bin, so it can be brought back).
+function remove(id) {
+  return sys.trash(backupDir(id));
+}
+
+// Deletes one backup folder for good. Only the automatic limit pruning uses
+// this: the Recycle Bin would keep the bytes, which defeats the size limit.
+function destroy(id) {
+  return sys.removePath(backupDir(id));
 }
 
 // Export a removal plan (the output of planRemoval) to HTML, CSV or JSON so it can be
