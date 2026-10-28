@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+- Safety pass: the long operations that lacked one now have a Cancel —
+  removing items with backup, the Windows clean-ups, and the Disk Map
+  measuring sweep all stop between steps, report anything not yet done
+  as left in place, and keep what was already removed fully undoable.
+  Deleting a backup or a snapshot now sends it to the Recycle Bin
+  instead of erasing it, so it can be brought back. Also fixed: after
+  running Windows clean-ups, the report could fail to appear; it now
+  shows every time.
 - Built-in groups for the program lists, computed live and shown above
   your own groups in the group picker: Bundled software (possible
   offers), Installed together, Unsigned, Bad signature, Growing in
