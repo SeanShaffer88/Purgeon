@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.7 - 2026-10-28
 
 - Removed the What's This page (it was on the Action menu, the action
   bar and Ctrl+W). The same "what it hooks into Windows" list still
