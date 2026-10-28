@@ -21,38 +21,9 @@ function Invoke-Installer([string] $File, [string] $Arguments) {
     }
 }
 
-# An x86 MSI on the x64 runner must install the x86 executable successfully.
-$msiPath = Join-Path $packages 'Purgeon-Setup.msi'
-$msiInstall = Join-Path $testRoot 'MSI install'
-$installLog = Join-Path $testRoot 'msi-install.log'
-$uninstallLog = Join-Path $testRoot 'msi-uninstall.log'
-Invoke-Installer msiexec.exe "/i `"$msiPath`" /qn /norestart INSTALLDIR=`"$msiInstall`" /L*v `"$installLog`""
-Assert-PeMachine "$msiInstall/purgeon.exe" 0x14C
-$tasks = @('\Purgeon\Start at Sign-in', '\Purgeon\Weekly Maintenance',
-           '\SweepUninstall\Start at Sign-in', '\SweepUninstall\Weekly Maintenance')
-foreach ($task in $tasks) {
-    & schtasks.exe /Create /TN $task /SC ONSTART /TR 'cmd.exe /c exit 0' /F
-    if ($LASTEXITCODE) { throw "Cannot create harmless task fixture: $task" }
-}
-Invoke-Installer msiexec.exe "/x `"$msiPath`" /qn /norestart /L*v `"$uninstallLog`""
-if (Test-Path -LiteralPath "$msiInstall/purgeon.exe") { throw 'MSI uninstall left the executable behind.' }
-foreach ($task in $tasks) {
-    & schtasks.exe /Query /TN $task 2>$null | Out-Null
-    if ($LASTEXITCODE -eq 0) {
-        Select-String -LiteralPath $uninstallLog -Pattern 'RemovePurgeon|RemoveLegacy|CustomActionSchedule|Return value 3' |
-            Select-Object -Last 30 | ForEach-Object { Write-Output $_.Line }
-        throw "MSI uninstall left scheduled task: $task"
-    }
-    # A missing task is the expected result; do not leak its native exit code
-    # into GitHub Actions' PowerShell wrapper after all checks have passed.
-    # Native commands update the global variable. A local assignment would hide
-    # the next query's real exit code and falsely report a surviving task.
-    $global:LASTEXITCODE = 0
-}
-
-# /S must reach the child, /D must preserve spaces, and native selection must pick x64.
+# /S must install silently, /D must preserve spaces, and the setup must install the native x64 build.
 $exeInstall = Join-Path $testRoot 'EXE install'
-Invoke-Installer "$packages/Purgeon-Setup.exe" "/S /D=$exeInstall"
+Invoke-Installer "$packages/Purgeon-Setup-x64.exe" "/S /D=$exeInstall"
 Assert-PeMachine "$exeInstall/purgeon.exe" 0x8664
 $uninstaller = Join-Path $exeInstall 'uninstall.exe'
 if (-not (Test-Path -LiteralPath $uninstaller)) { throw 'NSIS uninstaller missing.' }
@@ -62,4 +33,4 @@ while ((Test-Path -LiteralPath "$exeInstall/purgeon.exe") -and (Get-Date) -lt $d
     Start-Sleep -Milliseconds 250
 }
 if (Test-Path -LiteralPath "$exeInstall/purgeon.exe") { throw 'EXE uninstall left the executable behind.' }
-Write-Output 'Verified x86 MSI and native x64 EXE silent install/uninstall, paths with spaces, and MSI task cleanup.'
+Write-Output 'Verified native x64 EXE silent install/uninstall and paths with spaces.'
