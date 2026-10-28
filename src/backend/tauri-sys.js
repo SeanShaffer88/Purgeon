@@ -4,7 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 export async function createTauriSys() {
   const info = await invoke('sys_info');
   return {
-    info: { env: info.env, home: info.home, dataDir: info.data_dir, exe: info.exe, portable: info.portable, args: info.args, launch: info.launch || [] },
+    info: { env: info.env, home: info.home, dataDir: info.data_dir, exe: info.exe, portable: info.portable, args: info.args, launch: info.launch || [], cpu: info.cpu || '', ramBytes: info.ram_bytes || 0, osName: info.os_name || '', osVersion: info.os_version || '', osBuild: info.os_build || 0 },
     runPS: (script, input) => invoke('run_ps', { script, input: input ?? null }),
     exec: (file, args) => invoke('exec', { file, args }),
     runCommandLine: (commandLine) => invoke('run_command_line', { commandLine }),

@@ -100,6 +100,8 @@ const isConfirmationDisabled = async (id) => {
 
 const handlers = {
   'app:isAdmin': isAdmin,
+  // Basic PC specs for the status bar's right side, gathered once by the native layer.
+  'app:specs': () => ({ cpu: sys.info.cpu || '', ramBytes: sys.info.ramBytes || 0, osName: sys.info.osName || '', osVersion: sys.info.osVersion || '', osBuild: sys.info.osBuild || 0 }),
   'app:ready': () => (sys.frontendReady ? sys.frontendReady() : undefined),
   'app:quit': async () => {
     await log.flushNow().catch(() => {});
