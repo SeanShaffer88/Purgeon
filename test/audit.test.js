@@ -89,3 +89,18 @@ test('the drives script asks PowerShell for JSON, not a table', async () => {
   assert.ok(scripts[0].includes('ConvertTo-Json'), 'the first drives script must request JSON');
   setSys(nodeSys);
 });
+
+test('no bare view-name style rule can restyle the generic row icon', async () => {
+  // Regression (field report on 1.0.8): list rows without a program icon render
+  // <span class="generic-icon <view>">. A bare `.timeline { padding: 6px 16px 4px }`
+  // rule (the snapshot strip in the Snapshots view) also matched the Timeline
+  // view's icon, stretched it to 34px wide, and covered the start of every event
+  // title. The strip is now .snapshot-timeline; no bare rule named after a list
+  // view may come back.
+  const css = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  for (const view of ['desktop', 'store', 'monitored', 'backups', 'snapshots', 'history', 'timeline', 'archive']) {
+    assert.ok(!new RegExp(`^\\.${view} \\{`, 'm').test(css), `bare .${view} rule would restyle generic row icons`);
+  }
+  const snapshots = fs.readFileSync(new URL('../src/snapshots.jsx', import.meta.url), 'utf8');
+  assert.ok(snapshots.includes('className="snapshot-timeline"'), 'the snapshot strip uses its own class name');
+});
