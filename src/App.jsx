@@ -205,6 +205,9 @@ const MENU_TIPS = {
 };
 
 // The menu bar. The shortcuts shown here are handled by the keydown listener in App.
+// A menu entry is [action, label, shortcut?], null (a separator line), or a
+// group { group, tip, items } whose items open in a flyout to the side — the
+// groups keep each menu short enough to take in at a glance.
 const MENUS = [
   [
     'File',
@@ -212,9 +215,11 @@ const MENUS = [
       ['export', 'Export to HTML...', 'Ctrl+S'],
       ['report', 'Monthly Report...'],
       null,
-      ['migratePc', 'Migrate This PC...'],
-      ['restoreFolder', 'Restore Programs From Folder...'],
-      ['sync', 'Settings Sync...'],
+      { group: 'Move & Sync', tip: 'Move Purgeon or its programs to another PC, and keep settings in step', items: [
+        ['migratePc', 'Migrate This PC...'],
+        ['restoreFolder', 'Restore Programs From Folder...'],
+        ['sync', 'Settings Sync...'],
+      ] },
       null,
       ['elevate', 'Restart as Administrator'],
       null,
@@ -228,18 +233,23 @@ const MENUS = [
       ['force', 'Force...', 'Shift+Del'],
       ['analyze', 'Analyze Leftovers...', 'Ctrl+L'],
       ['queueAdd', 'Add to Uninstall Queue', 'Ctrl+Q'],
-      ['rescue', 'Rescue Broken Uninstall...'],
-      ['removeEntry', 'Remove Entry...'],
       null,
-      ['analyzeProgram', 'Analyze Program...', 'Ctrl+I'],
-      ['setGroup', 'Set Group...', 'Ctrl+G'],
-      ['backupProgram', 'Migrate / Back Up Program...'],
-      ['hide', 'Hide From List'],
-      ['unhide', 'Unhide'],
-      null,
-      ['registry', 'Registry Entry'],
-      ['folder', 'Installation Folder'],
-      ['search', 'Search Online'],
+      { group: 'Repair', tip: 'Fix a removal that went wrong', items: [
+        ['rescue', 'Rescue Broken Uninstall...'],
+        ['removeEntry', 'Remove Entry...'],
+      ] },
+      { group: 'Program', tip: 'Look at, label, back up or hide the selected program', items: [
+        ['analyzeProgram', 'Analyze Program...', 'Ctrl+I'],
+        ['setGroup', 'Set Group...', 'Ctrl+G'],
+        ['backupProgram', 'Migrate / Back Up Program...'],
+        ['hide', 'Hide From List'],
+        ['unhide', 'Unhide'],
+      ] },
+      { group: 'Open', tip: 'Open something that belongs to the selected program', items: [
+        ['registry', 'Registry Entry'],
+        ['folder', 'Installation Folder'],
+        ['search', 'Search Online'],
+      ] },
       null,
       ['properties', 'Properties', 'Alt+Enter'],
     ],
@@ -247,41 +257,48 @@ const MENUS = [
   [
     'View',
     [
-      ['view:desktop', 'Programs', 'Ctrl+1'],
-      ['view:store', 'Apps', 'Ctrl+2'],
-      ['view:monitored', 'Monitored Programs', 'Ctrl+3'],
-      ['view:debloat', 'Debloat', 'Ctrl+5'],
-      ['view:startup', 'Startup & Services', 'Ctrl+6'],
-      ['view:junk', 'Cleaner', 'Ctrl+8'],
-      ['view:disk', 'Disk Usage', 'Ctrl+0'],
-      ['view:archive', 'Uninstall Archive', 'Ctrl+9'],
-      ['view:timeline', 'Change Timeline', 'Ctrl+T'],
-      ['diskMap', 'Disk Space Map...'],
+      { group: 'Go to', tip: 'Switch to another part of Purgeon', items: [
+        ['view:desktop', 'Programs', 'Ctrl+1'],
+        ['view:store', 'Apps', 'Ctrl+2'],
+        ['view:monitored', 'Monitored Programs', 'Ctrl+3'],
+        ['view:debloat', 'Debloat', 'Ctrl+5'],
+        ['view:startup', 'Startup & Services', 'Ctrl+6'],
+        ['view:junk', 'Cleaner', 'Ctrl+8'],
+        ['view:disk', 'Disk Usage', 'Ctrl+0'],
+        ['view:archive', 'Uninstall Archive', 'Ctrl+9'],
+        ['view:timeline', 'Change Timeline', 'Ctrl+T'],
+        ['diskMap', 'Disk Space Map...'],
+      ] },
       null,
       ['palette', 'Command Palette...', 'Ctrl+K'],
       ['find', 'Find...', 'Ctrl+F'],
       ['refresh', 'Refresh', 'F5'],
       null,
-      ['zoomIn', 'Zoom In', 'Ctrl++'],
-      ['zoomOut', 'Zoom Out', 'Ctrl+-'],
-      ['zoomReset', 'Reset Zoom', 'Ctrl+0'],
-      null,
-      ['toggleGrid', 'Grid Lines'],
-      ['toggleHidden', 'Show Hidden Programs'],
-      ['theme:dark', 'Dark Theme'],
-      ['theme:light', 'Light Theme'],
-      ['theme:contrast', 'High Contrast'],
-      null,
-      ['toggleOnTop', 'Always on Top'],
-      ['toggleMinTray', 'Minimize to Tray'],
-      ['close:ask', 'Close Button Asks'],
-      ['close:tray', 'Close Button Hides to Tray'],
-      ['close:exit', 'Close Button Exits'],
-      ['toggleStartTray', 'Start Minimized to Tray'],
-      ['toggleAutostart', 'Start with Windows'],
-      null,
-      ['schedule', 'Background Monitoring...'],
-      ['syncFolder', 'Choose Sync Folder...'],
+      { group: 'Zoom', tip: 'Make the text bigger or smaller', items: [
+        ['zoomIn', 'Zoom In', 'Ctrl++'],
+        ['zoomOut', 'Zoom Out', 'Ctrl+-'],
+        ['zoomReset', 'Reset Zoom', 'Ctrl+0'],
+      ] },
+      { group: 'Appearance', tip: 'How the window and the list look', items: [
+        ['toggleGrid', 'Grid Lines'],
+        ['toggleHidden', 'Show Hidden Programs'],
+        ['theme:dark', 'Dark Theme'],
+        ['theme:light', 'Light Theme'],
+        ['theme:contrast', 'High Contrast'],
+      ] },
+      { group: 'Window', tip: 'How the window itself behaves', items: [
+        ['toggleOnTop', 'Always on Top'],
+        ['toggleMinTray', 'Minimize to Tray'],
+        ['close:ask', 'Close Button Asks'],
+        ['close:tray', 'Close Button Hides to Tray'],
+        ['close:exit', 'Close Button Exits'],
+        ['toggleStartTray', 'Start Minimized to Tray'],
+        ['toggleAutostart', 'Start with Windows'],
+      ] },
+      { group: 'Background', tip: 'What Purgeon does while it sits in the tray', items: [
+        ['schedule', 'Background Monitoring...'],
+        ['syncFolder', 'Choose Sync Folder...'],
+      ] },
       null,
       ['language', 'Language...'],
     ],
@@ -294,43 +311,50 @@ const MENUS = [
       ['trials', 'Trial Installs...'],
       ['queue', 'Uninstall Queue...'],
       null,
-      ['view:backups', 'Backups', 'Ctrl+4'],
-      ['view:history', 'Change History', 'Ctrl+H'],
-      ['view:snapshots', 'Snapshots', 'Ctrl+7'],
-      ['takeSnapshot', 'Take a Snapshot...'],
-      null,
-      ['restoreProgram', 'Restore a Program Backup...'],
-      ['whoOwns', 'Who Owns This...'],
-      ['orphans', 'Find Orphaned Leftovers...'],
-      ['regSearch', 'Search Registry...'],
-      ['portable', 'Portable Apps...'],
-      ['browsers', 'Browser Clean-up...'],
+      { group: 'Records', tip: 'Backups, snapshots and the history of changes', items: [
+        ['view:backups', 'Backups', 'Ctrl+4'],
+        ['view:history', 'Change History', 'Ctrl+H'],
+        ['view:snapshots', 'Snapshots', 'Ctrl+7'],
+        ['takeSnapshot', 'Take a Snapshot...'],
+      ] },
+      { group: 'Find & Fix', tip: 'Track down leftovers and put things back', items: [
+        ['restoreProgram', 'Restore a Program Backup...'],
+        ['whoOwns', 'Who Owns This...'],
+        ['orphans', 'Find Orphaned Leftovers...'],
+        ['regSearch', 'Search Registry...'],
+        ['browsers', 'Browser Clean-up...'],
+      ] },
       ['sysinfo', 'System Info...'],
-      ['view:archive', 'Uninstall Archive', 'Ctrl+9'],
       null,
-      ['updates', 'Program Updates (winget)...'],
-      ['exportWinget', 'Export Program List (winget)...'],
-      ['view:junk', 'Cleaner', 'Ctrl+8'],
+      { group: 'Lists & Portable', tip: 'Program lists, updates and portable packages', items: [
+        ['updates', 'Program Updates (winget)...'],
+        ['exportWinget', 'Export Program List (winget)...'],
+        ['portable', 'Portable Apps...'],
+        ['portableapps', 'PortableApps.com Installer...'],
+      ] },
       ['maintenance', 'Scheduled Maintenance...'],
       null,
-      ['toggleRestore', 'Create Restore Points'],
-      ['toggleSilent', 'Silent Uninstall When Possible'],
-      ['toggleSafe', 'Safe Mode'],
-      ['toggleShell', 'Explorer Right-Click Menu'],
-      ['ctxmenu', 'Explorer Context Menu Items...'],
-      null,
-      ['backupSettings', 'Backup Settings...'],
-      ['confirmationPrompts', 'Confirmation Prompts...'],
-      ['openLog', 'Open Command Log'],
-      null,
-      ['trustedPublishers', 'Trusted Publishers...'],
-      ['updateCheck', 'Check for Updates...'],
-      null,
-      ['portableapps', 'PortableApps.com Installer...'],
+      { group: 'Settings', tip: 'How Purgeon itself behaves', items: [
+        ['toggleRestore', 'Create Restore Points'],
+        ['toggleSilent', 'Silent Uninstall When Possible'],
+        ['toggleSafe', 'Safe Mode'],
+        ['toggleShell', 'Explorer Right-Click Menu'],
+        ['ctxmenu', 'Explorer Context Menu Items...'],
+        ['backupSettings', 'Backup Settings...'],
+        ['confirmationPrompts', 'Confirmation Prompts...'],
+        ['openLog', 'Open Command Log'],
+        ['trustedPublishers', 'Trusted Publishers...'],
+        ['updateCheck', 'Check for Updates...'],
+      ] },
     ],
   ],
   ['Help', [['palette', 'Command Palette...', 'Ctrl+K'], ['guide', 'User Guide'], ['shortcuts', 'Keyboard Shortcuts'], ['welcome', 'Welcome Back'], null, ['updates', 'Check for Updates...'], ['about', 'About']]],
 ];
+
+// Every command in a menu's entries, with flyout groups opened out flat —
+// for the command palette and the command list, which search across menus.
+export const flattenMenuEntries = (entries) =>
+  entries.flatMap((it) => (!it ? [] : Array.isArray(it) ? [it] : flattenMenuEntries(it.items)));
 
 // Mouse or keyboard: Alt plus a menu's first letter opens it; arrow keys move between items and
 // menus, Enter chooses, Escape closes.
@@ -400,6 +424,8 @@ function WindowControls({ pinned, onPin, toTray }) {
 
 function MenuBar({ onAction, checked = {}, right = null, controls = null, menus = MENUS }) {
   const [open, setOpen] = useState(null);
+  const [sub, setSub] = useState(null); // the open flyout group, by entry index
+  useEffect(() => setSub(null), [open ]);
   const bar = useRef(null);
   const focusItem = (step) => {
     const items = [...(bar.current?.querySelectorAll('.dropdown button') || [])];
@@ -434,7 +460,19 @@ function MenuBar({ onAction, checked = {}, right = null, controls = null, menus 
   const onMenuKey = (e, i) => {
     if (e.key === 'ArrowDown') (e.preventDefault(), focusItem(1));
     else if (e.key === 'ArrowUp') (e.preventDefault(), focusItem(-1));
-    else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+    else if (e.key === 'ArrowRight' && e.target.closest?.('[data-sub]')) {
+      // Right arrow on a group opens its flyout and moves into it.
+      e.preventDefault();
+      const g = e.target.closest('[data-sub]');
+      setSub(Number(g.dataset.sub));
+      setTimeout(() => g.parentElement.querySelector('.submenu button')?.focus(), 0);
+    } else if (e.key === 'ArrowLeft' && e.target.closest?.('.submenu')) {
+      // Left arrow inside a flyout closes it and returns to its group.
+      e.preventDefault();
+      const fly = e.target.closest('.submenu');
+      setSub(null);
+      fly.parentElement.querySelector('[data-sub]')?.focus();
+    } else if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
       e.preventDefault();
       setOpen((i + (e.key === 'ArrowRight' ? 1 : menus.length - 1)) % menus.length);
       setTimeout(() => focusItem(1), 0);
@@ -462,28 +500,50 @@ function MenuBar({ onAction, checked = {}, right = null, controls = null, menus 
           </button>
           {open === i && (
             <div className="context-menu dropdown" role="menu" onKeyDown={(e) => onMenuKey(e, i)}>
-              {entries.map((it, j) =>
-                it ? (
+              {entries.map((it, j) => {
+                if (!it) return <div key={j} className="sep" role="separator" />;
+                const itemButton = (item, key, inFlyout) => (
                   <button
-                    key={j}
-                    role={it[0] in checked ? 'menuitemcheckbox' : 'menuitem'}
-                    aria-checked={it[0] in checked ? !!checked[it[0]] : undefined}
-                    title={ACTION_TIPS[it[0]]}
+                    key={key}
+                    role={item[0] in checked ? 'menuitemcheckbox' : 'menuitem'}
+                    aria-checked={item[0] in checked ? !!checked[item[0]] : undefined}
+                    title={ACTION_TIPS[item[0]]}
+                    onMouseEnter={inFlyout ? undefined : () => setSub(null)}
                     onClick={() => {
                       setOpen(null);
-                      onAction(it[0]);
+                      onAction(item[0]);
                     }}
                   >
                     <span>
-                      {it[0] in checked && <span className="check">{checked[it[0]] ? '✓' : ''}</span>}
-                      {it[1]}
+                      {item[0] in checked && <span className="check">{checked[item[0]] ? '✓' : ''}</span>}
+                      {item[1]}
                     </span>
-                    <span className="accel">{it[2]}</span>
+                    <span className="accel">{item[2]}</span>
                   </button>
-                ) : (
-                  <div key={j} className="sep" role="separator" />
-                )
-              )}
+                );
+                if (Array.isArray(it)) return itemButton(it, j, false);
+                // A group: its items live in a flyout to the side.
+                return (
+                  <div key={j} className="submenu-wrap">
+                    <button
+                      data-sub={j}
+                      aria-haspopup="menu"
+                      aria-expanded={sub === j}
+                      title={it.tip}
+                      onMouseEnter={() => setSub(j)}
+                      onClick={() => setSub(sub === j ? null : j)}
+                    >
+                      <span>{it.group}</span>
+                      <span className="accel">›</span>
+                    </button>
+                    {sub === j && (
+                      <div className="context-menu submenu" role="menu" onMouseEnter={() => setSub(j)}>
+                        {it.items.map((item, k) => itemButton(item, k, true))}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
         </div>
@@ -2468,7 +2528,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
   // Commands whose menu label contains what is typed in the search box.
   const cmdText = filter.trim().toLowerCase();
   const cmdSeen = new Set();
-  const cmdMatches = cmdText.length < 2 ? [] : MENUS.flatMap(([menu, entries]) => entries.filter(Boolean).map(([action, label, accel]) => ({ action, label: label.replace(/\.\.\.$/, ''), accel, menu })))
+  const cmdMatches = cmdText.length < 2 ? [] : MENUS.flatMap(([menu, entries]) => flattenMenuEntries(entries).map(([action, label, accel]) => ({ action, label: label.replace(/\.\.\.$/, ''), accel, menu })))
       .filter((c) => c.label.toLowerCase().includes(cmdText) && !cmdSeen.has(c.action) && cmdSeen.add(c.action))
       .slice(0, 6);
   const cmdShown = cmdOpen && cmdMatches.length > 0;
@@ -2539,9 +2599,11 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     const out = [];
     for (const it of entries) {
       out.push(it);
-      if (it && it[0] === 'refresh') out.push(null, ['navBack', 'Back', 'Alt+Left'], ['navForward', 'Forward', 'Alt+Right'], null, ...filterItems);
+      if (Array.isArray(it) && it[0] === 'refresh')
+        out.push(null, ['navBack', 'Back', 'Alt+Left'], ['navForward', 'Forward', 'Alt+Right'], null, { group: 'Filter Programs', tip: 'Show only some of the programs in the list', items: filterItems });
     }
-    if (recentPrograms.length) out.push(null, ...recentPrograms.map((p) => [`recent:${p.key}`, `Recent: ${p.name.length > 42 ? `${p.name.slice(0, 42)}…` : p.name}`]));
+    if (recentPrograms.length)
+      out.push(null, { group: 'Recent Programs', tip: 'Programs you opened not long ago', items: recentPrograms.map((p) => [`recent:${p.key}`, `Recent: ${p.name.length > 42 ? `${p.name.slice(0, 42)}…` : p.name}`]) });
     return [label, out];
   });
 
@@ -3266,7 +3328,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {palette && (
         <CommandPalette
           commands={[
-            ...MENUS.flatMap(([menuLabel, entries]) => entries.filter(Boolean).map(([action, label, accel]) => ({ id: `${menuLabel}|${action}|${label}`, text: `${label.replace(/\.\.\.$/, '')} (${menuLabel})`, hint: accel, action }))),
+            ...MENUS.flatMap(([menuLabel, entries]) => flattenMenuEntries(entries).map(([action, label, accel]) => ({ id: `${menuLabel}|${action}|${label}`, text: `${label.replace(/\.\.\.$/, '')} (${menuLabel})`, hint: accel, action }))),
             ...desktopCache.current.map((p) => ({ id: `p|${p.key}`, text: `Program: ${p.name}`, program: p })),
           ]}
           onRun={(c) => {

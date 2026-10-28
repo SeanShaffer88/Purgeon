@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatBytes } from './format.js';
-import { crumbsOf, parentOf, shareText } from './backend/diskusage.js';
+import { crumbsOf, parentOf, shareText, systemDriveRoot } from './backend/diskusage.js';
 
 const api = window.api;
 
@@ -34,7 +34,10 @@ export function DiskUsageView({ filter, onError, onStatus }) {
       .invoke('disk:drives')
       .then((d) => {
         setDrives(d);
-        if (d.length) scan(d[0].root);
+        // Opening the view scans a drive straight away: the system drive
+        // when it is listed, otherwise the first one.
+        const start = d.find((x) => x.root.toLowerCase() === systemDriveRoot().toLowerCase()) || d[0];
+        if (start) scan(start.root);
         else setData({ entries: [], total: 0, complete: true });
       })
       .catch((e) => {
