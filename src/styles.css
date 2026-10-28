@@ -304,7 +304,11 @@ kbd {
 .list:not(:focus) .row.selected .col-name .cell-text { color: var(--text); }
 .row.user .col-name .cell-text { color: var(--amber); }
 .row .col { padding: 0 8px; display: flex; align-items: center; overflow: hidden; }
-.cell-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cell-text { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+/* The name cell's tags (hidden / group / insights) sit at the far end of the field,
+   away from the program's name, which keeps the space beside it. */
+.cell-tags { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }
+.cell-tags .insight-tag, .cell-tags .group-tag, .cell-tags .hidden-tag { margin-left: 0; }
 .icon { width: 16px; height: 16px; margin-right: 8px; flex: none; display: inline-flex; }
 .icon img { width: 16px; height: 16px; }
 .generic-icon { width: 16px; height: 16px; border: 1px solid var(--dim); position: relative; }
@@ -370,6 +374,7 @@ kbd {
 }
 .statusbar > span:first-child::before { content: '● '; color: var(--green); }
 .status-right { display: flex; gap: 12px; align-items: center; overflow: hidden; }
+.pc-specs { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .status-right > span:last-child { color: var(--green); }
 .muted { color: var(--muted); }
 .link { border: 0; background: none; color: var(--amber); cursor: pointer; padding: 0; }

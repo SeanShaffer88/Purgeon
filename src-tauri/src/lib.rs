@@ -823,6 +823,92 @@ fn cli_args() -> Vec<String> {
     }
 }
 
+/// Reads one string value from HKEY_LOCAL_MACHINE; "" when missing or not a string.
+/// Used for the basic PC specs shown in the status bar (processor name, Windows edition).
+fn reg_string(key_path: &str, value_name: &str) -> String {
+    #[link(name = "advapi32")]
+    extern "system" {
+        fn RegOpenKeyExW(
+            key: isize,
+            sub_key: *const u16,
+            options: u32,
+            sam_desired: u32,
+            result: *mut isize,
+        ) -> i32;
+        fn RegQueryValueExW(
+            key: isize,
+            value_name: *const u16,
+            reserved: *mut u32,
+            value_type: *mut u32,
+            data: *mut u8,
+            data_len: *mut u32,
+        ) -> i32;
+        fn RegCloseKey(key: isize) -> i32;
+    }
+    const HKEY_LOCAL_MACHINE: isize = -2147483646; // 0x80000002 as a signed handle
+    const KEY_READ: u32 = 0x20019;
+    let wide = |s: &str| -> Vec<u16> { s.encode_utf16().chain(std::iter::once(0)).collect() };
+    let key_wide = wide(key_path);
+    let name_wide = wide(value_name);
+    unsafe {
+        let mut key: isize = 0;
+        if RegOpenKeyExW(HKEY_LOCAL_MACHINE, key_wide.as_ptr(), 0, KEY_READ, &mut key) != 0 {
+            return String::new();
+        }
+        let mut value_type: u32 = 0;
+        let mut buffer = [0u8; 1024];
+        let mut data_len = buffer.len() as u32;
+        let status = RegQueryValueExW(
+            key,
+            name_wide.as_ptr(),
+            std::ptr::null_mut(),
+            &mut value_type,
+            buffer.as_mut_ptr(),
+            &mut data_len,
+        );
+        RegCloseKey(key);
+        // REG_SZ (1) or REG_EXPAND_SZ (2), with at least one UTF-16 code unit.
+        if status != 0 || !matches!(value_type, 1 | 2) || data_len < 2 {
+            return String::new();
+        }
+        let units: Vec<u16> = buffer[..data_len as usize]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|pair| u16::from_le_bytes(*pair))
+            .take_while(|&u| u != 0)
+            .collect();
+        String::from_utf16_lossy(&units)
+    }
+}
+
+/// Total physical memory in bytes; 0 when it cannot be read.
+fn total_ram_bytes() -> u64 {
+    #[repr(C)]
+    struct MemoryStatusEx {
+        length: u32,
+        memory_load: u32,
+        total_phys: u64,
+        avail_phys: u64,
+        total_page_file: u64,
+        avail_page_file: u64,
+        total_virtual: u64,
+        avail_virtual: u64,
+        avail_extended_virtual: u64,
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GlobalMemoryStatusEx(status: *mut MemoryStatusEx) -> i32;
+    }
+    let mut status: MemoryStatusEx = unsafe { std::mem::zeroed() };
+    status.length = std::mem::size_of::<MemoryStatusEx>() as u32;
+    if unsafe { GlobalMemoryStatusEx(&mut status) } != 0 {
+        status.total_phys
+    } else {
+        0
+    }
+}
+
 #[derive(Serialize)]
 struct SysInfo {
     env: std::collections::HashMap<String, String>,
@@ -833,11 +919,31 @@ struct SysInfo {
     args: Vec<String>,
     /// All start-up arguments, for requests the window handles (--resume-queue, --who-owns, --uninstall-target).
     launch: Vec<String>,
+    /// Friendly processor name from the registry, for the status bar's PC specs.
+    cpu: String,
+    /// Total physical memory in bytes, for the status bar's PC specs.
+    ram_bytes: u64,
+    /// Operating system name as Windows reports it, e.g. "Windows 11 Pro".
+    os_name: String,
+    /// Display version such as "24H2" ("" when absent).
+    os_version: String,
+    /// OS build number (0 when unreadable).
+    os_build: u32,
 }
 
 #[tauri::command]
 fn sys_info(app: tauri::AppHandle) -> SysInfo {
     let portable = portable_dir();
+    let os_key = "SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion";
+    let os_build: u32 = reg_string(os_key, "CurrentBuildNumber")
+        .parse()
+        .unwrap_or(0);
+    let mut os_name = reg_string(os_key, "ProductName");
+    // The registry still says "Windows 10" on many Windows 11 machines; the build
+    // number is the reliable tell (Windows 11 starts at build 22000).
+    if os_build >= 22000 {
+        os_name = os_name.replacen("Windows 10", "Windows 11", 1);
+    }
     SysInfo {
         env: windows_tools::environment(),
         home: std::env::var("USERPROFILE").unwrap_or_default(),
@@ -852,6 +958,16 @@ fn sys_info(app: tauri::AppHandle) -> SysInfo {
         portable: portable.is_some(),
         args: cli_args(),
         launch: std::env::args().skip(1).collect(),
+        cpu: reg_string(
+            "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
+            "ProcessorNameString",
+        )
+        .trim()
+        .to_string(),
+        ram_bytes: total_ram_bytes(),
+        os_name,
+        os_version: reg_string(os_key, "DisplayVersion"),
+        os_build,
     }
 }
 
