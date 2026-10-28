@@ -6,6 +6,7 @@ import * as programs from './programs.js';
 import * as leftovers from './leftovers.js';
 import * as backups from './backups.js';
 import * as shared from './shared.js';
+import * as erase from './erase.js';
 import * as monitor from './monitor.js';
 import * as debloat from './debloat.js';
 import * as restore from './restore.js';
@@ -82,7 +83,7 @@ let confirmUI = null;
 // Cancellation for the long operations the window can cancel: each run gets a
 // fresh stop flag, the matching cancel request flips it, and the operation
 // polls it between steps.
-const opStops = { measure: null, removeItems: null, cleanSystem: null, diskMap: null, diskScan: null };
+const opStops = { measure: null, removeItems: null, cleanSystem: null, diskMap: null, diskScan: null, eraseRun: null };
 const newStop = (name) => (opStops[name] = { stopped: false });
 const stopOp = (name) => {
   if (opStops[name]) opStops[name].stopped = true;
@@ -233,6 +234,21 @@ const handlers = {
   'backups:restoreEntries': ({ id, indexes }) => backups.restore(id, indexes),
   'backups:verifyPackage': (id) => backups.verifyPackage(id),
   'shared:components': () => shared.components(),
+  'erase:pick': async (folder) => {
+    const { open: openDialog } = await import('@tauri-apps/plugin-dialog');
+    const picked = await openDialog({ title: folder ? 'Choose a folder to erase the files inside' : 'Choose files to erase', directory: !!folder, multiple: !folder });
+    if (!picked) return [];
+    return Array.isArray(picked) ? picked : [picked];
+  },
+  'erase:collect': (paths) => erase.collect(paths),
+  'erase:run': async ({ files, pattern }) => {
+    const stop = newStop('eraseRun');
+    return erase.erase({ files, pattern, shouldStop: () => stop.stopped });
+  },
+  'erase:runCancel': () => {
+    stopOp('eraseRun');
+    return sys.cancelErase ? sys.cancelErase() : undefined;
+  },
   'backups:remove': (id) => backups.remove(id),
   'snapshots:list': () => snapshots.list(),
   'snapshots:take': ({ name, preset }) => snapshots.take(name, preset),
@@ -540,6 +556,11 @@ const recorders = {
     type: 'Restore',
     title: `Restored the backup of ${String(id).replace(/^[^_]*_/, '').replace(/-/g, ' ') || 'removed items'}`,
     detail: `${results.filter((r) => r.ok).length} of ${results.length} entries restored`,
+  }),
+  'erase:run': (_arg, out) => ({
+    type: 'Secure erase',
+    title: `Securely erased ${out.results.filter((r) => r.ok).length} of ${out.results.length} files`,
+    detail: out.cancelled ? 'The erase was cancelled partway' : 'Overwritten before deletion — not recoverable',
   }),
   'backups:restoreEntries': ({ id }, results) => ({
     type: 'Restore',
