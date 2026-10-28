@@ -12,6 +12,11 @@
 - Disk Usage listed drives that report no space at all (such as an empty card reader); they are no longer shown.
 - The `--help` text now lists the `--sync`, `--portableapps` and `--export` commands, which worked but were undocumented.
 
+
+### Under the hood
+
+- Removed leftover code and styles from features that no longer exist (about 19 KB of source), which slightly shrinks the built program. Nothing about how Purgeon works has changed.
+
 ## 1.0.7 - 2026-10-28
 
 - Removed the What's This page (it was on the Action menu, the action
