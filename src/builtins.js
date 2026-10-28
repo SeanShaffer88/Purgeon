@@ -12,6 +12,7 @@ export const BUILTIN_GROUPS = [
   ['\u0001recent', 'Recently installed (30 days)', (r) => { const d = new Date(r.date || r.installDate || 0).getTime(); return d > 0 && d >= Date.now() - 30 * 86400000; }],
   ['\u0001microsoft', 'Microsoft', (r) => /microsoft/i.test(r.publisher || '')],
   ['\u0001nopublisher', 'No publisher listed', (r) => !(r.publisher || '').trim()],
+  ['\u0001games', 'Games', (r) => { const loc = r.location || ''; return /steamapps[\\/]common[\\/]/i.test(loc) || /[\\/]gog games[\\/]/i.test(loc) || (/[\\/]epic games[\\/]/i.test(loc) && !/epic games[\\/]launcher/i.test(loc)); }],
 ];
 
 export const builtinById = (id) => BUILTIN_GROUPS.find(([x]) => x === id);

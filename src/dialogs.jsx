@@ -683,6 +683,75 @@ export function EraseDialog({ onClose }) {
   );
 }
 
+// Games (Tools › Advanced Tools): the games the launchers report, with
+// sizes. Uninstalling stays with the launcher; the one fix offered here is
+// cleaning up the entry of a game whose files are already gone — and even
+// that goes through the standard backed-up removal.
+export function GamesDialog({ onClose }) {
+  const [games, setGames] = useState(null);
+  const [confirming, setConfirming] = useState('');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+
+  const load = () => {
+    api.invoke('games:list').then(setGames).catch((e) => { setGames([]); setError(e.message); });
+  };
+  useEffect(load, []);
+
+  const cleanup = async (g) => {
+    if (confirming !== g.entryPath) { setConfirming(g.entryPath); return; }
+    setConfirming('');
+    setError('');
+    try {
+      const out = await api.invoke('games:cleanup', g);
+      if (out.results?.[0]?.ok) setNote(`The entry for ${g.name} was removed. A backup was made first — restore it from the Archive if you ever need it back.`);
+      else setError(out.results?.[0]?.detail || 'The entry could not be removed.');
+      load();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const total = (games || []).reduce((a, g) => a + (g.size || 0), 0);
+
+  return (
+    <Dialog title="Games" onClose={onClose} width={760} buttons={<button className="primary" onClick={onClose}>Close</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>
+        Games the launchers on this PC report, with the space each one takes. Uninstalling a game stays with its launcher — that is where its files and account live. If a game's files are already gone, Purgeon can clean up the leftover entry, with a backup made first.
+      </p>
+      {error && <div className="error-bar" style={{ marginBottom: 10 }}><span>{error}</span></div>}
+      {note && <div className="note" style={{ marginBottom: 10 }}>{note}</div>}
+      {games === null ? (
+        <p className="muted">Looking for games…</p>
+      ) : games.length === 0 ? (
+        <p className="muted">No games were found. Steam, Epic and GOG libraries are checked.</p>
+      ) : (
+        <>
+          {games.map((g) => (
+            <div key={`${g.launcher}:${g.entryPath}:${g.name}`} className="pkg-entry">
+              <span>
+                {g.name} <span className="launcher-chip">{g.launcher}</span>{' '}
+                <span className="muted">{g.location}</span>
+              </span>
+              {g.present ? (
+                <span className="muted" style={{ marginLeft: 'auto', flex: 'none' }}>{g.size ? `${(g.size / 1073741824).toFixed(1)} GB${g.partial ? '+' : ''}` : '—'}</span>
+              ) : (
+                <span style={{ marginLeft: 'auto', flex: 'none', display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <span className="pkg-badge warn">files gone</span>
+                  <button onClick={() => cleanup(g)} title="Remove this launcher entry — a backup is made first, so it can be restored from the Archive">
+                    {confirming === g.entryPath ? 'Confirm cleanup?' : 'Clean Up Entry'}
+                  </button>
+                </span>
+              )}
+            </div>
+          ))}
+          <p className="muted" style={{ marginTop: 10 }}>Total: {(total / 1073741824).toFixed(1)} GB across {games.filter((g) => g.present).length} installed games.</p>
+        </>
+      )}
+    </Dialog>
+  );
+}
+
 export function ResultsDialog({ title, results, note, onClose, onUndo }) {
   const failed = results.filter((r) => !r.ok);
   return (

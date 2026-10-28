@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, SystemInfoDialog, RecoveryDialog, SharedDialog, EraseDialog, planHtml } from './dialogs.jsx';
+import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, SystemInfoDialog, RecoveryDialog, SharedDialog, EraseDialog, GamesDialog, planHtml } from './dialogs.jsx';
 import { WelcomeDialog, FirstRunTips, FIRST_RUN_TIPS, SettingHelp, SHORTCUTS, ShortcutsDialog, UpdateAvailableDialog, UserGuide } from './onboarding.jsx';
 import { setConfirmUI } from './backend/api.js';
 import { iconPathFor } from './backend/programs.js';
@@ -350,6 +350,7 @@ const MENUS = [
         ['recoveryPackages', 'Recovery Packages...'],
         ['sharedComponents', 'Shared Components...'],
         ['secureErase', 'Secure Erase...'],
+        ['gamesLibrary', 'Games...'],
       ] },
     ],
   ],
@@ -2239,6 +2240,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     recoveryPackages: () => setModal({ type: 'recovery' }),
     sharedComponents: () => setModal({ type: 'shared' }),
     secureErase: () => setModal({ type: 'erase' }),
+    gamesLibrary: () => setModal({ type: 'games' }),
     confirmationPrompts: async () => setModal({ type: 'confirmationPrompts', settings: await api.invoke('settings:get') }),
     openLog: () => api.invoke('log:open'),
     trustedPublishers: async () => {
@@ -3054,6 +3056,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {modal?.type === 'recovery' && <RecoveryDialog onClose={() => setModal(null)} />}
       {modal?.type === 'shared' && <SharedDialog onClose={() => setModal(null)} />}
       {modal?.type === 'erase' && <EraseDialog onClose={() => setModal(null)} />}
+      {modal?.type === 'games' && <GamesDialog onClose={() => setModal(null)} />}
       {modal?.type === 'backupSettings' && (
         <BackupSettingsDialog
           settings={modal.settings}
