@@ -221,7 +221,25 @@ fn write_text_atomic(path: String, contents: String) -> Result<(), String> {
     }
     let tmp = format!("{}.tmp-{}", path, std::process::id());
     fs::write(&tmp, contents).map_err(|e| e.to_string())?;
-    fs::rename(&tmp, &path).map_err(|e| e.to_string())
+    // On Windows the rename fails with a permission error while another
+    // reader (an antivirus scan, a second reader of the same store) holds
+    // the target open for a moment. Retry briefly before giving up; if it
+    // still fails, the last error is returned and the caller reports it.
+    let mut last_err = None;
+    for attempt in 0..6 {
+        match fs::rename(&tmp, &path) {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                last_err = Some(e);
+                if attempt < 5 {
+                    std::thread::sleep(std::time::Duration::from_millis(40));
+                }
+            }
+        }
+    }
+    Err(last_err
+        .map(|e| e.to_string())
+        .unwrap_or_else(|| "rename failed".to_string()))
 }
 
 #[tauri::command]
