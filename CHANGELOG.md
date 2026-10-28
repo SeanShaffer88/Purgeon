@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Change Timeline event titles lost their first letters behind the row icon: a style rule for the snapshot strip in the Snapshots view shared its name with the Timeline view, stretched the small placeholder icon in every event row to twice its width, and covered the start of the text. The strip has its own class name now, and a regression test keeps any style rule named after a list view from restyling row icons again.
+
 ## 1.0.8 - 2026-10-28
 
 ### Fixed
