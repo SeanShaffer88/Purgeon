@@ -291,6 +291,9 @@ kbd {
 .seg button.sel { background: linear-gradient(180deg, #f0565c, #cf2e33); color: #fff; }
 .note { background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--amber); border-radius: 6px; padding: 9px 12px; font-size: 12.5px; color: var(--muted); }
 
+/* Games dialog launcher chip (Tools › Advanced Tools) */
+.launcher-chip { font-size: 10.5px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); padding: 1px 6px; border-radius: 8px; vertical-align: 1px; }
+
 .error-bar {
   display: flex; justify-content: space-between; align-items: center;
   background: #2a1212; color: var(--red); padding: 4px 8px; border-top: 1px solid #4a1f1f;
