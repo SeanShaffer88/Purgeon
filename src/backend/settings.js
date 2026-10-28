@@ -65,15 +65,28 @@ async function refreshCache(next) {
   }
 }
 
-export async function writeSettings(patch) {
-  const next = { ...(await readSettings()), ...patch };
-  await sys.writeText(settingsFile(), JSON.stringify(next, null, 2));
-  await refreshCache(next);
-  return next;
+// Writes are serialized: two writes at the same time would otherwise each
+// read the old file and the second would silently undo the first's change.
+let writeChain = Promise.resolve();
+const serializeWrite = (fn) => {
+  const run = writeChain.then(fn, fn);
+  writeChain = run.catch(() => {});
+  return run;
+};
+
+export function writeSettings(patch) {
+  return serializeWrite(async () => {
+    const next = { ...(await readSettings()), ...patch };
+    await sys.writeText(settingsFile(), JSON.stringify(next, null, 2));
+    await refreshCache(next);
+    return next;
+  });
 }
 
-export async function replaceSettings(next) {
-  await sys.writeText(settingsFile(), JSON.stringify(next, null, 2));
-  await refreshCache(next);
-  return next;
+export function replaceSettings(next) {
+  return serializeWrite(async () => {
+    await sys.writeText(settingsFile(), JSON.stringify(next, null, 2));
+    await refreshCache(next);
+    return next;
+  });
 }

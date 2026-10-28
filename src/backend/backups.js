@@ -480,18 +480,41 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
   return { backupId: id, results, cancelled: stopped };
 }
 
-// A removal that was cut off: { id, title, started, done, total } or null.
-async function interrupted() {
+// Reads the interrupted-removal record. A crash can strike while the record
+// itself is being written, leaving damaged JSON behind: that comes back as
+// { corrupt: true } (never a throw), so the damage is reported and can be
+// cleared instead of silently hiding the interrupted removal forever.
+async function readPending() {
   if (!(await sys.exists(pendingFile()))) return null;
-  const p = JSON.parse(await sys.readText(pendingFile()));
+  try {
+    const p = JSON.parse(await sys.readText(pendingFile()));
+    return p && p.id && Array.isArray(p.items) ? p : { corrupt: true };
+  } catch {
+    return { corrupt: true };
+  }
+}
+
+// A removal that was cut off: { id, title, started, done, total } or null.
+// A damaged record comes back as { corrupt: true, ... } with empty counts.
+async function interrupted() {
+  const p = await readPending();
+  if (!p) return null;
+  if (p.corrupt) return { id: null, title: '', started: null, done: 0, total: 0, corrupt: true };
   const m = await readEncryptedText(manifestFile(p.id)).then(JSON.parse).catch(() => null);
   return { id: p.id, title: p.title, started: p.started, done: m?.entries.length || 0, total: p.items.length };
 }
 
 // Resolves an interrupted removal: 'rollback' restores what it removed, 'finish' removes the
 // rest, 'keep' leaves things as they are. Its backup is sealed either way.
+// A damaged record cannot be rolled back or finished (nobody can tell what it
+// was removing); any choice just clears the record.
 async function resolveInterrupted(action) {
-  const p = JSON.parse(await sys.readText(pendingFile()));
+  const p = await readPending();
+  if (!p) return { action, results: [] };
+  if (p.corrupt) {
+    await sys.removePath(pendingFile());
+    return { action, results: [], corrupt: true };
+  }
   const dir = path.join(backupRoot, p.id);
   const m = await readEncryptedText(manifestFile(p.id)).then(JSON.parse).catch(() => null);
   if (m && m.entries.length) await seal(dir, m);

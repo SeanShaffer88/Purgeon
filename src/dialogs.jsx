@@ -618,6 +618,25 @@ export function AboutDialog({ onClose }) {
 
 // Shown on start when a removal was cut off (a crash or power cut) partway through.
 export function InterruptedDialog({ pending, onChoose }) {
+  if (pending.corrupt) {
+    return (
+      <Dialog
+        title="Interrupted Removal"
+        onClose={() => onChoose('keep')}
+        width={560}
+        buttons={
+          <button className="primary" onClick={() => onChoose('keep')}>
+            Clear the Record
+          </button>
+        }
+      >
+        <p className="heading">A removal did not finish, and its record is damaged.</p>
+        <p>
+          Purgeon was stopped while it was writing down what the removal had done, so it cannot tell which removal it was or what had already been removed. Nothing more will be removed, and any backup the removal made is still in Tools › Backups. Clearing the record just removes the damaged note; it does not change anything else.
+        </p>
+      </Dialog>
+    );
+  }
   return (
     <Dialog
       title="Interrupted Removal"
