@@ -5,6 +5,7 @@ import { runCommandLine, reg, runPS, psq } from './shell.js';
 import * as programs from './programs.js';
 import * as leftovers from './leftovers.js';
 import * as backups from './backups.js';
+import * as shared from './shared.js';
 import * as monitor from './monitor.js';
 import * as debloat from './debloat.js';
 import * as restore from './restore.js';
@@ -231,6 +232,7 @@ const handlers = {
   'backups:restore': (id) => backups.restore(id),
   'backups:restoreEntries': ({ id, indexes }) => backups.restore(id, indexes),
   'backups:verifyPackage': (id) => backups.verifyPackage(id),
+  'shared:components': () => shared.components(),
   'backups:remove': (id) => backups.remove(id),
   'snapshots:list': () => snapshots.list(),
   'snapshots:take': ({ name, preset }) => snapshots.take(name, preset),
