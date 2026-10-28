@@ -1,24 +1,8 @@
-# Purgeon 1.0.8
+# Purgeon 1.0.9
 
-## Disk Usage works now
+## Change Timeline titles read in full again
 
-On real PCs, Disk Usage opened to "No drives found" and never scanned anything: the question it asks Windows for the drive list was missing a piece, the answer could not be read, and the failure stayed silent. The drive list now comes from the system's own drive information (with the repaired question as a fallback), and opening the view scans your system drive straight away, biggest folders and files first.
-
-## Slimmer menus
-
-The menu bar's long lists are grouped into flyouts: File gains Move & Sync; Action gains Repair, Program, and Open; View gains Go to, Zoom, Appearance, Window, and Background (the program filters and recent programs have their own groups too); Tools gains Records, Find & Fix, Lists & Portable, and Settings. No command was removed — the command palette still finds every one of them — and the arrow keys move into and out of a flyout.
-
-## Reliability fixes from a full audit
-
-- A removal interrupted at exactly the wrong moment (a crash or power cut while its record was being written) left a damaged record that was silently ignored — the interrupted removal never reappeared and could never be cleared. It is now reported, explains itself, and can be cleared.
-- Two settings changes made at the same moment could silently undo each other; settings writes now take turns.
-- A typed group name could impersonate a built-in group in the filter; that is no longer possible.
-- Disk Usage no longer lists drives that report no space at all, such as an empty card reader.
-- The `--help` text now lists the `--sync`, `--portableapps`, and `--export` commands, which worked but were undocumented.
-
-## Under the hood
-
-Leftover code and styles from features that no longer exist were removed (about 19 KB of source), which slightly shrinks the built program. Nothing about how Purgeon works changed with this tidy-up.
+On the Change Timeline, every event title lost its first letters behind the small icon at the start of its row — "Installed or updated:" read as "…stalled or updated:". A style rule for the snapshot strip in the Snapshots view happened to share its name with the Timeline view, and its wide side padding stretched the placeholder icon in every event row to twice its proper width, painting over the start of the text. The strip has its own class name now, the icon is back to its proper size, and a regression test keeps a style rule named after any list view from restyling row icons again.
 
 ## Files
 
