@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Removed the What's This page (it was on the Action menu, the action
+  bar and Ctrl+W). The same "what it hooks into Windows" list still
+  appears inside Analyze Program, which keeps everything in one place.
 - Lighter running: the Debloat, Startup & Services, Cleaner and Disk
   Usage screens now load only when first opened, so the window paints
   sooner; and the installer watch checks every 3 seconds while the
