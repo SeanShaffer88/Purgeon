@@ -17,9 +17,11 @@ export function DebloatView({ filter, admin, onError, onStatus, beforeChange }) 
   const [pending, setPending] = useState({ explorer: new Set(), reboot: new Set() });
   const [restarting, setRestarting] = useState(false);
 
+  const [prevDamaged, setPrevDamaged] = useState(false);
   const load = async () => {
     try {
       setTweaks(await api.invoke('debloat:list'));
+      setPrevDamaged(await api.invoke('debloat:previousDamaged').catch(() => false));
     } catch (e) {
       onError(e.message);
       setTweaks([]);
@@ -86,7 +88,7 @@ export function DebloatView({ filter, admin, onError, onStatus, beforeChange }) 
   if (!tweaks) return <div className="list-empty">Reading current settings…</div>;
 
   return (
-    <div className="debloat">
+    <div className="tweak-list">
       <div className="debloat-bar">
         <span className="legend">
           <span className="pill on">ENABLED</span> tweak applied
@@ -106,6 +108,11 @@ export function DebloatView({ filter, admin, onError, onStatus, beforeChange }) 
         </span>
       </div>
 
+      {prevDamaged && (
+        <div className="debloat-warning" role="note">
+          The file that remembers your settings from before these tweaks was damaged, so turning a tweak off now restores the Windows default instead of your exact earlier setting. A copy of the damaged file was kept beside it with “.damaged” in the name.
+        </div>
+      )}
       {groups.length === 0 && <div className="list-empty">No tweaks match.</div>}
       {groups.map((g) => (
         <section key={g.name} className="tweak-group">
