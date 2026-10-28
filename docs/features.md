@@ -68,6 +68,12 @@ Programs matching any exclusion are rejected with a clear reason why.
 
 Try a program and undo it completely — a snapshot is taken, the installer runs, and you use the program as long as you like. **Try Over** removes everything added since the snapshot, including what the program created during the trial, and puts changed settings back. **Keep It** ends the trial and keeps the program installed.
 
+## Advanced Tools
+
+Tools › Advanced Tools holds the powerful tools, deliberately kept out of the main window:
+
+- **Recovery Packages**: every removal backup with its verification state. A backup is proven restorable when it is made — its seal is checked, its stored exports are trial-restored into a scratch folder, and its Recycle Bin items are confirmed present — and the verdict is recorded beside the package (never inside it, so the record cannot break the package's own fingerprint). The window also restores single ticked items out of a package, and can re-verify any package on demand.
+
 ## Snapshots
 
 **Snapshots** (`Ctrl+7`) — named records of Program Files, ProgramData, AppData, Start Menu and desktops, and the software and services parts of the registry. Temporary files and caches are left out. Depths: Quick, Standard, Deep.
@@ -271,6 +277,9 @@ Long operations (batch uninstall, leftover scanning, snapshot comparison) show a
 Purgeon --snapshot "Before installing X" [--preset quick|standard|deep]
 Purgeon --compare <before> <after|now> [--report file.html|.json|.txt]
 Purgeon --list-snapshots
+Purgeon --timeline [--json]
+Purgeon --history [--json]
+Purgeon --archive [--json]
 Purgeon --maintenance
 Purgeon --monitor "<installer>" [--name "<program name>"]
 Purgeon --monitor test-install-start --installer "<path>" [--name "<name>"]
