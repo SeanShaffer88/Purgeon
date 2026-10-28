@@ -752,6 +752,122 @@ export function GamesDialog({ onClose }) {
   );
 }
 
+// Relationship Graph (Tools › Advanced Tools): how each program connects
+// to the rest of the system, joined entirely on this PC. Orphans — entries
+// pointing at files that no longer exist, belonging to no installed
+// program — come first.
+export function GraphDialog({ onClose }) {
+  const [data, setData] = useState(null);
+  const [query, setQuery] = useState('');
+  const [selected, setSelected] = useState(null);
+  const [deep, setDeep] = useState(null);
+  const [confirming, setConfirming] = useState('');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+
+  const load = () => {
+    api.invoke('graph:graph').then(setData).catch((e) => { setData({ programs: [], orphans: [] }); setError(e.message); });
+  };
+  useEffect(load, []);
+
+  const pick = (n) => {
+    setSelected(n);
+    setDeep(null);
+    api.invoke('graph:program', n).then(setDeep).catch(() => setDeep({ dependents: [], unknown: 0, note: '', sharedFiles: 0 }));
+  };
+
+  const removeOrphan = async (o) => {
+    const id = `${o.kind}:${o.label}`;
+    if (confirming !== id) { setConfirming(id); return; }
+    setConfirming('');
+    setError('');
+    try {
+      const out = await api.invoke('graph:removeOrphan', o);
+      if (out.results?.[0]?.ok) setNote(`${o.label} was removed. A backup was made first — restore it from the Archive if needed.`);
+      else setError(out.results?.[0]?.detail || 'The entry could not be removed.');
+      load();
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  const q = query.trim().toLowerCase();
+  const programs = (data?.programs || []).filter((n) => !q || n.name.toLowerCase().includes(q));
+  const orphans = (data?.orphans || []).filter((o) => !q || o.label.toLowerCase().includes(q));
+
+  return (
+    <Dialog title="Relationship Graph" onClose={onClose} width={880} buttons={<button className="primary" onClick={onClose}>Close</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>
+        How each program connects to the rest of the system — worked out entirely on this PC; nothing leaves the machine.
+      </p>
+      {error && <div className="error-bar" style={{ marginBottom: 10 }}><span>{error}</span></div>}
+      {note && <div className="note" style={{ marginBottom: 10 }}>{note}</div>}
+      <input className="pkg-search" type="search" placeholder="Search programs…" value={query} onChange={(e) => setQuery(e.target.value)} />
+      {data === null ? (
+        <p className="muted">Building the graph…</p>
+      ) : (
+        <div className="recovery-cols">
+          <div className="pkg-list">
+            {orphans.length > 0 && <div className="pkg-entries-head" style={{ padding: '2px 4px 6px' }}>Connected to nothing</div>}
+            {orphans.map((o) => (
+              <div key={`orphan:${o.kind}:${o.label}`} className="pkg-row" style={{ cursor: 'default' }}>
+                <span className="pkg-name">{o.label} <span className="muted">· {o.kind}</span></span>
+                <span className="pkg-badge bad">missing file</span>
+              </div>
+            ))}
+            <div className="pkg-entries-head" style={{ padding: '8px 4px 6px' }}>Programs</div>
+            {programs.map((n) => (
+              <button key={n.name} className={`pkg-row ${selected?.name === n.name ? 'sel' : ''}`} onClick={() => pick(n)}>
+                <span className="pkg-name">{n.name}</span>
+                <span className="muted" style={{ marginLeft: 'auto', flex: 'none' }}>{n.links.length} connected</span>
+              </button>
+            ))}
+            {programs.length === 0 && <p className="muted" style={{ padding: 4 }}>No programs match.</p>}
+          </div>
+          <div className="pkg-entries">
+            {selected ? (
+              <>
+                <div className="pkg-entries-head">{selected.name}</div>
+                {selected.links.map((l, i) => (
+                  <div key={i} className="pkg-entry"><span>{l.kind}: {l.label} <span className="muted">{l.target}</span></span></div>
+                ))}
+                {selected.links.length === 0 && <p className="muted" style={{ fontSize: 13 }}>No services, tasks or startup entries run this program's files.</p>}
+                {deep === null ? (
+                  <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>Checking what depends on it…</p>
+                ) : (
+                  <>
+                    {deep.dependents.length > 0 && <p style={{ fontSize: 13, marginTop: 8 }}>Depended on by: {deep.dependents.join(', ')}</p>}
+                    {deep.unknown > 0 && <p style={{ fontSize: 13, marginTop: 8 }}>{deep.unknown} other installation{deep.unknown === 1 ? '' : 's'} registered a need for it.</p>}
+                    {deep.sharedFiles > 0 && <p style={{ fontSize: 13, marginTop: 8 }}>Its folder holds {deep.sharedFiles} shared file{deep.sharedFiles === 1 ? '' : 's'} other programs use.</p>}
+                    {deep.note && <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>{deep.note}</p>}
+                  </>
+                )}
+              </>
+            ) : orphans.length > 0 ? (
+              <>
+                <div className="pkg-entries-head">Orphaned entries</div>
+                {orphans.map((o) => (
+                  <div key={`od:${o.kind}:${o.label}`} className="pkg-entry">
+                    <span>{o.label} <span className="muted">· {o.kind} · points at {o.target}, which is no longer there</span></span>
+                    {(o.type === 'service' || o.type === 'task') && (
+                      <button style={{ marginLeft: 'auto', flex: 'none' }} onClick={() => removeOrphan(o)} title="Remove this entry — a backup is made first, so it can be restored from the Archive">
+                        {confirming === `${o.kind}:${o.label}` ? 'Confirm removal?' : 'Remove…'}
+                      </button>
+                    )}
+                  </div>
+                ))}
+                <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>Startup entries are listed but not removed here — a startup entry is one value inside a shared registry key, so turn those off in Startup &amp; Services instead. Services and tasks are removed only through the standard backed-up removal.</p>
+              </>
+            ) : (
+              <p className="muted">Pick a program to see its connections.</p>
+            )}
+          </div>
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
 export function ResultsDialog({ title, results, note, onClose, onUndo }) {
   const failed = results.filter((r) => !r.ok);
   return (

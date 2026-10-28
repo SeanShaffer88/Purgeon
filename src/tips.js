@@ -103,6 +103,7 @@ export const ACTION_TIPS = {
   sharedComponents: 'Shows the shared runtimes, shared folders and shared files Purgeon keeps during removals, with the programs that depend on each one where Windows records them.',
   secureErase: 'Overwrites files and then deletes them, so they cannot be undeleted. No backup and no undo — the list is reviewed and confirmed every time.',
   gamesLibrary: 'Shows the games Steam, Epic and GOG report on this PC, with sizes, and cleans up the entry of a game whose files are already gone (backed up first).',
+  relationshipGraph: 'Shows how each program connects to the rest of the system — its services, tasks and startup entries, what depends on it — and lists entries that point at files no longer on the PC.',
   confirmationPrompts: 'Manage which confirmation prompts are skipped. Prompts you disabled with "Don\'t show again" are listed here and can be restored.',
   openLog: 'Opens the log of every command Purgeon ran in the last 14 days, with its result.',
   portableapps: 'Creates a PortableApps.com installer (.paf.exe) from a program you monitored with Tools › Monitor an Installation. Purgeon copies the recorded program files into a PortableApps.com folder structure and writes an NSIS installer script you compile with makensis.',
