@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- Lighter running: the Debloat, Startup & Services, Cleaner and Disk
+  Usage screens now load only when first opened, so the window paints
+  sooner; and the installer watch checks every 3 seconds while the
+  window is in use but backs off to every 10 seconds while Purgeon is
+  hidden or in the tray.
 - New Disk Usage view (Ctrl+0): what is using the space on each drive,
   biggest first. Open folders to drill down, with each item's share of
   its folder; links are listed but never counted, so nothing is
