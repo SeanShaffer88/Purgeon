@@ -26,6 +26,8 @@ export async function add(program, how) {
     location: program.location || '',
     url: program.urlInfo || program.helpLink || '',
     store: !!program.store,
+    pkgName: program.pkgName || '',
+    family: program.family || '',
     how,
     removed: new Date().toISOString(),
     backups: [],

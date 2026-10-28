@@ -50,9 +50,11 @@ $out = foreach ($r in $roots) {
 @($out) | ConvertTo-Json -Compress -Depth 3
 `;
 
+// Every package, including the framework and system components the old list hid:
+// those come back flagged as locked (see shapeStoreApp) so the list is honest
+// about what is installed without offering to remove parts of Windows.
 const LIST_STORE = `
 $out = Get-AppxPackage -ErrorAction SilentlyContinue |
-  Where-Object { -not $_.IsFramework -and $_.SignatureKind -ne 'System' -and -not $_.IsResourcePackage } |
   ForEach-Object {
     $name = $_.Name
     $pub = if ($_.Publisher -match 'O=([^,]+)') { $matches[1] } elseif ($_.Publisher -match 'CN=([^,]+)') { $matches[1] } else { '' }
@@ -63,6 +65,8 @@ $out = Get-AppxPackage -ErrorAction SilentlyContinue |
     } catch {}
     [pscustomobject]@{
       key        = $_.PackageFullName
+      pkgName    = $_.Name
+      family     = $_.PackageFamilyName
       name       = $name
       version    = [string]$_.Version
       publisher  = $pub
@@ -70,10 +74,94 @@ $out = Get-AppxPackage -ErrorAction SilentlyContinue |
       installDate = ''
       sizeKB     = 0
       store      = $true
+      framework  = [bool]$_.IsFramework
+      resource   = [bool]$_.IsResourcePackage
+      system     = ($_.SignatureKind -eq 'System')
+      nonRemovable = [bool]$_.NonRemovable
     }
   }
 @($out) | ConvertTo-Json -Compress -Depth 3
 `;
+
+// Provisioned copies (the ones Windows adds back for new user accounts).
+// Reading them needs administrator rights; without them this returns nothing
+// and the list simply shows no provisioned flags.
+const LIST_PROVISIONED = `
+try {
+  $out = Get-AppxProvisionedPackage -Online -ErrorAction Stop |
+    ForEach-Object { [pscustomobject]@{ displayName = $_.DisplayName; packageName = $_.PackageName } }
+  @($out) | ConvertTo-Json -Compress
+} catch { '[]' }
+`;
+
+// Plain-words notes for the apps Windows ships, so the list explains itself.
+const STORE_NOTES = {
+  'microsoft.bingnews': 'News and headlines app from Microsoft.',
+  'microsoft.bingweather': 'Weather app from Microsoft.',
+  'microsoft.gethelp': 'Help and support app from Microsoft.',
+  'microsoft.getstarted': 'Tips app from Microsoft.',
+  'microsoft.messaging': 'Messaging app from Microsoft.',
+  'microsoft.microsoft3dviewer': '3D Viewer from Microsoft.',
+  'microsoft.microsoftofficehub': 'Office hub: links to Office apps and your documents.',
+  'microsoft.microsoftsolitairecollection': 'Solitaire card games from Microsoft.',
+  'microsoft.mixedrealityportal': 'Mixed Reality Portal for headsets.',
+  'microsoft.office.onenote': 'OneNote notebook app from Microsoft.',
+  'microsoft.people': 'People (contacts) app from Microsoft.',
+  'microsoft.print3d': 'Print 3D from Microsoft.',
+  'microsoft.skypeapp': 'Skype app from Microsoft.',
+  'microsoft.wallet': 'Microsoft Wallet for passes and payment cards.',
+  'microsoft.windowsalarms': 'Clock app: alarms, timers and stopwatch.',
+  'microsoft.windowscalculator': 'Calculator app from Microsoft.',
+  'microsoft.windowscamera': 'Camera app from Microsoft.',
+  'microsoft.windowsmaps': 'Maps app from Microsoft.',
+  'microsoft.windowssoundrecorder': 'Voice Recorder from Microsoft.',
+  'microsoft.windowsstore': 'Microsoft Store. Needed to install and update Store apps.',
+  'microsoft.windows.photos': 'Photos app from Microsoft.',
+  'microsoft.windowscommunicationsapps': 'Mail and Calendar apps from Microsoft.',
+  'microsoft.microsoftstickynotes': 'Sticky Notes from Microsoft.',
+  'microsoft.windowsnotepad': 'Notepad from Microsoft.',
+  'microsoft.paint': 'Paint from Microsoft.',
+  'microsoft.screensketch': 'Snipping Tool from Microsoft.',
+  'microsoft.xboxapp': 'Xbox app from Microsoft.',
+  'microsoft.xboxgamingoverlay': 'Xbox Game Bar overlay.',
+  'microsoft.xboxgameoverlay': 'Xbox game overlay.',
+  'microsoft.xboxidentityprovider': 'Xbox sign-in component.',
+  'microsoft.xboxspeechtotextoverlay': 'Xbox speech-to-text overlay.',
+  'microsoft.yourphone': 'Phone Link: pairs your phone with this PC.',
+  'microsoft.zunemusic': 'Media Player from Microsoft.',
+  'microsoft.zunevideo': 'Films & TV app from Microsoft.',
+  'clipchamp.clipchamp': 'Clipchamp video editor from Microsoft.',
+  'microsoftteams': 'Microsoft Teams chat (personal).',
+  'microsoft.todos': 'Microsoft To Do task lists.',
+  'microsoft.powerautomatedesktop': 'Power Automate for desktop automation.',
+  'microsoft.549981c3f5f10': 'Cortana voice assistant.',
+  'microsoft.windowsfeedbackhub': 'Feedback Hub for reporting Windows problems.',
+};
+
+export const noteFor = (pkgName) => STORE_NOTES[String(pkgName || '').toLowerCase()] || '';
+
+// Shapes one raw package row for the UI: locked system pieces are listed but
+// cannot be removed; provisioned copies are flagged by package name.
+export function shapeStoreApp(r, provisioned = {}) {
+  const locked = !!(r.framework || r.resource || r.system || r.nonRemovable);
+  const provName = provisioned[String(r.pkgName || '').toLowerCase()] || '';
+  return {
+    ...r,
+    locked,
+    lockReason: r.framework
+      ? 'Framework component other apps rely on'
+      : r.resource
+        ? 'Resource package (language or scale assets)'
+        : r.system
+          ? 'System component — removing it can break Windows features'
+          : r.nonRemovable
+            ? 'Windows marks this app as non-removable'
+            : '',
+    provisioned: !!provName,
+    provisionedName: provName,
+    note: noteFor(r.pkgName),
+  };
+}
 
 function formatDate(raw) {
   if (/^\d{8}$/.test(raw || '')) return `${raw.slice(0, 4)}-${raw.slice(4, 6)}-${raw.slice(6, 8)}`;
@@ -95,12 +183,34 @@ async function listDesktop() {
 }
 
 async function listStore() {
-  const rows = await runPSJson(LIST_STORE);
-  return rows.sort((a, b) => a.name.localeCompare(b.name));
+  const [rows, provisionedRows] = await Promise.all([runPSJson(LIST_STORE), runPSJson(LIST_PROVISIONED).catch(() => [])]);
+  const provisioned = {};
+  for (const p of provisionedRows) if (p.displayName) provisioned[String(p.displayName).toLowerCase()] = p.packageName || '';
+  return rows.map((r) => shapeStoreApp(r, provisioned)).sort((a, b) => a.name.localeCompare(b.name));
 }
 
 async function removeStoreApp(fullName) {
   await runPS(`Remove-AppxPackage -Package ${psq(fullName)} -ErrorAction Stop`);
+}
+
+// Removes the provisioned copy, so the app does not come back for new user
+// accounts. Needs administrator rights (the caller offers it accordingly).
+async function removeProvisionedPackage(pkgName) {
+  await runPS(`Get-AppxProvisionedPackage -Online -ErrorAction Stop | Where-Object { $_.DisplayName -eq ${psq(pkgName)} } | Remove-AppxProvisionedPackage -Online -ErrorAction Stop | Out-Null`);
+}
+
+// Brings a removed app back when any copy of its package is still on the PC
+// (another account or the provisioned image): re-registers it for this user.
+// Returns false when no copy remains — the caller offers the Store page.
+async function restoreStoreApp(pkgName) {
+  const out = await runPS(`
+$p = Get-AppxPackage -AllUsers -Name ${psq(pkgName)} -ErrorAction SilentlyContinue | Select-Object -First 1
+if ($p) {
+  Add-AppxPackage -Register "$($p.InstallLocation)\\AppXManifest.xml" -DisableDevelopmentMode -ErrorAction Stop
+  'restored'
+} else { 'gone' }
+`);
+  return /\brestored\b/.test(out || '');
 }
 
 // DisplayIcon is "path,index" and sometimes quoted. Fall back to the uninstaller exe.
@@ -177,4 +287,4 @@ async function iconsFor(programs) {
   return out;
 }
 
-export { iconsFor, listDesktop, listStore, removeStoreApp, iconPathFor, formatDate };
+export { iconsFor, listDesktop, listStore, removeStoreApp, removeProvisionedPackage, restoreStoreApp, iconPathFor, formatDate };
