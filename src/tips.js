@@ -27,6 +27,7 @@ export const ACTION_TIPS = {
   folder: 'Opens the program’s install folder in Explorer.',
   search: 'Searches the web for the program’s name in your default browser.',
   properties: 'Shows everything known about the program: uninstall command, folder, signer, installer type, what it was installed with, and its size history.',
+  sysinfo: 'Shows this PC\'s details: Windows version, processor, memory, motherboard, graphics, drives and audio, with temperatures where Windows reports them.',
   hide: 'Hides the selected programs from Purgeon’s list. They stay installed and Windows still lists them; only this list hides them. View › Show Hidden Programs and Action › Unhide bring them back.',
   unhide: 'Shows the selected hidden programs in the list normally again.',
   clearSelection: 'Deselects all selected programs.',

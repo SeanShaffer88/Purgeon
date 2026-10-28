@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, planHtml } from './dialogs.jsx';
+import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, SystemInfoDialog, planHtml } from './dialogs.jsx';
 import { WelcomeDialog, FirstRunTips, FIRST_RUN_TIPS, SettingHelp, SHORTCUTS, ShortcutsDialog, UpdateAvailableDialog, UserGuide } from './onboarding.jsx';
 import { setConfirmUI } from './backend/api.js';
 import { iconPathFor } from './backend/programs.js';
@@ -63,6 +63,8 @@ const VIEW_ICON_PATHS = {
   snapshots: 'M3 6h3l1.5-2h5L14 6h3v10H3zM10 8.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
   archive: 'M2.5 4h15v4h-15zM4 8v9h12V8M8 11h4',
   timeline: 'M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15zM10 6v4.5l3 2',
+  backups: 'M10 2.5l6 2.5v5c0 4-2.5 6-6 7.5C6.5 16 4 14 4 10V5zM7.5 10l2 2 3.5-3.5',
+  history: 'M3.5 10a6.5 6.5 0 1 1 2 4.6M3.5 10H7M3.5 10l.8-3.2M10 6.5V10l2.5 1.5',
 };
 const ViewIcon = ({ id }) => (
   <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
@@ -298,6 +300,7 @@ const MENUS = [
       ['regSearch', 'Search Registry...'],
       ['portable', 'Portable Apps...'],
       ['browsers', 'Browser Clean-up...'],
+      ['sysinfo', 'System Info...'],
       ['view:archive', 'Uninstall Archive', 'Ctrl+9'],
       null,
       ['updates', 'Program Updates (winget)...'],
@@ -2066,6 +2069,11 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     refresh: () => load(),
     monitor: () => setModal({ type: 'monitor' }),
     about: () => setModal({ type: 'about' }),
+    sysinfo: async () => {
+      setModal({ type: 'sysinfo', data: null });
+      const data = await api.invoke('app:sysinfo').catch(() => null);
+      setModal((m) => (m?.type === 'sysinfo' ? { type: 'sysinfo', data: data || { sections: [] } } : m));
+    },
     updates: () => setModal({ type: 'updates' }),
     zoomIn: () => changeZoom(1),
     zoomOut: () => changeZoom(-1),
@@ -2406,12 +2414,14 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
   const barItems = isBatch
     ? contextItems.filter(Boolean)
     : view === 'desktop'
-      ? DESKTOP_BAR.map((id) => contextItems.find((i) => i && i[0] === id)).filter(Boolean)
+      ? [...DESKTOP_BAR.map((id) => contextItems.find((i) => i && i[0] === id)).filter(Boolean), ['sysinfo', 'System Info']]
       : view === 'snapshots'
         ? [['takeSnapshot', 'Take Snapshot'], ...contextItems.filter(Boolean)]
         : view === 'timeline' || VIEW_NOTES[view]
           ? []
-          : contextItems.filter(Boolean);
+          : view === 'store'
+            ? [...contextItems.filter(Boolean), ['sysinfo', 'System Info']]
+            : contextItems.filter(Boolean);
   // Row 2: what is selected, or what to do in this view.
   const HINTS = {
     desktop: 'Nothing selected: click a program to see what you can do with it (double-click uninstalls it).',
@@ -2433,7 +2443,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       more: [current.publisher, current.sizeText, view === 'desktop' && archOf(current).text, current.date && `installed ${current.date}`, groups[current.key] && `group ${groups[current.key]}`, hidden[current.key] && 'hidden'].filter(Boolean).join(' · '),
     };
   })();
-  const barReady = (id) => (id === 'takeSnapshot' ? true : id === 'compareSelected' ? markedRows.length === 2 : isBatch || !!current);
+  const barReady = (id) => (id === 'sysinfo' || id === 'takeSnapshot' ? true : id === 'compareSelected' ? markedRows.length === 2 : isBatch || !!current);
 
   // The main window keeps the layout of the README screenshot — menu bar, command bar,
   // selection bar, action bar, list, status bar, and nothing else — so the quick list
@@ -2479,6 +2489,27 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           ) : null
         }
         checked={{ toggleRestore: restoreOn, toggleSilent: silentOn, toggleSafe: safeOn, toggleGrid: gridOn, 'theme:dark': theme === 'dark', 'theme:light': theme === 'light', 'theme:contrast': theme === 'contrast', 'filter:all': quickFilter === 'all', 'filter:desktop': quickFilter === 'desktop', 'filter:store': quickFilter === 'store', 'filter:recent': quickFilter === 'recent', 'filter:large': quickFilter === 'large', 'filter:unsigned': quickFilter === 'unsigned', 'filter:used': quickFilter === 'used', 'close:ask': closeAction === 'ask', 'close:tray': closeAction === 'tray', 'close:exit': closeAction === 'exit', toggleShell: shellOn, toggleOnTop: win.alwaysOnTop, toggleMinTray: win.minimizeToTray, toggleStartTray: win.startInTray, toggleAutostart: autostartOn, toggleDetect: detectOn, toggleHidden: showHidden, toggleSync: syncOn, toggleSchedule: scheduleOn }} />
+      {/* Premium header band: the open view's name, a one-line summary, and its headline number. */}
+      <div className="view-band">
+        <div className="band-logo"><ViewIcon id={view} /></div>
+        <div>
+          <div className="band-title">{view === 'desktop' ? 'Purgeon' : VIEWS[view].label}</div>
+          <div className="band-sub">
+            {view === 'desktop' || view === 'store' ? (
+              <span className="band-pill"><span className="band-dot" />{loading ? 'Loading…' : `${rows.length} ${VIEWS[view].noun} installed`}</span>
+            ) : view === 'debloat' ? (
+              'Safe, reversible Windows tweaks. Every tweak can be undone here.'
+            ) : view === 'junk' ? (
+              'Only safe categories — caches, dumps and temporary files Windows rebuilds.'
+            ) : (
+              `${visible.length} ${VIEWS[view].noun}`
+            )}
+          </div>
+        </div>
+        {(view === 'desktop' || view === 'store') && totalKB > 0 && (
+          <div className="band-stat"><b>{formatSize(totalKB)}</b><span>total size of installed {VIEWS[view].noun}</span></div>
+        )}
+      </div>
       <div className="workspace">
       {/* The views, as icons; each one's name and shortcut is in its tooltip. */}
       <nav className="view-bar-side" aria-label="Views">
@@ -2580,7 +2611,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {barItems.length > 0 && (
         <div className="action-bar" role="toolbar" aria-label="Actions" ref={actionBarRef} style={barCols > 0 ? { gridTemplateColumns: `repeat(${barCols}, minmax(0, 1fr))` } : undefined}>
           {barItems.map(([id, label]) => (
-            <button key={id} className={`action-button ${/^(force|delete)/i.test(id) ? 'danger' : ''}`} disabled={!barReady(id)} onClick={() => dispatch(id)} title={ACTION_TIPS[id]} aria-label={shortLabel(label)}>
+            <button key={id} className={`action-button ${id === 'uninstall' ? 'primary' : ''} ${/^(force|delete)/i.test(id) ? 'danger' : ''}`} disabled={!barReady(id)} onClick={() => dispatch(id)} title={ACTION_TIPS[id]} aria-label={shortLabel(label)}>
               {shortLabel(label)}
             </button>
           ))}
@@ -2855,6 +2886,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       )}
       {modal?.type === 'results' && <ResultsDialog {...modal} onClose={() => setModal(null)} />}
       {modal?.type === 'properties' && <PropertiesDialog program={modal.program} onClose={() => setModal(null)} />}
+      {modal?.type === 'sysinfo' && <SystemInfoDialog data={modal.data} onClose={() => setModal(null)} />}
       {modal?.type === 'about' && <AboutDialog onClose={() => setModal(null)} />}
       {modal?.type === 'shortcuts' && <ShortcutsDialog onClose={() => setModal(null)} />}
       {modal?.type === 'guide' && <UserGuide onClose={() => setModal(null)} />}
