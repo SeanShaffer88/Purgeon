@@ -52,11 +52,16 @@ export function toText({ drives: ds, scan: s }) {
 
 // ---- drives ------------------------------------------------------------------
 
-// The PC's drives with their used and free space.
+// The PC's drives with their used and free space. DriveInfo is the reliable
+// source (it reports only drives that are ready); the PSDrive list is the
+// fallback. Both scripts must end in ConvertTo-Json — without it PowerShell
+// prints a table, the JSON parse fails, and the list comes back empty.
+const DRIVES_DRIVEINFO = `@([System.IO.DriveInfo]::GetDrives() | Where-Object { $_.IsReady } | ForEach-Object { [pscustomobject]@{ root = $_.RootDirectory.FullName; used = [int64]($_.TotalSize - $_.AvailableFreeSpace); free = [int64]$_.AvailableFreeSpace } }) | ConvertTo-Json -Compress`;
+const DRIVES_PSDRIVE = `@(Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue | ForEach-Object { [pscustomobject]@{ root = $_.Root; used = [int64]$_.Used; free = [int64]$_.Free } }) | ConvertTo-Json -Compress`;
+
 export async function drives() {
-  const rows = await runPSJson(
-    `@(Get-PSDrive -PSProvider FileSystem -ErrorAction SilentlyContinue | ForEach-Object { [pscustomobject]@{ root = $_.Root; used = [int64]$_.Used; free = [int64]$_.Free } })`
-  ).catch(() => []);
+  let rows = await runPSJson(DRIVES_DRIVEINFO).catch(() => []);
+  if (!Array.isArray(rows) || !rows.length) rows = await runPSJson(DRIVES_PSDRIVE).catch(() => []);
   return (Array.isArray(rows) ? rows : [])
     .filter((d) => d && /^[a-z]:\\$/i.test(d.root || '') && (Number(d.used) || 0) + (Number(d.free) || 0) > 0)
     .map((d) => ({ root: d.root, used: Number(d.used) || 0, free: Number(d.free) || 0 }))
