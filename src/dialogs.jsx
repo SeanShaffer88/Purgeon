@@ -524,6 +524,56 @@ export function RecoveryDialog({ onClose }) {
   );
 }
 
+// Shared Components (Tools › Advanced Tools): the shared runtimes, folders
+// and files Purgeon keeps during removals, with dependents where the system
+// records them. Reached only from the menu.
+export function SharedDialog({ onClose }) {
+  const [items, setItems] = useState(null);
+  const [selected, setSelected] = useState(0);
+
+  useEffect(() => {
+    api.invoke('shared:components').then(setItems).catch(() => setItems([]));
+  }, []);
+
+  const current = items && items.length ? items[Math.min(selected, items.length - 1)] : null;
+
+  return (
+    <Dialog title="Shared Components" onClose={onClose} width={880} buttons={<button className="primary" onClick={onClose}>Close</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>
+        Parts used by more than one program. These are what Purgeon refuses to delete during a removal — here is exactly why, and who would be affected.
+      </p>
+      {items === null ? (
+        <p className="muted">Loading…</p>
+      ) : items.length === 0 ? (
+        <p className="muted">No shared components were found on this PC.</p>
+      ) : (
+        <div className="recovery-cols">
+          <div className="pkg-list">
+            {items.map((c, i) => (
+              <button key={`${c.kind}:${c.path}:${c.name}`} className={`pkg-row ${i === selected ? 'sel' : ''}`} onClick={() => setSelected(i)}>
+                <span className="pkg-name">{c.name}</span>
+                <span className="muted" style={{ marginLeft: 'auto', flex: 'none' }}>{c.tag}</span>
+              </button>
+            ))}
+          </div>
+          <div className="pkg-entries">
+            {current && (
+              <>
+                <div className="pkg-entries-head">{current.kind === 'folder' ? 'Depends on it' : current.kind === 'runtime' ? 'Shared runtime' : 'Shared file'}</div>
+                <div className="pkg-entry"><span className="muted">{current.path}</span></div>
+                <p style={{ fontSize: 13, margin: '6px 0 10px' }}>{current.detail}</p>
+                {current.dependents.map((d) => (
+                  <div key={d} className="pkg-entry"><span>{d}</span></div>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+    </Dialog>
+  );
+}
+
 export function ResultsDialog({ title, results, note, onClose, onUndo }) {
   const failed = results.filter((r) => !r.ok);
   return (
