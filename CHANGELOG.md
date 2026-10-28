@@ -4,6 +4,8 @@
 
 ### Added
 
+- **Relationship Graph** (Tools › Advanced Tools): how each program connects to the rest of the system — the services, scheduled tasks and startup entries that run its files, which installed programs depend on it, and how many shared files its folder holds — joined entirely on the PC. Entries pointing at files that no longer exist and belonging to no installed program are listed first; orphaned services and tasks can be removed from there through the standard backed-up removal.
+
 - **Games** (Tools › Advanced Tools): the games Steam, Epic and GOG report on the PC, each with its folder size and total. A "Games" built-in group also appears in the program list's group picker. Uninstalling a game stays with its launcher; for a game whose files are already gone, the window offers to clean up the leftover launcher entry — through the standard removal, so the entry is backed up first and can be restored from the Archive.
 
 - **Secure Erase** (Tools › Advanced Tools): overwrites files (1 pass of zeros, 1 pass of random data, or 3 passes) and then deletes them, so they cannot be undeleted. Folders are expanded into their files first; links and protected Windows locations are refused, and registry items are not offered. There is deliberately no backup and no undo — the file list is reviewed and the erase confirmed every time, and the window states the honest limit that overwriting on modern SSDs lowers the chance of recovery without promising it. The overwrite runs as a cancellable native command.
