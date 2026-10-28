@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+- The Apps view now lists everything that is installed, like a full
+  inventory: framework and system components appear with a "system
+  component" tag and are shown locked — never offered for removal —
+  and the header counts them. Known pre-installed apps carry a short
+  plain-words note about what they are. Apps with a provisioned copy
+  (the copy Windows gives to new user accounts) are tagged, and
+  removing one offers to remove the provisioned copy too, in both
+  single and batch removal. Removed Store apps can be brought back
+  from the Uninstall Archive: Purgeon re-registers a copy still on
+  the PC, or opens the app's Microsoft Store page when none remains.
+
 ## 1.0.6 - 2026-10-28
 
 - Debloat grows from 26 to 93 tweaks. A new App Privacy section carries

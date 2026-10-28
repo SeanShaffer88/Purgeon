@@ -1054,7 +1054,12 @@ const [reducedMotion, setReducedMotion] = useState(false);
   };
 
   // Runs each program's own uninstaller in turn, then shows one combined leftover list.
-  const batchUninstall = async (list) => {
+  const batchUninstall = async (all) => {
+    const lockedOut = all.filter((p) => p.store && p.locked);
+    const list = all.filter((p) => !(p.store && p.locked));
+    if (!list.length) {
+      return setNotice({ tone: 'warn', text: 'Everything selected is a system component, which Purgeon will not remove.' });
+    }
     const prep = await prepare(list.filter((p) => !p.store));
     const infoFor = (p) => prep[list.filter((x) => !x.store).indexOf(p)];
     const line = (p) => {
@@ -1064,11 +1069,25 @@ const [reducedMotion, setReducedMotion] = useState(false);
     };
     const go = await confirmWithRestore(
       `Uninstall ${list.length} programs?`,
-      `${list.map(line).join('\n')}\n\nEach program's own uninstaller runs in turn${silentOn ? '; ones marked silent run without their windows' : ', so finish each uninstaller\'s window'}. Afterwards Purgeon scans all of them for leftovers.`,
+      `${list.map(line).join('\n')}\n\nEach program's own uninstaller runs in turn${silentOn ? '; ones marked silent run without their windows' : ', so finish each uninstaller\'s window'}. Afterwards Purgeon scans all of them for leftovers.${lockedOut.length ? `\n\n${lockedOut.length} selected item(s) are system components and will be left in place.` : ''}`,
       'confirmBatchUninstall'
     );
     if (!go.ok) return;
     if (go.checked) await makeRestorePoint(`Purgeon: before uninstalling ${list.length} programs`, 'uninstall');
+
+    // Provisioned copies: offered once for the whole batch when any app has one.
+    const provTargets = list.filter((p) => p.store && p.provisioned);
+    let removeProv = false;
+    if (provTargets.length) {
+      const prov = await api.invoke('dialog:confirm', {
+        message: `Also remove ${provTargets.length} provisioned cop${provTargets.length === 1 ? 'y' : 'ies'}?`,
+        detail: 'Provisioned copies are built into Windows, so new user accounts would get these apps back. Removing them needs administrator rights and cannot be undone from Purgeon.',
+        checkboxLabel: 'Remove the provisioned copies too',
+        checkboxChecked: false,
+      });
+      removeProv = !!(prov?.ok && prov.checked);
+    }
+    const provNotes = [];
 
     stopBatch.current = false;
     pausedBatch.current = false;
@@ -1091,7 +1110,15 @@ const [reducedMotion, setReducedMotion] = useState(false);
       }
       setBusy({ message: `Uninstalling ${i + 1} of ${list.length}: ${p.name}`, current: i + 1, total: list.length, canPause: true, canCancel: true, onPause: (paused) => { pausedBatch.current = paused; }, onCancel: () => { stopBatch.current = true; } });
       try {
-        outcomes.push({ p, result: await api.invoke('program:runUninstaller', p) });
+        const result = await api.invoke('program:runUninstaller', p);
+        outcomes.push({ p, result });
+        if (result?.ok && removeProv && p.store && p.provisioned) {
+          try {
+            await api.invoke('programs:removeProvisioned', p.pkgName);
+          } catch (e) {
+            provNotes.push(`${p.name}: provisioned copy not removed (${e.message})`);
+          }
+        }
       } catch (e) {
         outcomes.push({ p, result: { ok: false, error: e.message } });
       }
@@ -1118,6 +1145,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
     const problems = outcomes
       .filter((o) => !o.result?.ok)
       .map((o) => (o.skipped ? `${o.p.name}: skipped` : o.result.error ? `${o.p.name}: ${o.result.error}` : `${o.p.name}: uninstaller exited with code ${o.result.code}`));
+    problems.push(...provNotes);
     const heading = `Uninstalled ${ok} of ${list.length} programs.${problems.length ? ` ${problems.join('; ')}.` : ''} Purgeon found ${items.length} leftover items.`;
     setModal({
       type: 'leftovers',
@@ -1777,6 +1805,9 @@ const [reducedMotion, setReducedMotion] = useState(false);
     uninstall: async (p) => {
       if (view === 'history') return actions.undoChange(p);
       if (view === 'archive') return actions.deleteRecord(p);
+      if (p.store && p.locked) {
+        return setNotice({ tone: 'warn', text: `${p.name} cannot be removed: ${p.lockReason || 'system component'}. Purgeon lists it so you can see everything installed, but leaves it in place.` });
+      }
       if (p.portable) {
         if (!(await confirmWithRestore(`Remove the portable app ${p.name}?`, 'It has no uninstaller: Purgeon removes its folder, its entry and the files and settings it left, after you review them. Everything is backed up first.', 'confirmRemovePortable')).ok) return;
         return scanFor(p, `Remove Portable App – ${p.name}`, (items) => `Purgeon found ${items.length} items belonging to ${p.name}.`);
@@ -1817,7 +1848,25 @@ const [reducedMotion, setReducedMotion] = useState(false);
       }
       setBusy('');
       if (p.store) {
-        if (result.ok) setModal({ type: 'results', title: 'Uninstall', results: [{ kind: 'file', path: p.name, ok: true, detail: 'App removed' }] });
+        if (result.ok) {
+          setModal({ type: 'results', title: 'Uninstall', results: [{ kind: 'file', path: p.name, ok: true, detail: 'App removed' }] });
+          if (p.provisioned) {
+            const prov = await api.invoke('dialog:confirm', {
+              message: `Also remove the provisioned copy of ${p.name}?`,
+              detail: 'A provisioned copy is built into Windows, so new user accounts would get this app. Removing it needs administrator rights and cannot be undone from Purgeon.',
+              checkboxLabel: 'Remove the provisioned copy too',
+              checkboxChecked: false,
+            });
+            if (prov?.ok && prov.checked) {
+              try {
+                await api.invoke('programs:removeProvisioned', p.pkgName);
+                setNotice({ tone: 'ok', text: `Provisioned copy of ${p.name} removed.` });
+              } catch (e) {
+                setNotice({ tone: 'warn', text: `The provisioned copy could not be removed: ${e.message}` });
+              }
+            }
+          }
+        }
         return load();
       }
       load();
@@ -1883,6 +1932,27 @@ const [reducedMotion, setReducedMotion] = useState(false);
     },
     reinstall: async (p) => {
       if (view !== 'archive') return;
+      if (p.store) {
+        // A removed Store app comes back by re-registering a copy that is still
+        // on the PC; when none remains, its Microsoft Store page is the way back.
+        setBusy(`Checking for a copy of ${p.name} still on this PC…`);
+        try {
+          const r = await api.invoke('programs:restoreStore', { pkgName: p.pkgName || '', family: p.family || '' });
+          if (r.restored) {
+            setNotice({ tone: 'ok', text: `${p.name} was restored from the copy still on this PC.` });
+          } else if (p.family) {
+            await api.invoke('open:url', r.storeUrl).catch(() => {});
+            setNotice({ tone: 'warn', text: `No copy of ${p.name} remains on this PC, so its Microsoft Store page was opened instead.` });
+          } else {
+            setNotice({ tone: 'warn', text: `No copy of ${p.name} remains on this PC, and no Store link was recorded for it.` });
+          }
+        } catch (e) {
+          setNotice({ tone: 'warn', text: `Could not restore ${p.name}: ${e.message}` });
+        } finally {
+          setBusy('');
+        }
+        return;
+      }
       setBusy(`Looking up ${p.name} in winget…`);
       let id = p.wingetId;
       try {
@@ -2496,7 +2566,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           <div className="band-title">{view === 'desktop' ? 'Purgeon' : VIEWS[view].label}</div>
           <div className="band-sub">
             {view === 'desktop' || view === 'store' ? (
-              <span className="band-pill"><span className="band-dot" />{loading ? 'Loading…' : `${rows.length} ${VIEWS[view].noun} installed`}</span>
+              <span className="band-pill"><span className="band-dot" />{loading ? 'Loading…' : `${rows.length} ${VIEWS[view].noun} installed${view === 'store' && rows.some((r) => r.locked) ? ` · ${rows.filter((r) => r.locked).length} system components, shown locked` : ''}`}</span>
             ) : view === 'debloat' ? (
               'Safe, reversible Windows tweaks. Every tweak can be undone here.'
             ) : view === 'junk' ? (
@@ -2695,8 +2765,18 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
                     {cellFor(r, id)}
                     {id === 'size' && r.sizeTruncated ? '+' : ''}
                   </span>
-                  {id === 'name' && ((batchable && (hidden[r.key] || groups[r.key])) || (view === 'desktop' && insight[r.key])) && (
+                  {id === 'name' && ((batchable && (hidden[r.key] || groups[r.key])) || (view === 'desktop' && insight[r.key]) || (view === 'store' && (r.locked || r.provisioned))) && (
                     <span className="cell-tags">
+                      {view === 'store' && r.locked && (
+                        <span className="hidden-tag" title={`${r.lockReason}. It is listed so you can see everything that is installed, but Purgeon will not remove it.`}>
+                          system component
+                        </span>
+                      )}
+                      {view === 'store' && r.provisioned && (
+                        <span className="group-tag" title="A provisioned copy is built into Windows: new user accounts get this app. When you remove the app, Purgeon offers to remove the provisioned copy too.">
+                          provisioned
+                        </span>
+                      )}
                       {batchable && hidden[r.key] && (
                         <span className="hidden-tag" title="Hidden from the list (Action › Hide From List). It is still installed; Action › Unhide shows it normally again.">
                           hidden

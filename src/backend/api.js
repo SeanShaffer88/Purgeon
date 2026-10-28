@@ -117,6 +117,8 @@ const handlers = {
   'settings:set': async (patch) => writeSettings(patch),
   'restore:create': async ({ description, kind }) => restore.create(description, kind, await isAdmin()),
   'programs:list': (kind) => (kind === 'store' ? programs.listStore() : programs.listDesktop()),
+  'programs:removeProvisioned': (pkgName) => programs.removeProvisionedPackage(pkgName),
+  'programs:restoreStore': async ({ pkgName, family }) => ({ restored: await programs.restoreStoreApp(pkgName), storeUrl: `ms-windows-store://pdp/?PFN=${family || ''}` }),
   // Each result is delivered to onMeasured listeners as soon as it is ready.
   'programs:measure': (list) => measure.measure(list, (result) => measuredListeners.forEach((fn) => fn(result))),
   'icons:get': (list) => programs.iconsFor(list),
