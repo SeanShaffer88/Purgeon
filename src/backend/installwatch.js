@@ -6,6 +6,12 @@
 import { sys } from './sys.js';
 import { runPSJson } from './shell.js';
 
+// How long to wait between installer checks while Purgeon runs: every
+// 3 seconds while the window is in use, backing off to 10 seconds while it
+// is hidden (minimized or in the tray). Installers wait on their first
+// page, so detection stays timely at the slower rate.
+export const nextWatchDelayMs = (hidden) => (hidden ? 10000 : 3000);
+
 const LOOKS_LIKE_INSTALLER = /setup|install/i;
 // Uninstallers, updaters' helpers and Windows' own installer processes.
 const NOT_AN_INSTALLER = /unins|uninst|^(TrustedInstaller|InstallAgent|InstallAgentUserBroker|SetupHost|SetupPrep|SetupPlatform|DismHost|TiWorker|MsiExecUI|InstallShieldHelper)\.exe$/i;
