@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- Built-in groups for the program lists, computed live and shown above
+  your own groups in the group picker: Bundled software (possible
+  offers), Installed together, Unsigned, Bad signature, Growing in
+  size, Large programs (1 GB or more), Recently installed (30 days),
+  Microsoft, and No publisher listed. A program can be in several
+  built-in groups at once and still keep its own group.
 - The Apps view now lists everything that is installed, like a full
   inventory: framework and system components appear with a "system
   component" tag and are shown locked — never offered for removal —
