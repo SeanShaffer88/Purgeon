@@ -267,6 +267,22 @@ kbd {
 }
 .search .clear:hover { color: var(--red); }
 
+/* Recovery Packages dialog (Tools › Advanced Tools) */
+.recovery-cols { display: flex; gap: 14px; align-items: flex-start; }
+.pkg-list { width: 44%; flex: none; }
+.pkg-row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: none; border-radius: 6px; padding: 7px 9px; color: var(--text); cursor: pointer; font-size: 13px; }
+.pkg-row:hover { background: var(--hover); }
+.pkg-row.sel { background: var(--hover); }
+.pkg-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pkg-badge { margin-left: auto; flex: none; font-size: 10.5px; padding: 1px 7px; border-radius: 8px; border: 1px solid var(--line); color: var(--muted); }
+.pkg-badge.ok { border-color: #2e5e33; color: #7fd08a; background: #12240f; }
+.pkg-badge.warn { border-color: #6b551f; color: var(--amber); background: #241c08; }
+.pkg-badge.bad { border-color: #7a2d30; color: #ff9d9d; background: #2a0f10; }
+.pkg-entries { flex: 1; min-width: 0; }
+.pkg-entries-head { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin-bottom: 8px; }
+.pkg-entry { display: flex; gap: 8px; align-items: flex-start; padding: 5px 4px; font-size: 13px; border-radius: 5px; }
+.pkg-entry:hover { background: var(--hover); }
+
 .error-bar {
   display: flex; justify-content: space-between; align-items: center;
   background: #2a1212; color: var(--red); padding: 4px 8px; border-top: 1px solid #4a1f1f;
@@ -500,7 +516,8 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .debloat-button.active { border-color: var(--accent-ink); background: var(--accent-dim); color: #fff; }
 
 /* debloat view */
-.debloat { flex: 1; overflow-y: auto; background: var(--bg); padding: 0 10px 10px; }
+.tweak-list { flex: 1; overflow-y: auto; background: var(--bg); padding: 0 10px 10px; }
+.debloat-warning { color: var(--amber); font-size: 13px; padding: 8px 2px 0; max-width: 900px; }
 .debloat-bar {
   position: sticky; top: 0; z-index: 1;
   display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap;
@@ -888,7 +905,7 @@ button:focus-visible, select:focus-visible, input:focus-visible, .tweak:focus-vi
 .sysinfo-sub { color: var(--muted); font-size: 13px; }
 
 /* Disk Usage view */
-.disk { flex: 1; overflow-y: auto; background: var(--bg); padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.disk-view { flex: 1; overflow-y: auto; background: var(--bg); padding: 10px; display: flex; flex-direction: column; gap: 10px; }
 .disk-drives { display: flex; flex-wrap: wrap; gap: 8px; }
 .drive-chip { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border: 1px solid var(--line, #26262a); border-radius: 10px; background: var(--panel); color: var(--text); cursor: pointer; }
 .drive-chip:hover { border-color: var(--accent); }

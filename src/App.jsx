@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, SystemInfoDialog, planHtml } from './dialogs.jsx';
+import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, SystemInfoDialog, RecoveryDialog, planHtml } from './dialogs.jsx';
 import { WelcomeDialog, FirstRunTips, FIRST_RUN_TIPS, SettingHelp, SHORTCUTS, ShortcutsDialog, UpdateAvailableDialog, UserGuide } from './onboarding.jsx';
 import { setConfirmUI } from './backend/api.js';
 import { iconPathFor } from './backend/programs.js';
@@ -32,7 +32,7 @@ const defer = (fn) => {
 
 const VIEWS = {
   desktop: { label: 'Programs', noun: 'programs', cols: [['name', 'Name'], ['arch', 'Arch'], ['size', 'Size'], ['date', 'Installed On']] },
-  store: { label: 'Apps', noun: 'apps', cols: [['name', 'Name'], ['version', 'Version'], ['publisher', 'Publisher']] },
+  store: { label: 'Apps', noun: 'apps', cols: [['name', 'Name'], ['size', 'Size'], ['version', 'Version'], ['publisher', 'Publisher']] },
   // Views below are opened from toolbar buttons or the Tools menu, not the view picker.
   monitored: { label: 'Monitored Programs', noun: 'monitored programs', cols: [['name', 'Name'], ['size', 'Changes'], ['date', 'Monitored On']], button: true },
   backups: { label: 'Backups', noun: 'backups', cols: [['name', 'Removed'], ['size', 'Entries'], ['date', 'Backed Up On']], button: true },
@@ -345,6 +345,9 @@ const MENUS = [
         ['openLog', 'Open Command Log'],
         ['trustedPublishers', 'Trusted Publishers...'],
         ['updateCheck', 'Check for Updates...'],
+      ] },
+      { group: 'Advanced Tools', tip: 'Powerful tools, kept out of the main window', items: [
+        ['recoveryPackages', 'Recovery Packages...'],
       ] },
     ],
   ],
@@ -720,6 +723,11 @@ const [reducedMotion, setReducedMotion] = useState(false);
           });
         }
       }
+      if (v === 'store') {
+        defer(() => {
+          api.invoke('programs:measureStore', data).catch(() => {});
+        });
+      }
       setRows(data.map((r) => toRow(v, r)));
     } catch (e) {
       setError(e.message);
@@ -772,7 +780,12 @@ const [reducedMotion, setReducedMotion] = useState(false);
     api.invoke('monitor:status').then((s) => s && setModal({ type: 'monitor', resume: s }));
     // A removal cut off by a crash or power cut comes first.
     api.invoke('backups:interrupted').then((p) => p && setModal({ type: 'interrupted', pending: p })).catch(() => {});
-    api.invoke('groups:get').then(setGroups).catch(() => {});
+    api.invoke('groups:get').then(setGroups).catch(() => {}).then(() =>
+      // A damaged data file (kept as a ".damaged" copy) is worth one clear note.
+      api.invoke('app:dataDamage').then((list) => {
+        if (list && list.length) setError(`A Purgeon data file was damaged and could not be read (${list.map((d) => d.file).join(', ')}). A copy of each was kept beside it with ".damaged" in the name, and Purgeon is continuing with safe defaults.`);
+      }).catch(() => {})
+    );
     api.invoke('shell:enabled').then(setShellOn).catch(() => {});
     api.invoke('autostart:enabled').then(setAutostartOn).catch(() => {});
     // Requests from the command line, the Explorer right-click menu and the RunOnce entry.
@@ -1226,9 +1239,13 @@ const [reducedMotion, setReducedMotion] = useState(false);
 
   const takeSnapshot = async (name, preset) => {
     setModal(null);
-    setBusy(`Taking snapshot "${name}"…\nThis takes about ${{ quick: 'a few seconds', standard: '10–20 seconds', deep: 'a minute or more' }[preset]}.`);
+    setBusy({ message: `Taking snapshot "${name}"…\nThis takes about ${{ quick: 'a few seconds', standard: '10–20 seconds', deep: 'a minute or more' }[preset]}.`, canCancel: true, onCancel: () => api.invoke('snapshots:cancel').catch(() => {}) });
     try {
       const meta = await api.invoke('snapshots:take', { name, preset });
+      if (meta.cancelled) {
+        setNotice({ tone: 'ok', text: 'Snapshot cancelled — nothing was saved.' });
+        return;
+      }
       const s = meta.stats;
       setNotice({ tone: 'ok', text: `Snapshot "${meta.name}" taken: ${(s.dirs + s.files).toLocaleString()} files and folders, ${(s.keys + s.values).toLocaleString()} registry entries in ${(s.ms / 1000).toFixed(1)} s.` });
       if (view !== 'snapshots') setView('snapshots');
@@ -1243,9 +1260,13 @@ const [reducedMotion, setReducedMotion] = useState(false);
   // Compares `before` with `after`, or with the system now when `after` is null.
   const runCompare = async (before, after) => {
     const [a, b] = after && after.created < before.created ? [after, before] : [before, after];
-    setBusy(b ? `Comparing "${a.name}" with "${b.name}"…` : `Comparing "${a.name}" with the system now…\nA fresh snapshot is taken first.`);
+    setBusy({ message: b ? `Comparing "${a.name}" with "${b.name}"…` : `Comparing "${a.name}" with the system now…\nA fresh snapshot is taken first.`, canCancel: true, onCancel: () => api.invoke('snapshots:cancel').catch(() => {}) });
     try {
       const comparison = await api.invoke('snapshots:compare', { before: a.id, after: b ? b.id : 'now' });
+      if (comparison.cancelled) {
+        setNotice({ tone: 'ok', text: 'Comparison cancelled.' });
+        return;
+      }
       setModal({ type: 'compare', comparison, beforeName: a.name, afterName: b ? b.name : 'Now' });
     } catch (e) {
       setError(e.message);
@@ -2213,6 +2234,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       setNotice({ tone: 'ok', text: s.safeMode ? 'Safe mode is on: leftover lists offer only items with a 90%+ match, and never services, scheduled tasks or firewall rules.' : 'Safe mode is off: every finding can be selected.' });
     },
     backupSettings: async () => setModal({ type: 'backupSettings', settings: await api.invoke('settings:get') }),
+    recoveryPackages: () => setModal({ type: 'recovery' }),
     confirmationPrompts: async () => setModal({ type: 'confirmationPrompts', settings: await api.invoke('settings:get') }),
     openLog: () => api.invoke('log:open'),
     trustedPublishers: async () => {
@@ -2521,6 +2543,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     if (view === 'backups') return `${r.name}\nDouble-click: restore what this backup holds.`;
     if (view === 'history') return `${r.name}\nDouble-click: undo this change, from the backup taken when it was made.`;
     if (view === 'archive') return `${r.name}\nDouble-click: reinstall it with winget. Right-click: website, or put back removed leftovers.`;
+    if (view === 'timeline') return r.detail ? `${r.name}\n${r.detail}` : r.name;
     return r.name;
   };
   const cellFor = (r, c) => (c === 'size' ? r.sizeText : c === 'date' ? r.date : c === 'arch' ? archOf(r).text : r[c]);
@@ -3024,6 +3047,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           }}
         />
       )}
+      {modal?.type === 'recovery' && <RecoveryDialog onClose={() => setModal(null)} />}
       {modal?.type === 'backupSettings' && (
         <BackupSettingsDialog
           settings={modal.settings}
