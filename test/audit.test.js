@@ -69,3 +69,23 @@ test('drives with no readable space at all are not listed', async () => {
   assert.deepEqual(ds.map((d) => d.root), ['C:\\', 'F:\\']);
   setSys(nodeSys);
 });
+
+test('the drives script asks PowerShell for JSON, not a table', async () => {
+  // Field failure (v1.0.7 on a real PC): the script lacked ConvertTo-Json, so
+  // PowerShell printed a table, the JSON parse failed, and the view reported
+  // "No drives found". This fake behaves like real PowerShell: JSON only
+  // when the script asks for it, a formatted table otherwise.
+  const scripts = [];
+  setSys({
+    ...nodeSys,
+    runPS: async (script) => {
+      scripts.push(script);
+      if (!script.includes('ConvertTo-Json')) return 'Root Used         Free\n---- ----         ----\nC:\\  171798691840 85899345920';
+      return JSON.stringify([{ root: 'C:\\', used: 171798691840, free: 85899345920 }]);
+    },
+  });
+  const ds = await diskusage.drives();
+  assert.deepEqual(ds.map((d) => d.root), ['C:\\']);
+  assert.ok(scripts[0].includes('ConvertTo-Json'), 'the first drives script must request JSON');
+  setSys(nodeSys);
+});
