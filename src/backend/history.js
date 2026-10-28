@@ -20,7 +20,7 @@ const update = (fn) => {
   queue = queue.then(async () => {
     if (!file) return;
     const entries = fn(await list());
-    await sys.writeText(file, JSON.stringify(entries.slice(0, LIMIT), null, 2));
+    await sys.writeTextAtomic(file, JSON.stringify(entries.slice(0, LIMIT), null, 2));
   });
   return queue;
 };

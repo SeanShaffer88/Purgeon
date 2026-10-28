@@ -141,7 +141,7 @@ export function StartupView({ filter, admin, programs, onError, onStatus, onRemo
   const unsigned = Object.values(sigs).filter((s) => s.status !== 'Valid').length;
 
   return (
-    <div className="debloat">
+    <div className="tweak-list">
       <div className="debloat-bar">
         <span className="legend">
           <span className="pill on">ENABLED</span> starts with Windows

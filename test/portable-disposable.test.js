@@ -23,6 +23,7 @@ function mockSys(overrides = {}) {
     trackRunning: async () => false,
     readText: async () => '{}',
     writeText: async () => {},
+    writeTextAtomic: async () => {},
     removePath: async () => {},
     exists: async () => false,
     makeDir: async () => {},
@@ -38,7 +39,7 @@ test('testInstallStart takes before snapshot and starts tracking', async () => {
   const mock = mockSys({
     takeSnapshot: async () => ({ dirs: 5, files: 10, keys: 3, values: 2 }),
     trackStart: async () => true,
-    writeText: async (p, c) => { mock.lastWritePath = p; mock.lastWriteContent = c; },
+    writeTextAtomic: async (p, c) => { mock.lastWritePath = p; mock.lastWriteContent = c; },
   });
   const result = await monitor.testInstallStart('C:\\Setup.exe', 'TestApp');
   assert.equal(result.entries, 20, 'should sum all snapshot entries');
@@ -58,6 +59,7 @@ test('testInstallFinish compares snapshots and returns items', async () => {
     }),
     trackStop: async () => null,
     writeText: async () => {},
+    writeTextAtomic: async () => {},
   });
   const result = await monitor.testInstallFinish('TestApp');
   assert.equal(result.name, 'TestApp');
@@ -74,7 +76,7 @@ test('testInstallFinish keeps temp result for revert', async () => {
       removed: [],
     }),
     trackStop: async () => null,
-    writeText: async (p, c) => { mock.lastWritePath = p; mock.lastWriteContent = c; },
+    writeTextAtomic: async (p, c) => { mock.lastWritePath = p; mock.lastWriteContent = c; },
   });
   await monitor.testInstallFinish('TestApp');
   assert.ok(mock.lastWritePath.includes('test-install-last.json'), 'should save temp result file');
@@ -118,6 +120,7 @@ test('testInstallFinish returns portable classification via API handler pattern'
     }),
     trackStop: async () => null,
     writeText: async () => {},
+    writeTextAtomic: async () => {},
   });
   const result = await monitor.testInstallFinish('Foo');
   // Simulate what the API handler does: classify the items

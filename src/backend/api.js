@@ -17,6 +17,7 @@ import * as groups from './groups.js';
 import * as installers from './installers.js';
 import * as safety from './safety.js';
 import * as log from './log.js';
+import * as datadamage from './datadamage.js';
 import * as owners from './owners.js';
 import * as winget from './winget.js';
 import * as trusted from './trusted.js';
@@ -115,6 +116,8 @@ const handlers = {
   'app:specs': () => ({ cpu: sys.info.cpu || '', ramBytes: sys.info.ramBytes || 0, osName: sys.info.osName || '', osVersion: sys.info.osVersion || '', osBuild: sys.info.osBuild || 0 }),
   'app:sysinfo': () => collectSysInfo(),
   'app:ready': () => (sys.frontendReady ? sys.frontendReady() : undefined),
+  // Data files that were found damaged this run (copies kept beside the originals).
+  'app:dataDamage': () => datadamage.list(),
   'app:quit': async () => {
     await log.flushNow().catch(() => {});
     return sys.quit();
@@ -136,6 +139,7 @@ const handlers = {
     return measure.measure(list, (result) => measuredListeners.forEach((fn) => fn(result)), stop ? () => stop.stopped : undefined);
   },
   'programs:measureCancel': () => stopOp('measure'),
+  'programs:measureStore': (list) => measure.measureStoreApps(Array.isArray(list) ? list : [], (result) => measuredListeners.forEach((fn) => fn(result))),
   'icons:get': (list) => programs.iconsFor(list),
   'program:runUninstaller': async (program) => {
     const rp = await maybeCreateRestorePoint('uninstall', `Purgeon: before uninstalling ${program.name}`);
@@ -225,12 +229,15 @@ const handlers = {
   },
   'log:open': () => open(log.folder()),
   'backups:restore': (id) => backups.restore(id),
+  'backups:restoreEntries': ({ id, indexes }) => backups.restore(id, indexes),
+  'backups:verifyPackage': (id) => backups.verifyPackage(id),
   'backups:remove': (id) => backups.remove(id),
   'snapshots:list': () => snapshots.list(),
   'snapshots:take': ({ name, preset }) => snapshots.take(name, preset),
   'snapshots:remove': (id) => snapshots.remove(id),
   'snapshots:rename': ({ id, name }) => snapshots.rename(id, name),
   'snapshots:compare': ({ before, after }) => snapshots.compare(before, after),
+  'snapshots:cancel': () => (sys.cancelSnapshot ? sys.cancelSnapshot() : undefined),
   'snapshots:cleanupItems': ({ before, selected }) => snapshots.cleanupItems(before, selected),
   'junk:scan': () => junk.scan(),
   'junk:scanSystem': () => junk.scanSystem(),
@@ -475,6 +482,7 @@ const handlers = {
   // Backup removal plan export (Enhancement 7)
   'backups:exportPlan': ({ plan, format, fileName }) => backups.exportPlan({ plan, format, fileName }),
   'debloat:list': () => debloat.list(),
+  'debloat:previousDamaged': () => debloat.previousDamaged(),
   'debloat:set': async ({ id, enable }) => {
     const t = debloat.TWEAKS?.find((x) => x.id === id);
     const rp = await maybeCreateRestorePoint('debloat', `Purgeon: before debloat tweak ${t?.title || id}`);
@@ -529,6 +537,11 @@ const recorders = {
   'backups:restore': (id, results) => ({
     type: 'Restore',
     title: `Restored the backup of ${String(id).replace(/^[^_]*_/, '').replace(/-/g, ' ') || 'removed items'}`,
+    detail: `${results.filter((r) => r.ok).length} of ${results.length} entries restored`,
+  }),
+  'backups:restoreEntries': ({ id }, results) => ({
+    type: 'Restore',
+    title: `Restored selected items from the backup of ${String(id).replace(/^[^_]*_/, '').replace(/-/g, ' ') || 'removed items'}`,
     detail: `${results.filter((r) => r.ok).length} of ${results.length} entries restored`,
   }),
   'snapshots:take': ({ preset }, meta) => ({

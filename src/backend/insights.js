@@ -150,7 +150,7 @@ export async function recordSizes(programs, day = today()) {
     else h.push([day, kb]);
     if (h.length > 365) h.splice(0, h.length - 365);
   }
-  await sys.writeText(sizesFile(), JSON.stringify(all));
+  await sys.writeTextAtomic(sizesFile(), JSON.stringify(all));
   return all;
 }
 

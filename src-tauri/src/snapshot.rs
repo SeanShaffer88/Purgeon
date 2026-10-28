@@ -12,11 +12,28 @@ use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::{BufRead, BufReader, BufWriter, Write};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::{Instant, UNIX_EPOCH};
 use winreg::enums::*;
 use winreg::RegKey;
 
 const MAX_DATA: usize = 4096;
+
+// Cancellation for the long walks below: the frontend sets this through the
+// cancel_snapshot command, and take/compare poll it as they go. A cancelled
+// operation reports Err("cancelled") — the backend maps that exact word to a
+// calm "cancelled" result instead of an error.
+static CANCELLED: AtomicBool = AtomicBool::new(false);
+
+pub fn request_cancel() {
+    CANCELLED.store(true, Ordering::SeqCst);
+}
+
+fn cancel_requested() -> bool {
+    CANCELLED.load(Ordering::SeqCst)
+}
+
+const CANCELLED_MSG: &str = "cancelled";
 
 #[derive(Deserialize)]
 pub struct RegRoot {
@@ -129,6 +146,7 @@ pub fn take(
     reg_roots: &[RegRoot],
     excludes: &[String],
 ) -> Result<SnapshotStats, String> {
+    CANCELLED.store(false, Ordering::SeqCst);
     let start = Instant::now();
     let excludes: Vec<String> = excludes.iter().map(|e| e.to_lowercase()).collect();
     let tmp = format!("{out}.part");
@@ -145,6 +163,11 @@ pub fn take(
     for root in file_roots {
         let mut stack = vec![(root.clone(), 1u32)];
         while let Some((dir, depth)) = stack.pop() {
+            if cancel_requested() {
+                drop(w);
+                let _ = fs::remove_file(&tmp);
+                return Err(CANCELLED_MSG.to_string());
+            }
             let Ok(rd) = fs::read_dir(&dir) else { continue };
             for e in rd.flatten() {
                 let Ok(t) = e.file_type() else { continue };
@@ -192,6 +215,11 @@ pub fn take(
         let base = RegKey::predef(hkey);
         let mut stack = vec![(root.path.clone(), 1u32)];
         while let Some((path, depth)) = stack.pop() {
+            if cancel_requested() {
+                drop(w);
+                let _ = fs::remove_file(&tmp);
+                return Err(CANCELLED_MSG.to_string());
+            }
             let Ok(key) = base.open_subkey_with_flags(&path, KEY_READ | KEY_WOW64_64KEY) else {
                 continue;
             };
@@ -249,7 +277,12 @@ struct Snap {
 fn load(path: &str) -> Result<Snap, String> {
     let f = File::open(path).map_err(|e| format!("{path}: {e}"))?;
     let mut s = Snap::default();
+    let mut lines = 0u64;
     for line in BufReader::new(GzDecoder::new(f)).lines() {
+        lines += 1;
+        if lines.is_multiple_of(8192) && cancel_requested() {
+            return Err(CANCELLED_MSG.to_string());
+        }
         let line = line.map_err(|e| e.to_string())?;
         let mut p = line.split('\t');
         match p.next() {
@@ -476,6 +509,7 @@ pub fn subtree(path: &str, key: &str) -> Result<Subtree, String> {
 }
 
 pub fn compare(before_path: &str, after_path: &str, limit: usize) -> Result<Comparison, String> {
+    CANCELLED.store(false, Ordering::SeqCst);
     let start = Instant::now();
     let a = load(before_path)?;
     let b = load(after_path)?;

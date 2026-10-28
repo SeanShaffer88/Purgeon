@@ -75,7 +75,7 @@ export async function setEnabled(pluginId, enabled) {
     manifest = JSON.parse(await sys.readText(mp));
   } catch {}
   manifest.enabled = enabled;
-  await sys.writeText(mp, JSON.stringify(manifest, null, 2));
+  await sys.writeTextAtomic(mp, JSON.stringify(manifest, null, 2));
   return { id: pluginId, enabled };
 }
 
@@ -94,7 +94,7 @@ export async function validate() {
         manifest = JSON.parse(await sys.readText(mp));
       } catch {}
       manifest.scriptHash = hash;
-      await sys.writeText(mp, JSON.stringify(manifest, null, 2));
+      await sys.writeTextAtomic(mp, JSON.stringify(manifest, null, 2));
       results.push({ id: e.name, integrity: 'valid', hash });
     } catch (err) {
       results.push({ id: e.name, integrity: 'error', error: String(err) });

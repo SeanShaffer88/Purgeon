@@ -13,9 +13,9 @@ dimension at least 3, and no Fail.
 |---|---:|---:|---|---|
 | Correctness | 14 | 2 | Fail | 181 JS tests and 10 native tests pass (x64); whole-product runtime matrix incomplete |
 | Security & privacy | 12 | 1 | Fail | CLI no-side-effect regressions and scoped risk notes; complete Tier 2 review/SBOM absent |
-| Robustness | 11 | 3 | Pass | Invalid-input and initialization-failure tests; the 2026-10-28 audit added failure drills for damaged on-disk state (interrupted-removal record) and concurrent settings writes |
+| Robustness | 11 | 3 | Pass | Invalid-input and initialization-failure tests; the 2026-10-28 audit added failure drills for damaged on-disk state (interrupted-removal record) and concurrent settings writes; the follow-up pass made every state write atomic and made damaged settings/groups/Debloat-state files quarantine-and-report instead of silently resetting |
 | Feature completeness | 9 | 2 | Fail | Scoped matrix in `docs/PARITY.md`; whole-product capability review pending |
-| Performance | 8 | 0 | Fail | No qualified application budgets or benchmark recorded |
+| Performance | 8 | 0 | Fail | A repeatable baseline now exists (`npm run perf`: production bundle bytes + test-suite wall time, first recorded 2026-10-28); qualified budgets not yet established |
 | Maintainability | 7 | 2 | Fail | Scoped decision record and isolated parser; repository-wide complexity check pending |
 | Modularity | 6 | 2 | Fail | Pure parser -> dispatcher -> backend -> system boundary reviewed for this slice only |
 | UX & accessibility | 6 | 1 | Fail | CLI help/errors updated; no runtime keyboard/screen-reader matrix performed |

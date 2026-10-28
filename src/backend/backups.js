@@ -88,7 +88,7 @@ async function readEncryptedText(p) {
 async function writeEncryptedText(p, text) {
   const password = await encryptionKey();
   const toWrite = password ? await encryptText(text, password) : text;
-  await sys.writeText(p, toWrite);
+  await sys.writeTextAtomic(p, toWrite);
 }
 
 const slug = (s) => (s || 'items').replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '').slice(0, 40);
@@ -279,7 +279,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
     await save();
   };
   await save();
-  await sys.writeText(pendingFile(), JSON.stringify({ id, title, owners, items, started: manifest.created }));
+  await sys.writeTextAtomic(pendingFile(), JSON.stringify({ id, title, owners, items, started: manifest.created }));
 
   // Last check before deleting: is anything still used by another installed program?
   // If the check itself cannot run, files, folders and keys are left alone.
@@ -476,6 +476,9 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
     return { backupId: null, results, cancelled: stopped };
   }
   await seal(dir, manifest);
+  // Prove the new package can be restored before calling it done. Best
+  // effort: a failed proof never fails the removal itself.
+  await verifyPackage(id).catch(() => {});
   await sys.removePath(pendingFile());
   return { backupId: id, results, cancelled: stopped };
 }
@@ -578,13 +581,107 @@ async function prune({ maxDays = 0, maxMB = 0 } = {}, now = Date.now(), hooks = 
 async function list() {
   const dirs = (await sys.readDir(backupRoot).catch(() => [])).filter((d) => d.dir);
   const manifests = await Promise.all(
-    dirs.map((d) =>
-      readEncryptedText(path.join(backupRoot, d.name, 'manifest.json'))
+    dirs.map(async (d) => {
+      const m = await readEncryptedText(path.join(backupRoot, d.name, 'manifest.json'))
         .then(JSON.parse)
-        .catch(() => null)
-    )
+        .catch(() => null);
+      if (!m) return null;
+      // Verification lives in a sidecar file, not the manifest, so recording
+      // it never breaks the manifest's own fingerprint.
+      const v = await sys.readText(path.join(backupRoot, d.name, 'verified.json')).then(JSON.parse).catch(() => null);
+      if (v) {
+        m.verified = v.ok === true;
+        m.verifiedAt = v.at || null;
+        m.verifyProblems = Array.isArray(v.problems) ? v.problems : [];
+      }
+      return m;
+    })
   );
   return manifests.filter(Boolean).sort((a, b) => b.created.localeCompare(a.created));
+}
+
+// Which of these original paths are still in the Recycle Bin (read-only
+// check, the same $I-record parsing the restore itself uses). Paths with an
+// 8.3 short name in them are skipped by the caller — the Bin records long
+// paths, so a short-named path could read as missing when it is not.
+async function binPresence(originals) {
+  const out = await runPS(
+    `$wanted = [Console]::In.ReadToEnd() | ConvertFrom-Json
+    $wanted = @($wanted)
+    $sid = [Security.Principal.WindowsIdentity]::GetCurrent().User.Value
+    $found = @()
+    foreach ($root in @($wanted | ForEach-Object { [IO.Path]::GetPathRoot([string]$_) } | Sort-Object -Unique)) {
+      $bin = Join-Path $root ('$Recycle.Bin\\' + $sid)
+      foreach ($i in Get-ChildItem -LiteralPath $bin -Filter '$I*' -Force -ErrorAction SilentlyContinue) {
+        try { $b = [IO.File]::ReadAllBytes($i.FullName) } catch { continue }
+        if ($b.Length -lt 28) { continue }
+        if ([BitConverter]::ToInt64($b, 0) -eq 2) { $len = [BitConverter]::ToInt32($b, 24); $p = [Text.Encoding]::Unicode.GetString($b, 28, [Math]::Max(0, $len - 1) * 2) }
+        else { $p = [Text.Encoding]::Unicode.GetString($b, 24, [Math]::Min(520, $b.Length - 24)).TrimEnd([char]0) }
+        if ($wanted -contains $p) { $found += $p }
+      }
+    }
+    @($found) | ConvertTo-Json -Compress`,
+    { input: JSON.stringify(originals) }
+  );
+  const arr = JSON.parse(out.trim() || '[]');
+  return new Set((Array.isArray(arr) ? arr : [arr]).map((p) => String(p).toLowerCase()));
+}
+
+// Proves a backup package can be restored, and records the verdict in a
+// verified.json sidecar (never inside the fingerprinted manifest):
+//   1. the seal is intact — manifest fingerprint matches and no stored file
+//      changed (the same check a restore runs);
+//   2. a trial restore of the stored exports — registry/service exports are
+//      copied to a scratch folder and must still parse;
+//   3. recycled files and folders are confirmed present in the Recycle Bin.
+// Anything that cannot be checked (no PowerShell, a short-named path) is
+// reported as unchecked, never as a failure.
+async function verifyPackage(id) {
+  const dir = backupDir(id);
+  const manifest = JSON.parse(await readEncryptedText(manifestFile(id)));
+  const record = async (result) => {
+    await sys.writeTextAtomic(path.join(dir, 'verified.json'), JSON.stringify(result, null, 2)).catch(() => {});
+    return result;
+  };
+  let changed;
+  try {
+    changed = await verify(dir, manifest);
+  } catch (e) {
+    return record({ ok: false, at: new Date().toISOString(), problems: [e.message], exportsChecked: 0, binChecked: 0 });
+  }
+  const problems = [...changed].map((n) => `The stored file ${n} was changed after the backup was made`);
+  let exportsChecked = 0;
+  const scratch = path.join(dir, '.trial');
+  try {
+    await sys.makeDir(scratch);
+    for (const e of manifest.entries) {
+      if (!e.file || changed.has(e.file)) continue;
+      if (e.kind !== 'key' && e.kind !== 'service' && e.kind !== 'task' && e.kind !== 'firewall') continue;
+      const text = await sys.readText(path.join(dir, e.file)).catch(() => '');
+      if (!text.trim()) {
+        problems.push(`The stored copy for ${e.path} is empty`);
+        continue;
+      }
+      if ((e.kind === 'key' || e.kind === 'service') && !/REGEDIT|Windows Registry Editor/i.test(text.slice(0, 200))) {
+        problems.push(`The registry export for ${e.path} no longer parses`);
+        continue;
+      }
+      await sys.writeText(path.join(scratch, e.file), text);
+      exportsChecked++;
+    }
+  } finally {
+    await sys.removePath(scratch).catch(() => {});
+  }
+  let binChecked = 0;
+  const recycledPaths = manifest.entries.filter((e) => e.recycled && !String(e.path).includes('~')).map((e) => e.path);
+  if (recycledPaths.length) {
+    const present = await binPresence(recycledPaths).catch(() => null);
+    if (present) {
+      binChecked = recycledPaths.length;
+      for (const p of recycledPaths) if (!present.has(p.toLowerCase())) problems.push(`${p} is no longer in the Recycle Bin`);
+    }
+  }
+  return record({ ok: problems.length === 0, at: new Date().toISOString(), problems, exportsChecked, binChecked });
 }
 
 // Moves the newest Recycle Bin copy of each original path back into place, in one pass. Each
@@ -644,14 +741,18 @@ async function restoreManyFromRecycleBin(originals) {
 
 const restoreFromRecycleBin = async (original) => (await restoreManyFromRecycleBin([original]))[original] || 'NOTFOUND';
 
-async function restore(id) {
+// Restores a backup. With `onlyIndexes` (an array of entry positions), only
+// those entries are restored — the Recovery Packages tool's selective restore.
+async function restore(id, onlyIndexes) {
   const dir = path.join(backupRoot, id);
   if (!(await sys.exists(path.join(dir, 'manifest.json')))) throw new Error('This backup no longer exists. It may have been removed by the backup limits in Tools › Backup Settings.');
   const manifest = JSON.parse(await readEncryptedText(path.join(dir, 'manifest.json')));
   const changed = await verify(dir, manifest);
+  const only = Array.isArray(onlyIndexes) ? new Set(onlyIndexes) : null;
   const results = [];
-  const recycled = await restoreManyFromRecycleBin(manifest.entries.filter((e) => e.recycled).map((e) => e.path)).catch((err) => ({ error: `ERR ${err.message}` }));
-  for (const e of manifest.entries) {
+  const recycled = await restoreManyFromRecycleBin(manifest.entries.filter((e, i) => e.recycled && (!only || only.has(i))).map((e) => e.path)).catch((err) => ({ error: `ERR ${err.message}` }));
+  for (const [entryIndex, e] of manifest.entries.entries()) {
+    if (only && !only.has(entryIndex)) continue;
     if (e.file && changed.has(e.file)) {
       results.push({ ...e, ok: false, detail: 'Its backup file was changed after it was made, so it was not restored' });
       continue;
@@ -764,4 +865,4 @@ ${rows}
   return { file, format, items: plan.results.length };
 }
 
-export { setRoot, removeItems, planRemoval, interrupted, resolveInterrupted, prune, list, restore, remove, restoreFromRecycleBin, restoreManyFromRecycleBin };
+export { setRoot, removeItems, planRemoval, interrupted, resolveInterrupted, prune, list, restore, remove, restoreFromRecycleBin, restoreManyFromRecycleBin, verifyPackage };

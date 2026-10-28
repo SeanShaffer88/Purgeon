@@ -59,7 +59,7 @@ export class FileCache {
   async save() {
     if (!this.dirty) return;
     try {
-      await sys.writeText(this.file, JSON.stringify(this.map));
+      await sys.writeTextAtomic(this.file, JSON.stringify(this.map));
       this.dirty = false;
     } catch {}
   }

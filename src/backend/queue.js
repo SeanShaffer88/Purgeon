@@ -15,7 +15,7 @@ const RUNONCE = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce';
 const VALUE = 'SweepUninstallQueue';
 
 export const get = () => sys.readText(file).then(JSON.parse).catch(() => null);
-export const save = (q) => sys.writeText(file, JSON.stringify(q, null, 2)).then(() => q);
+export const save = (q) => sys.writeTextAtomic(file, JSON.stringify(q, null, 2)).then(() => q);
 export async function clear() {
   await sys.removePath(file);
   await disarm();

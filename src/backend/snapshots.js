@@ -51,16 +51,27 @@ function scope(preset) {
   };
 }
 
+// The native layer reports a user cancel as an error with the exact message
+// "cancelled"; anywhere else it would surface as a scary failure, so it is
+// mapped here to a plain { cancelled: true } result.
+const isCancel = (e) => String((e && e.message) || e) === 'cancelled';
+
 export async function capture(out, name, preset) {
   const s = scope(preset);
-  return sys.takeSnapshot(out, name, s.fileRoots, s.fileDepth, s.regRoots, s.excludes);
+  try {
+    return await sys.takeSnapshot(out, name, s.fileRoots, s.fileDepth, s.regRoots, s.excludes);
+  } catch (e) {
+    if (isCancel(e)) return { cancelled: true };
+    throw e;
+  }
 }
 
 export async function take(name, preset = 'standard') {
   const id = String(Date.now());
   const stats = await capture(snapFile(id), name, preset);
+  if (stats.cancelled) return { cancelled: true };
   const meta = { id, name: name || `Snapshot ${new Date().toLocaleString()}`, created: new Date().toISOString(), preset, stats };
-  await sys.writeText(metaFile(id), JSON.stringify(meta, null, 2));
+  await sys.writeTextAtomic(metaFile(id), JSON.stringify(meta, null, 2));
   return meta;
 }
 
@@ -80,7 +91,7 @@ export async function rename(id, name) {
   if (!validId(id)) throw new Error('Invalid snapshot id');
   const meta = JSON.parse(await sys.readText(metaFile(id)));
   meta.name = name;
-  await sys.writeText(metaFile(id), JSON.stringify(meta, null, 2));
+  await sys.writeTextAtomic(metaFile(id), JSON.stringify(meta, null, 2));
   return meta;
 }
 
@@ -91,9 +102,17 @@ export async function compare(before, after, limit = 20000) {
   let afterPath = snapFile(after);
   if (after === 'now') {
     afterPath = path.join(dir, 'now.snap');
-    await capture(afterPath, 'Now', beforeMeta.preset);
+    const fresh = await capture(afterPath, 'Now', beforeMeta.preset);
+    if (fresh.cancelled) return { cancelled: true };
   }
-  const result = await sys.compareSnapshots(snapFile(before), afterPath, limit);
+  let result;
+  try {
+    result = await sys.compareSnapshots(snapFile(before), afterPath, limit);
+  } catch (e) {
+    if (after === 'now') await sys.removePath(afterPath).catch(() => {});
+    if (isCancel(e)) return { cancelled: true };
+    throw e;
+  }
   if (after === 'now') await sys.removePath(afterPath);
   return { ...result, beforeId: String(before), afterId: String(after), preset: beforeMeta.preset };
 }

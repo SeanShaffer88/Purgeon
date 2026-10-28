@@ -62,7 +62,7 @@ export function DiskUsageView({ filter, onError, onStatus }) {
   const max = shown.reduce((n, e) => Math.max(n, e.bytes), 0);
 
   return (
-    <div className="disk">
+    <div className="disk-view">
       <div className="disk-drives" role="group" aria-label="Drives">
         {(drives || []).map((d) => (
           <button key={d.root} className={`drive-chip ${path && path.toUpperCase().startsWith(d.root.toUpperCase()) ? 'on' : ''}`} onClick={() => scan(d.root)} title={`Show drive ${d.root} — ${formatBytes(d.free)} free of ${formatBytes(d.used + d.free)}`}>

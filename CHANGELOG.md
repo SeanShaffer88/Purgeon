@@ -1,5 +1,27 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- **Recovery Packages** (Tools › Advanced Tools): every removal backup shows whether it was proven restorable — new backups are verified when they are made (seal check, a trial restore of the stored exports, and a Recycle Bin presence check, recorded beside the package) — and single items can be ticked and restored out of a package instead of restoring everything. Older backups can be verified on demand from the same window.
+
+### Added
+
+- Snapshots can now be cancelled while being taken or compared (the native walk checks a cancel flag as it goes).
+- Command line: `--timeline`, `--history` and `--archive` print the same records as their windows, with `--json` for scripts.
+- The Apps view shows each app's size, measured from its own package folder; a package whose folder Windows will not let Purgeon read shows no size rather than a guess.
+- `npm run perf` prints a repeatable performance baseline (production bundle size and test-suite wall time).
+
+### Changed
+
+- Every file Purgeon uses to remember things (settings, groups, history, archive, backups, snapshots, Debloat state and more) is now written atomically — written to a temporary file and renamed over the original — so a crash or power cut mid-write cannot leave a damaged file behind.
+
+### Fixed
+
+- A damaged settings, groups or Debloat restore-data file is no longer silently reset and overwritten: the damaged text is kept beside the original with ".damaged" in its name, the app reports what happened, and the Debloat view warns when exact pre-tweak values were lost.
+- Timeline row tooltips now include the event's detail text (for example, who published a program).
+
 ## 1.0.9 - 2026-10-28
 
 ### Fixed

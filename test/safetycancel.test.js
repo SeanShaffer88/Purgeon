@@ -111,3 +111,36 @@ test('cleanSystem reports un-run options as cancelled when stopped', async () =>
   assert.equal(results.length, 2);
   assert.ok(results.every((r) => !r.ok && r.detail === 'Cancelled'));
 });
+
+test('snapshot take and compare stop calmly when cancelled', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'purgeon-snapcancel-'));
+  let mode = 'cancel';
+  let metaWrites = 0;
+  setSys({
+    ...nodeSys,
+    takeSnapshot: async () => {
+      if (mode === 'cancel') throw new Error('cancelled');
+      return { dirs: 1, files: 2, keys: 3, values: 4, ms: 5, bytes: 6 };
+    },
+    compareSnapshots: async () => {
+      if (mode === 'cancel') throw new Error('cancelled');
+      return { added: [], removed: [], changed: [], truncated: false };
+    },
+    cancelSnapshot: async () => {},
+    writeTextAtomic: async (p, s) => {
+      metaWrites++;
+      return nodeSys.writeTextAtomic(p, s);
+    },
+  });
+  await snapshots.setRoot(dir);
+  const cancelledTake = await snapshots.take('Test', 'quick');
+  assert.deepEqual(cancelledTake, { cancelled: true }, 'a cancelled take reports cancelled, not an error');
+  assert.equal(metaWrites, 0, 'a cancelled take saves no snapshot record');
+  mode = 'ok';
+  const meta = await snapshots.take('Test', 'quick');
+  assert.ok(meta.id && metaWrites === 1, 'a normal take still works');
+  mode = 'cancel';
+  const cancelledCompare = await snapshots.compare(meta.id, meta.id);
+  assert.deepEqual(cancelledCompare, { cancelled: true }, 'a cancelled compare reports cancelled, not an error');
+  fs.rmSync(dir, { recursive: true, force: true });
+});

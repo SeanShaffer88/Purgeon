@@ -94,8 +94,8 @@ export async function syncNow() {
       }
 
       await sys.writeText(tmp, settingsText);
-      await sys.writeText(target, settingsText);
-      await sys.writeText(ls, settingsText);
+      await sys.writeTextAtomic(target, settingsText);
+      await sys.writeTextAtomic(ls, settingsText);
       try { await sys.removePath(tmp); } catch {}
       synced++;
     } catch (e) {

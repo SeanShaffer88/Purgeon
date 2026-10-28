@@ -17,7 +17,8 @@
     "dev": "tauri dev",
     "dist": "tauri build",
     "dist:windows": "pwsh -NoProfile -File scripts/package-windows.ps1",
-    "test": "node --test \"test/*.test.js\""
+    "test": "node --test \"test/*.test.js\"",
+    "perf": "node scripts/perf.mjs"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",

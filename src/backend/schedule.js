@@ -31,7 +31,7 @@ const readState = async () => {
 
 const writeState = async (state) => {
   try {
-    await sys.writeText(stateFile(), JSON.stringify(state, null, 2));
+    await sys.writeTextAtomic(stateFile(), JSON.stringify(state, null, 2));
   } catch {}
 };
 

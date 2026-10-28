@@ -12,7 +12,7 @@ export const setRoot = async (dir) => {
 };
 
 const read = () => sys.readText(file).then(JSON.parse).catch(() => []);
-const write = (l) => sys.writeText(file, JSON.stringify(l, null, 2));
+const write = (l) => sys.writeTextAtomic(file, JSON.stringify(l, null, 2));
 
 export const list = read;
 

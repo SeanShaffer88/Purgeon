@@ -73,6 +73,9 @@ import * as portableapps from './backend/portableapps.js';
 import * as programs from './backend/programs.js';
 import * as junk from './backend/junk.js';
 import * as backups from './backend/backups.js';
+import * as history from './backend/history.js';
+import * as archive from './backend/archive.js';
+import * as explore from './backend/explore.js';
 import { runUninstaller } from './backend/api.js';
 import { runCommandLine } from './backend/shell.js';
 import { parseCliArgs } from './cli-args.js';
@@ -91,6 +94,13 @@ const HELP = `Purgeon command line
         Compares two snapshots, or a snapshot with the system now.
   --list-snapshots
         Lists saved snapshots.
+  --timeline [--json]
+        Lists the change timeline (the Change Timeline view): installs,
+        updates, removals and snapshots, newest first.
+  --history [--json]
+        Lists the actions Purgeon has recorded (the Change History view).
+  --archive [--json]
+        Lists the uninstall archive: every program removed, newest first.
   --maintenance
         Runs the weekly maintenance chosen in Tools › Scheduled Maintenance.
   --monitor "<installer>" [--name "<program name>"]
@@ -223,6 +233,38 @@ async function run(args) {
       return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')} ${t.toTimeString().slice(0, 5)}`;
     };
     return wrap(true, list.map((s) => `${s.id}  ${local(s.created)}  ${s.preset.padEnd(8)}  ${s.name}`).join('\r\n') + '\r\n');
+  }
+  if (cmd === '--timeline') {
+    const desktop = await programs.listDesktop().catch(() => []);
+    const written = sys.uninstallKeyTimes ? await sys.uninstallKeyTimes().catch(() => ({})) : {};
+    const events = await explore.timeline(desktop, written);
+    if (j) return wrap(true, JSON.stringify(events, null, 2));
+    if (!events.length) return wrap(true, 'Nothing recorded yet.\\r\\n');
+    const local = (iso) => {
+      const t = new Date(iso);
+      return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')} ${t.toTimeString().slice(0, 5)}`;
+    };
+    return wrap(true, events.map((e) => `${local(e.time)}  ${String(e.type).padEnd(10)}  ${e.title}`).join('\\r\\n') + '\\r\\n');
+  }
+  if (cmd === '--history') {
+    const entries = await history.list();
+    if (j) return wrap(true, JSON.stringify(entries, null, 2));
+    if (!entries.length) return wrap(true, 'No actions recorded yet.\\r\\n');
+    const local = (iso) => {
+      const t = new Date(iso);
+      return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')} ${t.toTimeString().slice(0, 5)}`;
+    };
+    return wrap(true, entries.map((e) => `${local(e.time)}  ${String(e.type).padEnd(10)}  ${e.title}${e.undone ? ' (undone)' : ''}`).join('\\r\\n') + '\\r\\n');
+  }
+  if (cmd === '--archive') {
+    const entries = await archive.list();
+    if (j) return wrap(true, JSON.stringify(entries, null, 2));
+    if (!entries.length) return wrap(true, 'No programs removed yet.\\r\\n');
+    const local = (iso) => {
+      const t = new Date(iso);
+      return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')} ${t.toTimeString().slice(0, 5)}`;
+    };
+    return wrap(true, entries.map((e) => `${local(e.removed)}  ${e.name}${e.version ? ` ${e.version}` : ''}  (${e.how})`).join('\\r\\n') + '\\r\\n');
   }
   if (cmd === '--monitor') {
     const sub = option(args, '--monitor');
@@ -590,7 +632,7 @@ async function run(args) {
 // parser and keep their existing dispatch below; a disposable test install under
 // --monitor also stays on that path because it takes its own options.
 const PARSER_COMMANDS = new Set(['--snapshot', '--compare', '--list-snapshots', '--monitor', '--maintenance', '--autostart', '--help', '-h', '/?']);
-const LEGACY_COMMANDS = new Set(['--background-scan', '--restore-point', '--associations', '--associations-for', '--schedule', '--startup', '--trusted', '--update', '--sync', '--plugins', '--portableapps', '--export', '--uninstall', '--language', '--settings', '--profiler', '--quiet', '-q', '--json']);
+const LEGACY_COMMANDS = new Set(['--background-scan', '--restore-point', '--associations', '--associations-for', '--schedule', '--startup', '--trusted', '--update', '--sync', '--plugins', '--portableapps', '--export', '--uninstall', '--language', '--settings', '--profiler', '--timeline', '--history', '--archive', '--quiet', '-q', '--json']);
 
 async function dispatch(args, initialize) {
   const first = Array.isArray(args) && typeof args[0] === 'string' ? args[0].toLowerCase() : null;

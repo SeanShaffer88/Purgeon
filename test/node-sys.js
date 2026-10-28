@@ -81,6 +81,12 @@ export function createNodeSys(dataDir = path.join(os.tmpdir(), 'purgeon-test-dat
       fs.mkdirSync(path.dirname(p), { recursive: true });
       fs.writeFileSync(p, s);
     },
+    writeTextAtomic: async (p, s) => {
+      fs.mkdirSync(path.dirname(p), { recursive: true });
+      const tmp = `${p}.tmp-${process.pid}`;
+      fs.writeFileSync(tmp, s);
+      fs.renameSync(tmp, p);
+    },
     makeDir: async (p) => {
       fs.mkdirSync(p, { recursive: true });
     },
