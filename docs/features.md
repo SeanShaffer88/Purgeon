@@ -72,7 +72,8 @@ Try a program and undo it completely — a snapshot is taken, the installer runs
 
 Tools › Advanced Tools holds the powerful tools, deliberately kept out of the main window:
 
-- **Recovery Packages**: every removal backup with its verification state. A backup is proven restorable when it is made — its seal is checked, its stored exports are trial-restored into a scratch folder, and its Recycle Bin items are confirmed present — and the verdict is recorded beside the package (never inside it, so the record cannot break the package's own fingerprint). The window also restores single ticked items out of a package, and can re-verify any package on demand.
+- **Recovery Packages**: every removal backup with its verification state.
+- **Shared Components**: the shared runtimes, shared install folders and shared files Purgeon keeps during removals. Shared files come from the SharedDLLs counts Windows itself maintains; where Windows records how many programs use a file but not which ones, the window says so instead of guessing. A backup is proven restorable when it is made — its seal is checked, its stored exports are trial-restored into a scratch folder, and its Recycle Bin items are confirmed present — and the verdict is recorded beside the package (never inside it, so the record cannot break the package's own fingerprint). The window also restores single ticked items out of a package, and can re-verify any package on demand.
 
 ## Snapshots
 
