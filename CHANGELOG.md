@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## 1.0.4 - 2026-10-27
+
+### Changed
+- Purgeon is now 64-bit only. Releases ship exactly two files: Purgeon-Setup-x64.exe (the native x64 installer) and Purgeon-Portable-x64.zip (the portable build). The 32-bit build, the universal installer and the MSI are discontinued; 64-bit Windows 10 or 11 is required. The installers remain unsigned.
+- Repeat program-list loads are much lighter: signature and processor-architecture results, and extracted program icons, are remembered per program file and only recomputed when that file changes, so refreshing the list no longer re-runs the full signature sweep.
+- Background measuring and insight work now starts after the window has painted, and measured program sizes are applied to the list in small batches, making the first seconds after launch smoother.
+- Settings are no longer re-read from disk on every operation; the saved settings are kept in step with the settings file's modified time, so outside edits are still picked up.
+- The command log is now flushed before the app exits, and the window shows a brief loading note instead of a blank page while Purgeon starts.
+
 ## 1.0.3 - 2026-10-27
 
 ### Fixed
