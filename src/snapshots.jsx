@@ -233,7 +233,7 @@ export function SnapshotTimeline({ snapshots, marked, onSelect, onCompare, onCom
   const chosen = sorted.filter((s) => marked.has(s.key));
   const day = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
   return (
-    <div className="timeline" role="group" aria-label="Snapshot timeline">
+    <div className="snapshot-timeline" role="group" aria-label="Snapshot timeline">
       <div className="timeline-track">
         <span className="timeline-line" />
         {sorted.map((s, i) => (
