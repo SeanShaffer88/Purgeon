@@ -111,7 +111,20 @@ export function createNodeSys(dataDir = path.join(os.tmpdir(), 'purgeon-test-dat
       fs.mkdirSync(path.dirname(p), { recursive: true });
       const tmp = `${p}.tmp-${process.pid}`;
       fs.writeFileSync(tmp, s);
-      fs.renameSync(tmp, p);
+      // Mirror the native command: on Windows the rename can fail with
+      // EPERM while another process holds the target open for a moment
+      // (test files share one data folder), so retry briefly.
+      let lastErr = null;
+      for (let attempt = 0; attempt < 6; attempt++) {
+        try {
+          fs.renameSync(tmp, p);
+          return;
+        } catch (e) {
+          lastErr = e;
+          if (attempt < 5) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 40);
+        }
+      }
+      throw lastErr;
     },
     makeDir: async (p) => {
       fs.mkdirSync(p, { recursive: true });
