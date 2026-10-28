@@ -58,4 +58,23 @@ async function measure(programs, onResult, shouldStop) {
   await Promise.all(Array.from({ length: 3 }, worker));
 }
 
-export { measure, measureOne, programFolder, folderSize };
+// Store apps: every package has its own folder (its InstallLocation), so a
+// package's size is that folder's size, measured directly — never guessed.
+// The desktop path refuses those folders on purpose (they are the shared
+// WindowsApps area); here each folder belongs to exactly one package, which
+// is what makes the number honest. A folder Windows will not let Purgeon read
+// (some system packages) simply stays unmeasured and shows no size.
+async function measureStoreApps(programs, onResult, shouldStop) {
+  const queue = programs.filter((p) => p.location);
+  const worker = async () => {
+    while (queue.length) {
+      if (shouldStop && shouldStop()) return;
+      const p = queue.shift();
+      const { bytes, entries, truncated } = await folderSize(p.location).catch(() => ({ bytes: 0, entries: 0, truncated: false }));
+      if (entries > 0 && bytes > 0) onResult({ key: p.key, folder: p.location, sizeKB: Math.round(bytes / 1024), sizeMeasured: true, sizeTruncated: truncated });
+    }
+  };
+  await Promise.all(Array.from({ length: 3 }, worker));
+}
+
+export { measure, measureOne, programFolder, folderSize, measureStoreApps };

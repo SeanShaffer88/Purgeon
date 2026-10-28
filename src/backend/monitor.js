@@ -25,7 +25,7 @@ async function start(installer) {
   const stats = await capture(beforeFile(), 'Before installation', 'standard');
   // Live tracking only follows an installer Purgeon starts itself.
   const live = !!installer && !!sys.trackStart && (await sys.trackStart().then(() => true, () => false));
-  await sys.writeText(sessionFile(), JSON.stringify({ started: new Date().toISOString(), installer, live }));
+  await sys.writeTextAtomic(sessionFile(), JSON.stringify({ started: new Date().toISOString(), installer, live }));
   return { entries: stats.dirs + stats.files + stats.keys + stats.values, live };
 }
 
@@ -33,7 +33,7 @@ async function start(installer) {
 // snapshot is taken now, while it waits on its first page. Snapshots only, no live tracking.
 async function attach(installer, name) {
   const stats = await capture(beforeFile(), 'Before installation', 'standard');
-  await sys.writeText(sessionFile(), JSON.stringify({ started: new Date().toISOString(), installer, name, live: false, attached: true }));
+  await sys.writeTextAtomic(sessionFile(), JSON.stringify({ started: new Date().toISOString(), installer, name, live: false, attached: true }));
   return { entries: stats.dirs + stats.files + stats.keys + stats.values };
 }
 
@@ -156,7 +156,7 @@ async function finish(name) {
     changedFiles: comparison.changed.filter((c) => c.kind === 'file').length,
     ...(tracked && { tracked: { processes: [...new Set(tracked.processes.map((p) => path.basename(p.image)))], events: tracked.events } }),
   };
-  await sys.writeText(path.join(storeDir, 'programs', `${record.id}.json`), JSON.stringify(record, null, 2));
+  await sys.writeTextAtomic(path.join(storeDir, 'programs', `${record.id}.json`), JSON.stringify(record, null, 2));
   await cancel();
   return record;
 }
@@ -170,7 +170,7 @@ async function finish(name) {
 async function testInstallStart(installer, name) {
   const stats = await capture(beforeFile(), 'Before installation (test)', 'standard');
   const live = !!installer && !!sys.trackStart && (await sys.trackStart().then(() => true, () => false));
-  await sys.writeText(sessionFile(), JSON.stringify({ started: new Date().toISOString(), installer, name, live, testInstall: true }));
+  await sys.writeTextAtomic(sessionFile(), JSON.stringify({ started: new Date().toISOString(), installer, name, live, testInstall: true }));
   return { entries: stats.dirs + stats.files + stats.keys + stats.values, live };
 }
 
@@ -198,7 +198,7 @@ async function testInstallFinish(name) {
     ...(tracked && { tracked: { processes: [...new Set(tracked.processes.map((p) => path.basename(p.image)))], events: tracked.events } }),
   };
   // Keep a temp copy so revertTestInstall can remove the captured changes.
-  await sys.writeText(TEST_RESULT_FILE(), JSON.stringify(result, null, 2));
+  await sys.writeTextAtomic(TEST_RESULT_FILE(), JSON.stringify(result, null, 2));
   return result;
 }
 

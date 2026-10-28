@@ -5,6 +5,7 @@
 import { sys } from './sys.js';
 import * as path from './winpath.js';
 import { reg, runPS, runPSJson } from './shell.js';
+import * as datadamage from './datadamage.js';
 
 const ADV = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced';
 const CDM = 'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\ContentDeliveryManager';
@@ -175,8 +176,29 @@ const setRoot = async (dir) => {
   await sys.makeDir(dir);
   stateFile = path.join(dir, 'previous-values.json');
 };
-const readPrevious = () => sys.readText(stateFile).then(JSON.parse).catch(() => ({}));
-const writePrevious = (s) => sys.writeText(stateFile, JSON.stringify(s, null, 2));
+let previousWasDamaged = false;
+const readPrevious = async () => {
+  let text;
+  try {
+    text = await sys.readText(stateFile);
+  } catch {
+    return {};
+  }
+  try {
+    return JSON.parse(text);
+  } catch {
+    // The exact pre-tweak values are damaged and cannot be recovered: keep a
+    // copy of the file, record it, and carry on with the documented off
+    // behavior (Windows defaults). The Debloat view warns the user via
+    // previousDamaged() — this must never be a silent loss.
+    previousWasDamaged = true;
+    await datadamage.quarantine(stateFile, text).catch(() => {});
+    await sys.writeTextAtomic(stateFile, '{}').catch(() => {});
+    return {};
+  }
+};
+const previousDamaged = () => previousWasDamaged;
+const writePrevious = (s) => sys.writeTextAtomic(stateFile, JSON.stringify(s, null, 2));
 
 const REG_TYPE = { String: 'REG_SZ', ExpandString: 'REG_EXPAND_SZ', DWord: 'REG_DWORD', QWord: 'REG_QWORD', Binary: 'REG_BINARY', MultiString: 'REG_MULTI_SZ' };
 
@@ -251,4 +273,4 @@ async function restartExplorer() {
   `);
 }
 
-export { setRoot, list, set, restartExplorer, TWEAKS, needsAdmin };
+export { setRoot, list, set, restartExplorer, TWEAKS, needsAdmin, previousDamaged, readPrevious };

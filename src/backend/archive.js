@@ -10,7 +10,7 @@ export const setRoot = async (dir) => {
 };
 
 const read = () => sys.readText(file).then(JSON.parse).catch(() => []);
-const write = (list) => sys.writeText(file, JSON.stringify(list, null, 2));
+const write = (list) => sys.writeTextAtomic(file, JSON.stringify(list, null, 2));
 
 export const list = async () => (await read()).sort((a, b) => b.removed.localeCompare(a.removed));
 
@@ -69,7 +69,7 @@ const knownFile = () => path.join(path.dirname(file), 'known-programs.json');
 export async function outside(programs) {
   const before = await sys.readText(knownFile()).then(JSON.parse).catch(() => null);
   const now = Object.fromEntries(programs.filter((p) => p.key && !p.store).map((p) => [p.key, { key: p.key, name: p.name, version: p.version || '', publisher: p.publisher || '', location: p.location || '', urlInfo: p.urlInfo || '', icon: p.icon || '' }]));
-  await sys.writeText(knownFile(), JSON.stringify({ saved: new Date().toISOString(), programs: now }));
+  await sys.writeTextAtomic(knownFile(), JSON.stringify({ saved: new Date().toISOString(), programs: now }));
   if (!before?.programs) return []; // first run: nothing to compare with
   // Removed with Purgeon since the last look: already in the archive.
   const removedHere = new Set((await read()).filter((e) => e.removed >= before.saved).map((e) => String(e.key).toLowerCase()));
