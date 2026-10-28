@@ -124,6 +124,17 @@ const HELP = `Purgeon command line
         Startup performance profile.
   --settings [--json]
         Shows current settings.
+  --sync status|apply|now [--files settings.json]
+        Shows or configures cloud-synced settings. apply takes
+        --folder <path> and --on|--off.
+  --portableapps list
+        Lists monitored programs that can be packaged as
+        PortableApps.com installers.
+  --portableapps generate --monitor-id <id> --output <folder>
+        Creates a PortableApps.com directory structure and NSIS installer
+        script from a monitored program's recorded files.
+  --export <type> --format <csv|json|html> --output <path>
+        Exports a list to a file. Types: programs, startup, junk, backups.
   --sysinfo [--json]
         Shows system information (the same report as Tools > System Info).
   --disk ["<folder>"] [--json]
