@@ -12,6 +12,7 @@ import * as backups from '../src/backend/backups.js';
 import * as snapshots from '../src/backend/snapshots.js';
 import { cleanSystem } from '../src/backend/junk.js';
 import { diskMap } from '../src/backend/explore.js';
+import * as winpath from '../src/backend/winpath.js';
 
 // The backend speaks Windows paths everywhere; on this machine the fake sys
 // translates them to real paths for the filesystem calls it makes itself.
@@ -143,4 +144,56 @@ test('snapshot take and compare stop calmly when cancelled', async () => {
   const cancelledCompare = await snapshots.compare(meta.id, meta.id);
   assert.deepEqual(cancelledCompare, { cancelled: true }, 'a cancelled compare reports cancelled, not an error');
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+const REG_TEXT = 'Windows Registry Editor Version 5.00\r\n\r\n[HKEY_LOCAL_MACHINE\\SOFTWARE\\Test]\r\n"A"=dword:00000001\r\n';
+const at = (root, ...parts) => winpath.join(root, ...parts);
+async function makeStoredPackage(root, id = 'cancelpkg') {
+  await nodeSys.makeDir(at(root, id));
+  fs.writeFileSync(at(root, id, '0.reg'), REG_TEXT);
+  fs.writeFileSync(at(root, id, '1.reg'), REG_TEXT);
+  const manifest = {
+    id,
+    title: 'Cancel Test',
+    created: '2026-10-28T00:00:00.000Z',
+    entries: [
+      { kind: 'key', path: 'HKLM\\SOFTWARE\\Test', file: '0.reg' },
+      { kind: 'key', path: 'HKLM\\SOFTWARE\\Other', file: '1.reg' },
+    ],
+  };
+  fs.writeFileSync(at(root, id, 'manifest.json'), JSON.stringify(manifest, null, 2));
+}
+
+test('restore stops between entries when cancelled and leaves the rest in place', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'purgeon-restore-cancel-'));
+  await backups.setRoot(root);
+  await makeStoredPackage(root);
+  const results = await backups.restore('cancelpkg', undefined, () => true);
+  assert.equal(results.length, 2, 'every entry is reported');
+  assert.ok(results.every((r) => !r.ok && /restore was cancelled/.test(r.detail)), 'each entry says it was left in place by the cancel');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('a cancelled verify is not recorded as a verdict on the package', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'purgeon-verify-cancel-'));
+  await backups.setRoot(root);
+  await makeStoredPackage(root);
+  const v = await backups.verifyPackage('cancelpkg', () => true);
+  assert.equal(v.cancelled, true, 'the check reports it was cancelled');
+  assert.ok(!fs.existsSync(at(root, 'cancelpkg', 'verified.json')), 'no verdict file is written for a cancelled check');
+  fs.rmSync(root, { recursive: true, force: true });
+});
+
+test('the scan-cancel flag empties folder scans (Cleaner Cancel)', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'purgeon-junkscan-'));
+  fs.writeFileSync(path.join(root, 'a.tmp'), 'x');
+  fs.writeFileSync(path.join(root, 'b.tmp'), 'y');
+  const sysHere = createNodeSys();
+  await sysHere.beginScans();
+  assert.equal((await sysHere.listJunk(root)).length, 2, 'a fresh scan lists the folder');
+  await sysHere.cancelScans();
+  assert.equal((await sysHere.listJunk(root)).length, 0, 'after cancel, scans return nothing further');
+  await sysHere.beginScans();
+  assert.equal((await sysHere.listJunk(root)).length, 2, 'beginning a new scan clears the flag');
+  fs.rmSync(root, { recursive: true, force: true });
 });

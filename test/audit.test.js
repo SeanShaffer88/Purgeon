@@ -109,6 +109,19 @@ test('no bare view-name style rule can restyle the generic row icon', async () =
   assert.ok(snapshots.includes('className="snapshot-timeline"'), 'the snapshot strip uses its own class name');
 });
 
+test('menubar dropdowns never clip their flyout panels', async () => {
+  // Regression (field report on 1.0.10): a later stylesheet rule gave
+  // .context-menu.dropdown `overflow-y: auto` ("long menus scroll"), which
+  // turned every menubar dropdown into a clip box — the Advanced Tools
+  // flyout, positioned at the dropdown's right edge, painted behind it.
+  // No dropdown rule may set overflow to anything but visible.
+  const css = fs.readFileSync(new URL('../src/styles.css', import.meta.url), 'utf8');
+  for (const m of css.matchAll(/\.context-menu\.dropdown\s*\{([^}]*)\}/g)) {
+    const overflow = /overflow(-[xy])?\s*:\s*([^;]+)/.exec(m[1]);
+    assert.ok(!overflow || overflow[2].trim() === 'visible', `menubar dropdown overflow must stay visible, found: ${m[1].trim()}`);
+  }
+});
+
 test('data stores write atomically: complete JSON lands and no temp file remains', async () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'purgeon-atomic-'));
   setSys({ ...nodeSys, info: { ...nodeSys.info, dataDir: dir } });
