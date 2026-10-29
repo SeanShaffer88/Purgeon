@@ -102,6 +102,7 @@ export const ACTION_TIPS = {
   backupSettings: 'Limits how much space and how long backups are kept. Each program’s newest backup is always kept.',
   recoveryPackages: 'Shows every removal backup, whether it was proven restorable when it was made, and lets you restore single items out of a package instead of everything.',
   powerOptions: 'Power plans and timings: switch plans, set when the screen turns off, when the PC sleeps or hibernates, battery saver, wake timers and USB power saving. Changes are recorded in Change History with an undo.',
+  systemRestore: 'Restore points and their storage: turn protection on or off per drive, set how much space points may use, create and delete points, and open Windows\' own restore wizard.',
   sharedComponents: 'Shows the shared runtimes, shared folders and shared files Purgeon keeps during removals, with the programs that depend on each one where Windows records them.',
   secureErase: 'Overwrites files and then deletes them, so they cannot be undeleted. No backup and no undo — the list is reviewed and confirmed every time.',
   gamesLibrary: 'Shows the games Steam, Epic and GOG report on this PC, with sizes, and cleans up the entry of a game whose files are already gone (backed up first).',
