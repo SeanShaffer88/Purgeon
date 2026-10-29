@@ -17,6 +17,7 @@ export const DEFAULT_SETTINGS = {
   disabledConfirmations: [],
   textScale: 1,
   reducedMotion: false,
+  alertThresholds: { cpu: 90, mem: 90, diskFreeGB: 20 },
 };
 
 export const settingsFile = () => path.join(sys.info.dataDir, 'settings.json');
