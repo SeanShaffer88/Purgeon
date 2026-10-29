@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { TWEAKS } from '../src/backend/debloat.js';
 
 test('tweak ids are unique and well-formed', () => {
@@ -32,4 +33,29 @@ test('app privacy consent toggles use the Deny/Allow string store', () => {
     assert.equal(t.values[0].off, 'Allow', t.id);
     assert.match(t.values[0].key, /CapabilityAccessManager\\ConsentStore\\/, t.id);
   }
+});
+
+test('every tweak category is named in the Debloat view order', () => {
+  // Regression: batch 1 added App Privacy and Settings sync tweaks whose
+  // categories were missing from the view's order list, and the view only
+  // renders ordered categories — 38 working tweaks were invisible for a
+  // release while the header still counted them.
+  const view = fs.readFileSync(new URL('../src/debloat.jsx', import.meta.url), 'utf8');
+  const order = /const CATEGORY_ORDER = \[([^\]]*)\]/.exec(view)[1];
+  for (const t of TWEAKS) assert.ok(order.includes(`'${t.category}'`), `${t.id}: category "${t.category}" is not in the Debloat view's CATEGORY_ORDER`);
+});
+
+test('Edge tweaks are documented Microsoft policies under the Edge policy key', () => {
+  const edge = TWEAKS.filter((t) => t.category === 'Microsoft Edge');
+  assert.ok(edge.length >= 30, `expected the Edge batch, got ${edge.length}`);
+  for (const t of edge) {
+    for (const v of t.values) {
+      assert.equal(v.key, 'HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge', `${t.id} writes outside the Edge policy key`);
+      assert.equal(v.type, 'REG_DWORD', `${t.id} policy value is not a DWORD`);
+      assert.equal(v.off, null, `${t.id} revert must remove the policy value, restoring Edge's default`);
+    }
+  }
+  // Protection stays on: no tweak may switch off a safety feature.
+  const names = edge.flatMap((t) => t.values.map((v) => v.name));
+  assert.ok(!names.includes('SmartScreenEnabled') && !names.includes('TyposquattingCheckerEnabled'), 'Edge safety features are never offered as tweaks');
 });
