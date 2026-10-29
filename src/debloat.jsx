@@ -8,7 +8,7 @@ const EFFECT = {
   reboot: { label: 'Needs reboot', className: 'fx-reboot' },
 };
 
-const CATEGORY_ORDER = ['Privacy & telemetry', 'Start, search & taskbar', 'Ads & suggestions', 'Explorer & UI', 'Windows Update'];
+const CATEGORY_ORDER = ['Privacy & telemetry', 'Start, search & taskbar', 'Ads & suggestions', 'Explorer & UI', 'Windows Update', 'App Privacy', 'Settings sync', 'Microsoft Edge'];
 
 export function DebloatView({ filter, admin, onError, onStatus, beforeChange }) {
   const [tweaks, setTweaks] = useState(null);
@@ -82,7 +82,11 @@ export function DebloatView({ filter, admin, onError, onStatus, beforeChange }) 
     if (!tweaks) return [];
     const q = filter.trim().toLowerCase();
     const shown = q ? tweaks.filter((t) => `${t.title} ${t.detail} ${t.category}`.toLowerCase().includes(q)) : tweaks;
-    return CATEGORY_ORDER.map((c) => ({ name: c, all: tweaks.filter((t) => t.category === c), items: shown.filter((t) => t.category === c) })).filter((g) => g.items.length);
+    // Categories the order list does not name are appended in data order — a
+    // tweak whose category is missing here must never become invisible
+    // (the App Privacy and Settings sync sections once were, for a release).
+    const order = [...CATEGORY_ORDER, ...new Set(tweaks.map((t) => t.category).filter((c) => !CATEGORY_ORDER.includes(c)))];
+    return order.map((c) => ({ name: c, all: tweaks.filter((t) => t.category === c), items: shown.filter((t) => t.category === c) })).filter((g) => g.items.length);
   }, [tweaks, filter]);
 
   if (!tweaks) return <div className="list-empty">Reading current settings…</div>;
