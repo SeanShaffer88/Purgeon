@@ -4,7 +4,7 @@
 // Only settings are synced, never full backups (too large, and backups are local).
 import { sys } from './sys.js';
 import * as winpath from './winpath.js';
-import { readSettings } from './settings.js';
+import { readSettings, writeSettings } from './settings.js';
 import { createHash } from 'node:crypto';
 
 let syncRoot = '';
@@ -52,6 +52,9 @@ export async function status() {
 }
 
 // Configure the sync folder, whether sync is on, and which files to sync.
+// The folder and the on/off choice are written to the settings file: they
+// used to live only in this module's memory, so sync silently turned itself
+// off at every restart and the menu showed it off again.
 export async function apply({ folder, on, files }) {
   if (folder) {
     await sys.makeDir(folder);
@@ -59,8 +62,25 @@ export async function apply({ folder, on, files }) {
   }
   enabled = on !== undefined ? on : enabled;
   if (files) syncFiles = files;
+  if (folder || on !== undefined) {
+    await writeSettings({ ...(folder ? { syncFolder: folder } : {}), ...(on !== undefined ? { syncOn: enabled } : {}) }).catch(() => {});
+  }
   if (enabled && syncRoot) await syncNow();
   return status();
+}
+
+// Called once at startup (from the backend init): reload the folder and
+// on/off the user picked last time from the settings file, so a configured
+// sync keeps working across restarts. When sync is on, one sync runs now.
+export async function restore() {
+  const s = await readSettings().catch(() => null);
+  if (!s) return;
+  if (s.syncFolder) {
+    syncRoot = s.syncFolder;
+    await sys.makeDir(syncRoot).catch(() => {});
+  }
+  enabled = s.syncOn === true;
+  if (enabled && syncRoot) await syncNow().catch(() => {});
 }
 
 // Copy settings into the sync folder atomically, with conflict detection.

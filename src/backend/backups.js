@@ -54,7 +54,12 @@ async function encryptText(text, password) {
   out.set(salt, 0);
   out.set(iv, salt.length);
   out.set(new Uint8Array(ct), salt.length + iv.length);
-  return ENC_PREFIX + btoa(String.fromCharCode(...out));
+  // Convert in chunks: spreading a large array into fromCharCode overflows
+  // the call stack (RangeError past ~125 KB), which would abort a removal
+  // midway once an encrypted manifest grew past that size.
+  let bin = '';
+  for (let i = 0; i < out.length; i += 0x8000) bin += String.fromCharCode(...out.subarray(i, i + 0x8000));
+  return ENC_PREFIX + btoa(bin);
 }
 
 async function decryptText(ciphertext, password) {
@@ -638,7 +643,7 @@ async function binPresence(originals) {
 // reported as unchecked, never as a failure.
 async function verifyPackage(id, shouldStop) {
   const dir = backupDir(id);
-  const manifest = JSON.parse(await readEncryptedText(manifestFile(id)));
+  const manifest = JSON.parse(await readEncryptedText(path.join(dir, 'manifest.json')));
   const record = async (result) => {
     await sys.writeTextAtomic(path.join(dir, 'verified.json'), JSON.stringify(result, null, 2)).catch(() => {});
     return result;
@@ -745,7 +750,7 @@ const restoreFromRecycleBin = async (original) => (await restoreManyFromRecycleB
 // Restores a backup. With `onlyIndexes` (an array of entry positions), only
 // those entries are restored — the Recovery Packages tool's selective restore.
 async function restore(id, onlyIndexes, shouldStop) {
-  const dir = path.join(backupRoot, id);
+  const dir = backupDir(id);
   if (!(await sys.exists(path.join(dir, 'manifest.json')))) throw new Error('This backup no longer exists. It may have been removed by the backup limits in Tools › Backup Settings.');
   const manifest = JSON.parse(await readEncryptedText(path.join(dir, 'manifest.json')));
   const changed = await verify(dir, manifest);
@@ -818,12 +823,14 @@ function backupDir(id) {
   if (!id || typeof id !== 'string') throw new Error('Invalid backup id');
   // Reject path separators and traversal sequences.
   if (/[\\/]/.test(id)) throw new Error('Invalid backup id: path separators not allowed');
-  if (/^\.\.(\.|[\\/]|$)/i.test(id)) throw new Error('Invalid backup id: traversal not allowed');
+  if (id === '.' || /^\.\.(\.|[\\/]|$)/i.test(id)) throw new Error('Invalid backup id: traversal not allowed');
   // Reject Windows reserved device names.
   if (/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i.test(id)) throw new Error('Invalid backup id: reserved device name');
   const target = path.resolve(path.join(backupRoot, id));
   const root = path.resolve(backupRoot);
-  if (target !== root && !target.startsWith(root + path.sep)) {
+  // The target must be a folder INSIDE the root: an id like "." resolves to
+  // the root itself, and removing that would take every backup with it.
+  if (!target.startsWith(root + path.sep)) {
     throw new Error('Invalid backup id: escapes backup root');
   }
   return target;
