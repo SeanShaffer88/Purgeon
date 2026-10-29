@@ -59,6 +59,11 @@ import * as diskusage from './diskusage.js';
 import * as processes from './processes.js';
 import * as power from './power.js';
 import * as restoremgr from './restoremgr.js';
+import * as boot from './boot.js';
+import * as eventlogs from './eventlogs.js';
+import * as health from './health.js';
+import * as tasks from './tasks.js';
+import * as cookierules from './cookierules.js';
 import * as browsers from './browsers.js';
 import * as portable from './portable.js';
 import * as portableapps from './portableapps.js';
@@ -88,7 +93,7 @@ let confirmUI = null;
 // Cancellation for the long operations the window can cancel: each run gets a
 // fresh stop flag, the matching cancel request flips it, and the operation
 // polls it between steps.
-const opStops = { measure: null, removeItems: null, cleanSystem: null, diskMap: null, diskScan: null, eraseRun: null, orphanScan: null, restoreRun: null, gamesLoad: null, graphLoad: null, verifyRun: null };
+const opStops = { measure: null, removeItems: null, cleanSystem: null, diskMap: null, diskScan: null, eraseRun: null, orphanScan: null, restoreRun: null, gamesLoad: null, graphLoad: null, verifyRun: null, healthRun: null };
 const newStop = (name) => (opStops[name] = { stopped: false });
 const stopOp = (name) => {
   if (opStops[name]) opStops[name].stopped = true;
@@ -454,6 +459,58 @@ const handlers = {
   'restore:removePoint': ({ shadowId, description }) => restoremgr.removePoint(shadowId, description),
   'restore:createPoint': ({ description }) => restoremgr.createPoint(description),
   'restore:openUi': () => restoremgr.openRestoreUi(),
+  // Boot Options (Tools > System Tools).
+  'boot:state': () => boot.state(),
+  'boot:setSafeBoot': ({ mode, previous, withRestorePoint }) => boot.setSafeBoot(mode, previous, withRestorePoint),
+  'boot:setTimeout': ({ seconds, previous }) => boot.setTimeout(seconds, previous),
+  // Event Logs (Tools > System Tools).
+  'logs:channels': () => eventlogs.channels(),
+  'logs:exportPick': async ({ name }) => {
+    const { save } = await import('@tauri-apps/plugin-dialog');
+    const file = await save({ title: `Save a copy of the ${name} log`, defaultPath: `${String(name).replace(/[\\/:*?"<>|]/g, '_')}.evtx`, filters: [{ name: 'Event log', extensions: ['evtx'] }] });
+    return file ? eventlogs.exportLog(name, file) : null;
+  },
+  'logs:clear': ({ name }) => eventlogs.clearLog(name),
+  'logs:setEnabled': ({ name, on }) => eventlogs.setEnabled(name, on),
+  // Health Check (Tools > System Tools).
+  'health:run': async ({ runSfc } = {}) => {
+    const stop = newStop('healthRun');
+    const startupCount = await startup.list().then((l) => l.length).catch(() => null);
+    return health.runChecks({ runSfc: !!runSfc, startupCount, shouldStop: () => stop.stopped });
+  },
+  'health:cancel': () => stopOp('healthRun'),
+  'health:weekly': async () => !!((await readSettings()).maintenance || {}).health,
+  'health:setWeekly': async ({ on }) => {
+    const s = await readSettings();
+    const next = { ...s, maintenance: { ...maintenance.DEFAULTS, ...(s.maintenance || {}), health: !!on } };
+    await writeSettings(next);
+    return maintenance.apply(next.maintenance);
+  },
+  'health:saveReport': async ({ result }) => {
+    const { save } = await import('@tauri-apps/plugin-dialog');
+    const file = await save({ title: 'Save the health report', defaultPath: 'purgeon-health-report.txt', filters: [{ name: 'Text', extensions: ['txt'] }] });
+    if (!file) return null;
+    const lines = [`Purgeon health check, ${new Date().toLocaleString()}`, '', result.summary.text, '', ...result.checks.map((c) => `${c.label}: ${c.status.toUpperCase()} - ${c.detail}`)];
+    await sys.writeText(file, lines.join('\r\n') + '\r\n');
+    return { path: file };
+  },
+  // Scheduled Tasks (Tools > System Tools).
+  'tasks:list': () => tasks.list(),
+  'tasks:setEnabled': ({ task, on }) => tasks.setEnabled(task, on),
+  'tasks:runNow': ({ task }) => tasks.runNow(task),
+  'tasks:stop': ({ task }) => tasks.stop(task),
+  'tasks:remove': ({ task }) => tasks.remove(task),
+  'tasks:restore': ({ file, name }) => tasks.restoreFromBackup(file, name),
+  'tasks:create': (spec) => tasks.create(spec),
+  'tasks:pickProgram': async () => {
+    const { open: openDialog } = await import('@tauri-apps/plugin-dialog');
+    const file = await openDialog({ title: 'Choose the program the task runs', multiple: false, filters: [{ name: 'Programs', extensions: ['exe', 'bat', 'cmd', 'ps1'] }] });
+    return typeof file === 'string' ? file : null;
+  },
+  // Per-site cookie rules (Browser Clean-up).
+  'cookies:rules': () => cookierules.rules(),
+  'cookies:addRule': ({ kind, pattern }) => cookierules.addRule(kind, pattern),
+  'cookies:removeRule': ({ kind, pattern }) => cookierules.removeRule(kind, pattern),
   'explore:timeline': async (list) => explore.timeline(list, sys.uninstallKeyTimes ? await sys.uninstallKeyTimes().catch(() => ({})) : {}),
   'program:analyze': (program) => explore.analyze(program),
   'registry:search': (term) => explore.searchRegistry(term),
