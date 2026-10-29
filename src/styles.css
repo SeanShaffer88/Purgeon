@@ -946,3 +946,40 @@ button:focus-visible, select:focus-visible, input:focus-visible, .tweak:focus-vi
 .disk-fill { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-bright), var(--accent-deep)); border-radius: 4px; }
 .disk-size { min-width: 130px; text-align: right; font-variant-numeric: tabular-nums; }
 .disk-share { color: var(--muted); margin-left: 8px; font-size: 12px; }
+
+/* Processes view */
+.proc-view { flex: 1; overflow-y: auto; background: var(--bg); padding: 10px; display: flex; flex-direction: column; gap: 10px; }
+.proc-meters { display: flex; gap: 12px; flex-wrap: wrap; }
+.proc-meter { flex: 1; min-width: 220px; background: var(--panel); border: 1px solid var(--line, #26262a); border-radius: 10px; padding: 10px 12px; }
+.proc-meter h3 { font-size: 11px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin-bottom: 6px; font-weight: 600; }
+.proc-big { font-size: 20px; font-weight: 600; }
+.proc-bar { height: 6px; background: var(--line, #26262a); border-radius: 3px; margin-top: 7px; overflow: hidden; }
+.proc-bar i { display: block; height: 100%; background: linear-gradient(90deg, var(--accent-bright), var(--accent-deep)); }
+.proc-bar i.amber { background: linear-gradient(90deg, #f5b04c, #d18f26); }
+.proc-spark { display: block; width: 100%; height: 22px; margin-top: 8px; }
+.proc-alerts { color: var(--muted); font-size: 12.5px; margin-top: 8px; }
+.linklike { background: none; border: none; color: var(--text); text-decoration: underline; cursor: pointer; font: inherit; padding: 0; }
+.proc-head, .proc-row { display: flex; align-items: center; gap: 10px; padding: 6px 10px; }
+.proc-head { color: var(--muted); font-size: 11px; text-transform: uppercase; letter-spacing: .5px; border-bottom: 1px solid var(--line, #26262a); }
+.proc-list { display: flex; flex-direction: column; gap: 2px; overflow-y: auto; }
+.proc-row { border: 1px solid transparent; border-radius: 8px; cursor: pointer; font-size: 13px; }
+.proc-row:hover { background: var(--panel); }
+.proc-row.sel { background: var(--panel); border-color: var(--line, #26262a); }
+.proc-c-name { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.proc-c-num { width: 110px; text-align: right; font-variant-numeric: tabular-nums; }
+.proc-c-badge { width: 110px; text-align: right; }
+.proc-view .badge { font-size: 10.5px; padding: 1px 7px; border-radius: 8px; border: 1px solid #2e5e33; color: #7fd08a; background: #12240f; white-space: nowrap; }
+.proc-view .badge.warn { border-color: #6b551f; color: #f5b04c; background: #241c08; }
+.proc-view .badge.grey { border-color: var(--line, #3a3b40); color: var(--muted); background: transparent; }
+.proc-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+.proc-actions button { padding: 6px 14px; border-radius: 6px; background: var(--panel); border: 1px solid var(--line, #333438); color: var(--text); font-size: 13px; cursor: pointer; }
+.proc-actions button:disabled { opacity: .45; cursor: default; }
+.proc-prio { position: relative; display: inline-block; }
+.proc-prio-menu { position: absolute; bottom: calc(100% + 4px); left: 0; display: flex; flex-direction: column; padding: 4px; z-index: 30; min-width: 150px; }
+.proc-prio-menu .menu-item { background: none; border: none; text-align: left; padding: 6px 10px; border-radius: 5px; color: var(--text); cursor: pointer; font-size: 13px; }
+.proc-prio-menu .menu-item:hover { background: var(--panel); }
+.proc-cores { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.proc-core { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+.proc-field { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 10px; }
+.proc-field input { width: 70px; background: var(--bg); border: 1px solid var(--line, #2c2c30); border-radius: 6px; color: var(--text); padding: 5px 8px; font: inherit; }
+.dialog-buttons button.danger { color: #ff7a7e; border-color: rgba(229, 72, 77, 0.40); }

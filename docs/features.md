@@ -178,6 +178,12 @@ For each entry: publisher, command, program it belongs to, digital signature, up
 
 **New-entry alerts** — when a program adds itself to startup, Purgeon tells you with a Windows notification and offers Allow or Turn Off.
 
+## Processes and resource alerts
+
+**Processes** — a live view of everything running: processor, memory and system-disk meters with rolling graphs, and a list of processes with each one's processor and memory use and its priority. Select one to **End** it (with a confirmation — unsaved work in it is lost), **Suspend** it (frozen where it stands) and **Resume** it, change its **Priority** (Idle to High; Realtime is never offered because it can starve the mouse and keyboard), or choose which **processor cores** it may run on. Windows' critical processes and Purgeon itself are protected in the backend: their buttons are disabled and the backend refuses the action too. Actions are recorded in Change History, with an undo where one exists (a priority change can be put back; ending a process cannot).
+
+**Resource alerts** — while Purgeon runs, including minimized to the tray, it checks once a minute and warns you once per condition when the processor or memory stays over the level you set, or the system disk's free space drops below it, until things calm down. Levels live in the Processes view; 0 turns an alert off. Alerts cannot run while Purgeon is closed.
+
 ## Explorer context menu
 
 **Explorer Context Menu Items** — lists right-click entries programs added to Explorer for files, folders, folder and desktop background, and drives. Windows' own entries are left out. Turn any one off or on; nothing is deleted (uses Windows' own `LegacyDisable` switch or shell-extension blocked list). Changes show in new Explorer windows or everywhere after **Restart Explorer**. Each is in Change History and can be undone.

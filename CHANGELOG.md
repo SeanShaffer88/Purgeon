@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Added
+- **Processes view** (rail, and View › Go to › Processes): live processor, memory and system-disk meters with rolling graphs; a process list with per-process processor and memory use and its priority; End, Suspend and Resume; priority changes (Real-time is never offered) and per-process processor-core choice; Windows' critical processes and Purgeon itself are protected in the backend, not just hidden in the view. Endings, suspensions, priority and core changes are recorded in Change History, with undo where one exists.
+- **Resource alerts**: while Purgeon runs (including from the tray), it warns once per condition — processor or memory staying over the level you set, or the system disk running low — until things calm down. Levels are set in the Processes view (0 turns an alert off).
+
 ### Fixed
 - Startup & Services trust warnings never appeared: the check behind them referenced a module that was never loaded, so it failed silently on every use. It now runs, and entries that run from a Temp or Downloads folder, are unsigned, or appeared recently are flagged as intended.
 - Scheduled background monitoring failed at the end of every run when it tried to record the scan in the Change History (it called a history function that does not exist), so the scan's results were lost. Scans now finish and are recorded.
