@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, SystemInfoDialog, RecoveryDialog, SharedDialog, EraseDialog, GamesDialog, GraphDialog, planHtml } from './dialogs.jsx';
+import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, SystemInfoDialog, RecoveryDialog, SharedDialog, EraseDialog, GamesDialog, GraphDialog, PowerDialog, planHtml } from './dialogs.jsx';
 import { WelcomeDialog, FirstRunTips, FIRST_RUN_TIPS, SettingHelp, SHORTCUTS, ShortcutsDialog, UpdateAvailableDialog, UserGuide } from './onboarding.jsx';
 import { setConfirmUI } from './backend/api.js';
 import { iconPathFor } from './backend/programs.js';
@@ -379,6 +379,9 @@ const MENUS = [
         ['secureErase', 'Secure Erase...'],
         ['gamesLibrary', 'Games...'],
         ['relationshipGraph', 'Relationship Graph...'],
+      ] },
+      { group: 'System Tools', tip: 'Power, booting, restore points, logs, health and scheduled tasks', items: [
+        ['powerOptions', 'Power Options...'],
       ] },
     ],
   ],
@@ -2293,6 +2296,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     },
     backupSettings: async () => setModal({ type: 'backupSettings', settings: await api.invoke('settings:get') }),
     recoveryPackages: () => setModal({ type: 'recovery' }),
+    powerOptions: () => setModal({ type: 'power' }),
     sharedComponents: () => setModal({ type: 'shared' }),
     secureErase: () => setModal({ type: 'erase' }),
     gamesLibrary: () => setModal({ type: 'games' }),
@@ -3116,6 +3120,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         />
       )}
       {modal?.type === 'recovery' && <RecoveryDialog onClose={() => setModal(null)} />}
+      {modal?.type === 'power' && <PowerDialog onClose={() => setModal(null)} />}
       {modal?.type === 'shared' && <SharedDialog onClose={() => setModal(null)} />}
       {modal?.type === 'erase' && <EraseDialog onClose={() => setModal(null)} />}
       {modal?.type === 'games' && <GamesDialog onClose={() => setModal(null)} />}

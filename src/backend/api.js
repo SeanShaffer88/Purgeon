@@ -57,6 +57,7 @@ import * as trials from './trials.js';
 import * as explore from './explore.js';
 import * as diskusage from './diskusage.js';
 import * as processes from './processes.js';
+import * as power from './power.js';
 import * as browsers from './browsers.js';
 import * as portable from './portable.js';
 import * as portableapps from './portableapps.js';
@@ -438,6 +439,13 @@ const handlers = {
     if (dir) await open(dir);
     return '';
   },
+  // Power Options (Tools > System Tools).
+  'power:state': () => power.state(),
+  'power:setPlan': ({ guid, name }) => power.setPlan(guid, name),
+  'power:setTimeout': ({ kind, acMin, dcMin, previous }) => power.setTimeout(kind, acMin, dcMin, previous),
+  'power:setBatterySaver': ({ pct, previous }) => power.setBatterySaver(pct, previous),
+  'power:setWakeTimers': ({ on, previous }) => power.setWakeTimers(on, previous),
+  'power:setUsbSuspend': ({ on, previous }) => power.setUsbSuspend(on, previous),
   'explore:timeline': async (list) => explore.timeline(list, sys.uninstallKeyTimes ? await sys.uninstallKeyTimes().catch(() => ({})) : {}),
   'program:analyze': (program) => explore.analyze(program),
   'registry:search': (term) => explore.searchRegistry(term),

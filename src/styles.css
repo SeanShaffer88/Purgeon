@@ -983,3 +983,11 @@ button:focus-visible, select:focus-visible, input:focus-visible, .tweak:focus-vi
 .proc-field { display: flex; align-items: center; gap: 8px; font-size: 13px; margin-bottom: 10px; }
 .proc-field input { width: 70px; background: var(--bg); border: 1px solid var(--line, #2c2c30); border-radius: 6px; color: var(--text); padding: 5px 8px; font: inherit; }
 .dialog-buttons button.danger { color: #ff7a7e; border-color: rgba(229, 72, 77, 0.40); }
+
+/* Power Options dialog */
+.power-row { display: flex; align-items: center; gap: 14px; padding: 7px 2px; border-bottom: 1px solid var(--line, #1b1b1e); flex-wrap: wrap; }
+.power-label { width: 190px; flex: none; font-size: 13px; }
+.power-cell { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--muted); }
+.power-cell select { background: var(--bg); border: 1px solid var(--line, #2c2c30); border-radius: 6px; color: var(--text); padding: 5px 8px; font: inherit; }
+.power-check { color: var(--text); font-size: 13px; cursor: pointer; }
+.error-text { color: #ff7a7e; font-size: 13px; }
