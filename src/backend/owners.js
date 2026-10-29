@@ -105,7 +105,7 @@ $running = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.Path 
 
 // Leftovers of programs that are no longer installed. Every finding scores below the auto-select
 // line, so nothing is selected until you choose it.
-export async function orphans(now = Date.now()) {
+export async function orphans(now = Date.now(), shouldStop) {
   const idx = await programIndex();
   const owned = (name) => {
     const c = norm(name);
@@ -121,7 +121,9 @@ export async function orphans(now = Date.now()) {
   // LocalLow is left out: it mostly holds games' saves and settings.
   const lowRoot = path.join(homeDir(), 'AppData', 'LocalLow').toLowerCase();
   const roots = [...new Set(fileRoots().map((r) => r.replace(/\\+$/, '')))].filter((r) => r.toLowerCase() !== lowRoot);
+  let stopped = false;
   for (const root of roots) {
+    if (shouldStop && shouldStop()) { stopped = true; break; }
     for (const d of (await sys.readDir(root).catch(() => [])).filter((e) => e.dir && !e.link)) {
       const full = path.join(root, d.name);
       const lower = full.toLowerCase();
@@ -161,9 +163,13 @@ export async function orphans(now = Date.now()) {
     if (!folderNames.some((n) => nameMatches(k.name, n))) continue;
     items.push({ kind: 'key', path: k.path, score: 50, reason: 'Matches a leftover folder, and no installed program' });
   }
-  for (const s of scan?.services || []) {
-    if (owned(s.name) && owned(s.display)) continue;
-    items.push({ kind: 'service', path: s.name, score: 65, reason: `Service whose program no longer exists (${s.exe})` });
+  if (!stopped) {
+    for (const s of scan?.services || []) {
+      if (owned(s.name) && owned(s.display)) continue;
+      items.push({ kind: 'service', path: s.name, score: 65, reason: `Service whose program no longer exists (${s.exe})` });
+    }
   }
-  return merge(items);
+  const out = merge(items);
+  if (stopped) out.cancelled = true; // partial results: the scan was cancelled
+  return out;
 }

@@ -85,7 +85,7 @@ let confirmUI = null;
 // Cancellation for the long operations the window can cancel: each run gets a
 // fresh stop flag, the matching cancel request flips it, and the operation
 // polls it between steps.
-const opStops = { measure: null, removeItems: null, cleanSystem: null, diskMap: null, diskScan: null, eraseRun: null };
+const opStops = { measure: null, removeItems: null, cleanSystem: null, diskMap: null, diskScan: null, eraseRun: null, orphanScan: null, restoreRun: null, gamesLoad: null, graphLoad: null, verifyRun: null };
 const newStop = (name) => (opStops[name] = { stopped: false });
 const stopOp = (name) => {
   if (opStops[name]) opStops[name].stopped = true;
@@ -232,9 +232,20 @@ const handlers = {
     return { ...result, restorePoint: rp };
   },
   'log:open': () => open(log.folder()),
-  'backups:restore': (id) => backups.restore(id),
-  'backups:restoreEntries': ({ id, indexes }) => backups.restore(id, indexes),
-  'backups:verifyPackage': (id) => backups.verifyPackage(id),
+  'backups:restore': (id) => {
+    newStop('restoreRun');
+    return backups.restore(id, undefined, () => opStops.restoreRun?.stopped);
+  },
+  'backups:restoreCancel': () => stopOp('restoreRun'),
+  'backups:restoreEntries': ({ id, indexes }) => {
+    newStop('restoreRun');
+    return backups.restore(id, indexes, () => opStops.restoreRun?.stopped);
+  },
+  'backups:verifyPackage': (id) => {
+    const stop = newStop('verifyRun');
+    return backups.verifyPackage(id, () => stop.stopped);
+  },
+  'backups:verifyCancel': () => stopOp('verifyRun'),
   'shared:components': () => shared.components(),
   'erase:pick': async (folder) => {
     const { open: openDialog } = await import('@tauri-apps/plugin-dialog');
@@ -251,8 +262,16 @@ const handlers = {
     stopOp('eraseRun');
     return sys.cancelErase ? sys.cancelErase() : undefined;
   },
-  'games:list': () => games.list(),
-  'graph:graph': () => graph.graph(),
+  'games:list': () => {
+    const stop = newStop('gamesLoad');
+    return games.list(() => stop.stopped);
+  },
+  'games:listCancel': () => stopOp('gamesLoad'),
+  'graph:graph': () => {
+    const stop = newStop('graphLoad');
+    return graph.graph(() => stop.stopped);
+  },
+  'graph:graphCancel': () => stopOp('graphLoad'),
   'graph:program': (program) => graph.programLinks(program),
   // Orphan cleanup is limited to the kinds the standard removal can back up
   // and restore: services and scheduled tasks. Startup entries are shown
@@ -277,7 +296,11 @@ const handlers = {
   'snapshots:compare': ({ before, after }) => snapshots.compare(before, after),
   'snapshots:cancel': () => (sys.cancelSnapshot ? sys.cancelSnapshot() : undefined),
   'snapshots:cleanupItems': ({ before, selected }) => snapshots.cleanupItems(before, selected),
-  'junk:scan': () => junk.scan(),
+  'junk:scan': async () => {
+    await sys.beginScans().catch(() => {});
+    return junk.scan();
+  },
+  'junk:scanCancel': () => sys.cancelScans(),
   'junk:scanSystem': () => junk.scanSystem(),
   'junk:cleanSystem': async (ids) => {
     const rp = await maybeCreateRestorePoint('junk-clean', 'Purgeon: before junk clean-up');
@@ -306,7 +329,11 @@ const handlers = {
     const file = await openDialog({ title: folder ? 'Choose a folder' : 'Choose a file', directory: !!folder, multiple: false });
     return typeof file === 'string' ? file : null;
   },
-  'orphans:scan': () => owners.orphans(),
+  'orphans:scan': () => {
+    const stop = newStop('orphanScan');
+    return owners.orphans(Date.now(), () => stop.stopped);
+  },
+  'orphans:scanCancel': () => stopOp('orphanScan'),
   'winget:available': () => winget.available(),
   'winget:upgrades': () => winget.upgrades(),
   'winget:upgrade': (id) => winget.upgrade(id),

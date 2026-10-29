@@ -109,7 +109,7 @@ async function gogGames() {
 
 // Every detected game, de-duplicated by folder, with presence checked and
 // folder sizes measured for the games that are there.
-export async function list() {
+export async function list(shouldStop) {
   const all = [...(await steamGames().catch(() => [])), ...(await epicGames().catch(() => [])), ...(await gogGames().catch(() => []))];
   const byLocation = new Map();
   for (const g of all) {
@@ -122,6 +122,7 @@ export async function list() {
   const queue = [...games];
   const worker = async () => {
     while (queue.length) {
+      if (shouldStop && shouldStop()) return;
       const g = queue.shift();
       g.present = g.location ? await sys.exists(g.location).catch(() => false) : false;
       if (g.present) {
