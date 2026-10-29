@@ -1335,3 +1335,93 @@ export function PowerDialog({ onClose }) {
     </Dialog>
   );
 }
+
+// System Restore (Tools › System Tools): per-drive restore storage and
+// protection, the restore points themselves, and a hand-off to Windows'
+// own restore wizard for the roll-back itself. Windows exposes no
+// per-drive "protection on" reading, so drives are described by their
+// storage — the window never claims more than that.
+export function RestoreDialog({ onClose }) {
+  const [state, setState] = useState(null);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [confirmOff, setConfirmOff] = useState(null);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+
+  const load = () => api.invoke('restore:state').then(setState).catch((e) => { setState({ drives: [], points: [] }); setErr(e.message); });
+  useEffect(() => { load(); }, []);
+
+  const run = async (fn) => {
+    setBusy(true); setErr('');
+    try { await fn(); await load(); } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+  const fmtDate = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '');
+  const PCTS = [1, 2, 3, 5, 10, 15, 20, 30, 50, 100];
+
+  return (
+    <Dialog title="System Restore" onClose={onClose} width={760} buttons={<button className="primary" onClick={onClose}>Close</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>
+        Restore points let Windows roll back to how things were. The roll-back itself runs in Windows' own System Restore window — this one manages the storage, the protection and the points.
+      </p>
+      {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
+      {state === null ? <p className="muted">Reading restore settings…</p> : (
+        <>
+          <div className="pkg-entries-head">Drives</div>
+          <div style={{ marginBottom: 12 }}>
+            {state.drives.map((d) => (
+              <div key={d.drive} className="pkg-row" style={{ cursor: 'default' }}>
+                <span className="pkg-name">{d.drive}</span>
+                <span className="muted">{d.hasStorage ? `Storage: ${d.used || '0'} used of ${d.unbounded ? 'no limit' : d.maxText}` : 'No restore storage set up'}</span>
+                {d.hasStorage && (
+                  <select disabled={busy} title="The most space restore points may use on this drive. When they need more, the oldest are deleted first." value={d.unbounded ? 'unbounded' : (d.maxPct ?? '')}
+                    onChange={(e) => run(() => api.invoke('restore:setMax', { drive: d.drive, pct: e.target.value === 'unbounded' ? null : Number(e.target.value), unbounded: e.target.value === 'unbounded', previous: { pct: d.maxPct, unbounded: d.unbounded } }))}>
+                    {PCTS.map((p) => <option key={p} value={p}>{p}% of the drive</option>)}
+                    <option value="unbounded">No limit</option>
+                  </select>
+                )}
+                <button disabled={busy} title={d.hasStorage ? 'Turn restore protection off for this drive (deletes its restore points)' : 'Turn restore protection on for this drive'} onClick={() => (d.hasStorage ? setConfirmOff(d) : run(() => api.invoke('restore:setProtection', { drive: d.drive, on: true })))}>
+                  {d.hasStorage ? 'Turn off' : 'Turn on'}
+                </button>
+              </div>
+            ))}
+            {state.drives.length === 0 && <p className="muted">No fixed drives were found.</p>}
+          </div>
+          <div className="pkg-entries-head" style={{ display: 'flex', alignItems: 'center' }}>
+            Restore points
+            <button style={{ marginLeft: 'auto' }} disabled={busy} title="Create a restore point right now" onClick={() => run(() => api.invoke('restore:createPoint', { description: `Created from Purgeon (${new Date().toLocaleString()})` }))}>Create one now</button>
+          </div>
+          <div style={{ marginBottom: 12 }}>
+            {state.points.map((p) => (
+              <div key={p.sequence} className="pkg-row" style={{ cursor: 'default' }}>
+                <span className="pkg-name">{p.description}</span>
+                <span className="muted">{fmtDate(p.createdISO)}</span>
+                <button disabled={busy || !p.shadowId} title={p.shadowId ? 'Delete this restore point (it cannot be brought back)' : 'This point cannot be matched to its stored copy, so it can only be removed with the others from the Cleaner'} onClick={() => setConfirmDelete(p)}>Delete</button>
+              </div>
+            ))}
+            {state.points.length === 0 && <p className="muted">No restore points yet.</p>}
+          </div>
+          <p className="muted">
+            To roll Windows back to one of these points, use Windows' own wizard:
+            <button style={{ marginLeft: 8 }} disabled={busy} title="Open Windows' System Restore window" onClick={() => run(() => api.invoke('restore:openUi'))}>Open System Restore…</button>
+          </p>
+        </>
+      )}
+      {confirmOff && (
+        <Dialog title={`Turn off protection for ${confirmOff.drive}?`} onClose={() => setConfirmOff(null)} width={520} buttons={<>
+          <button onClick={() => setConfirmOff(null)}>Keep it on</button>
+          <button className="danger" onClick={() => { const d = confirmOff; setConfirmOff(null); run(() => api.invoke('restore:setProtection', { drive: d.drive, on: false })); }}>Turn off and delete its points</button>
+        </>}>
+          <p>Turning protection off deletes every restore point on {confirmOff.drive}. Windows offers no undo for that, and neither can Purgeon.</p>
+        </Dialog>
+      )}
+      {confirmDelete && (
+        <Dialog title="Delete this restore point?" onClose={() => setConfirmDelete(null)} width={520} buttons={<>
+          <button onClick={() => setConfirmDelete(null)}>Keep it</button>
+          <button className="danger" onClick={() => { const p = confirmDelete; setConfirmDelete(null); run(() => api.invoke('restore:removePoint', { shadowId: p.shadowId, description: p.description })); }}>Delete it</button>
+        </>}>
+          <p>“{confirmDelete.description}” ({fmtDate(confirmDelete.createdISO)}) will be deleted. A deleted restore point cannot be brought back.</p>
+        </Dialog>
+      )}
+    </Dialog>
+  );
+}
