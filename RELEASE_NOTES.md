@@ -1,19 +1,13 @@
-# Purgeon 1.0.10
+# Purgeon 1.1.0
 
-## Advanced Tools
+## Debloat grows to 129 tweaks
 
-Five new tools live under **Tools › Advanced Tools** — powerful, kept out of the main window, each in its own window:
+- **New Microsoft Edge section — 36 toggles.** Each one is a documented Microsoft Edge policy: Strict tracking prevention, no personalised ads/search/news, diagnostic data limited to required, no feedback, no payment-method checks by websites, card and address autofill off, address-bar suggestions off, no page preloading, no password saving, shopping assistant and sidebar off, a quiet new tab page, no first-run experience, no automatic sign-in, no default-browser prompts, startup boost off, and the AI features (built-in AI APIs, AI themes, Copilot, inline Compose, AI history search) off or hidden. SmartScreen and the typosquatting checker are deliberately not offered — they protect against malicious sites.
+- **Two sections are back.** The App Privacy (32 toggles) and Settings sync (6) sections were missing from the Debloat view — the header counted them, but they never appeared. They render again, and the view can no longer lose a section that way.
 
-- **Recovery Packages** — every removal backup, with proof it can be restored. New backups are verified as they are made (seal check, a trial restore of the stored exports, a Recycle Bin presence check), and single items can be ticked and restored out of a package instead of everything.
-- **Shared Components** — the shared runtimes, shared install folders and shared files Purgeon refuses to delete during a removal, with the programs that depend on each folder. For shared files, Windows records how many programs use each one but not which — the window says so rather than guessing.
-- **Secure Erase** — overwrites files (1 pass of zeros, 1 pass of random data, or 3 passes) and then deletes them so they cannot be undeleted. Files only; links and protected Windows locations are refused. No backup and no undo, by design: the list is reviewed and confirmed every time, and the window states the honest SSD limit.
-- **Games** — the games Steam, Epic and GOG report, with folder sizes and a total, plus a Games group in the main list. Uninstalling stays with the launcher; a game whose files are already gone can have its leftover entry cleaned up through the standard backed-up removal.
-- **Relationship Graph** — how each program connects to the rest of the system: its services, tasks and startup entries, what depends on it, and its shared files, joined entirely on your PC. Orphaned entries (pointing at files that no longer exist) are listed first; orphaned services and tasks can be removed there, backed up first.
+## Fixes and polish
 
-## Also in this release
-
-- Every file Purgeon uses to remember things is now written atomically — a crash or power cut mid-write cannot leave a damaged file behind. If a settings, groups or Debloat data file is ever found damaged, the damaged copy is kept beside the original and the app tells you, instead of silently resetting it.
-- Snapshots can be cancelled while being taken or compared.
-- The Apps view shows each app's size, measured from its own package folder.
-- New command-line commands: `--timeline`, `--history`, `--archive` (with `--json`), matching their windows.
-- Timeline row tooltips now include the event's detail text.
+- **The installer now updates in place.** Installing over an existing copy no longer stops to offer an uninstall of the old version first; it updates over the top, the same way the in-app updater already did.
+- **Menu flyouts display properly.** Flyouts such as Tools › Advanced Tools opened behind the menu dropdown; they now open clear of it, fully visible and clickable.
+- **Every scan and progress task has a Cancel button.** The leftover and orphan scans (which keep what they found so far), the pre-uninstall check (cancelling it stops the uninstall), program analysis, restores and undo, the Cleaner scan, and the Games, Relationship Graph and Recovery Packages windows while they load, verify or restore.
+- **The view rail's icons are evenly aligned** — every icon now shares one size and centre.
