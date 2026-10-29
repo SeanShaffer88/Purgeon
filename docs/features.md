@@ -192,7 +192,7 @@ For each entry: publisher, command, program it belongs to, digital signature, up
 
 ## Debloat
 
-**Debloat** (`Ctrl+5`) — 26 safe, reversible tweaks in five groups: Privacy & telemetry, Start/search/taskbar, Ads & suggestions, Explorer & UI, and Windows Update. Each is ENABLED or DISABLED; turning one off puts back exactly the previous value. Each says when it takes effect: Applies immediately, Needs Explorer restart, or Needs reboot. No service removal, no app removal, no security features turned off. Machine-wide policies are tagged Admin.
+**Debloat** (`Ctrl+5`) — 136 safe, reversible tweaks in nine groups: Privacy & telemetry, Start, search & taskbar, Ads & suggestions, Explorer & UI, Windows Update, App Privacy, Settings sync, Microsoft Edge, and Performance (Game Mode, game recording, GPU scheduling, power throttling, background apps, visual effects, menu delay — each mapping checked against Microsoft documentation or the Group Policy / Policy CSP references). Each is ENABLED or DISABLED; turning one off puts back exactly the previous value. Each says when it takes effect: Applies immediately, Needs Explorer restart, or Needs reboot. No service removal, no app removal, no security features turned off. Machine-wide policies are tagged Admin.
 
 ## Program groups
 
