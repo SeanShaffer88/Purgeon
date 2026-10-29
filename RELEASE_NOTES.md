@@ -1,13 +1,24 @@
-# Purgeon 1.1.0
+# Purgeon 1.2.0
 
-## Debloat grows to 129 tweaks
+## New: System Tools
 
-- **New Microsoft Edge section — 36 toggles.** Each one is a documented Microsoft Edge policy: Strict tracking prevention, no personalised ads/search/news, diagnostic data limited to required, no feedback, no payment-method checks by websites, card and address autofill off, address-bar suggestions off, no page preloading, no password saving, shopping assistant and sidebar off, a quiet new tab page, no first-run experience, no automatic sign-in, no default-browser prompts, startup boost off, and the AI features (built-in AI APIs, AI themes, Copilot, inline Compose, AI history search) off or hidden. SmartScreen and the typosquatting checker are deliberately not offered — they protect against malicious sites.
-- **Two sections are back.** The App Privacy (32 toggles) and Settings sync (6) sections were missing from the Debloat view — the header counted them, but they never appeared. They render again, and the view can no longer lose a section that way.
+- **Processes view** — live processor, memory and disk meters with rolling graphs; per-process use and priority; End, Suspend and Resume; priority and processor-core changes. Windows' critical processes and Purgeon itself are protected. Changes are recorded in Change History, with undo where one exists.
+- **Resource alerts** — while Purgeon runs (tray included), it warns once per condition when processor or memory stays over a level you set, or the system disk runs low.
+- **Performance debloat section** — 7 switches, each checked against Microsoft documentation first (Game Mode, GPU scheduling, power throttling off, background Store apps off, visual effects for performance, and more). Debloat now totals 136 tweaks in 9 groups.
+- **Power Options window** — power plans, screen/sleep/hibernate timings, battery-saver level, wake timers and USB power-down, all through Windows' own powercfg, each change recorded with an undo.
+- **System Restore window** — restore storage per drive (view and resize), protection on/off, create and delete individual points (only when a point matches its stored copy exactly), and a button for Windows' own roll-back wizard.
+- **Boot Options window** — choose the next start (Normal, Safe Mode, Safe Mode with networking) with a restore point offered first and a second confirmation; boot-menu wait time; the Windows versions on the PC, read-only.
+- **Event Logs window** — every Windows log with counts and sizes, searchable; save any log to a file; clearing a log always saves a copy first. The Security log is view-and-save only.
+- **Health Check window** — a plain-words once-over (drive health and space, system-file check, recent restore point, waiting updates, recent crashes, startup load, battery wear), each line Pass / Warning / Fail / Couldn't check with the reason, nothing repaired automatically, cancellable, report can be saved, and it can join the existing Weekly Maintenance run.
+- **Scheduled Tasks window** — all scheduled tasks including Windows' own (badged, never deletable here); run, stop, turn off/on; deleting a task saves its definition first so Change History can undo it; create simple tasks.
+- **Cookie rules per site** — Blocked and Allowed site lists for Chrome and Edge, written to the browsers' own policy keys so they hold in every profile. Firefox is not covered and the window says so plainly.
 
-## Fixes and polish
+## Fixes
 
-- **The installer now updates in place.** Installing over an existing copy no longer stops to offer an uninstall of the old version first; it updates over the top, the same way the in-app updater already did.
-- **Menu flyouts display properly.** Flyouts such as Tools › Advanced Tools opened behind the menu dropdown; they now open clear of it, fully visible and clickable.
-- **Every scan and progress task has a Cancel button.** The leftover and orphan scans (which keep what they found so far), the pre-uninstall check (cancelling it stops the uninstall), program analysis, restores and undo, the Cleaner scan, and the Games, Relationship Graph and Recovery Packages windows while they load, verify or restore.
-- **The view rail's icons are evenly aligned** — every icon now shares one size and centre.
+- Startup trust warnings never appeared (the check's module was never loaded and failed silently) — they now flag entries running from Temp/Downloads, unsigned entries, and newly appeared ones.
+- Scheduled background monitoring failed at the end of every run while recording its results — scans now finish and are recorded.
+- Settings sync forgot its folder and on/off choice at every restart — both are saved now.
+- A backup id of "." pointed at the whole backups folder and passed the safety check — refused now, and restores check ids the same way deletes do.
+- Encrypted backup manifests over about 125 KB could not be written, which could have stopped a large removal partway through — fixed.
+
+x64 only. Unsigned, as always.
