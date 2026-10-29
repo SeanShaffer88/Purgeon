@@ -102,12 +102,13 @@ export async function backgroundScan({ scope = 'both' } = {}) {
   }
 
   const history = await import('./history.js');
-  await history.add({
-    kind: 'backgroundScan',
-    description: `Background scan${wasMissed ? ' (retry after missed run)' : ''} found ${results.leftovers.length + results.startup.length} items`,
-    time: results.time,
-    details: results,
-  }).catch(() => {});
+  await history
+    .record({
+      type: 'Background scan',
+      title: `Background scan${wasMissed ? ' (retry after missed run)' : ''} found ${results.leftovers.length + results.startup.length} items`,
+      detail: `Scope: ${results.scope}`,
+    })
+    .catch(() => {});
   return results;
 }
 
