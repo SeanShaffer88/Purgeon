@@ -324,7 +324,49 @@ export function BrowsersDialog({ data, running, onRemove, onClose }) {
           {data.settings.map((s) => `${s.browserName} (${s.profile}): search ${s.search || 'default'}${s.home ? `, home page ${s.home}` : ''}`).join(' · ')}
         </p>
       )}
+      <CookieRules />
     </Dialog>
+  );
+}
+
+
+// Per-site cookie rules, mirrored to the Chrome and Edge policy keys.
+// Written as their own component so the rules load and save independently
+// of the extension list this dialog is mostly about.
+function CookieRules() {
+  const [rules, setRules] = useState(null);
+  const [draft, setDraft] = useState({ blocked: '', allowed: '' });
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const load = () => api.invoke('cookies:rules').then(setRules).catch((e) => { setRules({ blocked: [], allowed: [] }); setErr(e.message); });
+  useEffect(() => { load(); }, []);
+  const act = async (fn) => { setBusy(true); setErr(''); try { await fn(); await load(); } catch (e) { setErr(e.message); } finally { setBusy(false); } };
+  const listFor = (kind, label, hint, warnText) => (
+    <div style={{ marginTop: 14 }}>
+      <p className="heading" style={{ marginBottom: 6 }}>{label}</p>
+      {rules && rules[kind].length === 0 && <p className="muted">None yet.</p>}
+      {rules && rules[kind].map((p) => (
+        <div key={p} className="pkg-row" style={{ cursor: 'default' }}>
+          <span className="pkg-name">{p}</span>
+          <button disabled={busy} title={`Remove the ${kind} rule for ${p}`} onClick={() => act(() => api.invoke('cookies:removeRule', { kind, pattern: p }))}>Remove</button>
+        </div>
+      ))}
+      <span style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+        <input value={draft[kind]} title={hint} placeholder="example.com" style={{ flex: 1 }} onChange={(e) => setDraft((d) => ({ ...d, [kind]: e.target.value }))} />
+        <button disabled={busy || !draft[kind].trim()} title={warnText || hint} onClick={() => act(async () => { await api.invoke('cookies:addRule', { kind, pattern: draft[kind] }); setDraft((d) => ({ ...d, [kind]: '' })); })}>Add</button>
+      </span>
+    </div>
+  );
+  return (
+    <div style={{ marginTop: 18 }}>
+      <p className="heading">Cookie rules per site</p>
+      <p className="muted">These are written to Chrome's and Edge's own policy settings, so they hold in every profile and while the browser runs. Blocking a site signs you out of it there. Firefox does not read these policies, so the rules do not cover it. Changing them needs administrator rights.</p>
+      {err && <p className="error-text" style={{ margin: '8px 0' }}>{err}</p>}
+      {rules === null ? <p className="muted">Reading the rules…</p> : (<>
+        {listFor('blocked', 'Never allow cookies from', 'Sites here may never set cookies in Chrome or Edge', 'Blocking a site signs you out of it in Chrome and Edge')}
+        {listFor('allowed', 'Always allow cookies from', 'Sites here may always set cookies in Chrome or Edge, even when cookies are otherwise restricted')}
+      </>)}
+    </div>
   );
 }
 
