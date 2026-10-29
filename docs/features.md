@@ -184,6 +184,12 @@ For each entry: publisher, command, program it belongs to, digital signature, up
 
 **Resource alerts** — while Purgeon runs, including minimized to the tray, it checks once a minute and warns you once per condition when the processor or memory stays over the level you set, or the system disk's free space drops below it, until things calm down. Levels live in the Processes view; 0 turns an alert off. Alerts cannot run while Purgeon is closed.
 
+## System Tools
+
+Tools › System Tools holds a second set of windows beside Advanced Tools, kept out of the main window:
+
+**Power Options** — the PC's power plans (the one in use is badged Active) with one-click switching; screen-off, sleep and hibernate timings for On battery and Plugged in; the battery-saver turn-on level; whether scheduled work may wake the PC; and whether idle USB devices are powered down. Everything goes through Windows' own powercfg, every change lands in Change History, and every change there has an undo that restores the previous value.
+
 ## Explorer context menu
 
 **Explorer Context Menu Items** — lists right-click entries programs added to Explorer for files, folders, folder and desktop background, and drives. Windows' own entries are left out. Turn any one off or on; nothing is deleted (uses Windows' own `LegacyDisable` switch or shell-extension blocked list). Changes show in new Explorer windows or everywhere after **Restart Explorer**. Each is in Change History and can be undone.
