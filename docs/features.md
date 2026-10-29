@@ -160,7 +160,7 @@ Items are marked as part of the program (install folders, shortcuts, machine-wid
 
 ## Browser clean-up
 
-**Browser Clean-up** — lists extensions, search engine and home page of Chrome, Edge, Brave and Firefox. Extensions a program added on its own (through the registry or into Firefox's shared folders) are flagged and can be removed with a backup. Extensions you added yourself are listed for reference only. Nothing is changed while the browser is running.
+**Browser Clean-up** — lists extensions, search engine and home page of Chrome, Edge, Brave and Firefox. Extensions a program added on its own (through the registry or into Firefox's shared folders) are flagged and can be removed with a backup. Extensions you added yourself are listed for reference only. Nothing is changed while the browser is running. The same window carries **cookie rules per site**: Blocked and Allowed lists written to Chrome's and Edge's policy keys, holding in every profile and while the browsers run (adding a block warns that it signs you out of that site). Firefox does not read those policies and is stated as not covered.
 
 ## Startup & Services
 
@@ -189,6 +189,14 @@ For each entry: publisher, command, program it belongs to, digital signature, up
 Tools › System Tools holds a second set of windows beside Advanced Tools, kept out of the main window:
 
 **Power Options** — the PC's power plans (the one in use is badged Active) with one-click switching; screen-off, sleep and hibernate timings for On battery and Plugged in; the battery-saver turn-on level; whether scheduled work may wake the PC; and whether idle USB devices are powered down. Everything goes through Windows' own powercfg, every change lands in Change History, and every change there has an undo that restores the previous value.
+
+**Scheduled Tasks** — every task on the PC, Windows' own included (badged at the row's edge, and never deletable here): state, author, last and next run, and the last result. Run now, Stop, and Turn off/on for any task; Delete saves the task's definition to Purgeon's task-backups folder first, and Change History's undo re-registers it from that copy. Simple tasks can be created: a program at sign-in, daily, or weekly.
+
+**Health Check** — a plain-words once-over with Pass / Warning / Fail / Couldn't check per line: drive health and free space, system-file integrity (quick store check, or a full verification that takes a few minutes), a restore point no older than 30 days, waiting Windows updates, program crashes in the last week, startup load, and battery wear. Nothing is repaired — each line names the tool that fixes it. The run can be cancelled between checks, the report can be saved as a text file, and the check can be added to the Weekly Maintenance run.
+
+**Event Logs** — every Windows event log, searchable, with record counts and sizes. Any log can be saved to an .evtx file; clearing one always saves a copy first into Purgeon's log-backups folder and keeps it (the copy is the only way back); recording can be turned off and on. The Security log is view-and-save only — never cleared, never turned off — and that guard is in the backend too.
+
+**Boot Options** — what the next start does: Normal start, Safe Mode, or Safe Mode with networking (a restore point is offered first, and setting a mode takes a second confirmation), the boot-menu wait in seconds, and the Windows versions on the PC listed read-only. The window explains the Shift+Restart recovery route for a Windows that will not start. Reading boot settings needs administrator rights; without them the window says so.
 
 **System Restore** — per-drive restore storage: how much space restore points are using and the most they may use (adjustable, including No limit), protection on or off per drive (turning it off deletes that drive's points and asks first, saying there is no undo), the points themselves with their dates, creating a point, and deleting one when it can be matched exactly to its stored copy. The roll-back itself is Windows' job: an Open System Restore button starts its wizard. Windows gives programs no per-drive "protection on" reading, so drives are described by their storage, not a guessed state.
 
