@@ -843,8 +843,10 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 /* keyboard focus is always visible */
 button:focus-visible, select:focus-visible, input:focus-visible, .tweak:focus-visible, .list:focus-visible { outline: 2px solid var(--green); outline-offset: -2px; }
 .menubar-item > button u { text-decoration: underline; text-underline-offset: 2px; }
-/* long menus scroll instead of running off the window */
-.context-menu.dropdown { max-height: calc(100vh - 40px); overflow-y: auto; }
+/* Menubar dropdowns must NOT be scroll containers: any overflow other than
+   visible turns the dropdown into a clip box and its flyout panels (which
+   open to the side) get hidden behind it. Long lists live in flyouts, and
+   flyouts scroll on their own (.context-menu.submenu above). */
 
 /* uninstall queue, disk map, sheets, palette */
 .queue-done .muted { color: var(--green); }

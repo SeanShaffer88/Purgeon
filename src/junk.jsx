@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanupItems } from './backend/junk.js';
 import { formatBytes } from './format.js';
 
@@ -14,11 +14,19 @@ export function JunkView({ filter, admin, onError, onStatus, onClean }) {
   // Windows' own clean-ups: permanent, so never selected by default.
   const [system, setSystem] = useState(null);
   const [chosenSys, setChosenSys] = useState(new Set());
+  const [scanRun, setScanRun] = useState(0);
+  const [scanCancelled, setScanCancelled] = useState(false);
+  const cancelRef = useRef(false);
 
   useEffect(() => {
+    setScanCancelled(false);
+    cancelRef.current = false;
+    setCats(null);
+    setSystem(null);
     api
       .invoke('junk:scan')
       .then((c) => {
+        if (cancelRef.current) return; // a cancelled scan's late results are discarded
         setCats(c);
         // Everything found is selected, except what needs administrator rights when not elevated.
         setChosen(new Set(c.filter((x) => x.items.length && !x.privacy && !(x.admin && admin === false)).map((x) => x.id)));
@@ -31,7 +39,15 @@ export function JunkView({ filter, admin, onError, onStatus, onClean }) {
       .invoke('junk:scanSystem')
       .then(setSystem)
       .catch(() => setSystem([]));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scanRun]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const cancelScan = () => {
+    cancelRef.current = true;
+    api.invoke('junk:scanCancel').catch(() => {});
+    setScanCancelled(true);
+    setCats([]);
+    setSystem([]);
+  };
 
   const picked = (cats || []).filter((c) => chosen.has(c.id));
   const total = picked.reduce((n, c) => n + c.bytes, 0);
@@ -56,7 +72,18 @@ export function JunkView({ filter, admin, onError, onStatus, onClean }) {
       return n;
     });
 
-  if (!cats) return <div className="list-empty">Scanning temporary files, crash dumps and caches…</div>;
+  if (scanCancelled) return (
+    <div className="list-empty-actionable">
+      <div>Scan cancelled — nothing was cleaned.</div>
+      <button className="btn" onClick={() => setScanRun((n) => n + 1)}>Scan Again</button>
+    </div>
+  );
+  if (!cats) return (
+    <div className="list-empty-actionable">
+      <div>Scanning temporary files, crash dumps and caches…</div>
+      <button className="btn" onClick={cancelScan}>Cancel Scan</button>
+    </div>
+  );
 
   return (
     <div className="debloat junk">
