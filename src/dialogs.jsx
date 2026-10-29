@@ -1254,3 +1254,84 @@ export function BackupSettingsDialog({ settings, onSave, onClose }) {
     </Dialog>
   );
 }
+
+// Power Options (Tools › System Tools): the power plan and its timings,
+// changed through powercfg — the same switches Settings uses. Every change
+// is recorded in Change History with an undo.
+export function PowerDialog({ onClose }) {
+  const [state, setState] = useState(null);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+
+  const load = () => api.invoke('power:state').then(setState).catch((e) => { setState({ plans: [] }); setErr(e.message); });
+  useEffect(() => { load(); }, []);
+
+  const run = async (fn) => {
+    setBusy(true); setErr('');
+    try { await fn(); await load(); } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+
+  const MINUTES = [0, 1, 2, 3, 5, 10, 15, 20, 25, 30, 45, 60, 120, 180, 240, 300];
+  const minuteOptions = (current) => {
+    const list = current !== null && current !== undefined && !MINUTES.includes(current) ? [...MINUTES, current].sort((a, b) => a - b) : MINUTES;
+    return list.map((m) => <option key={m} value={m}>{m === 0 ? 'Never' : m < 60 ? `${m} minutes` : `${m / 60} hour${m === 60 ? '' : 's'}`}</option>);
+  };
+  const timeoutRow = (label, kind, tip) => (
+    <div className="power-row">
+      <span className="power-label">{label}</span>
+      <label className="power-cell">On battery
+        <select disabled={busy || !state} title={tip} value={state?.[kind]?.dc ?? ''} onChange={(e) => run(() => api.invoke('power:setTimeout', { kind, acMin: state[kind].ac, dcMin: Number(e.target.value), previous: state[kind] }))}>{minuteOptions(state?.[kind]?.dc)}</select>
+      </label>
+      <label className="power-cell">Plugged in
+        <select disabled={busy || !state} title={tip} value={state?.[kind]?.ac ?? ''} onChange={(e) => run(() => api.invoke('power:setTimeout', { kind, acMin: Number(e.target.value), dcMin: state[kind].dc, previous: state[kind] }))}>{minuteOptions(state?.[kind]?.ac)}</select>
+      </label>
+    </div>
+  );
+
+  return (
+    <Dialog title="Power Options" onClose={onClose} width={720} buttons={<button className="primary" onClick={onClose}>Close</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>How this PC uses power. Every change is recorded in Change History and can be undone there.</p>
+      {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
+      {state === null ? <p className="muted">Reading the power settings…</p> : (
+        <>
+          <div className="pkg-entries-head">Power plan</div>
+          <div style={{ marginBottom: 12 }}>
+            {state.plans.map((p) => (
+              <button key={p.guid} className={`pkg-row ${p.active ? 'sel' : ''}`} disabled={busy || p.active} title={p.active ? 'This is the plan in use' : `Switch to the ${p.name} plan`} onClick={() => run(() => api.invoke('power:setPlan', { guid: p.guid, name: p.name }))}>
+                <span className="pkg-name">{p.name}</span>
+                {p.active && <span className="pkg-badge ok">Active</span>}
+              </button>
+            ))}
+            {state.plans.length === 0 && <p className="muted">No power plans were found.</p>}
+          </div>
+          {timeoutRow('Turn off the screen', 'screen', 'How long the PC waits, doing nothing, before the screen turns off')}
+          {timeoutRow('Sleep', 'sleep', 'How long the PC waits, doing nothing, before it sleeps')}
+          {timeoutRow('Hibernate', 'hibernate', 'How long the PC waits, doing nothing, before it hibernates (a deeper off that saves everything to disk)')}
+          <div className="power-row">
+            <span className="power-label">Battery saver turns on at</span>
+            <label className="power-cell">Battery level
+              <select disabled={busy} title="Battery saver limits background work to stretch the battery once it drains to this level" value={state.batterySaverPct ?? ''} onChange={(e) => run(() => api.invoke('power:setBatterySaver', { pct: Number(e.target.value), previous: state.batterySaverPct }))}>
+                {[0, 10, 20, 30, 40, 50, 100].map((p) => <option key={p} value={p}>{p === 0 ? 'Never' : p === 100 ? 'Always' : `${p}%`}</option>)}
+              </select>
+            </label>
+          </div>
+          <div className="power-row">
+            <span className="power-label">Timed wake-ups</span>
+            <label className="power-cell power-check">
+              <input type="checkbox" disabled={busy} checked={!!state.wakeTimers} title="Let scheduled work (updates, backups) bring the PC out of sleep at a set time" onChange={(e) => run(() => api.invoke('power:setWakeTimers', { on: e.target.checked, previous: state.wakeTimers }))} />
+              Let scheduled work wake the PC
+            </label>
+          </div>
+          <div className="power-row">
+            <span className="power-label">USB devices</span>
+            <label className="power-cell power-check">
+              <input type="checkbox" disabled={busy} checked={!!state.usbSuspend} title="Windows may power down USB devices that are sitting idle, to save power" onChange={(e) => run(() => api.invoke('power:setUsbSuspend', { on: e.target.checked, previous: state.usbSuspend }))} />
+              Power down idle USB devices
+            </label>
+          </div>
+          <p className="muted" style={{ marginTop: 10 }}>On a desktop PC the battery settings are kept but have no effect until a battery exists. Plan changes apply straight away.</p>
+        </>
+      )}
+    </Dialog>
+  );
+}
