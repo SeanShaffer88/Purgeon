@@ -2,7 +2,13 @@
 
 ## Unreleased
 
+### Added
+
+- **Microsoft Edge debloat section**: 36 toggles for Edge, each one of Microsoft's documented Edge policies — Strict tracking prevention, no personalised ads/search/news, diagnostic data limited to required, no feedback, no payment-method checks by sites, card/address autofill off, address-bar suggestions off, no page preloading, no password saving, shopping assistant and sidebar off, a quiet new tab page, no first-run experience, no automatic sign-in, no default-browser nagging, startup boost off, the AI features (built-in AI APIs, AI themes, Copilot, inline Compose, AI history search) off or hidden, and more. SmartScreen and the typosquatting checker are deliberately not offered: they protect against malicious sites.
+
 ### Fixed
+
+- **Two Debloat sections were invisible**: the App Privacy (32 toggles) and Settings sync (6) sections never appeared in the Debloat view — the view's section order did not name their categories, while the header still counted all 93 tweaks. The sections render again, the order now names every category, any future category is appended automatically instead of vanishing, and a test guards it.
 
 - Menu flyouts (such as Tools › Advanced Tools) no longer open behind the menu dropdown: a stylesheet rule that made long menus scroll also turned the dropdown into a clip box, hiding the flyout. Menubar dropdowns no longer clip; long lists live in flyouts, which scroll on their own.
 - The view rail's icons now share one optical size and center. The artwork had been drawn at different sizes inside its frame (the eye wider, the power symbol higher, the clock larger), so the rail looked unevenly spaced even though the buttons are uniform.
