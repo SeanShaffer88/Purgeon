@@ -411,7 +411,7 @@ const handlers = {
   'startup:trust': async (entries) => {
     const exe = (cmd) => ((String(cmd || '').match(/^\s*"([^"]+)"|^\s*(\S+?\.exe)\b/i) || [])[1] || (String(cmd || '').match(/^\s*(\S+?\.exe)\b/i) || [])[1] || '').replace(/%([^%]+)%/g, (_, v) => sys.info.env[v] || `%${v}%`);
     const files = entries.map((e) => exe(e.command));
-    const sigs = await insights.signatures(files.filter(Boolean));
+    const sigs = await (await lazyInsights.get()).signatures(files.filter(Boolean));
     const out = {};
     for (const [i, e] of entries.entries()) {
       const f = files[i];
@@ -714,6 +714,9 @@ export async function initBackend() {
     sync.setRoot(path.join(data, 'sync')),
     profiler.setRoot(path.join(data, 'profiles')),
   ]);
+  // Settings sync keeps its folder and on/off in the settings file; reload
+  // them so a configured sync survives restarts.
+  await sync.restore().catch(() => {});
   // The installer drops an exit marker next to the program when it needs
   // this copy closed for an upgrade; watch for it from here on.
   const { watchExitMarker } = await import('./updateexit.js');
