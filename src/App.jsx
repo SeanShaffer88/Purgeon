@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, SystemInfoDialog, RecoveryDialog, SharedDialog, EraseDialog, GamesDialog, GraphDialog, PowerDialog, planHtml } from './dialogs.jsx';
+import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, SystemInfoDialog, RecoveryDialog, SharedDialog, EraseDialog, GamesDialog, GraphDialog, PowerDialog, RestoreDialog, planHtml } from './dialogs.jsx';
 import { WelcomeDialog, FirstRunTips, FIRST_RUN_TIPS, SettingHelp, SHORTCUTS, ShortcutsDialog, UpdateAvailableDialog, UserGuide } from './onboarding.jsx';
 import { setConfirmUI } from './backend/api.js';
 import { iconPathFor } from './backend/programs.js';
@@ -382,6 +382,7 @@ const MENUS = [
       ] },
       { group: 'System Tools', tip: 'Power, booting, restore points, logs, health and scheduled tasks', items: [
         ['powerOptions', 'Power Options...'],
+        ['systemRestore', 'System Restore...'],
       ] },
     ],
   ],
@@ -2297,6 +2298,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     backupSettings: async () => setModal({ type: 'backupSettings', settings: await api.invoke('settings:get') }),
     recoveryPackages: () => setModal({ type: 'recovery' }),
     powerOptions: () => setModal({ type: 'power' }),
+    systemRestore: () => setModal({ type: 'restore' }),
     sharedComponents: () => setModal({ type: 'shared' }),
     secureErase: () => setModal({ type: 'erase' }),
     gamesLibrary: () => setModal({ type: 'games' }),
@@ -3121,6 +3123,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       )}
       {modal?.type === 'recovery' && <RecoveryDialog onClose={() => setModal(null)} />}
       {modal?.type === 'power' && <PowerDialog onClose={() => setModal(null)} />}
+      {modal?.type === 'restore' && <RestoreDialog onClose={() => setModal(null)} />}
       {modal?.type === 'shared' && <SharedDialog onClose={() => setModal(null)} />}
       {modal?.type === 'erase' && <EraseDialog onClose={() => setModal(null)} />}
       {modal?.type === 'games' && <GamesDialog onClose={() => setModal(null)} />}

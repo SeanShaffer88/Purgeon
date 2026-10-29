@@ -58,6 +58,7 @@ import * as explore from './explore.js';
 import * as diskusage from './diskusage.js';
 import * as processes from './processes.js';
 import * as power from './power.js';
+import * as restoremgr from './restoremgr.js';
 import * as browsers from './browsers.js';
 import * as portable from './portable.js';
 import * as portableapps from './portableapps.js';
@@ -446,6 +447,13 @@ const handlers = {
   'power:setBatterySaver': ({ pct, previous }) => power.setBatterySaver(pct, previous),
   'power:setWakeTimers': ({ on, previous }) => power.setWakeTimers(on, previous),
   'power:setUsbSuspend': ({ on, previous }) => power.setUsbSuspend(on, previous),
+  // System Restore (Tools > System Tools).
+  'restore:state': () => restoremgr.state(),
+  'restore:setProtection': ({ drive, on }) => restoremgr.setProtection(drive, on),
+  'restore:setMax': ({ drive, pct, unbounded, previous }) => (unbounded || pct === null ? restoremgr.setMaxUnbounded(drive, previous) : restoremgr.setMaxPct(drive, pct, previous)),
+  'restore:removePoint': ({ shadowId, description }) => restoremgr.removePoint(shadowId, description),
+  'restore:createPoint': ({ description }) => restoremgr.createPoint(description),
+  'restore:openUi': () => restoremgr.openRestoreUi(),
   'explore:timeline': async (list) => explore.timeline(list, sys.uninstallKeyTimes ? await sys.uninstallKeyTimes().catch(() => ({})) : {}),
   'program:analyze': (program) => explore.analyze(program),
   'registry:search': (term) => explore.searchRegistry(term),
