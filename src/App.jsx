@@ -14,6 +14,7 @@ import { nextWatchDelayMs } from './backend/installwatch.js';
 // The heavy views load only when first opened, keeping first paint light.
 const DebloatView = lazy(() => import('./debloat.jsx').then((m) => ({ default: m.DebloatView })));
 const DiskUsageView = lazy(() => import('./disk.jsx').then((m) => ({ default: m.DiskUsageView })));
+const ProcessesView = lazy(() => import('./processes.jsx').then((m) => ({ default: m.ProcessesView })));
 const StartupView = lazy(() => import('./startup.jsx').then((m) => ({ default: m.StartupView })));
 const JunkView = lazy(() => import('./junk.jsx').then((m) => ({ default: m.JunkView })));
 import { GroupDialog } from './groups.jsx';
@@ -42,6 +43,7 @@ const VIEWS = {
   debloat: { label: 'Debloat', noun: 'tweaks', cols: [], button: true, custom: true },
   junk: { label: 'Cleaner', noun: 'categories', cols: [], button: true, custom: true },
   disk: { label: 'Disk Usage', noun: 'items', cols: [], button: true, custom: true },
+  processes: { label: 'Processes', noun: 'processes', cols: [], button: true, custom: true },
   timeline: { label: 'Change Timeline', noun: 'events', cols: [['name', 'Event'], ['size', 'Type'], ['date', 'When']], button: true },
   archive: { label: 'Uninstall Archive', noun: 'removed programs', cols: [['name', 'Removed Program'], ['size', 'How'], ['date', 'Removed On']], button: true },
 };
@@ -51,6 +53,7 @@ const VIEW_CHIPS = [
   ['desktop', 'Programs', 'Desktop programs installed on this PC (Ctrl+1)'],
   ['store', 'Apps', 'Windows Store apps from the Microsoft Store (Ctrl+2)'],
   ['monitored', 'Monitored', 'Monitored programs: programs recorded with Tools › Monitor an Installation (Ctrl+3)'],
+  ['processes', 'Processes', 'Processes: what is running now, how much of the PC it uses, and controls to end, pause or prioritise it'],
   ['startup', 'Startup', 'Startup & Services: programs, tasks and services that start with Windows (Ctrl+6)'],
   ['debloat', 'Debloat', 'Debloat Windows: safe, reversible tweaks that remove Windows ads, telemetry and clutter (Ctrl+5)'],
   ['junk', 'Cleaner', 'Cleaner: temporary files, crash dumps and caches that can be cleaned (Ctrl+8)'],
@@ -69,6 +72,7 @@ const VIEW_ICON_PATHS = {
   debloat: 'M4 3v14M10 3v14M16 3v14M2 7h4M8 13h4M14 9h4',
   junk: 'M4 6h12M8 6V4h4v2M5.5 6l1 11h7l1-11M8.5 9v5M11.5 9v5',
   disk: 'M10 3.5V10h6.5A7 7 0 1 0 10 3.5zM13.2 2.9a7 7 0 0 1 3.9 3.9h-3.9z',
+  processes: 'M4 15a8 8 0 1 1 12 0M10 15l3.8-5.8',
   snapshots: 'M3 6h3l1.5-2h5L14 6h3v10H3zM10 8.5a3 3 0 1 0 0 6 3 3 0 0 0 0-6z',
   archive: 'M2.5 4h15v4h-15zM4 8v9h12V8M8 11h4',
   timeline: 'M10 2.5a7.5 7.5 0 1 0 0 15 7.5 7.5 0 0 0 0-15zM10 6v4.5l3 2',
@@ -92,6 +96,7 @@ const VIEW_ICON_TRANSFORMS = {
   snapshots: 'translate(-0.36 -0.36) scale(1.036)',
   archive: 'translate(0.33 -0.15) scale(0.967)',
   timeline: 'translate(0.33 0.33) scale(0.967)',
+  processes: 'translate(-2.08 -3.29) scale(1.208)',
   backups: 'translate(0.33 0.33) scale(0.967)',
   history: 'translate(-1.15 -1.15) scale(1.115)',
 };
@@ -282,6 +287,7 @@ const MENUS = [
         ['view:desktop', 'Programs', 'Ctrl+1'],
         ['view:store', 'Apps', 'Ctrl+2'],
         ['view:monitored', 'Monitored Programs', 'Ctrl+3'],
+        ['view:processes', 'Processes'],
         ['view:debloat', 'Debloat', 'Ctrl+5'],
         ['view:startup', 'Startup & Services', 'Ctrl+6'],
         ['view:junk', 'Cleaner', 'Ctrl+8'],
@@ -827,6 +833,10 @@ const [reducedMotion, setReducedMotion] = useState(false);
     // New startup entries: checked now and every 10 minutes while Purgeon runs (also from the tray).
     const first = setTimeout(() => checkStartup(), 8000);
     const every = setInterval(() => checkStartup(), 10 * 60 * 1000);
+    // Resource alerts: a light sample every minute while Purgeon runs (the
+    // Processes view polls faster itself). Newly fired alerts use the error bar.
+    const alertFirst = setTimeout(() => checkAlerts(), 30000);
+    const alertEvery = setInterval(() => checkAlerts(), 60 * 1000);
     // The page is alive and about to listen for the close question: from here on the
     // native side may intercept a close and ask; before this it must let it through.
     api.invoke('app:ready').catch(() => {});
@@ -1686,6 +1696,15 @@ const [reducedMotion, setReducedMotion] = useState(false);
     if (!found.length) return !quietIfNone && setNotice({ tone: 'ok', text: 'No new startup entries.' });
     notify('New startup entry', `${found.map((e) => e.name).join(', ')} added ${found.length === 1 ? 'itself' : 'themselves'} to what starts with Windows.`);
     setModal((m) => m || { type: 'startupAlert', entries: found });
+  };
+
+  // Resource alerts (Processes): the backend reports only newly fired
+  // alerts, so this stays quiet until a threshold is crossed.
+  const checkAlerts = async () => {
+    const r = await api.invoke('processes:sample').catch(() => null);
+    if (!r?.alerts?.length) return;
+    notify('Your PC is busy', r.alerts[0]);
+    setError(r.alerts[0]);
   };
 
   // ---- 11. browsers --------------------------------------------------------------------------------
@@ -2700,6 +2719,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               'Only safe categories — caches, dumps and temporary files Windows rebuilds.'
             ) : view === 'disk' ? (
               'What is using the space on each drive, biggest first. Open a folder to look inside it.'
+            ) : view === 'processes' ? (
+              'What is running right now, and what it is costing. Windows critical processes are protected.'
             ) : (
               `${visible.length} ${VIEWS[view].noun}`
             )}
@@ -2846,6 +2867,10 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       ) : view === 'disk' ? (
         <Suspense fallback={<div className="list-empty">Loading…</div>}>
           <DiskUsageView key={customKey} filter={filter} onError={setError} onStatus={setCustomStatus} />
+        </Suspense>
+      ) : view === 'processes' ? (
+        <Suspense fallback={<div className="list-empty">Loading…</div>}>
+          <ProcessesView key={customKey} filter={filter} onError={setError} onStatus={setCustomStatus} />
         </Suspense>
       ) : (
       <div className={`list view-${view}`} tabIndex={0} ref={listRef} onKeyDown={onListKey}>
