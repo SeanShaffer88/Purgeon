@@ -8,7 +8,7 @@ const EFFECT = {
   reboot: { label: 'Needs reboot', className: 'fx-reboot' },
 };
 
-const CATEGORY_ORDER = ['Privacy & telemetry', 'Start, search & taskbar', 'Ads & suggestions', 'Explorer & UI', 'Windows Update', 'App Privacy', 'Settings sync', 'Microsoft Edge'];
+const CATEGORY_ORDER = ['Privacy & telemetry', 'Start, search & taskbar', 'Ads & suggestions', 'Explorer & UI', 'Windows Update', 'App Privacy', 'Settings sync', 'Microsoft Edge', 'Performance'];
 
 export function DebloatView({ filter, admin, onError, onStatus, beforeChange }) {
   const [tweaks, setTweaks] = useState(null);
