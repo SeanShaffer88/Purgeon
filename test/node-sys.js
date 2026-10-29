@@ -107,6 +107,8 @@ export function createNodeSys(dataDir = path.join(os.tmpdir(), 'purgeon-test-dat
       fs.unlinkSync(p);
     },
     cancelErase: async () => {},
+    beginScans: async () => { scansCancelled = false; },
+    cancelScans: async () => { scansCancelled = true; },
     writeTextAtomic: async (p, s) => {
       fs.mkdirSync(path.dirname(p), { recursive: true });
       const tmp = `${p}.tmp-${process.pid}`;
@@ -163,6 +165,10 @@ export function createNodeSys(dataDir = path.join(os.tmpdir(), 'purgeon-test-dat
   };
 }
 
+// Mirrors the native scan-cancel flag (begin_scans/cancel_scans in lib.rs).
+let scansCancelled = false;
+export const __scansCancelled = () => scansCancelled;
+
 // Items directly inside a folder with their total size and newest modification time (like list_junk in lib.rs).
 function listJunk(root) {
   let entries = [];
@@ -172,7 +178,7 @@ function listJunk(root) {
     return [];
   }
   return entries
-    .filter((e) => !e.isSymbolicLink())
+    .filter((e) => !e.isSymbolicLink() && !scansCancelled)
     .map((e) => {
       const full = path.join(root, e.name);
       let bytes = 0;

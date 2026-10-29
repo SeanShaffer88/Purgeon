@@ -49,16 +49,18 @@ export function buildGraph(programs, entries) {
   return { nodes, orphanCandidates };
 }
 
-export async function graph() {
+export async function graph(shouldStop) {
   const [desktop, store, entries] = await Promise.all([listDesktop().catch(() => []), listStore().catch(() => []), startup.list().catch(() => [])]);
   const { nodes, orphanCandidates } = buildGraph([...desktop, ...store], entries);
   // An orphan is only claimed when the file it points at is verifiably
   // gone — "not matched to a program" alone proves nothing.
   const orphans = [];
+  let cancelled = false;
   for (const o of orphanCandidates) {
+    if (shouldStop && shouldStop()) { cancelled = true; break; }
     if (o.target && /^[a-z]:\\/i.test(o.target) && !(await sys.exists(o.target).catch(() => true))) orphans.push(o);
   }
-  return { programs: nodes, orphans };
+  return { programs: nodes, orphans, cancelled };
 }
 
 // The selected program's deeper links, computed on demand: which installed

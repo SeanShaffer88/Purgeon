@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Menu flyouts (such as Tools › Advanced Tools) no longer open behind the menu dropdown: a stylesheet rule that made long menus scroll also turned the dropdown into a clip box, hiding the flyout. Menubar dropdowns no longer clip; long lists live in flyouts, which scroll on their own.
+- The view rail's icons now share one optical size and center. The artwork had been drawn at different sizes inside its frame (the eye wider, the power symbol higher, the clock larger), so the rail looked unevenly spaced even though the buttons are uniform.
+
+### Changed
+
+- Installing over an existing copy now always updates in place. The installer no longer stops to offer an uninstall of the old version first.
+- Every scan and progress task can now be cancelled: the leftover scan of programs removed elsewhere and the orphaned-leftovers scan (both keep what they found so far), the pre-uninstall check (cancelling it stops the uninstall), program analysis, restores and undo, the Cleaner scan, and the Games, Relationship Graph and Recovery Packages windows while they load, verify or restore. Single bounded system calls (creating a restore point, reading the shared-components list) remain the only waits without a cancel, because there is no loop for a cancel to stop.
+
 ## 1.0.10 - 2026-10-28
 
 ### Added

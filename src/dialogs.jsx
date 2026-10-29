@@ -414,7 +414,8 @@ export function RecoveryDialog({ onClose }) {
     try {
       const v = await api.invoke('backups:verifyPackage', selected.id);
       await load(selected.id);
-      if (!v.ok) setError(`Verification found problems: ${v.problems.join('; ')}`);
+      if (v.cancelled) setError('Verification cancelled — the package keeps its previous verdict.');
+      else if (!v.ok) setError(`Verification found problems: ${v.problems.join('; ')}`);
     } catch (e) {
       setError(e.message);
     } finally {
@@ -471,6 +472,7 @@ export function RecoveryDialog({ onClose }) {
               <button onClick={verify} disabled={!selected || !!busy} title="Re-check this package: seal, stored files, trial restore, Recycle Bin contents">
                 {busy === 'Verifying…' ? 'Verifying…' : 'Verify Selected'}
               </button>
+              {busy === 'Verifying…' && <button onClick={() => api.invoke('backups:verifyCancel').catch(() => {})}>Cancel</button>}
             </div>
             {selected && selected.verified === false && (selected.verifyProblems || []).length > 0 && (
               <ul className="muted" style={{ marginTop: 8, paddingLeft: 16 }}>
@@ -501,6 +503,7 @@ export function RecoveryDialog({ onClose }) {
                   <button onClick={() => restore(selected.entries.map((_, i) => i))} disabled={!!busy} title="Restore everything in this package">
                     Restore Everything
                   </button>
+                  {busy === 'Restoring…' && <button onClick={() => api.invoke('backups:restoreCancel').catch(() => {})}>Cancel</button>}
                 </div>
               </>
             )}
@@ -722,7 +725,7 @@ export function GamesDialog({ onClose }) {
       {error && <div className="error-bar" style={{ marginBottom: 10 }}><span>{error}</span></div>}
       {note && <div className="note" style={{ marginBottom: 10 }}>{note}</div>}
       {games === null ? (
-        <p className="muted">Looking for games…</p>
+        <p className="muted">Looking for games… <button className="btn small" style={{ marginLeft: 8 }} onClick={() => { api.invoke('games:listCancel').catch(() => {}); setGames([]); setNote('The search was cancelled — sizes shown so far may be incomplete.'); }}>Cancel</button></p>
       ) : games.length === 0 ? (
         <p className="muted">No games were found. Steam, Epic and GOG libraries are checked.</p>
       ) : (
@@ -757,6 +760,7 @@ export function GamesDialog({ onClose }) {
 // pointing at files that no longer exist, belonging to no installed
 // program — come first.
 export function GraphDialog({ onClose }) {
+  const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState(null);
@@ -766,7 +770,8 @@ export function GraphDialog({ onClose }) {
   const [error, setError] = useState('');
 
   const load = () => {
-    api.invoke('graph:graph').then(setData).catch((e) => { setData({ programs: [], orphans: [] }); setError(e.message); });
+    setLoading(true);
+    api.invoke('graph:graph').then((d) => { setData(d); setLoading(false); if (d.cancelled) setNote('The scan was cancelled — the map may be incomplete.'); }).catch((e) => { setData({ programs: [], orphans: [] }); setLoading(false); setError(e.message); });
   };
   useEffect(load, []);
 
@@ -804,7 +809,7 @@ export function GraphDialog({ onClose }) {
       {note && <div className="note" style={{ marginBottom: 10 }}>{note}</div>}
       <input className="pkg-search" type="search" placeholder="Search programs…" value={query} onChange={(e) => setQuery(e.target.value)} />
       {data === null ? (
-        <p className="muted">Building the graph…</p>
+        <p className="muted">Building the graph… <button className="btn small" style={{ marginLeft: 8 }} onClick={() => api.invoke('graph:graphCancel').catch(() => {})}>Cancel</button></p>
       ) : (
         <div className="recovery-cols">
           <div className="pkg-list">

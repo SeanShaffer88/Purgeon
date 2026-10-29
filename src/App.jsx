@@ -75,9 +75,30 @@ const VIEW_ICON_PATHS = {
   backups: 'M10 2.5l6 2.5v5c0 4-2.5 6-6 7.5C6.5 16 4 14 4 10V5zM7.5 10l2 2 3.5-3.5',
   history: 'M3.5 10a6.5 6.5 0 1 1 2 4.6M3.5 10H7M3.5 10l.8-3.2M10 6.5V10l2.5 1.5',
 };
+// Each glyph's artwork was drawn at a different size and center inside the
+// 20x20 frame (the eye is 17 wide, the power symbol sits high, the clock is
+// 15 across), so the rail looked uneven even though the buttons are a fixed
+// 40px on a 44px pitch. These transforms — computed from the measured
+// bounding box of each path — center every glyph on (10, 10) and scale its
+// larger side to 14.5, so all icons share one optical size and center.
+const VIEW_ICON_TRANSFORMS = {
+  desktop: 'translate(-0.36 -0.88) scale(1.036)',
+  store: 'translate(-1.15 -1.71) scale(1.115)',
+  monitored: 'translate(1.47 1.47) scale(0.853)',
+  startup: 'translate(-0.87 0.03) scale(1.087)',
+  debloat: 'translate(0.94 0.94) scale(0.906)',
+  junk: 'translate(-1.15 -1.71) scale(1.115)',
+  disk: 'translate(-0.36 -0.36) scale(1.036)',
+  snapshots: 'translate(-0.36 -0.36) scale(1.036)',
+  archive: 'translate(0.33 -0.15) scale(0.967)',
+  timeline: 'translate(0.33 0.33) scale(0.967)',
+  backups: 'translate(0.33 0.33) scale(0.967)',
+  history: 'translate(-1.15 -1.15) scale(1.115)',
+};
+
 const ViewIcon = ({ id }) => (
   <svg viewBox="0 0 20 20" width="18" height="18" aria-hidden="true">
-    <path d={VIEW_ICON_PATHS[id]} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+    <path d={VIEW_ICON_PATHS[id]} transform={VIEW_ICON_TRANSFORMS[id]} fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
   </svg>
 );
 
@@ -996,7 +1017,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
   // Reverses one Change History entry and reports what happened.
   const runUndo = async (historyId, title) => {
     setModal(null);
-    setBusy('Undoing…');
+    setBusy({ message: 'Undoing…', canCancel: true, onCancel: () => api.invoke('backups:restoreCancel').catch(() => {}) });
     try {
       const result = await api.invoke('history:undo', historyId);
       if (Array.isArray(result)) setModal({ type: 'results', title: 'Undo Report', results: result });
@@ -1015,7 +1036,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
     const entry = (await api.invoke('history:list')).find((e) => e.undo?.channel === 'backups:restore' && e.undo.arg === backupId && !e.undone);
     if (entry) return runUndo(entry.id, entry.title);
     setModal(null);
-    setBusy('Restoring…');
+    setBusy({ message: 'Restoring…', canCancel: true, onCancel: () => api.invoke('backups:restoreCancel').catch(() => {}) });
     try {
       setModal({ type: 'results', title: 'Undo Report', results: await api.invoke('backups:restore', backupId) });
     } catch (e) {
@@ -1030,9 +1051,11 @@ const [reducedMotion, setReducedMotion] = useState(false);
   // installer recorded and what depends on each program. One entry per program, in order.
   const prepare = async (list) => {
     if (!list.length) return [];
-    setBusy(list.length === 1 ? `Checking ${list[0].name}…` : `Checking ${list.length} programs…`);
+    const cancelFlag = { v: false };
+    setBusy({ message: list.length === 1 ? `Checking ${list[0].name}…` : `Checking ${list.length} programs…`, canCancel: true, onCancel: () => { cancelFlag.v = true; } });
     try {
-      return await Promise.all(list.map((p) => api.invoke('program:prepare', p).catch(() => null)));
+      const out = await Promise.all(list.map((p) => api.invoke('program:prepare', p).catch(() => null)));
+      return cancelFlag.v ? null : out; // null means: the check was cancelled, stop the whole action
     } finally {
       setBusy('');
     }
@@ -1143,6 +1166,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
       return setNotice({ tone: 'warn', text: 'Everything selected is a system component, which Purgeon will not remove.' });
     }
     const prep = await prepare(list.filter((p) => !p.store));
+    if (!prep) return setNotice({ tone: 'warn', text: 'Uninstall cancelled — the pre-uninstall check was stopped.' });
     const infoFor = (p) => prep[list.filter((x) => !x.store).indexOf(p)];
     const line = (p) => {
       const info = infoFor(p);
@@ -1339,13 +1363,13 @@ const [reducedMotion, setReducedMotion] = useState(false);
   // ---- tools: who owns, orphans, updates, maintenance ----------------------------
 
   const findOrphans = async () => {
-    setBusy('Looking for leftovers of programs that are no longer installed…\nThis can take a minute.');
+    setBusy({ message: 'Looking for leftovers of programs that are no longer installed…\nThis can take a minute.', canCancel: true, onCancel: () => api.invoke('orphans:scanCancel').catch(() => {}) });
     try {
       const items = await api.invoke('orphans:scan');
       setModal({
         type: 'leftovers',
         title: 'Orphaned Leftovers',
-        heading: `${items.length} folders, registry keys and services match no installed program. Nothing is selected: check each one (Tools › Who Owns This helps) before removing it.`,
+        heading: items.cancelled ? `Scan cancelled: ${items.length} folders, registry keys and services found so far match no installed program. Nothing is selected: check each one (Tools › Who Owns This helps) before removing it.` : `${items.length} folders, registry keys and services match no installed program. Nothing is selected: check each one (Tools › Who Owns This helps) before removing it.`,
         items,
         owners: [],
         onRemove: (sel) => removeWithBackup('Orphaned leftovers', sel),
@@ -1540,12 +1564,17 @@ const [reducedMotion, setReducedMotion] = useState(false);
   const scanRemoved = async (list) => {
     setModal(null);
     const items = [];
+    stopBatch.current = false;
+    let scanned = 0;
     for (const [i, p] of list.entries()) {
-      setBusy({ message: `Scanning for leftovers of ${p.name}`, current: i + 1, total: list.length });
+      if (stopBatch.current) break;
+      setBusy({ message: `Scanning for leftovers of ${p.name}`, current: i + 1, total: list.length, canCancel: true, onCancel: () => { stopBatch.current = true; } });
       items.push(...(await api.invoke('program:scan', { ...p, installerItems: [] }).catch(() => [])).map((x) => ({ ...x, program: p.name })));
+      scanned = i + 1;
     }
     setBusy('');
-    setModal({ type: 'leftovers', title: 'Leftovers of Removed Programs', heading: `${items.length} leftover items of ${list.length} program${list.length === 1 ? '' : 's'} removed elsewhere.`, items, owners: list.map((p) => p.key), onRemove: (sel) => removeWithBackup('Leftovers of programs removed elsewhere', sel, null, list.map((p) => p.key)) });
+    if (stopBatch.current && !items.length) return setNotice({ tone: 'warn', text: 'Leftover scan cancelled.' });
+    setModal({ type: 'leftovers', title: 'Leftovers of Removed Programs', heading: stopBatch.current ? `Scan cancelled after ${scanned} of ${list.length} programs: ${items.length} leftover items found so far.` : `${items.length} leftover items of ${list.length} program${list.length === 1 ? '' : 's'} removed elsewhere.`, items, owners: list.map((p) => p.key), onRemove: (sel) => removeWithBackup('Leftovers of programs removed elsewhere', sel, null, list.map((p) => p.key)) });
   };
 
   // ---- 3. trial installs -----------------------------------------------------------------------
@@ -1852,9 +1881,12 @@ const [reducedMotion, setReducedMotion] = useState(false);
     rescue: (p) => view === 'desktop' && rescue(p),
     analyzeProgram: async (p) => {
       if (view !== 'desktop') return;
-      setBusy(`Analyzing ${p.name}: measuring its folders and finding what it hooks into Windows…`);
+      const cancelFlag = { v: false };
+      setBusy({ message: `Analyzing ${p.name}: measuring its folders and finding what it hooks into Windows…`, canCancel: true, onCancel: () => { cancelFlag.v = true; api.invoke('explore:diskMapCancel').catch(() => {}); } });
       try {
-        setModal({ type: 'analysis', program: p, data: await api.invoke('program:analyze', p) });
+        const data = await api.invoke('program:analyze', p);
+        if (cancelFlag.v) return setNotice({ tone: 'warn', text: `Analysis of ${p.name} cancelled.` });
+        setModal({ type: 'analysis', program: p, data });
       } catch (e) {
         setError(e.message);
       } finally {
@@ -1909,6 +1941,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
         }
       }
       const prep = p.store ? null : await prepare([p]);
+      if (!p.store && prep === null) return setNotice({ tone: 'warn', text: 'Uninstall cancelled — the pre-uninstall check was stopped.' });
       const info = prep?.[0];
       const go = await confirmWithRestore(
         `Uninstall ${p.name}?`,
@@ -1958,7 +1991,9 @@ const [reducedMotion, setReducedMotion] = useState(false);
     },
     force: async (p) => {
       if (view !== 'desktop') return actions.uninstall(p);
-      const [info] = await prepare([p]);
+      const prepF = await prepare([p]);
+      if (!prepF) return setNotice({ tone: 'warn', text: 'Force removal cancelled — the pre-removal check was stopped.' });
+      const [info] = prepF;
       // Signature verification when required by settings.
       if ((await api.invoke('settings:get')).requireSignature) {
         const exe = iconPathFor(p);

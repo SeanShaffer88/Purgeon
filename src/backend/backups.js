@@ -636,7 +636,7 @@ async function binPresence(originals) {
 //   3. recycled files and folders are confirmed present in the Recycle Bin.
 // Anything that cannot be checked (no PowerShell, a short-named path) is
 // reported as unchecked, never as a failure.
-async function verifyPackage(id) {
+async function verifyPackage(id, shouldStop) {
   const dir = backupDir(id);
   const manifest = JSON.parse(await readEncryptedText(manifestFile(id)));
   const record = async (result) => {
@@ -655,6 +655,7 @@ async function verifyPackage(id) {
   try {
     await sys.makeDir(scratch);
     for (const e of manifest.entries) {
+      if (shouldStop && shouldStop()) return { ok: false, cancelled: true, at: new Date().toISOString(), problems: ['The check was cancelled before it finished'], exportsChecked, binChecked: 0 }; // not recorded: a cancelled check is not a verdict on the package
       if (!e.file || changed.has(e.file)) continue;
       if (e.kind !== 'key' && e.kind !== 'service' && e.kind !== 'task' && e.kind !== 'firewall') continue;
       const text = await sys.readText(path.join(dir, e.file)).catch(() => '');
@@ -743,16 +744,20 @@ const restoreFromRecycleBin = async (original) => (await restoreManyFromRecycleB
 
 // Restores a backup. With `onlyIndexes` (an array of entry positions), only
 // those entries are restored — the Recovery Packages tool's selective restore.
-async function restore(id, onlyIndexes) {
+async function restore(id, onlyIndexes, shouldStop) {
   const dir = path.join(backupRoot, id);
   if (!(await sys.exists(path.join(dir, 'manifest.json')))) throw new Error('This backup no longer exists. It may have been removed by the backup limits in Tools › Backup Settings.');
   const manifest = JSON.parse(await readEncryptedText(path.join(dir, 'manifest.json')));
   const changed = await verify(dir, manifest);
   const only = Array.isArray(onlyIndexes) ? new Set(onlyIndexes) : null;
   const results = [];
-  const recycled = await restoreManyFromRecycleBin(manifest.entries.filter((e, i) => e.recycled && (!only || only.has(i))).map((e) => e.path)).catch((err) => ({ error: `ERR ${err.message}` }));
+  const recycled = shouldStop && shouldStop() ? {} : await restoreManyFromRecycleBin(manifest.entries.filter((e, i) => e.recycled && (!only || only.has(i))).map((e) => e.path)).catch((err) => ({ error: `ERR ${err.message}` }));
   for (const [entryIndex, e] of manifest.entries.entries()) {
     if (only && !only.has(entryIndex)) continue;
+    if (shouldStop && shouldStop()) {
+      results.push({ ...e, ok: false, detail: 'Left in place — the restore was cancelled' });
+      continue;
+    }
     if (e.file && changed.has(e.file)) {
       results.push({ ...e, ok: false, detail: 'Its backup file was changed after it was made, so it was not restored' });
       continue;

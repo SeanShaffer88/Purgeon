@@ -25,6 +25,8 @@ export async function createTauriSys() {
     cancelSnapshot: () => invoke('cancel_snapshot'),
     secureErase: (path, passes) => invoke('secure_erase_file', { path, passes }),
     cancelErase: () => invoke('cancel_erase'),
+    beginScans: () => invoke('begin_scans'),
+    cancelScans: () => invoke('cancel_scans'),
     snapshotSubtree: (path, key) => invoke('snapshot_subtree', { path, key }),
     trashMany: (paths) => invoke('move_many_to_trash', { paths }),
     listJunk: (root, maxMs) => invoke('list_junk', { root, maxMs }),

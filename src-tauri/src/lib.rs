@@ -569,6 +569,23 @@ struct JunkEntry {
     newest: f64,
 }
 
+static SCANS_CANCELLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Starts a batch of folder scans: clears the scan-cancel flag. The junk
+/// scan fires many list_junk calls in parallel, so the flag is batch-scoped
+/// (cleared when a scan begins, set by cancel_scans) rather than per call.
+#[tauri::command]
+fn begin_scans() {
+    SCANS_CANCELLED.store(false, std::sync::atomic::Ordering::SeqCst);
+}
+
+/// Asks in-progress folder scans (list_junk walks) to stop and return what
+/// they have measured so far.
+#[tauri::command]
+fn cancel_scans() {
+    SCANS_CANCELLED.store(true, std::sync::atomic::Ordering::SeqCst);
+}
+
 /// The items directly inside a junk folder, each with its total size and newest modification time.
 #[tauri::command]
 async fn list_junk(root: String, max_ms: u64) -> Vec<JunkEntry> {
@@ -579,6 +596,9 @@ async fn list_junk(root: String, max_ms: u64) -> Vec<JunkEntry> {
         };
         let mut out = Vec::new();
         for e in rd.flatten() {
+            if SCANS_CANCELLED.load(std::sync::atomic::Ordering::SeqCst) {
+                break;
+            }
             let Ok(t) = e.file_type() else { continue };
             if t.is_symlink() {
                 continue;
@@ -590,7 +610,9 @@ async fn list_junk(root: String, max_ms: u64) -> Vec<JunkEntry> {
             if t.is_dir() {
                 let mut stack = vec![e.path()];
                 while let Some(dir) = stack.pop() {
-                    if start.elapsed() > Duration::from_millis(max_ms) {
+                    if start.elapsed() > Duration::from_millis(max_ms)
+                        || SCANS_CANCELLED.load(std::sync::atomic::Ordering::SeqCst)
+                    {
                         break;
                     }
                     let Ok(rd) = fs::read_dir(&dir) else { continue };
@@ -1470,6 +1492,8 @@ pub fn run() {
             cancel_snapshot,
             secure_erase_file,
             cancel_erase,
+            begin_scans,
+            cancel_scans,
             snapshot_subtree,
             sys_info,
             quit,

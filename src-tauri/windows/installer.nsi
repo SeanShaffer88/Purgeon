@@ -284,7 +284,14 @@ Function PageReinstall
   ; of this function because we need to populate some variables
   ; related to current installed version if detected and whether
   ; we are downgrading or not.
-  ${If} $PassiveMode = 1
+  ;
+  ; Purgeon change: the page is NEVER shown. Installing over an existing
+  ; copy always updates in place — the user is not offered an uninstall
+  ; first. "Do not uninstall" is pre-selected (ReinstallPageCheck 2) and the
+  ; leave logic runs immediately, exactly as in passive mode. (A WiX/MSI
+  ; install is still migrated by that logic, automatically.)
+  StrCpy $ReinstallPageCheck 2
+  ${If} 1 = 1
     Call PageLeaveReinstall
   ${Else}
     nsDialogs::Create 1018
