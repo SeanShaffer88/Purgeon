@@ -56,6 +56,7 @@ import * as drivers from './drivers.js';
 import * as trials from './trials.js';
 import * as explore from './explore.js';
 import * as diskusage from './diskusage.js';
+import * as processes from './processes.js';
 import * as browsers from './browsers.js';
 import * as portable from './portable.js';
 import * as portableapps from './portableapps.js';
@@ -114,6 +115,7 @@ const isConfirmationDisabled = async (id) => {
   return Array.isArray(s.disabledConfirmations) && s.disabledConfirmations.includes(id);
 };
 
+let procAlertActive = new Set();
 const handlers = {
   'app:isAdmin': isAdmin,
   // Basic PC specs for the status bar's right side, gathered once by the native layer.
@@ -402,6 +404,38 @@ const handlers = {
   'disk:open': async (entry) => {
     const target = entry?.dir ? entry.path : entry?.path ? entry.path.replace(/[\\/][^\\/]*$/, '') : '';
     if (target) await open(target);
+    return '';
+  },
+  // Processes view: live monitoring, control, and resource alerts. The
+  // alert state lives here so both the view's polling and the app-wide
+  // check share one set of already-fired alerts.
+  'processes:sample': async () => {
+    const r = await processes.sample();
+    const s = await readSettings();
+    const th = { cpu: 90, mem: 90, diskFreeGB: 20, ...(s.alertThresholds || {}) };
+    const before = procAlertActive;
+    procAlertActive = processes.alertStates(r.totals, th, procAlertActive);
+    const fired = [...procAlertActive].filter((k) => !before.has(k)).map((k) => processes.alertText(k, r.totals, th));
+    return { ...r, alerts: fired };
+  },
+  'processes:end': ({ pid, name }) => processes.end(pid, { pid, name }),
+  'processes:suspend': ({ pid, name }) => processes.suspend(pid, { pid, name }),
+  'processes:resume': (pid) => processes.resume(pid),
+  'processes:setPriority': ({ pid, name, level, previous }) => processes.setPriority(pid, level, { pid, name, priority: previous }),
+  'processes:setAffinity': ({ pid, name, cores }) => processes.setAffinity(pid, cores, { pid, name }),
+  'processes:alertThresholds': async () => ({ cpu: 90, mem: 90, diskFreeGB: 20, ...((await readSettings()).alertThresholds || {}) }),
+  'processes:setAlertThresholds': async (v) => {
+    const clean = {
+      cpu: Math.max(0, Math.min(100, Number(v?.cpu) || 0)),
+      mem: Math.max(0, Math.min(100, Number(v?.mem) || 0)),
+      diskFreeGB: Math.max(0, Math.min(10000, Number(v?.diskFreeGB) || 0)),
+    };
+    await writeSettings({ alertThresholds: clean });
+    return clean;
+  },
+  'processes:openFolder': async (file) => {
+    const dir = String(file || '').replace(/[\\/][^\\/]*$/, '');
+    if (dir) await open(dir);
     return '';
   },
   'explore:timeline': async (list) => explore.timeline(list, sys.uninstallKeyTimes ? await sys.uninstallKeyTimes().catch(() => ({})) : {}),
