@@ -59,3 +59,29 @@ test('Edge tweaks are documented Microsoft policies under the Edge policy key', 
   const names = edge.flatMap((t) => t.values.map((v) => v.name));
   assert.ok(!names.includes('SmartScreenEnabled') && !names.includes('TyposquattingCheckerEnabled'), 'Edge safety features are never offered as tweaks');
 });
+
+
+test('Performance tweaks use only their documented keys and never touch protection or services', () => {
+  const perf = TWEAKS.filter((t) => t.category === 'Performance');
+  assert.equal(perf.length, 7, `expected the 7 verified performance tweaks, got ${perf.length}`);
+  const allowedKeys = new Set([
+    'HKCU\\\\Software\\\\Microsoft\\\\GameBar',
+    'HKLM\\\\SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\GameDVR',
+    'HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\GameDVR',
+    'HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\GraphicsDrivers',
+    'HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\Power\\\\PowerThrottling',
+    'HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\BackgroundAccessApplications',
+    'HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Search',
+    'HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Explorer\\\\VisualEffects',
+    'HKCU\\\\Control Panel\\\\Desktop',
+  ]);
+  for (const t of perf) {
+    for (const v of t.values) assert.ok(allowedKeys.has(v.key), `${t.id} writes to an unverified key: ${v.key}`);
+    assert.ok(!/defender|smartscreen|firewall|prefetch|sysmain/i.test(JSON.stringify(t.values)), `${t.id} touches protection or prefetch`);
+  }
+  const byId = Object.fromEntries(perf.map((t) => [t.id, t]));
+  assert.equal(byId.gamedvroff.values[0].on, 0, 'the GameDVR policy must be set to not-allowed');
+  assert.equal(byId.gpuscheduling.values[0].on, 2, 'HwSchMode 2 is on');
+  assert.equal(byId.menudelay.values[0].type, 'REG_SZ', 'MenuShowDelay is a string value');
+  assert.equal(byId.menudelay.values[0].off, '400', 'MenuShowDelay reverts to the Windows default');
+});
