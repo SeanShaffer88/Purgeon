@@ -190,6 +190,8 @@ Tools › System Tools holds a second set of windows beside Advanced Tools, kept
 
 **Power Options** — the PC's power plans (the one in use is badged Active) with one-click switching; screen-off, sleep and hibernate timings for On battery and Plugged in; the battery-saver turn-on level; whether scheduled work may wake the PC; and whether idle USB devices are powered down. Everything goes through Windows' own powercfg, every change lands in Change History, and every change there has an undo that restores the previous value.
 
+**System Restore** — per-drive restore storage: how much space restore points are using and the most they may use (adjustable, including No limit), protection on or off per drive (turning it off deletes that drive's points and asks first, saying there is no undo), the points themselves with their dates, creating a point, and deleting one when it can be matched exactly to its stored copy. The roll-back itself is Windows' job: an Open System Restore button starts its wizard. Windows gives programs no per-drive "protection on" reading, so drives are described by their storage, not a guessed state.
+
 ## Explorer context menu
 
 **Explorer Context Menu Items** — lists right-click entries programs added to Explorer for files, folders, folder and desktop background, and drives. Windows' own entries are left out. Turn any one off or on; nothing is deleted (uses Windows' own `LegacyDisable` switch or shell-extension blocked list). Changes show in new Explorer windows or everywhere after **Restart Explorer**. Each is in Change History and can be undone.
