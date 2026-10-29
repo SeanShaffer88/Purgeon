@@ -1425,3 +1425,347 @@ export function RestoreDialog({ onClose }) {
     </Dialog>
   );
 }
+
+// Boot Options (Tools › System Tools): what the next start does. Safe Mode
+// is a start-up troubleshooting mode; the window is deliberately plain
+// about two things — reading these settings needs administrator rights,
+// and if Windows will not start, the recovery route is holding Shift while
+// choosing Restart. Changes ask for a second confirmation because they
+// take effect away from the desk, at the next start.
+export function BootDialog({ onClose }) {
+  const [state, setState] = useState(null);
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [withPoint, setWithPoint] = useState(true);
+  const [pending, setPending] = useState(null);
+
+  const load = () => api.invoke('boot:state').then(setState).catch((e) => { setState({ entries: [], timeout: null, safeboot: 'none' }); setErr(e.message); });
+  useEffect(() => { load(); }, []);
+
+  const run = async (fn) => {
+    setBusy(true); setErr('');
+    try { await fn(); await load(); } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+
+  const MODES = [
+    { id: 'none', label: 'Normal start', detail: 'Windows starts the usual way.' },
+    { id: 'minimal', label: 'Safe Mode', detail: 'The next start loads only the basics — for troubleshooting a Windows that misbehaves.' },
+    { id: 'network', label: 'Safe Mode with networking', detail: 'Safe Mode, plus the network — for downloading drivers or updates while troubleshooting.' },
+  ];
+  const timeouts = [0, 5, 10, 15, 30, 60];
+
+  return (
+    <Dialog title="Boot Options" onClose={onClose} width={700} buttons={<button className="primary" onClick={onClose}>Close</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>These change what happens at the next start, not this one. Nothing here restarts the PC.</p>
+      {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
+      {state === null ? <p className="muted">Reading the boot settings…</p> : (
+        <>
+          <div className="pkg-entries-head">Next start</div>
+          <div style={{ marginBottom: 10 }}>
+            {MODES.map((m) => (
+              <button key={m.id} className={`pkg-row ${state.safeboot === m.id ? 'sel' : ''}`} disabled={busy || state.safeboot === m.id} title={m.detail} onClick={() => setPending(m)}>
+                <span className="pkg-name">{m.label}</span>
+                {state.safeboot === m.id && <span className="pkg-badge ok">Set</span>}
+              </button>
+            ))}
+            {state.safeboot === 'other' && <p className="muted">Windows is set to a specialist start mode Purgeon does not change. Choosing Normal start above clears it.</p>}
+          </div>
+          <label className="power-cell power-check" style={{ marginBottom: 12 }}>
+            <input type="checkbox" checked={withPoint} disabled={busy} onChange={(e) => setWithPoint(e.target.checked)} title="Make a restore point before changing the start mode, so the change sits behind a safety net" />
+            Create a restore point first (recommended)
+          </label>
+          <div className="power-row">
+            <span className="power-label">Boot menu waits</span>
+            <label className="power-cell">Seconds
+              <select disabled={busy || state.timeout === null} title="How long the list of Windows versions waits at start before the default one loads" value={state.timeout ?? ''} onChange={(e) => run(() => api.invoke('boot:setTimeout', { seconds: Number(e.target.value), previous: state.timeout }))}>
+                {timeouts.map((s) => <option key={s} value={s}>{s === 0 ? '0 (no wait)' : `${s} seconds`}</option>)}
+                {state.timeout !== null && !timeouts.includes(state.timeout) && <option value={state.timeout}>{state.timeout} seconds</option>}
+              </select>
+            </label>
+          </div>
+          <div className="pkg-entries-head" style={{ marginTop: 12 }}>Windows versions on this PC (read-only)</div>
+          <div style={{ marginBottom: 10 }}>
+            {state.entries.map((e) => (
+              <div key={e.id} className="pkg-row" style={{ cursor: 'default' }}>
+                <span className="pkg-name">{e.name}</span>
+                {e.isDefault && <span className="pkg-badge ok">Default</span>}
+              </div>
+            ))}
+            {state.entries.length === 0 && <p className="muted">No boot entries could be read.</p>}
+          </div>
+          <p className="muted">If Windows will not start at all: hold Shift while choosing Restart (from the sign-in screen if needed) and Windows shows its recovery tools, including Startup Settings, where Safe Mode can be picked directly.</p>
+        </>
+      )}
+      {pending && (
+        <Dialog title={`${pending.label} at the next start?`} onClose={() => setPending(null)} width={520} buttons={<>
+          <button onClick={() => setPending(null)}>Not yet</button>
+          <button className="primary" onClick={() => { const m = pending; setPending(null); run(() => api.invoke('boot:setSafeBoot', { mode: m.id, previous: state.safeboot, withRestorePoint: withPoint })); }}>Set it</button>
+        </>}>
+          <p>{pending.detail}</p>
+          <p className="muted">It takes effect when the PC next starts. You can change your mind here any time before then{withPoint ? ', and a restore point is made first' : ''}.</p>
+        </Dialog>
+      )}
+    </Dialog>
+  );
+}
+
+// Event Logs (Tools › System Tools): every Windows event log with its
+// size and record count. Saving a copy works for all of them; clearing
+// always saves a copy first and keeps it; the Security log can be viewed
+// and saved but never cleared or turned off (the backend refuses too).
+export function LogsDialog({ onClose }) {
+  const [items, setItems] = useState(null);
+  const [selected, setSelected] = useState(0);
+  const [filter, setFilter] = useState('');
+  const [err, setErr] = useState('');
+  const [note, setNote] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [confirmClear, setConfirmClear] = useState(null);
+
+  const load = () => api.invoke('logs:channels').then((rows) => { setItems(rows); }).catch((e) => { setItems([]); setErr(e.message); });
+  useEffect(() => { load(); }, []);
+
+  const run = async (fn, after) => {
+    setBusy(true); setErr(''); setNote('');
+    try { const r = await fn(); if (after) after(r); await load(); } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+
+  const shown = (items || []).filter((c) => !filter || c.name.toLowerCase().includes(filter.toLowerCase()));
+  const current = shown.length ? shown[Math.min(selected, shown.length - 1)] : null;
+  const fmtSize = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : b >= 1024 ? `${(b / 1024).toFixed(0)} KB` : `${b} B`);
+
+  return (
+    <Dialog title="Event Logs" onClose={onClose} width={880} buttons={<button className="primary" onClick={onClose}>Close</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>Windows writes everything that happens into these logs. Clearing one always saves a copy into Purgeon's log-backups folder first, and the copy is kept.</p>
+      {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
+      {note && <p className="muted" style={{ marginBottom: 10 }}>{note}</p>}
+      <input className="search-input" style={{ marginBottom: 10, width: '100%' }} placeholder="Search logs…" title="Type part of a log's name to filter the list" value={filter} onChange={(e) => { setFilter(e.target.value); setSelected(0); }} />
+      {items === null ? <p className="muted">Reading the logs…</p> : shown.length === 0 ? <p className="muted">No logs match.</p> : (
+        <div className="recovery-cols">
+          <div className="pkg-list">
+            {shown.map((c, i) => (
+              <button key={c.name} className={`pkg-row ${current && c.name === current.name ? 'sel' : ''}`} onClick={() => setSelected(i)}>
+                <span className="pkg-name">{c.name}</span>
+                {c.guarded ? <span className="pkg-badge warn">Protected</span> : !c.enabled ? <span className="pkg-badge warn">Off</span> : null}
+              </button>
+            ))}
+          </div>
+          <div className="pkg-entries">
+            {current && (
+              <>
+                <div className="pkg-entries-head">{current.name}</div>
+                <div className="pkg-entry"><span className="muted">Records</span><span style={{ marginLeft: 'auto' }}>{current.records.toLocaleString()}</span></div>
+                <div className="pkg-entry"><span className="muted">Size on disk</span><span style={{ marginLeft: 'auto' }}>{fmtSize(current.sizeBytes)}</span></div>
+                <div className="pkg-entry"><span className="muted">Recording</span><span style={{ marginLeft: 'auto' }}>{current.enabled ? 'On' : 'Off'}</span></div>
+                {current.guarded && <p style={{ fontSize: 13, margin: '8px 0' }}>The Security log is the record Windows keeps of sign-ins and security events. Purgeon can save a copy of it, but never clears it or turns it off.</p>}
+                <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                  <button disabled={busy} title="Save this log to an .evtx file you choose" onClick={() => run(() => api.invoke('logs:exportPick', { name: current.name }), (r) => { if (r) setNote(`Saved a copy of ${current.name} to ${r.path}.`); })}>Save a copy…</button>
+                  {!current.guarded && <button disabled={busy} title="Empty this log (a copy is saved first and kept)" onClick={() => setConfirmClear(current)}>Clear…</button>}
+                  {!current.guarded && <button disabled={busy} title={current.enabled ? 'Stop recording new events into this log' : 'Start recording events into this log again'} onClick={() => run(() => api.invoke('logs:setEnabled', { name: current.name, on: !current.enabled }))}>{current.enabled ? 'Turn off' : 'Turn on'}</button>}
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      {confirmClear && (
+        <Dialog title={`Clear the ${confirmClear.name} log?`} onClose={() => setConfirmClear(null)} width={520} buttons={<>
+          <button onClick={() => setConfirmClear(null)}>Keep it</button>
+          <button className="danger" onClick={() => { const c = confirmClear; setConfirmClear(null); run(() => api.invoke('logs:clear', { name: c.name }), (r) => setNote(`Cleared ${c.name}. Its copy was kept at ${r.backup}.`)); }}>Save a copy and clear</button>
+        </>}>
+          <p>The log will be emptied. First, a copy is saved into Purgeon's log-backups folder and kept — that copy is the only way back.</p>
+        </Dialog>
+      )}
+    </Dialog>
+  );
+}
+
+// Health Check (Tools › System Tools): plain-words answers to "is this PC
+// okay?" Nothing is repaired here — each line names the tool that fixes
+// it. The run can be cancelled between checks; a check that cannot run
+// says so instead of guessing.
+export function HealthDialog({ onClose }) {
+  const [result, setResult] = useState(null);
+  const [running, setRunning] = useState(false);
+  const [runSfc, setRunSfc] = useState(false);
+  const [weekly, setWeekly] = useState(false);
+  const [err, setErr] = useState('');
+  const [note, setNote] = useState('');
+
+  useEffect(() => { api.invoke('health:weekly').then(setWeekly).catch(() => {}); }, []);
+
+  const start = async () => {
+    setRunning(true); setErr(''); setNote(''); setResult(null);
+    try { setResult(await api.invoke('health:run', { runSfc })); }
+    catch (e) { setErr(e.message); }
+    finally { setRunning(false); }
+  };
+  const BADGE = { pass: ['ok', 'Pass'], warn: ['warn', 'Warning'], fail: ['bad', 'Fail'], unknown: ['', 'Couldn’t check'] };
+
+  return (
+    <Dialog title="Health Check" onClose={onClose} width={760} buttons={<button className="primary" onClick={onClose}>Close</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>A plain-words once-over: drives, system files, restore points, updates, crashes, startup load and the battery. Nothing is changed or repaired — each line names the tool that fixes it.</p>
+      {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
+      {note && <p className="muted" style={{ marginBottom: 10 }}>{note}</p>}
+      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+        {!running
+          ? <button className="primary" title="Run the health check now" onClick={start}>{result ? 'Run again' : 'Run the check'}</button>
+          : <button className="danger" title="Stop the check at the next step" onClick={() => api.invoke('health:cancel')}>Cancel</button>}
+        <label className="power-cell power-check">
+          <input type="checkbox" checked={runSfc} disabled={running} title="Also verify every Windows system file, not just the quick store check. Takes a few minutes." onChange={(e) => setRunSfc(e.target.checked)} />
+          Also verify every system file (slower)
+        </label>
+        <label className="power-cell power-check">
+          <input type="checkbox" checked={weekly} title="Add the health check (without the slow file verification) to the weekly maintenance run. Maintenance itself is set up in Tools." onChange={(e) => { setWeekly(e.target.checked); api.invoke('health:setWeekly', { on: e.target.checked }).catch((x) => setErr(x.message)); }} />
+          Add to Weekly Maintenance
+        </label>
+      </div>
+      {running && <p className="muted">Checking… (drive health, system files, restore points, updates, crashes, startup, battery)</p>}
+      {result && (
+        <>
+          <p style={{ fontSize: 14, marginBottom: 10 }}>{result.summary.text}{result.cancelled ? ' (The run was cancelled, so this covers only the checks that finished.)' : ''}</p>
+          <div style={{ marginBottom: 12 }}>
+            {result.checks.map((c) => (
+              <div key={c.id + c.label} className="pkg-row" style={{ cursor: 'default' }}>
+                <span className="pkg-name">{c.label}</span>
+                <span className="muted" style={{ flex: 1 }}>{c.detail}</span>
+                <span className={`pkg-badge ${BADGE[c.status]?.[0] || ''}`}>{BADGE[c.status]?.[1] || c.status}</span>
+              </div>
+            ))}
+          </div>
+          <button disabled={running} title="Save this report as a text file" onClick={async () => { try { const r = await api.invoke('health:saveReport', { result }); if (r) setNote(`Report saved to ${r.path}.`); } catch (e) { setErr(e.message); } }}>Save Report…</button>
+        </>
+      )}
+    </Dialog>
+  );
+}
+
+// Scheduled Tasks (Tools › System Tools): everything Windows runs on a
+// schedule. Windows' own tasks are badged and can be run or turned off
+// but never deleted here; deleting anything else saves its definition
+// first, and Change History's undo re-registers it from that copy.
+export function TasksDialog({ onClose }) {
+  const [items, setItems] = useState(null);
+  const [selected, setSelected] = useState(0);
+  const [filter, setFilter] = useState('');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(null);
+  const [creating, setCreating] = useState(false);
+
+  const load = () => api.invoke('tasks:list').then(setItems).catch((e) => { setItems([]); setErr(e.message); });
+  useEffect(() => { load(); }, []);
+  const run = async (fn) => {
+    setBusy(true); setErr('');
+    try { await fn(); await load(); } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  };
+  const shown = (items || []).filter((t) => !filter || `${t.path}${t.name}`.toLowerCase().includes(filter.toLowerCase()));
+  const current = shown.length ? shown[Math.min(selected, shown.length - 1)] : null;
+  const fmtWhen = (iso) => (iso ? new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' }) : '—');
+  const resultText = (r) => (r === null || r === undefined ? '—' : r === 0 ? 'Ran fine' : `Finished with code ${r}`);
+
+  return (
+    <Dialog title="Scheduled Tasks" onClose={onClose} width={900} buttons={<>
+      <button disabled={busy} title="Create a simple task: run a program at sign-in, daily or weekly" onClick={() => setCreating(true)}>New Task…</button>
+      <button className="primary" onClick={onClose}>Close</button>
+    </>}>
+      <p className="muted" style={{ marginBottom: 10 }}>Everything Windows runs on a schedule. Windows' own tasks are badged — they can be run or turned off here, but never deleted.</p>
+      {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
+      <input className="search-input" style={{ marginBottom: 10, width: '100%' }} placeholder="Search tasks…" title="Type part of a task's name or folder to filter the list" value={filter} onChange={(e) => { setFilter(e.target.value); setSelected(0); }} />
+      {items === null ? <p className="muted">Reading the tasks…</p> : shown.length === 0 ? <p className="muted">No tasks match.</p> : (
+        <div className="recovery-cols">
+          <div className="pkg-list">
+            {shown.map((t, i) => (
+              <button key={t.path + t.name} className={`pkg-row ${current && t.name === current.name && t.path === current.path ? 'sel' : ''}`} onClick={() => setSelected(i)}>
+                <span className="pkg-name">{t.name}<span className="muted" style={{ display: 'block', fontSize: 11.5 }}>{t.path}</span></span>
+                {t.isWindows ? <span className="pkg-badge warn">Windows</span> : t.state === 'Disabled' ? <span className="pkg-badge warn">Off</span> : null}
+              </button>
+            ))}
+          </div>
+          <div className="pkg-entries">
+            {current && (
+              <>
+                <div className="pkg-entries-head">{current.name}</div>
+                <div className="pkg-entry"><span className="muted">Folder</span><span style={{ marginLeft: 'auto' }}>{current.path}</span></div>
+                <div className="pkg-entry"><span className="muted">State</span><span style={{ marginLeft: 'auto' }}>{current.state}</span></div>
+                {current.author && <div className="pkg-entry"><span className="muted">Author</span><span style={{ marginLeft: 'auto' }}>{current.author}</span></div>}
+                <div className="pkg-entry"><span className="muted">Last run</span><span style={{ marginLeft: 'auto' }}>{fmtWhen(current.lastRun)}</span></div>
+                <div className="pkg-entry"><span className="muted">Last result</span><span style={{ marginLeft: 'auto' }}>{resultText(current.lastResult)}</span></div>
+                <div className="pkg-entry"><span className="muted">Next run</span><span style={{ marginLeft: 'auto' }}>{fmtWhen(current.nextRun)}</span></div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                  <button disabled={busy} title="Run this task right now" onClick={() => run(() => api.invoke('tasks:runNow', { task: current }))}>Run now</button>
+                  <button disabled={busy} title="Stop this task if it is running" onClick={() => run(() => api.invoke('tasks:stop', { task: current }))}>Stop</button>
+                  <button disabled={busy} title={current.state === 'Disabled' ? 'Let this task run on its schedule again' : 'Keep the task but stop it running on its schedule'} onClick={() => run(() => api.invoke('tasks:setEnabled', { task: current, on: current.state === 'Disabled' }))}>{current.state === 'Disabled' ? 'Turn on' : 'Turn off'}</button>
+                  {!current.isWindows && <button disabled={busy} className="danger" title="Delete this task (its definition is saved first, and Change History can undo)" onClick={() => setConfirmDelete(current)}>Delete…</button>}
+                </div>
+                {current.isWindows && <p className="muted" style={{ marginTop: 10 }}>One of Windows' own tasks — it can be run or turned off here, but not deleted.</p>}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      {confirmDelete && (
+        <Dialog title={`Delete ${confirmDelete.name}?`} onClose={() => setConfirmDelete(null)} width={520} buttons={<>
+          <button onClick={() => setConfirmDelete(null)}>Keep it</button>
+          <button className="danger" onClick={() => { const t = confirmDelete; setConfirmDelete(null); run(() => api.invoke('tasks:remove', { task: t })); }}>Delete it</button>
+        </>}>
+          <p>Its definition is saved to Purgeon's task-backups folder first, and Change History's undo puts it back from that copy.</p>
+        </Dialog>
+      )}
+      {creating && <TaskCreateDialog onClose={() => setCreating(false)} onDone={() => { setCreating(false); load(); }} />}
+    </Dialog>
+  );
+}
+
+function TaskCreateDialog({ onClose, onDone }) {
+  const [name, setName] = useState('');
+  const [program, setProgram] = useState('');
+  const [trigger, setTrigger] = useState('daily');
+  const [time, setTime] = useState('09:00');
+  const [day, setDay] = useState('Monday');
+  const [err, setErr] = useState('');
+  const [busy, setBusy] = useState(false);
+  const create = async () => {
+    setBusy(true); setErr('');
+    try { await api.invoke('tasks:create', { name, program, trigger, time, day }); onDone(); }
+    catch (e) { setErr(e.message); setBusy(false); }
+  };
+  return (
+    <Dialog title="New Task" onClose={onClose} width={560} buttons={<>
+      <button onClick={onClose}>Cancel</button>
+      <button className="primary" disabled={busy || !name.trim() || !program} onClick={create}>Create the task</button>
+    </>}>
+      {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
+      <label className="field">Name
+        <input value={name} title="What the task is called in the list" onChange={(e) => setName(e.target.value)} placeholder="e.g. Back up my photos" />
+      </label>
+      <label className="field">Program
+        <span style={{ display: 'flex', gap: 8 }}>
+          <input value={program} title="The program file the task runs" onChange={(e) => setProgram(e.target.value)} placeholder="C:\\Path\\program.exe" style={{ flex: 1 }} />
+          <button title="Choose the program file" onClick={async () => { const f = await api.invoke('tasks:pickProgram'); if (f) setProgram(f); }}>Choose…</button>
+        </span>
+      </label>
+      <label className="field">When
+        <select value={trigger} title="When the task runs" onChange={(e) => setTrigger(e.target.value)}>
+          <option value="logon">When I sign in</option>
+          <option value="daily">Every day</option>
+          <option value="weekly">Every week</option>
+        </select>
+      </label>
+      {trigger !== 'logon' && (
+        <div style={{ display: 'flex', gap: 10 }}>
+          {trigger === 'weekly' && (
+            <label className="field" style={{ flex: 1 }}>Day
+              <select value={day} title="The day of the week" onChange={(e) => setDay(e.target.value)}>
+                {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((d) => <option key={d} value={d}>{d}</option>)}
+              </select>
+            </label>
+          )}
+          <label className="field" style={{ flex: 1 }}>Time
+            <input value={time} title="The time of day, like 09:00" onChange={(e) => setTime(e.target.value)} placeholder="09:00" />
+          </label>
+        </div>
+      )}
+    </Dialog>
+  );
+}

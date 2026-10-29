@@ -17,7 +17,7 @@ const TASK_NAME = 'Weekly Maintenance';
 const OLD_TASK_PATH = '\\SweepUninstall\\';
 const removeOld = () => runPS(`Unregister-ScheduledTask -TaskPath ${psq(OLD_TASK_PATH)} -TaskName ${psq(TASK_NAME)} -Confirm:$false -ErrorAction SilentlyContinue`).catch(() => {});
 export const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-export const DEFAULTS = { enabled: false, day: 'Sunday', time: '10:00', snapshot: true, junk: ['usertemp', 'dumps', 'wer', 'thumbs', 'shaders'] };
+export const DEFAULTS = { enabled: false, day: 'Sunday', time: '10:00', snapshot: true, junk: ['usertemp', 'dumps', 'wer', 'thumbs', 'shaders'], health: false };
 
 let dir = '';
 export const setRoot = async (d) => {
@@ -76,6 +76,16 @@ export async function run(settings, limits = {}) {
       lines.push(`Junk files: ${done} of ${results.length} items (about ${fmt(bytes)}) moved to the Recycle Bin.`);
       if (backupId) await history.record({ type: 'Removal', title: `Removed ${done} items: ${title}`, detail: `Backup ${backupId}`, undo: { channel: 'backups:restore', arg: backupId } });
     } else lines.push('Junk files: nothing to clean.');
+  }
+  if (m.health) {
+    const { runChecks } = await import('./health.js');
+    const { list: startupList } = await import('./startup.js');
+    const startupCount = await startupList().then((l) => l.length).catch(() => null);
+    const health = await runChecks({ startupCount }).catch(() => null);
+    if (health) {
+      lines.push(`Health check: ${health.summary.text}`);
+      for (const c of health.checks.filter((x) => x.status === 'warn' || x.status === 'fail')) lines.push(`  - ${c.label}: ${c.detail}`);
+    } else lines.push('Health check: could not run.');
   }
   const removed = await backups.prune({ maxDays: Number(limits.backupMaxDays) || 0, maxMB: Number(limits.backupMaxMB) || 0 }).catch(() => []);
   if (removed.length) lines.push(`Backup limits: ${removed.length} old backups removed.`);
