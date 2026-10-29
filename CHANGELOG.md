@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+- Startup & Services trust warnings never appeared: the check behind them referenced a module that was never loaded, so it failed silently on every use. It now runs, and entries that run from a Temp or Downloads folder, are unsigned, or appeared recently are flagged as intended.
+- Scheduled background monitoring failed at the end of every run when it tried to record the scan in the Change History (it called a history function that does not exist), so the scan's results were lost. Scans now finish and are recorded.
+- Settings sync forgot its folder and on/off choice at every restart — both lived only in memory. They are kept in the settings file now and reloaded when Purgeon starts, so a configured sync keeps working.
+- A backup id of "." was accepted as a backup folder name and resolved to the backups folder itself; deleting it would have removed every backup. It is refused, and restores now check the id the same way deletes always did.
+- Encrypted backup manifests larger than about 125 KB could not be written (a size limit in how the encrypted text was assembled), which would have stopped a large removal partway through. The text is now assembled in pieces.
+
 ## 1.1.0 - 2026-10-28
 
 ### Added
