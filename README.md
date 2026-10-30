@@ -325,6 +325,7 @@ These are permanent. They are never selected for you, need administrator rights,
 - Extensions that a **program added on its own** (through the registry, or into Firefox's shared folders) are flagged. That is how bundled offers arrive, and these can be removed here with a backup.
 - Extensions you added yourself are listed for reference only; remove those in the browser, which keeps its own records right.
 - Nothing is changed while that browser is running.
+- **Cookie rules per site:** Blocked and Allowed lists for Chrome and Edge, written to the browsers' own policy keys so they hold in every profile. Adding a block warns that it signs you out of that site. Firefox is not covered, because it does not read these policies — and the window says so plainly.
 
 ## Startup & Services
 
@@ -349,6 +350,18 @@ Entries from Microsoft are tagged **Windows** and ask before being turned off.
 
 **New-entry alerts:** when a program adds itself to what starts with Windows, Purgeon tells you with a Windows notification and offers **Allow** or **Turn Off**.
 
+## System Tools
+
+**Tools › System Tools** opens a set of small windows over Windows' own machinery. Nothing in them repairs or changes anything silently: changes are recorded in Change History, with an undo where one exists.
+
+- **Processes** (also a rail view, **View › Go to › Processes**): live processor, memory and system-disk meters with rolling graphs; per-process use and priority; End, Suspend and Resume; priority and processor-core changes. Windows' critical processes and Purgeon itself are protected — their actions are disabled. **Resource alerts** can warn you once per condition while Purgeon runs, tray included, when processor or memory stays over a level you set or the system disk runs low.
+- **Power Options:** power plans, screen, sleep and hibernate timings, the battery-saver level, wake timers and USB power-down, all through Windows' own `powercfg`.
+- **System Restore:** restore storage per drive (view and resize), protection on or off, creating and deleting individual points, and a button for Windows' own roll-back wizard.
+- **Boot Options:** choose the next start — Normal, Safe Mode, or Safe Mode with networking — with a restore point offered first and a second confirmation; the boot-menu wait time; and the Windows versions on the PC, read-only. Reading the boot settings needs administrator rights, and without them the window says so plainly.
+- **Event Logs:** every Windows log with its record count and size, searchable; save any log to a file; clearing a log always saves a copy first. The Security log is view-and-save only.
+- **Health Check:** a plain-words once-over — drive health and space, system-file check, recent restore point, waiting updates, recent crashes, startup load, battery wear — each line Pass, Warning, Fail or Couldn't check with the reason. Nothing is repaired automatically; the run can be cancelled, the report saved, and the check can join the Weekly Maintenance run.
+- **Scheduled Tasks:** all scheduled tasks including Windows' own (badged, never deletable here); run, stop, turn off or on; deleting a task saves its definition first so Change History can undo it; and creating simple tasks.
+
 ## Explorer context menu
 
 ![Explorer context menu items](docs/screenshots/context-menu-items.png)
@@ -363,7 +376,7 @@ Entries from Microsoft are tagged **Windows** and ask before being turned off.
 
 ![Debloat, privacy and taskbar tweaks](docs/screenshots/debloat-top.png)
 
-- **Tweaks:** **Debloat** (`Ctrl+5`) lists 26 safe, reversible tweaks in five groups: Privacy & telemetry, Start/search/taskbar, Ads & suggestions, Explorer & UI, and Windows Update.
+- **Tweaks:** **Debloat** (`Ctrl+5`) lists 136 safe, reversible tweaks in nine groups — including Privacy & telemetry, Start/search/taskbar, Ads & suggestions, Explorer & UI, Windows Update, Microsoft Edge, and Performance.
 - **On and off:** each is either **ENABLED** (green, applied) or **DISABLED** (red, Windows default). Turning one off puts back exactly the value you had before.
 - **Timing:** each says when it takes effect: **Applies immediately**, **Needs Explorer restart** or **Needs reboot**.
 - **What's left out:** no service removal, no app removal, and no security features turned off. Machine-wide policies are tagged **Admin**.
