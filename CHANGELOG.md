@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.2.0 - 2026-10-29
 
 ### Added
 - **Processes view** (rail, and View › Go to › Processes): live processor, memory and system-disk meters with rolling graphs; a process list with per-process processor and memory use and its priority; End, Suspend and Resume; priority changes (Real-time is never offered) and per-process processor-core choice; Windows' critical processes and Purgeon itself are protected in the backend, not just hidden in the view. Endings, suspensions, priority and core changes are recorded in Change History, with undo where one exists.
