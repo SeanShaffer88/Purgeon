@@ -9,8 +9,10 @@
 // the documented NT calls. Windows' critical processes and Purgeon itself
 // are guarded here in the backend — the view hides the buttons too, but the
 // guard does not depend on the view.
-import { runPS, runPSJson } from './shell.js';
+import { runPSJson } from './shell.js';
 import { record } from './history.js';
+import { objectResult } from './contracts.js';
+import { sys } from './sys.js';
 
 const note = (entry) => record(entry).catch(() => {});
 
@@ -27,7 +29,7 @@ export function guardReason(p) {
   if (p.pid === 0 || p.pid === 4) return 'That is a core Windows process and cannot be changed.';
   const name = String(p.name || '').toLowerCase().replace(/\.exe$/, '');
   if (CRITICAL_NAMES.has(name)) return `${p.name} is one of Windows' critical processes and cannot be changed.`;
-  if (name === 'purgeon') return 'That is Purgeon itself.';
+  if (name === 'purgeon' || p.pid === sys.info?.pid) return 'That is Purgeon itself.';
   return null;
 }
 
@@ -85,7 +87,7 @@ export function affinityMask(cores) {
 }
 
 let previous = null; // { at, processes: [{pid, cpuSeconds}] }
-let suspendedByUs = new Set();
+let suspendedByUs = new Map(); // PID -> verified creation time
 
 const SAMPLE_PS = `
 $ErrorActionPreference = 'SilentlyContinue'
@@ -100,6 +102,7 @@ $procs = Get-Process | ForEach-Object {
     pid = $_.Id; name = $_.ProcessName; cpuSeconds = if ($_.CPU) { $_.CPU } else { 0 }
     memBytes = $_.WorkingSet64; priority = "$($_.PriorityClass)"; threads = $_.Threads.Count
     path = try { $_.Path } catch { $null }; suspended = $sus
+    creationTime = try { $_.StartTime.ToFileTimeUtc().ToString() } catch { '' }
   }
 }
 [pscustomobject]@{
@@ -116,12 +119,13 @@ $procs = Get-Process | ForEach-Object {
 // One sample: totals plus every process with its CPU percentage since the
 // previous call (0 on the first call). Sorted busiest first.
 export async function sample() {
-  const raw = await runPSJson(SAMPLE_PS);
+  const raw = objectResult(await runPSJson(SAMPLE_PS), ['totals', 'processes']);
+  if (!Array.isArray(raw.processes) || !raw.totals || !(raw.totals.cores > 0)) throw new Error('Invalid process sample');
   const now = Date.now();
   const cores = raw?.totals?.cores || 1;
   let pcts = new Map();
   if (previous) pcts = cpuPercents(previous.processes, raw.processes, now - previous.at, cores);
-  previous = { at: now, processes: raw.processes.map(p => ({ pid: p.pid, cpuSeconds: p.cpuSeconds })) };
+  previous = { at: now, processes: raw.processes.map(p => ({ pid: p.pid, creationTime: p.creationTime, cpuSeconds: p.cpuSeconds })) };
   const totals = {
     ...raw.totals,
     memUsedGB: Math.round((raw.totals.memTotalGB - raw.totals.memFreeGB) * 10) / 10,
@@ -129,25 +133,27 @@ export async function sample() {
     diskPct: raw.totals.systemTotalGB > 0 ? Math.round((raw.totals.systemFreeGB / raw.totals.systemTotalGB) * 100) : 0,
   };
   const processes = raw.processes.map(p => ({
-    pid: p.pid, name: p.name, path: p.path || '',
+    pid: p.pid, name: p.name, path: p.path || '', creationTime: String(p.creationTime || ''),
     cpuPct: pcts.get(p.pid) || 0,
     memMB: Math.round(p.memBytes / 1048576),
     priority: SETTABLE_PRIORITIES.includes(p.priority) ? p.priority : (p.priority || 'Normal'),
-    suspended: !!p.suspended || suspendedByUs.has(p.pid),
+    suspended: !!p.suspended || suspendedByUs.get(p.pid) === p.creationTime,
     guarded: guardReason(p),
   })).sort((a, b) => b.cpuPct - a.cpuPct || b.memMB - a.memMB);
   return { totals, processes };
 }
 
-async function psForPid(pid, body) {
-  if (!Number.isInteger(pid) || pid <= 0) throw new Error('That process is not running any more.');
-  await runPS(`$p = Get-Process -Id ${pid} -ErrorAction Stop\n${body}`, { timeout: 20000 });
+async function nativeAction(pid, identity, action) {
+  if (!identity || identity.pid !== pid || !/^\d{12,20}$/.test(identity.creationTime || '')) throw new Error('Process identity is missing. Refresh the process list before acting.');
+  if (!sys.prepareProcess || !sys.executeProcess) throw new Error('Native process controls are unavailable');
+  const plan = await sys.prepareProcess({ pid, creationTime: identity.creationTime, action });
+  return sys.executeProcess(plan.id);
 }
 
 export async function end(pid, proc) {
   const why = guardReason(proc || { pid, name: '' });
   if (why) throw new Error(why);
-  await psForPid(pid, 'Stop-Process -Id ' + pid + ' -Force');
+  await nativeAction(pid, proc, { kind: 'end' });
   suspendedByUs.delete(pid);
   note({ type: 'Process', title: `Ended ${proc?.name || 'a process'}`, detail: `Process ${pid} was ended from the Processes view. This cannot be undone.`, undo: null });
   return { ok: true };
@@ -158,12 +164,12 @@ export async function setPriority(pid, level, proc) {
   const why = guardReason(proc || { pid, name: '' });
   if (why) throw new Error(why);
   // The view passes the priority it last saw; that becomes the undo target.
-  const previous = proc?.priority || '';
-  await psForPid(pid, `$p.PriorityClass = [System.Diagnostics.ProcessPriorityClass]::${level}`);
+  const result = await nativeAction(pid, proc, { kind: 'priority', level });
+  const previous = result.previousPriority || '';
   note({
     type: 'Process', title: `Set ${proc?.name || 'a process'} to ${level} priority`,
     detail: previous ? `It was ${previous} before.` : '',
-    undo: previous && SETTABLE_PRIORITIES.includes(previous) ? { channel: 'processes:setPriority', arg: { pid, name: proc?.name || '', level: previous } } : null,
+    undo: previous && SETTABLE_PRIORITIES.includes(previous) ? { channel: 'processes:setPriority', arg: { pid, name: proc?.name || '', creationTime: proc.creationTime, level: previous } } : null,
   });
   return { ok: true };
 }
@@ -173,31 +179,23 @@ export async function setAffinity(pid, cores, proc) {
   if (mask === 0n) throw new Error('Tick at least one processor core.');
   const why = guardReason(proc || { pid, name: '' });
   if (why) throw new Error(why);
-  await psForPid(pid, `$p.ProcessorAffinity = [IntPtr]${mask.toString()}`);
+  await nativeAction(pid, proc, { kind: 'affinity', mask: mask.toString() });
   note({ type: 'Process', title: `Set which cores ${proc?.name || 'a process'} may use`, detail: `Cores ${cores.join(', ')}.`, undo: null });
   return { ok: true };
 }
 
-const NT_PS = `
-Add-Type -TypeDefinition @'
-using System; using System.Runtime.InteropServices;
-public static class NtProc {
-  [DllImport("ntdll.dll")] public static extern int NtSuspendProcess(IntPtr h);
-  [DllImport("ntdll.dll")] public static extern int NtResumeProcess(IntPtr h);
-}
-'@`;
 
 export async function suspend(pid, proc) {
   const why = guardReason(proc || { pid, name: '' });
   if (why) throw new Error(why);
-  await psForPid(pid, `${NT_PS}\n[NtProc]::NtSuspendProcess($p.Handle) | Out-Null`);
-  suspendedByUs.add(pid);
-  note({ type: 'Process', title: `Suspended ${proc?.name || 'a process'}`, detail: 'Resume it from the Processes view.', undo: { channel: 'processes:resume', arg: pid } });
+  await nativeAction(pid, proc, { kind: 'suspend' });
+  suspendedByUs.set(pid, proc.creationTime);
+  note({ type: 'Process', title: `Suspended ${proc?.name || 'a process'}`, detail: 'Resume it from the Processes view.', undo: { channel: 'processes:resume', arg: { pid, name: proc.name, creationTime: proc.creationTime } } });
   return { ok: true };
 }
 
-export async function resume(pid) {
-  await psForPid(pid, `${NT_PS}\n[NtProc]::NtResumeProcess($p.Handle) | Out-Null`);
+export async function resume(pid, proc) {
+  await nativeAction(pid, proc, { kind: 'resume' });
   suspendedByUs.delete(pid);
   note({ type: 'Process', title: 'Resumed a suspended process', detail: `Process ${pid}.`, undo: null });
   return { ok: true };

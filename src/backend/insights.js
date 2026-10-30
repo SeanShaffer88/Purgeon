@@ -9,6 +9,8 @@ import { runPSJson } from './shell.js';
 import { iconPathFor } from './programs.js';
 import { publisherKey } from './leftovers.js';
 import { FileCache } from './filecache.js';
+import { createReadContext, forEachRead } from './read-context.js';
+import { readSettings } from './settings.js';
 
 let dir = '';
 // Per-file results (signature, processor architecture) keyed by each file's stamp,
@@ -19,6 +21,7 @@ const sigKey = (p) => `sig:${p}`;
 const archKey = (p) => `arch:${p}`;
 
 export const setRoot = async (d) => {
+  exeMemo.clear();
   dir = d;
   await sys.makeDir(dir);
   fileCache = new FileCache(path.join(dir, 'file-insights.json'));
@@ -40,7 +43,7 @@ $in = [Console]::In.ReadToEnd() | ConvertFrom-Json  # assigned first so the arra
 
 // Signature of each file: Map(lowercased path -> { status: 'Valid' | 'NotSigned' | 'HashMismatch' | ..., signer }).
 // Files whose stamp still matches a cached result are not sent to PowerShell again.
-export async function signatures(paths) {
+export async function signatures(paths, context) {
   const unique = [...new Set(paths.filter((p) => /^[a-z]:\\.+\.(exe|dll|sys)$/i.test(p || '')))];
   if (!unique.length) return new Map();
   const out = new Map();
@@ -48,9 +51,8 @@ export async function signatures(paths) {
   let misses = unique;
   if (fileCache) {
     misses = [];
-    await Promise.all(
-      unique.map(async (p) => {
-        const stamp = await fileCache.stampFor(p);
+    await forEachRead(unique, async (p) => {
+        const stamp = await (context ? context.stampFor(p) : fileCache.stampFor(p));
         if (stamp !== null) {
           stamps.set(p, stamp);
           const v = fileCache.hit(sigKey(p), stamp);
@@ -60,16 +62,17 @@ export async function signatures(paths) {
           }
         }
         misses.push(p);
-      })
-    );
+      });
   }
   if (misses.length) {
     const rows = await runPSJson(SIGNATURES, { input: JSON.stringify(misses) }).catch(() => []);
+    const originals = new Map();
+    for (const p of misses) if (!originals.has(p.toLowerCase())) originals.set(p.toLowerCase(), p);
     for (const r of rows) {
       const value = { status: r.status, signer: r.signer };
       out.set(r.path.toLowerCase(), value);
       if (fileCache) {
-        const original = misses.find((p) => p.toLowerCase() === r.path.toLowerCase());
+        const original = originals.get(r.path.toLowerCase());
         const stamp = original && stamps.get(original);
         if (stamp) fileCache.put(sigKey(original), stamp, value);
       }
@@ -126,9 +129,22 @@ export function installedTogether(programs, times) {
   const out = new Map();
   const timed = programs
     .filter((p) => !RUNTIME.test(p.name) && times[p.key])
-    .map((p) => ({ p, t: times[p.key], pub: publisherKey(p.publisher) }));
+    .map((p, index) => ({ p, index, t: Number(times[p.key]), pub: publisherKey(p.publisher) }));
+  const sorted = timed.filter((a) => Number.isFinite(a.t)).sort((a, b) => a.t - b.t);
+  const lowerBound = (time) => {
+    let low = 0, high = sorted.length;
+    while (low < high) { const mid = (low + high) >>> 1; if (sorted[mid].t < time) low = mid + 1; else high = mid; }
+    return low;
+  };
   for (const a of timed) {
-    const mates = timed.filter((b) => b !== a && Math.abs(b.t - a.t) <= WINDOW_MS && (!a.pub || !b.pub || b.pub !== a.pub));
+    if (!Number.isFinite(a.t)) continue;
+    const mates = [];
+    for (let i = lowerBound(a.t - WINDOW_MS); i < sorted.length && sorted[i].t <= a.t + WINDOW_MS; i++) {
+      const b = sorted[i];
+      if (b !== a && Math.abs(b.t - a.t) <= WINDOW_MS && (!a.pub || !b.pub || b.pub !== a.pub)) mates.push(b);
+      if (mates.length > 4) break;
+    }
+    mates.sort((a, b) => a.index - b.index);
     if (mates.length && mates.length <= 4) out.set(a.p.key, mates.map((m) => m.p.name));
   }
   return out;
@@ -141,6 +157,7 @@ const today = () => new Date().toISOString().slice(0, 10);
 
 // Records each program's size once a day (KB), keeping a year of history.
 export async function recordSizes(programs, day = today()) {
+  if ((await readSettings()).recordSizeHistory !== true) return sizeHistory();
   const all = await sys.readText(sizesFile()).then(JSON.parse).catch(() => ({}));
   for (const p of programs) {
     const kb = Math.round(Number(p.sizeKB) || 0);
@@ -150,6 +167,7 @@ export async function recordSizes(programs, day = today()) {
     else h.push([day, kb]);
     if (h.length > 365) h.splice(0, h.length - 365);
   }
+  if ((await readSettings()).recordSizeHistory !== true) return sizeHistory();
   await sys.writeTextAtomic(sizesFile(), JSON.stringify(all));
   return all;
 }
@@ -173,26 +191,34 @@ export function growth(history, day = today()) {
 // Memoized for the session: the answer depends only on the entry's own fields, and
 // finding it can mean reading the program's whole install folder.
 const exeMemo = new Map();
+const exeIdentity = (p) => JSON.stringify([p.key, p.location || '', p.icon || '', p.uninstall || '']);
 export const programExe = async (p) => {
-  const memoKey = `${p.key}|${p.location || ''}|${p.icon || ''}|${p.uninstall || ''}`;
+  const memoKey = exeIdentity(p);
   if (exeMemo.has(memoKey)) return exeMemo.get(memoKey);
-  const found = mainExe(p) || (await exeInFolder(p));
-  exeMemo.set(memoKey, found);
-  return found;
+  const pending = Promise.resolve().then(() => mainExe(p) || exeInFolder(p));
+  exeMemo.set(memoKey, pending);
+  if (exeMemo.size > 4000) exeMemo.delete(exeMemo.keys().next().value);
+  try {
+    const found = await pending;
+    if (!found && exeMemo.get(memoKey) === pending) exeMemo.delete(memoKey);
+    return found;
+  } catch (error) {
+    if (exeMemo.get(memoKey) === pending) exeMemo.delete(memoKey);
+    throw error;
+  }
 };
 
 // The processor each file is built for ("x64", "x86", "arm64"), read from its header.
 // Cached per file stamp like signatures; even an unknown ('') result is cached.
-async function architectures(paths) {
+async function architectures(paths, context) {
   if (!sys.exeArch || !paths.length) return new Map();
   const out = new Map();
   const stamps = new Map();
   let misses = [...new Set(paths)];
   if (fileCache) {
     misses = [];
-    await Promise.all(
-      [...new Set(paths)].map(async (p) => {
-        const stamp = await fileCache.stampFor(p);
+    await forEachRead([...new Set(paths)], async (p) => {
+        const stamp = await (context ? context.stampFor(p) : fileCache.stampFor(p));
         if (stamp !== null) {
           stamps.set(p, stamp);
           const v = fileCache.hit(archKey(p), stamp);
@@ -202,8 +228,7 @@ async function architectures(paths) {
           }
         }
         misses.push(p);
-      })
-    );
+      });
   }
   if (misses.length) {
     const got = await sys.exeArch(misses).catch(() => []);
@@ -222,12 +247,15 @@ async function architectures(paths) {
 
 // { [programKey]: { signature?, signer?, together?: [names], offer?: true, growth?, arch?, exe? } }
 export async function programInsights(programs) {
+  const context = createReadContext();
+  const active = new Set(programs.map(exeIdentity));
+  for (const key of exeMemo.keys()) if (!active.has(key)) exeMemo.delete(key);
   const exes = new Map(await Promise.all(programs.map(async (p) => [p.key, await programExe(p)])));
   const [sigs, times, sizes, archs] = await Promise.all([
-    signatures([...exes.values()].filter(Boolean)),
+    signatures([...exes.values()].filter(Boolean), context),
     sys.uninstallKeyTimes ? sys.uninstallKeyTimes().catch(() => ({})) : {},
     recordSizes(programs).catch(() => ({})),
-    architectures([...exes.values()].filter(Boolean)),
+    architectures([...exes.values()].filter(Boolean), context),
   ]);
   const together = installedTogether(programs, times);
   const out = {};

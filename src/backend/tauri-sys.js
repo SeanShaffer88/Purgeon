@@ -1,11 +1,29 @@
 // The app's system layer: thin calls into the Rust core (src-tauri/src/lib.rs).
 import { invoke } from '@tauri-apps/api/core';
 
+/** @returns {Promise<import('./system-contracts').SystemAdapter>} */
 export async function createTauriSys() {
-  const info = await invoke('sys_info');
+  const info = /** @type {import('./system-contracts').NativeSystemInfo} */ (await invoke('sys_info'));
   return {
-    info: { env: info.env, home: info.home, dataDir: info.data_dir, exe: info.exe, portable: info.portable, args: info.args, launch: info.launch || [], cpu: info.cpu || '', ramBytes: info.ram_bytes || 0, osName: info.os_name || '', osVersion: info.os_version || '', osBuild: info.os_build || 0 },
-    runPS: (script, input) => invoke('run_ps', { script, input: input ?? null }),
+    queryOperation: (request) => invoke('query_operation', { request }),
+    selectResource: (selection) => invoke('select_resource', { selection }),
+    prepareOperation: (request) => invoke('prepare_operation', { request }),
+    executeOperation: (planId) => invoke('execute_operation', { planId }),
+    recoverOperation: (request) => invoke('recover_operation', { request }),
+    cancelOperation: (planId) => invoke('cancel_operation', { planId }),
+    info: { version: __APP_VERSION__, pid: info.pid, env: info.env, home: info.home, dataDir: info.data_dir, exe: info.exe, portable: info.portable, args: info.args, launch: info.launch || [], cpu: info.cpu || '', ramBytes: info.ram_bytes || 0, osName: info.os_name || '', osVersion: info.os_version || '', osBuild: info.os_build || 0 },
+    runPS: (script, input, timeoutMs = 60000) => invoke('run_ps', { script, input: input ?? null, timeoutMs }),
+    copyFile: (source, target) => invoke('copy_file_checked', { source, target }),
+    secretGet: () => invoke('secret_get'),
+    secretKeys: () => invoke('secret_keys'),
+    secretSet: (value) => invoke('secret_set', { value }),
+    prepareProcess: (request) => invoke('prepare_process_operation', { request }),
+    executeProcess: (planId) => invoke('execute_process_operation', { planId }),
+    elevateHandoff: () => invoke('elevate_handoff'),
+    debloatStatus: () => invoke('debloat_status'),
+    prepareDebloat: (request) => invoke('prepare_debloat_operation', { request }),
+    prepareDebloatRecovery: (request) => invoke('prepare_debloat_recovery', { request }),
+    executeDebloat: (planId) => invoke('execute_debloat_operation', { planId }),
     exec: (file, args) => invoke('exec', { file, args }),
     runCommandLine: (commandLine) => invoke('run_command_line', { commandLine }),
     launch: (file, args = []) => invoke('launch', { file, args }),
@@ -13,8 +31,13 @@ export async function createTauriSys() {
     stat: (path) => invoke('stat', { path }),
     exists: (path) => invoke('exists', { path }),
     readText: (path) => invoke('read_text', { path }),
+    readOptionalText: (path) => invoke('read_optional_text', { path }),
+    restorePoints: () => invoke('list_restore_points'),
+    prepareRestoreRemoval: (request) => invoke('prepare_restore_removal', { request }),
+    executeRestoreRemoval: (planId) => invoke('execute_restore_removal', { planId }),
     writeText: (path, contents) => invoke('write_text', { path, contents }),
     writeTextAtomic: (path, contents) => invoke('write_text_atomic', { path, contents }),
+    commitStagedFile: (source, target) => invoke('commit_staged_file', { source, target }),
     makeDir: (path) => invoke('make_dir', { path }),
     removePath: (path) => invoke('remove_path', { path }),
     trash: (path) => invoke('move_to_trash', { path }),
@@ -34,6 +57,7 @@ export async function createTauriSys() {
     trackStart: () => invoke('track_start'),
     trackLaunch: (file) => invoke('track_launch', { file }),
     trackRunning: () => invoke('track_running'),
+    trackPeek: () => invoke('track_peek'),
     trackStop: () => invoke('track_stop'),
     waitProcess: (pid, timeoutMs) => invoke('wait_process', { pid, timeoutMs }),
     sha256Files: (paths) => invoke('sha256_files', { paths }),

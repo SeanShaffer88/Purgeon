@@ -1,3 +1,4 @@
+import { tx } from './backend/i18n.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { cleanupItems } from './backend/junk.js';
 import { formatBytes } from './format.js';
@@ -39,7 +40,7 @@ export function JunkView({ filter, admin, onError, onStatus, onClean }) {
       .invoke('junk:scanSystem')
       .then(setSystem)
       .catch(() => setSystem([]));
-  }, [scanRun]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scanRun]);
 
   const cancelScan = () => {
     cancelRef.current = true;
@@ -58,11 +59,11 @@ export function JunkView({ filter, admin, onError, onStatus, onClean }) {
     if (!cats) return onStatus('Scanning for junk files');
     const all = cats.reduce((n, c) => n + c.bytes, 0);
     onStatus(`${formatBytes(all)} of junk files found, ${formatBytes(total)} selected`);
-  }, [cats, total]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [cats, total]);
 
   const shown = useMemo(() => {
     const q = filter.trim().toLowerCase();
-    return (cats || []).filter((c) => !q || `${c.label} ${c.detail}`.toLowerCase().includes(q));
+    return (cats || []).filter((c) => !q || `${tx(c.label)} ${tx(c.detail)}`.toLowerCase().includes(q));
   }, [cats, filter]);
 
   const toggle = (id) =>
@@ -74,29 +75,28 @@ export function JunkView({ filter, admin, onError, onStatus, onClean }) {
 
   if (scanCancelled) return (
     <div className="list-empty-actionable">
-      <div>Scan cancelled — nothing was cleaned.</div>
-      <button className="btn" onClick={() => setScanRun((n) => n + 1)}>Scan Again</button>
+      <div>{tx("Scan cancelled — nothing was cleaned.")}</div>
+      <button className="btn" onClick={() => setScanRun((n) => n + 1)}>{tx("Scan Again")}</button>
     </div>
   );
   if (!cats) return (
     <div className="list-empty-actionable">
-      <div>Scanning temporary files, crash dumps and caches…</div>
-      <button className="btn" onClick={cancelScan}>Cancel Scan</button>
+      <div>{tx("Scanning temporary files, crash dumps and caches…")}</div>
+      <button className="btn" onClick={cancelScan}>{tx("Cancel Scan")}</button>
     </div>
   );
 
   return (
     <div className="debloat junk">
       <div className="debloat-bar">
-        <span className="legend">Temporary files, crash dumps, error reports and caches that Windows and programs recreate when needed. The registry is not touched.</span>
+        <span className="legend">{tx("Temporary files, crash dumps, error reports and caches that Windows and programs recreate when needed. The registry is not touched.")}</span>
         <span className="debloat-actions">
-          <button className="restart-explorer" disabled={!count && !sysPicked.length} onClick={() => onClean(cleanupItems(picked), picked, total, sysPicked)}>
-            Clean {count ? `${formatBytes(total)}` : 'Selected'}
-            {sysPicked.length ? ` + ${sysPicked.length} Windows clean-up${sysPicked.length === 1 ? '' : 's'}` : ''}
+          <button className="restart-explorer" disabled={!count && !sysPicked.length} onClick={() => onClean(cleanupItems(picked), picked, total, sysPicked)}>{tx("Clean ")}{count ? `${formatBytes(total)}` : tx("Selected")}
+            {sysPicked.length ? tx(" + {p0} Windows clean-up{p1}", { p0: (sysPicked.length), p1: (sysPicked.length === 1 ? '' : 's') }) : ''}
           </button>
         </span>
       </div>
-      {shown.length === 0 && <div className="list-empty">No categories match.</div>}
+      {shown.length === 0 && <div className="list-empty">{tx("No categories match.")}</div>}
       <section className="tweak-group">
         {shown.map((c) => {
           const needsAdmin = c.admin && admin === false;
@@ -105,11 +105,11 @@ export function JunkView({ filter, admin, onError, onStatus, onClean }) {
               <label className={`tweak junk-row ${chosen.has(c.id) ? 'on' : 'off'} ${c.items.length ? '' : 'empty'}`}>
                 <input type="checkbox" checked={chosen.has(c.id)} disabled={!c.items.length} onChange={() => toggle(c.id)} />
                 <span className="tweak-text">
-                  <span className="tweak-title">{c.label}</span>
-                  <span className="tweak-detail">{c.detail}</span>
+                  <span className="tweak-title">{tx(c.label)}</span>
+                  <span className="tweak-detail">{tx(c.detail)}</span>
                 </span>
                 <span className="tweak-tags">
-                  <span className="junk-size">{c.items.length ? formatBytes(c.bytes) : 'Clean'}</span>
+                  <span className="junk-size">{c.items.length ? formatBytes(c.bytes) : tx("Clean")}</span>
                   {c.items.length > 0 && (
                     <button
                       className="link junk-count"
@@ -118,10 +118,10 @@ export function JunkView({ filter, admin, onError, onStatus, onClean }) {
                         setOpen(open === c.id ? null : c.id);
                       }}
                     >
-                      {c.items.length.toLocaleString()} item{c.items.length === 1 ? '' : 's'} {open === c.id ? '▴' : '▾'}
+                      {c.items.length.toLocaleString()}{tx(" item")}{c.items.length === 1 ? '' : tx("s")} {open === c.id ? '▴' : '▾'}
                     </button>
                   )}
-                  {c.admin && <span className={`fx fx-admin ${needsAdmin ? 'warn' : ''}`} title={needsAdmin ? 'Restart as Administrator to clean this' : undefined}>Admin</span>}
+                  {c.admin && <span className={`fx fx-admin ${needsAdmin ? 'warn' : ''}`} title={needsAdmin ? tx("Restart as Administrator to clean this") : undefined}>{tx("Admin")}</span>}
                 </span>
               </label>
               {open === c.id && (
@@ -135,7 +135,7 @@ export function JunkView({ filter, admin, onError, onStatus, onClean }) {
                         <span className="muted">{formatBytes(i.bytes)}</span>
                       </div>
                     ))}
-                  {c.items.length > 300 && <div className="muted junk-item">…and {(c.items.length - 300).toLocaleString()} more</div>}
+                  {c.items.length > 300 && <div className="muted junk-item">{tx("…and ")}{(c.items.length - 300).toLocaleString()}{tx(" more")}</div>}
                 </div>
               )}
             </div>
@@ -144,10 +144,10 @@ export function JunkView({ filter, admin, onError, onStatus, onClean }) {
       </section>
       <section className="tweak-group">
         <div className="tweak-group-head">
-          <span>Windows clean-up · permanent</span>
-          <span className="muted">done by Windows itself; cannot be undone</span>
+          <span>{tx("Windows clean-up · permanent")}</span>
+          <span className="muted">{tx("done by Windows itself; cannot be undone")}</span>
         </div>
-        {!system && <div className="list-empty">Checking Windows clean-up options…</div>}
+        {!system && <div className="list-empty">{tx("Checking Windows clean-up options…")}</div>}
         {(system || []).map((c) => {
           const usable = c.present && admin !== false;
           return (
@@ -165,21 +165,19 @@ export function JunkView({ filter, admin, onError, onStatus, onClean }) {
                 }
               />
               <span className="tweak-text">
-                <span className="tweak-title">{c.label}</span>
-                <span className="tweak-detail">{c.detail}</span>
+                <span className="tweak-title">{tx(c.label)}</span>
+                <span className="tweak-detail">{tx(c.detail)}</span>
               </span>
               <span className="tweak-tags">
-                <span className="junk-size">{!c.present ? 'Nothing to clean' : c.bytes != null ? formatBytes(c.bytes) : c.note}</span>
-                <span className="fx fx-permanent">Permanent</span>
-                <span className={`fx fx-admin ${admin === false ? 'warn' : ''}`} title={admin === false ? 'Restart as Administrator to use this' : undefined}>
-                  Admin
-                </span>
+                <span className="junk-size">{!c.present ? tx("Nothing to clean") : c.bytes != null ? formatBytes(c.bytes) : c.note}</span>
+                <span className="fx fx-permanent">{tx("Permanent")}</span>
+                <span className={`fx fx-admin ${admin === false ? 'warn' : ''}`} title={admin === false ? tx("Restart as Administrator to use this") : undefined}>{tx("Admin")}</span>
               </span>
             </label>
           );
         })}
       </section>
-      <p className="footnote junk-note">Cleaned items go to the Recycle Bin, so you can undo a cleanup from Tools › Change History. Empty the Recycle Bin afterwards to free the space. Files in use are skipped.</p>
+      <p className="footnote junk-note">{tx("Cleaned items go to the Recycle Bin, so you can undo a cleanup from Tools › Change History. Empty the Recycle Bin afterwards to free the space. Files in use are skipped.")}</p>
     </div>
   );
 }

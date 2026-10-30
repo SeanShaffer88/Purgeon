@@ -1,5 +1,6 @@
+import { tx } from './backend/i18n.js';
 import { useState } from 'react';
-import { Dialog } from './dialogs.jsx';
+import { Dialog } from './core-dialog.jsx';
 
 const KIND = { dir: 'Folder', file: 'File', key: 'Registry key', value: 'Registry value' };
 const label = (i) => (i.kind === 'value' ? `${i.path}  ›  ${i.name || '(default)'}` : i.path);
@@ -42,20 +43,18 @@ export function ProgramBackupDialog({ program, items, settings = [], onSave, onC
   const picked = list.filter((i) => chosen.has(i.id) && fits(i));
   return (
     <Dialog
-      title={`Migrate Program – ${program.name}`}
+      title={tx("Migrate Program – {p0}", { p0: (program.name) })}
       onClose={onClose}
       width={780}
       buttons={
         <>
-          <span className="button-hint">{picked.length} selected</span>
-          <button className="primary" disabled={!picked.length} onClick={() => onSave(picked, mode)}>
-            Save Package…
-          </button>
-          <button onClick={onClose}>Cancel</button>
+          <span className="button-hint">{picked.length}{tx(" selected")}</span>
+          <button className="primary" disabled={!picked.length} onClick={() => onSave(picked, mode)}>{tx("Save Package…")}</button>
+          <button onClick={onClose}>{tx("Cancel")}</button>
         </>
       }
     >
-      <p className="heading">Pack {program.name} into one file to install it on another PC with Tools › Restore a Program Backup, or to keep as a backup.</p>
+      <p className="heading">{tx("Pack ")}{program.name}{tx(" into one file to install it on another PC with Tools › Restore a Program Backup, or to keep as a backup.")}</p>
       <div className="mode-row" role="radiogroup">
         {MODES.map(([id, title, hint]) => (
           <label key={id} className={`preset ${mode === id ? 'on' : ''}`}>
@@ -73,13 +72,11 @@ export function ProgramBackupDialog({ program, items, settings = [], onSave, onC
         render={(i) => (
           <>
             <span className="path">{label(i)}</span>
-            <span className={`muted part ${i.mine ? 'mine' : ''}`}>{i.mine ? 'Your settings' : 'Program'} · {KIND[i.kind]}</span>
+            <span className={`muted part ${i.mine ? 'mine' : ''}`}>{i.mine ? tx("Your settings") : tx("Program")} · {KIND[i.kind]}</span>
           </>
         )}
       />
-      <p className="footnote">
-        Nothing is changed on this PC. Services, scheduled tasks and drivers are not included; if the program needs them, run its installer on the other PC and then restore My settings only.
-      </p>
+      <p className="footnote">{tx("Nothing is changed on this PC. Services, scheduled tasks and drivers are not included; if the program needs them, run its installer on the other PC and then restore My settings only.")}</p>
     </Dialog>
   );
 }
@@ -96,22 +93,19 @@ export function ProgramRestoreDialog({ backup, onRestore, onClose }) {
   const [chosen, setChosen] = useState(() => new Set(list.filter((i) => !i.blocked).map((i) => i.id)));
   return (
     <Dialog
-      title={`Restore Program – ${backup.program.name}`}
+      title={tx("Restore Program – {p0}", { p0: (backup.program.name) })}
       onClose={onClose}
       width={800}
       buttons={
         <>
-          <span className="button-hint">{chosen.size} selected</span>
-          <button className="primary" disabled={!chosen.size} onClick={() => onRestore([...chosen])}>
-            Restore
-          </button>
-          <button onClick={onClose}>Cancel</button>
+          <span className="button-hint">{chosen.size}{tx(" selected")}</span>
+          <button className="primary" disabled={!chosen.size} onClick={() => onRestore([...chosen])}>{tx("Restore")}</button>
+          <button onClick={onClose}>{tx("Cancel")}</button>
         </>
       }
     >
       <p className="heading">
-        {backup.program.name} {backup.program.version} · packaged {new Date(backup.created).toLocaleString()} on {backup.source.computer || 'another PC'}, with {CONTENTS[backup.program.contents || 'all']}. Paths in {backup.source.user}’s profile are restored into yours.
-      </p>
+        {backup.program.name} {backup.program.version}{tx(" · packaged ")}{new Date(backup.created).toLocaleString()}{tx(" on ")}{backup.source.computer || tx("another PC")}{tx(", with ")}{CONTENTS[backup.program.contents || 'all']}{tx(". Paths in ")}{backup.source.user}{tx("’s profile are restored into yours.")}</p>
       {INSTALLER_NOTE[backup.program.installer] && <div className="safe-note">{INSTALLER_NOTE[backup.program.installer]}</div>}
       <Checklist
         items={list}
@@ -120,14 +114,14 @@ export function ProgramRestoreDialog({ backup, onRestore, onClose }) {
         disabled={(i) => !!i.blocked}
         render={(i) => (
           <>
-            <span className="path" title={i.target !== i.path ? `Backed up from ${i.path}` : undefined}>
+            <span className="path" title={i.target !== i.path ? tx("Backed up from {p0}", { p0: (i.path) }) : undefined}>
               {label({ ...i, path: i.target })}
             </span>
-            <span className="muted">{i.blocked || (i.kind === 'dir' ? `${i.files} files ${formatBytes(i.bytes)}` : KIND[i.kind])}</span>
+            <span className="muted">{i.blocked || (i.kind === 'dir' ? tx("{p0} files {p1}", { p0: (i.files), p1: (formatBytes(i.bytes)) }) : KIND[i.kind])}</span>
           </>
         )}
       />
-      <p className="footnote">Existing folders and files are never overwritten. Existing registry keys are saved before the backup is merged into them. You can undo the restore from Tools › Change History.</p>
+      <p className="footnote">{tx("Existing folders and files are never overwritten. Existing registry keys are saved before the backup is merged into them. You can undo the restore from Tools › Change History.")}</p>
     </Dialog>
   );
 }

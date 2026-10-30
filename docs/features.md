@@ -1,6 +1,6 @@
 # Purgeon — Features
 
-Purgeon is a Windows uninstaller that removes a program and then finds the files, folders, registry keys, startup entries and services it left behind. Every change is backed up first and can be undone.
+Purgeon is a Windows uninstaller that removes a program and then finds the files, folders, registry keys, startup entries and services it left behind. Supported cleanup changes retain recovery records where possible. Undo depends on the operation, an intact backup, and (for recycled files) continued Recycle Bin availability; irreversible actions and uncertain outcomes need separate review.
 
 It runs on Windows 10 and 11 (64-bit). The full app is a **4.0 MB** executable in a **1.5 MB** installer, built with Tauri and React on Windows' built-in WebView2.
 
@@ -21,7 +21,7 @@ It runs on Windows 10 and 11 (64-bit). The full app is a **4.0 MB** executable i
 - Explorer right-click entries, shell extensions, file types and URL handlers;
 - data and cache folders named after the program's own executables.
 
-**Choosing what to remove** — every item gets a match score from 0 to 100%. Items scoring 70% or more start ticked; weaker guesses start unticked. Publisher folders count only when named exactly after the publisher, so removing one Google program never offers another's folders.
+**Choosing what to remove** — items show ownership evidence. Name-only matches and unattributed snapshot changes start unchecked; internal ranking scores are not statistical probabilities. Publisher folders count only when named exactly after the publisher, so removing one Google program never offers another's folders.
 
 **Force** (`Shift+Del`) handles programs whose uninstaller is broken or missing. **Rescue Broken Uninstall** reinstalls the program through winget over the existing copy, then uninstalls it normally. **Analyze Leftovers** (`Ctrl+L`) shows what belongs to a program without uninstalling it.
 
@@ -66,7 +66,7 @@ Programs matching any exclusion are rejected with a clear reason why.
 
 ## Trial installs
 
-Try a program and undo it completely — a snapshot is taken, the installer runs, and you use the program as long as you like. **Try Over** removes everything added since the snapshot, including what the program created during the trial, and puts changed settings back. **Keep It** ends the trial and keeps the program installed.
+Try a program and review and undo its recorded changes where recovery data is available — a snapshot is taken, the installer runs, and you use the program as long as you like. **Try Over** removes everything added since the snapshot, including what the program created during the trial, and puts changed settings back. **Keep It** ends the trial and keeps the program installed.
 
 ## Advanced Tools
 
@@ -84,7 +84,7 @@ Tools › Advanced Tools holds the powerful tools, deliberately kept out of the 
 
 **Timeline comparison** — click one snapshot, then Ctrl+click a second to compare them, or compare one with **Now**. A comparison shows what was added, removed and changed, with old and new registry values side by side. Filter by files or registry, search, export to HTML.
 
-**Clean Up Selected** — removes added items and puts changed or removed registry values and keys back. Everything is backed up and undoable, and **Dry Run** shows what it would do first.
+**Clean Up Selected** — removes added items and puts changed or removed registry values and keys back. Supported items retain recovery metadata; changed file contents are not captured, and Recycle Bin recovery is conditional. **Dry Run** shows the proposed operation.
 
 ## Change timeline
 
@@ -240,7 +240,7 @@ Tools › System Tools holds a second set of windows beside Advanced Tools, kept
 
 ## Safety, backups and undo
 
-**Everything is backed up before it changes:** registry keys exported to `.reg` files, values recorded with type and data; scheduled tasks exported to XML; firewall rules and service definitions saved; files go to the Recycle Bin.
+**Recovery varies by operation:** registry keys exported to `.reg` files, values recorded with type and data; scheduled tasks exported to XML; firewall rules and service definitions saved; files go to the Recycle Bin.
 
 **Undo** — `Tools › Change History` (`Ctrl+H`) lists every change and undoes it with a double-click. `Tools › Backups` (`Ctrl+4`) restores any removal. After a removal, the report has an Undo button.
 

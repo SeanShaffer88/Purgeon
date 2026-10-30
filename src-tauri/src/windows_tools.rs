@@ -2,12 +2,38 @@
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
+/// Native-only helpers must not derive privileged executable/DLL locations from
+/// caller environment variables or search the working directory.
+pub fn system_file(name: &str) -> Result<PathBuf, String> {
+    if name.is_empty() || name.contains(['\\', '/', ':', '\0']) {
+        return Err("Expected a Windows system filename".into());
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetSystemDirectoryW(buffer: *mut u16, size: u32) -> u32;
+    }
+    let mut buffer = vec![0u16; 32768];
+    let length = unsafe { GetSystemDirectoryW(buffer.as_mut_ptr(), buffer.len() as u32) } as usize;
+    if length == 0 || length >= buffer.len() {
+        return Err("Could not resolve Windows system directory".into());
+    }
+    let directory =
+        PathBuf::from(String::from_utf16(&buffer[..length]).map_err(|e| e.to_string())?);
+    Ok(if name.eq_ignore_ascii_case("powershell.exe") {
+        directory.join(r"WindowsPowerShell\v1.0\powershell.exe")
+    } else {
+        directory.join(name)
+    })
+}
+
 fn tool_under(root: &Path, file: &str, wow64: bool) -> PathBuf {
     let directory = root.join(if wow64 { "Sysnative" } else { "System32" });
     match file.to_ascii_lowercase().as_str() {
         "powershell.exe" => directory.join(r"WindowsPowerShell\v1.0\powershell.exe"),
         // regedt32 is the native launcher for Registry Editor.
         "regedit.exe" => directory.join("regedt32.exe"),
+        "explorer.exe" => root.join("explorer.exe"),
+        "rstrui.exe" => directory.join("rstrui.exe"),
         "cmd.exe" | "reg.exe" | "schtasks.exe" | "net.exe" | "sc.exe" | "dism.exe"
         | "cleanmgr.exe" | "msiexec.exe" => directory.join(file),
         _ => PathBuf::from(file),

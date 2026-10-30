@@ -37,16 +37,17 @@ test('a backup id of "." is refused instead of resolving to the whole backup roo
   await backups.setRoot(path.join(dataDir, 'backups'));
   await assert.rejects(async () => backups.remove('.'), /Invalid backup id/);
   await assert.rejects(async () => backups.remove('..'), /Invalid backup id/);
-  // A normal generated id passes the guard (it then reaches the trash layer,
-  // which the test sys deliberately does not provide).
-  await assert.rejects(async () => backups.remove('2026-10-28T00-00-00-000Z_test'), /trash is not available/);
+  // A syntactically valid id with no readable manifest is retained for review,
+  // rather than reaching the trash layer without recovery evidence.
+  await assert.rejects(async () => backups.remove('2026-10-28T00-00-00-000Z_test'), /journal and backup are retained/);
 });
 
 test('settings sync keeps its folder and on/off across a restart', async () => {
   const sync = await import('../src/backend/sync.js');
   const settings = await import('../src/backend/settings.js');
   const internal = path.join(dataDir, 'sync');
-  const cloud = path.join(dataDir, 'cloud');
+  const cloud = fs.mkdtempSync(path.join(os.tmpdir(), 'purgeon-sync-external-'));
+  test.after(() => fs.rmSync(cloud, { recursive: true, force: true }));
   await sync.setRoot(internal);
   await sync.apply({ folder: cloud, on: true });
   const saved = await settings.readSettings();

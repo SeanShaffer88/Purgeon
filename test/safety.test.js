@@ -5,7 +5,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { registryFixture } from './registry-fixture.js';
 import { fileURLToPath } from 'node:url';
 import { setSys } from '../src/backend/sys.js';
 import { createNodeSys } from './node-sys.js';
@@ -518,20 +518,22 @@ test('removeItems applies the pre-delete check and refuses when it cannot run', 
 
 import * as log from '../src/backend/log.js';
 
-const regq = (...a) => {
-  try {
-    return execFileSync('reg.exe', a, { stdio: 'pipe' }).toString();
-  } catch {
-    return null;
-  }
-};
+let regq;
+function mockRegistry(t) {
+  const fixture = registryFixture();
+  regq = fixture.query;
+  setSys({ ...nodeSys, exec: fixture.exec });
+  t.after(() => setSys(nodeSys));
+  return fixture;
+}
 const noState = { programs: [], shared: [] };
 
-test('backups are sealed with fingerprints and tampering is refused', async () => {
+test('backups are sealed with fingerprints and tampering is refused', async (t) => {
+  mockRegistry(t);
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-seal-'));
   await backups.setRoot(root);
   const K = 'HKCU\\Software\\SweepSealTest';
-  regq('add', K, '/v', 'A', '/t', 'REG_SZ', '/d', 'one', '/f');
+  await regq('add', K, '/v', 'A', '/t', 'REG_SZ', '/d', 'one', '/f');
   const { backupId } = await backups.removeItems({ title: 'seal', items: [{ kind: 'key', path: 'HKEY_CURRENT_USER\\Software\\SweepSealTest' }], state: noState });
   const mfile = path.join(root, backupId, 'manifest.json');
   const m = JSON.parse(fs.readFileSync(mfile, 'utf8'));
@@ -544,21 +546,22 @@ test('backups are sealed with fingerprints and tampering is refused', async () =
   const r1 = await backups.restore(backupId);
   assert.equal(r1[0].ok, false);
   assert.match(r1[0].detail, /changed after it was made/);
-  assert.equal(regq('query', K), null, 'nothing was imported');
+  assert.equal(await regq('query', K), null, 'nothing was imported');
   // A changed manifest is refused outright.
   fs.writeFileSync(mfile, fs.readFileSync(mfile, 'utf8').replace('SweepSealTest', 'SweepSealTesX'));
-  await assert.rejects(() => backups.restore(backupId), /changed after it was made/);
-  regq('delete', K, '/f');
+  await assert.rejects(() => backups.restore(backupId), /changed after it was made|inconsistent completed operation evidence/);
+  await regq('delete', K, '/f');
   fs.rmSync(root, { recursive: true, force: true });
 });
 
-test('an interrupted removal can be rolled back, finished or left', async () => {
+test('an interrupted removal can be rolled back or retained for review', async (t) => {
+  mockRegistry(t);
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'sweep-crash-'));
   await backups.setRoot(root);
   const K1 = 'HKCU\\Software\\SweepCrashTest1';
   const K2 = 'HKCU\\Software\\SweepCrashTest2';
-  regq('add', K1, '/v', 'A', '/t', 'REG_SZ', '/d', '1', '/f');
-  regq('add', K2, '/v', 'B', '/t', 'REG_SZ', '/d', '2', '/f');
+  await regq('add', K1, '/v', 'A', '/t', 'REG_SZ', '/d', '1', '/f');
+  await regq('add', K2, '/v', 'B', '/t', 'REG_SZ', '/d', '2', '/f');
   const items = [{ kind: 'key', path: 'HKEY_CURRENT_USER\\Software\\SweepCrashTest1' }, { kind: 'key', path: 'HKEY_CURRENT_USER\\Software\\SweepCrashTest2' }];
   // Simulate a crash after the first key: remove both, then put the journal back and drop the
   // second entry from the manifest and registry state, as if the run stopped there.
@@ -566,27 +569,29 @@ test('an interrupted removal can be rolled back, finished or left', async () => 
   const mfile = path.join(root, backupId, 'manifest.json');
   const m = JSON.parse(fs.readFileSync(mfile, 'utf8'));
   m.entries = m.entries.slice(0, 1);
+  m.intents = m.intents.slice(0, 1);
   m.complete = false;
   delete m.fingerprint;
   delete m.files;
   fs.writeFileSync(mfile, JSON.stringify(m));
-  regq('add', K2, '/v', 'B', '/t', 'REG_SZ', '/d', '2', '/f');
+  await regq('add', K2, '/v', 'B', '/t', 'REG_SZ', '/d', '2', '/f');
   fs.writeFileSync(path.join(root, 'pending.json'), JSON.stringify({ id: backupId, title: 'crash test', owners: [], items, started: m.created }));
 
   const p = await backups.interrupted();
   assert.deepEqual([p.title, p.done, p.total], ['crash test', 1, 2]);
   const rolled = await backups.resolveInterrupted('rollback');
   assert.ok(rolled.results.every((r) => r.ok), JSON.stringify(rolled.results));
-  assert.ok(regq('query', K1, '/v', 'A'), 'the removed key is back');
+  assert.ok(await regq('query', K1, '/v', 'A'), 'the removed key is back');
   assert.equal(await backups.interrupted(), null, 'the journal is cleared');
   const sealed = JSON.parse(fs.readFileSync(mfile, 'utf8'));
   assert.equal(sealed.complete, true, 'the partial backup is sealed');
 
   fs.writeFileSync(path.join(root, 'pending.json'), JSON.stringify({ id: backupId, title: 'crash test', owners: [], items, started: m.created }));
-  const finished = await backups.resolveInterrupted('finish');
-  assert.ok(finished.backupId && regq('query', K1) === null && regq('query', K2) === null, 'finishing removes the rest');
-  regq('delete', K1, '/f');
-  regq('delete', K2, '/f');
+  await assert.rejects(() => backups.resolveInterrupted('finish'), /remaining item identities/);
+  assert.ok(await regq('query', K1), 'refused replay leaves restored data intact');
+  assert.ok(await regq('query', K2), 'refused replay leaves remaining data intact');
+  await regq('delete', K1, '/f');
+  await regq('delete', K2, '/f');
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -807,23 +812,25 @@ test('the monthly report covers the month asked for', async () => {
 
 import * as ctxmenu from '../src/backend/ctxmenu.js';
 
-test('context menu entries are turned off and on without deleting them', async () => {
+test('context menu entries are turned off and on without deleting them', async (t) => {
+  const fixture = mockRegistry(t);
+  setSys({ runPS: async () => JSON.stringify([{ type: 'verb', key: 'HKEY_CURRENT_USER\\Software\\Classes\\*\\shell\\SweepCtxTest', name: 'Sweep Context Test', scope: 'user', enabled: !fixture.keys.get(fixture.canonical('HKCU\\Software\\Classes\\*\\shell\\SweepCtxTest'))?.has('LegacyDisable') }]) });
   const K = 'HKCU\\Software\\Classes\\*\\shell\\SweepCtxTest';
-  regq('add', K, '/v', 'MUIVerb', '/t', 'REG_SZ', '/d', 'Sweep Context Test', '/f');
-  regq('add', `${K}\\command`, '/ve', '/t', 'REG_SZ', '/d', `"${process.execPath}" "%1"`, '/f');
+  await regq('add', K, '/v', 'MUIVerb', '/t', 'REG_SZ', '/d', 'Sweep Context Test', '/f');
+  await regq('add', `${K}\\command`, '/ve', '/t', 'REG_SZ', '/d', `"${process.execPath}" "%1"`, '/f');
   try {
     const entry = (await ctxmenu.list()).find((e) => e.name === 'Sweep Context Test');
     assert.ok(entry && entry.enabled && entry.type === 'verb' && entry.scope === 'user' && !entry.admin, JSON.stringify(entry));
     await ctxmenu.set(entry, false);
-    assert.ok(regq('query', K, '/v', 'LegacyDisable'), 'turned off with LegacyDisable');
+    assert.ok(await regq('query', K, '/v', 'LegacyDisable'), 'turned off with LegacyDisable');
     assert.equal((await ctxmenu.list()).find((e) => e.name === 'Sweep Context Test').enabled, false);
     await ctxmenu.set(entry, true);
-    assert.equal(regq('query', K, '/v', 'LegacyDisable'), null, 'turned back on');
-    assert.ok(regq('query', `${K}\\command`), 'the entry itself is never deleted');
+    assert.equal(await regq('query', K, '/v', 'LegacyDisable'), null, 'turned back on');
+    assert.ok(await regq('query', `${K}\\command`), 'the entry itself is never deleted');
     await assert.rejects(() => ctxmenu.set({ type: 'verb', key: 'HKEY_LOCAL_MACHINE\\SYSTEM\\X', name: 'x' }, false), /Not a context menu entry/);
     await assert.rejects(() => ctxmenu.set({ type: 'extension', clsid: 'nope', name: 'x' }, false), /Not a shell extension/);
   } finally {
-    regq('delete', K, '/f');
+    await regq('delete', K, '/f');
   }
 });
 

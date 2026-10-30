@@ -4,6 +4,7 @@
 // box and field without a tooltip of its own the matching one, as the UI changes.
 
 export const ACTION_TIPS = {
+  settingsSync: 'Shares approved appearance preferences through a folder you choose. Secrets and security approvals stay on this PC.',
   // File
   export: 'Saves the list as it is shown now (name, version, publisher, size, date, folder) as an HTML page you choose where to save. Nothing on the PC changes.',
   report: 'Saves an HTML report of one month: programs installed and removed, space freed, startup changes, updates, clean-ups and programs flagged by the insights. Read-only.',
@@ -82,6 +83,10 @@ export const ACTION_TIPS = {
   // Tools
   monitor: 'Records everything an installer creates or changes, using a snapshot before and after (and live tracking as administrator), so the program can be removed completely later.',
   toggleDetect: 'Watches for installers starting while Purgeon runs (also from the tray) and asks whether to record them. Nothing is recorded unless you say yes.',
+  toggleStartupMonitoring: 'Opt in to periodic checks for new startup entries while Purgeon runs. Off by default.',
+  'view:services': 'Inspect Windows and application services, including automatic and delayed start. Changes keep the existing administrator and confirmation checks.',
+  toggleResourceAlerts: 'Opt in to background resource checks and threshold alerts. Off by default; the Processes view remains available.',
+  toggleSizeHistory: 'Opt in to recording daily program sizes to show growth over time. Off by default; current program sizes remain available.',
   trials: 'Try a program and undo it completely: a snapshot is taken, you install and use it, then Try Over removes everything added since, after showing you the list.',
   queue: 'Shows the uninstall queue: programs uninstalled one after another without watching, continuing after a restart if needed. All leftovers are reviewed at the end.',
   takeSnapshot: 'Records your files, folders and registry settings now, to compare with later. Quick takes seconds; Deep takes longer.',
@@ -216,17 +221,29 @@ export function installTips(root = document.body) {
     const tip = tipForLabel(el.innerText || el.textContent || el.getAttribute('aria-label'));
     if (tip) el.title = tip;
   };
-  const scan = () => root.querySelectorAll('button, [role="option"], label.preset').forEach(apply);
-  let queued = false;
-  const observer = new MutationObserver(() => {
-    if (queued) return;
-    queued = true;
-    requestAnimationFrame(() => {
-      queued = false;
-      scan();
+  const selector = 'button, [role="option"], label.preset';
+  const scan = (node) => {
+    if (node.matches?.(selector)) apply(node);
+    node.querySelectorAll?.(selector).forEach(apply);
+  };
+  const affected = new Set();
+  let frame = null, active = true;
+  const observer = new MutationObserver((records) => {
+    for (const record of records) {
+      const element = record.target.nodeType === 1 ? record.target : record.target.parentElement;
+      const control = element?.closest(selector);
+      if (control) affected.add(control);
+      for (const node of record.addedNodes || []) if (node.nodeType === 1) affected.add(node);
+    }
+    if (!affected.size || frame !== null) return;
+    frame = requestAnimationFrame(() => {
+      frame = null;
+      if (!active) return;
+      for (const node of affected) if (node === root || root.contains(node)) scan(node);
+      affected.clear();
     });
   });
   observer.observe(root, { childList: true, subtree: true, characterData: true });
-  scan();
-  return () => observer.disconnect();
+  scan(root);
+  return () => { active = false; observer.disconnect(); if (frame !== null) cancelAnimationFrame(frame); affected.clear(); };
 }

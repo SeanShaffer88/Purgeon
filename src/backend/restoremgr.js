@@ -52,12 +52,21 @@ export function parseShadowStorage(text) {
 // and a shadow copy's InstallDate ("/Date(1793490622000)/" in PowerShell
 // JSON, or an ISO string) refer to the same moment; match within 2 s.
 export function wmiTimeToMs(value) {
-  if (typeof value === 'number') return value;
+  if (typeof value === 'number') return Number.isFinite(value) && !Number.isNaN(new Date(value).getTime()) ? value : null;
   const s = String(value || '');
-  const dot = s.match(/\/Date\((-?\d+)\)\//);
+  const dot = s.match(/^\/Date\((-?\d+)(?:[+-]\d{4})?\)\/$/);
   if (dot) return Number(dot[1]);
-  const wmi = s.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\.(\d{3})/);
-  if (wmi) return Date.UTC(+wmi[1], +wmi[2] - 1, +wmi[3], +wmi[4], +wmi[5], +wmi[6], +wmi[7]);
+  const wmi = s.match(/^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})(\d{2})\.(\d{6})([+-])(\d{3})$/);
+  if (wmi) {
+    const [year, month, day, hour, minute, second] = wmi.slice(1, 7).map(Number);
+    if (year < 1 || month < 1 || month > 12 || day < 1 || day > 31 || hour > 23 || minute > 59 || second > 59) return null;
+    const local = new Date(0);
+    local.setUTCFullYear(year, month - 1, day);
+    local.setUTCHours(hour, minute, second, Number(wmi[7].slice(0, 3)));
+    if (local.getUTCFullYear() !== year || local.getUTCMonth() !== month - 1 || local.getUTCDate() !== day) return null;
+    return local.getTime() - (wmi[8] === '+' ? 1 : -1) * Number(wmi[9]) * 60000;
+  }
+  if (/^\d{14}\./.test(s)) return null;
   const iso = Date.parse(s);
   return Number.isNaN(iso) ? null : iso;
 }
@@ -65,21 +74,21 @@ export function wmiTimeToMs(value) {
 export function matchShadowId(point, shadows) {
   const when = wmiTimeToMs(point?.CreationTime ?? point?.creationTime);
   if (when === null) return null;
+  const matches = [];
   for (const s of shadows || []) {
     const at = wmiTimeToMs(s.InstallDate ?? s.installDate);
-    if (at !== null && Math.abs(at - when) <= 2000) return s.ID ?? s.id ?? null;
+    if (at !== null && Math.abs(at - when) <= 2000) matches.push(s.ID ?? s.id ?? null);
   }
-  return null;
+  return matches.length === 1 ? matches[0] : null;
 }
 
 const DRIVE_RE = /^[A-Za-z]:$/;
 
 export async function state() {
-  const [drives, storageText, points, shadows] = await Promise.all([
+  const [drives, storageText, points] = await Promise.all([
     runPSJson(`[System.IO.DriveInfo]::GetDrives() | Where-Object { $_.DriveType -eq 'Fixed' -and $_.IsReady } | ForEach-Object { [pscustomobject]@{ root = $_.RootDirectory.FullName; total = $_.TotalSize } } | ConvertTo-Json -Compress`).catch(() => []),
     vss(['list', 'shadowstorage']).catch(() => ''),
-    restorepoint.list().catch(() => []),
-    runPSJson(`Get-CimInstance Win32_ShadowCopy -ErrorAction SilentlyContinue | Where-Object { $_.ClientAccessible } | Select-Object ID, InstallDate | ConvertTo-Json -Compress`).catch(() => []),
+    typeof sys.restorePoints === 'function' ? sys.restorePoints() : restorepoint.list(),
   ]);
   const storage = parseShadowStorage(storageText);
   const byDrive = Object.fromEntries(storage.map((s) => [s.drive, s]));
@@ -88,13 +97,12 @@ export async function state() {
     const s = byDrive[letter];
     return { drive: letter, total: d.total || 0, hasStorage: !!s, used: s?.used || '', maxText: s?.maxText || '', maxPct: s?.maxPct ?? null, unbounded: !!s?.unbounded };
   });
-  const shadowList = Array.isArray(shadows) ? shadows : [shadows];
   const pointList = (Array.isArray(points) ? points : []).map((p) => {
-    const ms = wmiTimeToMs(p.CreationTime);
+    const created = p.created ?? p.CreationTime ?? '';
+    const ms = wmiTimeToMs(created);
     return {
-      sequence: p.SequenceNumber, description: p.Description || 'Restore point', created: p.CreationTime || '',
+      sequence: p.sequence ?? p.SequenceNumber, description: p.description ?? p.Description ?? '', created,
       createdISO: ms ? new Date(ms).toISOString() : '',
-      shadowId: matchShadowId(p, shadowList.filter(Boolean)),
     };
   });
   return { drives: driveList, points: pointList };
@@ -143,17 +151,18 @@ export async function setMaxUnbounded(drive, previous) {
   return { ok: true };
 }
 
-const GUID_RE = /^\{[0-9a-f-]{36}\}$|^[0-9a-f-]{36}$/i;
-
-export async function removePoint(shadowId, description) {
-  if (!GUID_RE.test(String(shadowId || ''))) throw new Error('This restore point cannot be matched to its stored copy, so Purgeon cannot delete it on its own. Older points can be removed from the Cleaner, and all of them from Windows\' own System Restore settings.');
-  await vss(['delete', 'shadows', `/shadow=${shadowId}`, '/quiet']);
+export async function removePoint({ sequence, created, description } = {}) {
+  if (!Number.isInteger(sequence) || sequence <= 0 || sequence > 0xffffffff || typeof created !== 'string' || !created || created.length > 128 || typeof description !== 'string' || description.length > 1024) throw new Error('Refresh the restore-point list and select a valid point.');
+  if (typeof sys.prepareRestoreRemoval !== 'function' || typeof sys.executeRestoreRemoval !== 'function') throw new Error('Native restore-point deletion is unavailable. Use Windows System Restore settings.');
+  const plan = await sys.prepareRestoreRemoval({ sequence, expectedCreationTime: created, expectedDescription: description });
+  const result = await sys.executeRestoreRemoval(plan.id);
+  if (!result?.ok || result.sequence !== sequence) throw new Error('Restore deletion could not be verified. Inspect its native recovery journal before retrying.');
   note({
     type: 'System Restore', title: `Deleted the restore point "${description || 'Restore point'}"`,
     detail: 'A deleted restore point cannot be brought back.',
     undo: null,
   });
-  return { ok: true };
+  return result;
 }
 
 export async function createPoint(description) {
@@ -164,6 +173,6 @@ export async function createPoint(description) {
 }
 
 export async function openRestoreUi() {
-  await runPS(`Start-Process "$env:SystemRoot\\System32\\rstrui.exe"`);
+  await sys.launch('rstrui.exe', []);
   return { ok: true };
 }

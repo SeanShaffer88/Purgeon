@@ -10,7 +10,7 @@ A Windows uninstaller that removes a program and then finds the files, folders, 
 It can also:
 - notice installers as they start, and record what they install;
 - monitor installations and compare before-and-after snapshots;
-- let you try a program and then undo it completely;
+- let you try a program and then review and undo its recorded changes where recovery data is available;
 - analyze any program: what it hooks into Windows, its disk use, when it was last used, and what needs it;
 - find leftovers of programs you removed long ago;
 - show where your disk space goes, program by program;
@@ -19,7 +19,7 @@ It can also:
 - update programs with winget;
 - manage everything that runs with Windows, and Explorer's right-click menu.
 
-Every change is backed up first and can be undone.
+Supported cleanup changes retain recovery records where possible. Undo depends on the operation, an intact backup, and (for recycled files) continued Recycle Bin availability; irreversible actions and uncertain outcomes need separate review.
 
 It has a compact single-list window with a dark terminal theme. It is built with [Tauri](https://tauri.app/) and React on Microsoft Edge WebView2.
 
@@ -115,7 +115,7 @@ The menu bar is also the window’s title bar: drag its empty middle to move the
 - data and cache folders named after the program's own executables.
 
 **Choosing what to remove**
-- Every item gets a **match score** from 0 to 100%. Items scoring 70% or more start ticked; weaker guesses start unticked and are marked **check**.
+- Every item shows its **ownership evidence**. Name-only matches and unattributed snapshot changes start unchecked. Internal ranking scores are selection heuristics, not measured probabilities.
 - Publisher folders count only when named exactly after the publisher, so removing one Google program never offers another's folders.
 - **Force** (`Shift+Del`) handles programs whose uninstaller is broken or missing.
 - **Rescue Broken Uninstall** reinstalls the program through winget over the existing copy, which puts a working uninstaller back, then uninstalls it normally.
@@ -158,11 +158,13 @@ The menu bar is also the window’s title bar: drag its empty middle to move the
 
 ![Monitored programs](docs/screenshots/monitored.png)
 
-**Detecting installations:** while Purgeon runs, including from the tray, it notices installers starting and asks whether to record them. It brings its window forward and shows a Windows notification.
+**Detecting installations:** off by default. Opt in with **Tools › Detect Installations** to have Purgeon notice installers starting while it runs, including from the tray, and ask whether to record them. It brings its window forward and shows a Windows notification.
 - **Monitor It** takes the "before" snapshot while the installer waits on its first page, then you install as usual and click **Installation Finished**.
 - It looks only at new programs started in your own Windows session, named like an installer (`setup`, `install`) or Windows Installer opening an `.msi`. Uninstallers, Windows' own servicing, its own program updates and trial installs are left out.
 - An installer that was already running is recorded with snapshots only; live tracking follows installers Purgeon starts itself.
-- **Tools › Detect Installations** turns it off.
+- **Tools › Detect Installations** turns detection on or off. Saved explicit opt-ins are preserved.
+
+**Other automatic monitoring:** **Tools › Monitor New Startup Entries**, **Resource Alerts**, and **Record Program Size History** also default off. Each can be enabled separately. Turning history recording off keeps existing history and current size measurements. Manual Processes inspection and **Monitor an Installation** remain available. These defaults do not unregister existing scheduled tasks or overwrite saved explicit preferences.
 
 ![Purgeon asking to monitor an installer that just started](docs/screenshots/installer-detected.png)
 
@@ -170,7 +172,7 @@ The menu bar is also the window’s title bar: drag its empty middle to move the
 
 ![Two trials running](docs/screenshots/trials.png)
 
-- **Tools › Trial Installs** lets you try a program and undo it completely.
+- **Tools › Trial Installs** lets you try a program and review and undo its recorded changes where recovery data is available.
 - A snapshot is taken, the installer runs, and you use the program for as long as you like.
 - **Try Over** removes everything added since the snapshot, including what the program created while you tried it, and puts changed settings back. You review the full list first, and everything removed is backed up.
 - **Keep It** ends the trial and keeps the program.
@@ -184,7 +186,7 @@ The menu bar is also the window’s title bar: drag its empty middle to move the
 - **Depths:** **Quick** (a few seconds), **Standard** or **Deep**.
 - **Timeline:** it shows your snapshots in order. Click one, then Ctrl+click a second to compare them, or click **Now**.
 - **Comparing:** a comparison shows what was **added**, **removed** and **changed**, with old and new registry values side by side. You can filter by files or registry, search, and export to HTML.
-- **Clean Up Selected** removes added items, and puts changed or removed registry values and keys back from the earlier snapshot. Everything is backed up and undoable, and **Dry Run** shows what it would do first.
+- **Clean Up Selected** removes added items, and puts changed or removed registry values and keys back from the earlier snapshot. Supported items retain recovery metadata; changed file contents are not captured, and Recycle Bin recovery is conditional. **Dry Run** shows the proposed operation.
 
 ![Comparing a snapshot with the system now](docs/screenshots/snapshot-compare.png)
 
@@ -392,13 +394,13 @@ It never uninstalls anything and never runs the permanent Windows clean-ups. Eac
 **Window and tray** (all in the View menu):
 - **Always on Top**, or the 📌 thumbtack in the title bar, keeps the window in front of other windows.
 - **Minimize to Tray** hides the window in the notification area when you minimize it: the window and its taskbar button go away, and only the tray icon remains.
-- **The close button** asks whether to **Minimize to Tray** (keep running there, still spotting installers and new startup entries) or **Exit**, with a **Remember my choice** box. **Close Button Asks**, **Close Button Hides to Tray** and **Close Button Exits** change the choice later.
+- **The close button** asks whether to **Minimize to Tray** (keep running there, with only the monitoring options you enabled) or **Exit**, with a **Remember my choice** box. **Close Button Asks**, **Close Button Hides to Tray** and **Close Button Exits** change the choice later.
 - **Start Minimized to Tray** starts it hidden there.
-- **Start with Windows** starts it when you sign in. Purgeon runs as administrator, and Windows skips such programs in its Run list, so this is a task in **Task Scheduler › Purgeon** that starts it at sign-in without a UAC prompt. Turning the option off deletes the task, and uninstalling Purgeon removes it too. The installer's last page offers it as well, unticked.
+- **Start with Windows** starts it when you sign in. New registrations use a Limited-privilege task in **Task Scheduler › Purgeon**. Normal startup does not request administrator rights. Existing older Highest-privilege tasks may require administrator-assisted replacement; migration is not assumed to have succeeded. Turning the option off deletes the task, and uninstalling Purgeon removes it too. The installer's last page offers it as well, unticked.
 
 ![The close button asks whether to exit or keep running in the tray](docs/screenshots/close-question.png)
 
-**The tray icon:** a left click shows the window. A right click opens a menu: Show Purgeon, Monitor an Installation, Cleaner, Startup & Services, Program Updates and Exit. The icon also reports finished maintenance runs, available updates, new startup entries and interrupted removals.
+**The tray icon:** a left click shows the window. A right click opens its navigation and action menu. Notifications for new startup entries require monitoring to be enabled; the icon also reports requested maintenance, enabled update checks, and interrupted removals.
 
 ![Window and tray options in the View menu](docs/screenshots/window-options.png)
 
@@ -414,7 +416,7 @@ It never uninstalls anything and never runs the permanent Windows clean-ups. Eac
 
 ## Safety, backups and undo
 
-**Everything is backed up before it changes:**
+**Recovery varies by operation:**
 - registry keys are exported to `.reg` files, and values are recorded with their type and data;
 - scheduled tasks are exported to XML, and firewall rules and service definitions are saved;
 - files go to the Recycle Bin.
@@ -429,7 +431,7 @@ It never uninstalls anything and never runs the permanent Windows clean-ups. Eac
 **Seeing and limiting what happens:**
 - **Dry Run** shows exactly what a removal would do, and **Tools › Safe Mode** offers only near-certain matches.
 - **Restore points:** before an uninstall, a batch or the first Debloat change, the confirmation offers to create one (**Tools › Create Restore Points** sets the default).
-- **Crash-safe removals:** each item is in the backup before the next one is removed. After a crash or power cut, the next start offers to roll back, finish or leave the removal.
+- **Crash-safe removals:** each item is in the backup before the next one is removed. After an interruption, the next start offers recovery review. Valid completed changes can be rolled back or kept; unreadable or uncertain evidence is retained. Automatic Finish is refused: run a fresh scan and preview before deleting more items.
 - **Fingerprinted backups:** backups are sealed with SHA-256 fingerprints, and a changed backup is not restored. **Tools › Backup Settings** can limit backups by age or size, always keeping each program's newest.
 - **Command log:** **Tools › Open Command Log** shows every command Purgeon ran, with its result, for 14 days.
 - **Tests:** an automated safety test suite runs on every build and blocks a release if it fails.

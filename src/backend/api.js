@@ -27,34 +27,27 @@ import * as winget from './winget.js';
 import * as trusted from './trusted.js';
 import * as updatecheck from './updatecheck.js';
 import { readSettings, writeSettings, DEFAULT_SETTINGS } from './settings.js';
+import { createLazyModule } from './lazy-module.js';
 // Cold-path modules are loaded on first use (lazy) to speed up startup:
 // transfer, archive, insights, maintenance, queue, explore, browsers, portable,
 // shellmenu, report, ctxmenu, installwatch, trials.
-const lazyModule = (name) => {
-  let mod = null;
-  return {
-    get: async () => (mod || (mod = await import(`./${name}.js`))),
-  };
-};
+const lazyModule = (name) => createLazyModule(() => import(`./${name}.js`));
+const lazyNamespace = (loader) => new Proxy({}, { get: (_target, key) => key === 'then' ? undefined : async (...args) => (await loader.get())[key](...args) });
 const lazyTransfer = lazyModule('transfer');
 const lazyArchive = lazyModule('archive');
 const lazyInsights = lazyModule('insights');
-const lazyMaintenance = lazyModule('maintenance');
-const lazyQueue = lazyModule('queue');
-const lazyTrials = lazyModule('trials');
 const lazyExplore = lazyModule('explore');
 const lazyBrowsers = lazyModule('browsers');
 const lazyPortable = lazyModule('portable');
 const lazyShellmenu = lazyModule('shellmenu');
 const lazyReport = lazyModule('report');
 const lazyCtxmenu = lazyModule('ctxmenu');
-const lazyInstallwatch = lazyModule('installwatch');
 import * as running from './running.js';
 import * as maintenance from './maintenance.js';
 import * as queue from './queue.js';
 import * as drivers from './drivers.js';
 import * as trials from './trials.js';
-import * as explore from './explore.js';
+const explore = lazyNamespace(lazyExplore);
 import * as diskusage from './diskusage.js';
 import * as processes from './processes.js';
 import * as power from './power.js';
@@ -64,23 +57,26 @@ import * as eventlogs from './eventlogs.js';
 import * as health from './health.js';
 import * as tasks from './tasks.js';
 import * as cookierules from './cookierules.js';
-import * as browsers from './browsers.js';
-import * as portable from './portable.js';
+const browsers = lazyNamespace(lazyBrowsers);
+const portable = lazyNamespace(lazyPortable);
 import * as portableapps from './portableapps.js';
-import * as shellmenu from './shellmenu.js';
-import * as report from './report.js';
-import * as ctxmenu from './ctxmenu.js';
+const shellmenu = lazyNamespace(lazyShellmenu);
+const report = lazyNamespace(lazyReport);
+const ctxmenu = lazyNamespace(lazyCtxmenu);
 import * as autostart from './autostart.js';
 import * as installwatch from './installwatch.js';
 // New modules (enhancements): i18n, schedule, associations, restorepoint, plugins, sync, profiler.
-import * as i18n from './i18n.js';
+const lazyI18n = lazyModule('i18n');
+const i18n = lazyNamespace(lazyI18n);
 import * as schedule from './schedule.js';
-import * as associations from './associations.js';
+const lazyAssociations = lazyModule('associations');
+const associations = lazyNamespace(lazyAssociations);
 import * as restorepoint from './restorepoint.js';
 import * as plugins from './plugins.js';
 import * as sync from './sync.js';
 import * as profiler from './profiler.js';
 import { collectSysInfo } from './sysinfo.js';
+import { canRememberConfirmation } from './confirmation-policy.js';
 
 const isAdmin = async () => (await sys.exec('net.exe', ['session'])).ok;
 
@@ -136,7 +132,9 @@ const handlers = {
     return sys.quit();
   },
   'app:elevate': async () => {
-    await runPS(`Start-Process -FilePath ${psq(sys.info.exe)} -Verb RunAs`);
+    if (!sys.elevateHandoff) throw new Error('Native elevation handoff is unavailable');
+    await sys.elevateHandoff();
+    await log.flushNow();
     await sys.quit();
   },
   'settings:get': readSettings,
@@ -155,6 +153,11 @@ const handlers = {
   'programs:measureStore': (list) => measure.measureStoreApps(Array.isArray(list) ? list : [], (result) => measuredListeners.forEach((fn) => fn(result))),
   'icons:get': (list) => programs.iconsFor(list),
   'program:runUninstaller': async (program) => {
+    // Resolve commands again at action time; never execute a renderer-supplied command.
+    const inventory = program.store ? await programs.listStore() : await programs.listDesktop();
+    const fresh = inventory.find((p) => p.key === program.key);
+    if (!fresh) throw new Error('The selected program is no longer installed. Refresh the list.');
+    program = fresh;
     const rp = await maybeCreateRestorePoint('uninstall', `Purgeon: before uninstalling ${program.name}`);
     if (program.store) {
       await programs.removeStoreApp(program.key);
@@ -324,7 +327,11 @@ const handlers = {
   'drivers:candidates': () => drivers.oldDriverCandidates(),
   'drivers:delete': async ({ inf }) => drivers.deleteDriver(inf),
   'programs:insights': async (list) => (await lazyInsights.get()).programInsights(list),
-  'programs:recordSizes': async (list) => (await lazyInsights.get()).recordSizes(list).then(() => true),
+  'programs:recordSizes': async (list) => {
+    if ((await readSettings()).recordSizeHistory !== true) return false;
+    await (await lazyInsights.get()).recordSizes(list);
+    return (await readSettings()).recordSizeHistory === true;
+  },
   'programs:sizeHistory': async () => (await lazyInsights.get()).sizeHistory(),
   'files:signatures': async (paths) => Object.fromEntries(await (await lazyInsights.get()).signatures(paths)),
   'security:verifySignature': async ({ path }) => {
@@ -419,17 +426,18 @@ const handlers = {
   'processes:sample': async () => {
     const r = await processes.sample();
     const s = await readSettings();
+    if (s.resourceAlerts !== true) { procAlertActive = new Set(); return { ...r, alerts: [] }; }
     const th = { cpu: 90, mem: 90, diskFreeGB: 20, ...(s.alertThresholds || {}) };
     const before = procAlertActive;
     procAlertActive = processes.alertStates(r.totals, th, procAlertActive);
     const fired = [...procAlertActive].filter((k) => !before.has(k)).map((k) => processes.alertText(k, r.totals, th));
     return { ...r, alerts: fired };
   },
-  'processes:end': ({ pid, name }) => processes.end(pid, { pid, name }),
-  'processes:suspend': ({ pid, name }) => processes.suspend(pid, { pid, name }),
-  'processes:resume': (pid) => processes.resume(pid),
-  'processes:setPriority': ({ pid, name, level, previous }) => processes.setPriority(pid, level, { pid, name, priority: previous }),
-  'processes:setAffinity': ({ pid, name, cores }) => processes.setAffinity(pid, cores, { pid, name }),
+  'processes:end': (proc) => processes.end(proc.pid, proc),
+  'processes:suspend': (proc) => processes.suspend(proc.pid, proc),
+  'processes:resume': (proc) => processes.resume(proc.pid, proc),
+  'processes:setPriority': (proc) => processes.setPriority(proc.pid, proc.level, { ...proc, priority: proc.previous }),
+  'processes:setAffinity': (proc) => processes.setAffinity(proc.pid, proc.cores, proc),
   'processes:alertThresholds': async () => ({ cpu: 90, mem: 90, diskFreeGB: 20, ...((await readSettings()).alertThresholds || {}) }),
   'processes:setAlertThresholds': async (v) => {
     const clean = {
@@ -456,7 +464,7 @@ const handlers = {
   'restore:state': () => restoremgr.state(),
   'restore:setProtection': ({ drive, on }) => restoremgr.setProtection(drive, on),
   'restore:setMax': ({ drive, pct, unbounded, previous }) => (unbounded || pct === null ? restoremgr.setMaxUnbounded(drive, previous) : restoremgr.setMaxPct(drive, pct, previous)),
-  'restore:removePoint': ({ shadowId, description }) => restoremgr.removePoint(shadowId, description),
+  'restore:removePoint': (point) => restoremgr.removePoint(point),
   'restore:createPoint': ({ description }) => restoremgr.createPoint(description),
   'restore:openUi': () => restoremgr.openRestoreUi(),
   // Boot Options (Tools > System Tools).
@@ -465,13 +473,10 @@ const handlers = {
   'boot:setTimeout': ({ seconds, previous }) => boot.setTimeout(seconds, previous),
   // Event Logs (Tools > System Tools).
   'logs:channels': () => eventlogs.channels(),
-  'logs:exportPick': async ({ name }) => {
-    const { save } = await import('@tauri-apps/plugin-dialog');
-    const file = await save({ title: `Save a copy of the ${name} log`, defaultPath: `${String(name).replace(/[\\/:*?"<>|]/g, '_')}.evtx`, filters: [{ name: 'Event log', extensions: ['evtx'] }] });
-    return file ? eventlogs.exportLog(name, file) : null;
-  },
-  'logs:clear': ({ name }) => eventlogs.clearLog(name),
-  'logs:setEnabled': ({ name, on }) => eventlogs.setEnabled(name, on),
+  'logs:exportPick': ({ channelId }) => eventlogs.exportLog(channelId),
+  'logs:clear': ({ channelId }) => eventlogs.clearLog(channelId),
+  'logs:setEnabled': ({ channelId, on }) => eventlogs.setEnabled(channelId, on),
+  'logs:undoEnabled': (request) => eventlogs.undoEnabled(request),
   // Health Check (Tools > System Tools).
   'health:run': async ({ runSfc } = {}) => {
     const stop = newStop('healthRun');
@@ -599,8 +604,8 @@ const handlers = {
   'plugins:runLeftoverRules': (id) => plugins.runLeftoverRules(id),
   // Enhancement 9: cloud-synced settings and backup index
   'sync:status': () => sync.status(),
-  'sync:apply': ({ folder, on }) => sync.apply({ folder, on }),
-  'sync:syncNow': () => sync.syncNow(),
+  'sync:apply': (options) => sync.apply(options),
+  'sync:syncNow': (options) => sync.syncNow(options),
   // Enhancement 10: startup profiler
   'profiler:report': () => profiler.report(),
   'profiler:baseline': () => profiler.saveBaseline(),
@@ -655,6 +660,7 @@ const handlers = {
   'backups:exportPlan': ({ plan, format, fileName }) => backups.exportPlan({ plan, format, fileName }),
   'debloat:list': () => debloat.list(),
   'debloat:previousDamaged': () => debloat.previousDamaged(),
+  'debloat:recover': (request) => debloat.recover(request),
   'debloat:set': async ({ id, enable }) => {
     const t = debloat.TWEAKS?.find((x) => x.id === id);
     const rp = await maybeCreateRestorePoint('debloat', `Purgeon: before debloat tweak ${t?.title || id}`);
@@ -674,7 +680,7 @@ const handlers = {
   // { ok, checked }, otherwise to a boolean.
   'dialog:confirm': async (options) => {
     // A confirmation that the user disabled is auto-approved with a warning notice.
-    if (options.confirmId && await isConfirmationDisabled(options.confirmId)) {
+    if (canRememberConfirmation(options.confirmId) && await isConfirmationDisabled(options.confirmId)) {
       api.notify?.({ tone: 'warn', text: `Confirmation “${options.message || options.confirmId}” was skipped (disabled in settings).` });
       return options.checkboxLabel ? { ok: true, checked: false } : true;
     }
@@ -685,10 +691,12 @@ const handlers = {
 // Change History: what each change-making request records, with the request that undoes it.
 const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 const recorders = {
-  'debloat:set': ({ id, enable }) => {
+  'debloat:set': ({ id, enable }, result) => {
     const t = debloat.TWEAKS.find((x) => x.id === id);
-    return { type: 'Debloat', title: `${enable ? 'Applied' : 'Turned off'} "${t?.title || id}"`, undo: { channel: 'debloat:set', arg: { id, enable: !enable } } };
+    const action = result?.restoredOriginal ? 'Restored original values for' : result?.appliedDefaults ? 'Applied catalog defaults for' : enable ? 'Applied' : 'Updated';
+    return { type: 'Debloat', title: `${action} "${t?.title || id}"`, undo: { channel: 'debloat:set', arg: { id, enable: !enable } } };
   },
+  'debloat:recover': ({ tweakId }, result) => ({ type: 'Debloat recovery', title: `${tweakId}: ${result?.outcome || 'unknown outcome'}` }),
   'startup:set': ({ entry, enable }) => ({
     type: entry.type === 'service' ? 'Service' : 'Startup',
     title: `${enable ? 'Turned on' : 'Turned off'} "${entry.name}"`,
@@ -794,6 +802,9 @@ export const setConfirmUI = (fn) => {
 // Folders under the app's data directory, created on start.
 export async function initBackend() {
   const data = sys.info.dataDir;
+  lazyTransfer.configureRoot(path.join(data, 'transfers'));
+  lazyInsights.configureRoot(path.join(data, 'insights'));
+  lazyArchive.configureRoot(path.join(data, 'archive'));
   await sys.makeDir(data);
   // Every command Purgeon runs from here on is written to the command log.
   await log.setRoot(path.join(data, 'logs'));
@@ -808,9 +819,6 @@ export async function initBackend() {
     history.setRoot(path.join(data, 'history')),
     snapshots.setRoot(path.join(data, 'snapshots')),
     groups.setRoot(path.join(data, 'groups')),
-    (await lazyTransfer.get()).setRoot(path.join(data, 'transfers')),
-    (await lazyInsights.get()).setRoot(path.join(data, 'insights')),
-    (await lazyArchive.get()).setRoot(path.join(data, 'archive')),
     maintenance.setRoot(path.join(data, 'reports')),
     queue.setRoot(path.join(data, 'queue')),
     trials.setRoot(path.join(data, 'trials')),
@@ -833,19 +841,27 @@ export async function initBackend() {
 }
 
 profiler.mark('api:imports-loaded');
+let activeMutation = null;
+const mutates = (channel) => !/cancel$/i.test(channel) && /:(?:set|apply|remove|delete|run|restore|recover|undo|resolve|prune|start|finish|launch|revert|clear|enable|disable|add|save|arm|disarm|restart|kill|end|suspend|resume|generate|register|unregister|export|import|syncNow)/i.test(channel);
 
 export const api = {
   async invoke(channel, arg) {
     const fn = handlers[channel];
     if (!fn) throw new Error(`Unknown request ${channel}`);
-    const RETRYABLE = /(file.*busy|registry.*locked|access.*denied|timeout)/i;
+    const mutation = mutates(channel);
+    if (mutation && activeMutation) throw new Error(`Another operation (${activeMutation}) is in progress. Wait for it to finish before starting ${channel}.`);
+    if (mutation) activeMutation = channel;
+    try {
+    // Mutations never retry automatically: a failed response may follow a commit.
+    const retryRead = /^(programs:list|settings:get|app:specs|groups:list|backups:list|history:list|snapshots:list)$/.test(channel);
+    const RETRYABLE = /(file.*busy|registry.*locked)/i;
     let lastErr;
     for (let attempt = 1; attempt <= 3; attempt++) {
       try {
         return await fn(arg);
       } catch (e) {
         lastErr = e instanceof Error ? e : new Error(String(e));
-        if (attempt < 3 && RETRYABLE.test(lastErr.message)) {
+        if (retryRead && attempt < 3 && RETRYABLE.test(lastErr.message)) {
           await new Promise((r) => setTimeout(r, 300 * attempt));
           continue;
         }
@@ -853,6 +869,7 @@ export const api = {
       }
     }
     throw lastErr;
+    } finally { if (mutation) activeMutation = null; }
   },
   onMeasured(fn) {
     measuredListeners.add(fn);

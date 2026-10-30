@@ -18,7 +18,9 @@
     "dist": "tauri build",
     "dist:windows": "pwsh -NoProfile -File scripts/package-windows.ps1",
     "test": "node --test \"test/*.test.js\"",
-    "perf": "node scripts/perf.mjs"
+    "perf": "node scripts/perf.mjs",
+    "lint": "eslint src",
+    "typecheck": "tsc --project tsconfig.json"
   },
   "dependencies": {
     "@tauri-apps/api": "^2.12.4",
@@ -26,10 +28,14 @@
     "@tauri-apps/plugin-notification": "^2.7.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@tauri-apps/cli": "^2.12.4",
     "@vitejs/plugin-react": "^6.1.2",
+    "eslint": "^10.13.0",
+    "globals": "^17.13.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
     "vite": "^8.3.5"
   }
 }

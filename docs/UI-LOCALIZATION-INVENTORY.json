@@ -1,0 +1,6215 @@
+{
+  "note": "English-only presentation source inventory. Other-language translation work was explicitly cancelled by the user. This records source authoring only; no tests, build, lint, type check, app launch or accessibility validation was run.",
+  "occurrences": 1269,
+  "uniqueTexts": [
+    " (The run was cancelled, so this covers only the checks that finished.)",
+    " (in the Recycle Bin)",
+    " (of {p0})",
+    " (v{p0})",
+    " ({p0} items)",
+    " + {p0} Windows clean-up{p1}",
+    " Backup limits from Tools › Backup Settings are applied too. Windows' own permanent clean-ups are never run automatically.",
+    " Cleanup keeps recovery records, but files require their Recycle Bin copies, and some actions cannot be undone.",
+    " Core ",
+    " File",
+    " Files",
+    " GB across ",
+    " GB free",
+    " MB",
+    " MB) will be overwritten and deleted, with no backup:",
+    " Pick a program, click Uninstall, and review what Purgeon will remove before it happens.",
+    " Record what an installer creates, so you can remove it cleanly later (Tools › Monitor an Installation).",
+    " Registry",
+    " Remember my choice",
+    " Remove temporary files, caches, and Windows clutter you don't need (Cleaner view).",
+    " Run weekly maintenance",
+    " Take a Quick snapshot",
+    " Turn off entries that start with Windows without deleting them (Startup & Services view).",
+    " Windows default",
+    " a reboot",
+    " accept connections",
+    " after a restart",
+    " and had removed ",
+    " applies",
+    " at next sign-in",
+    " at start-up",
+    " automatic services ·",
+    " brings in newer settings from another PC.",
+    " change",
+    " connected",
+    " enabled",
+    " file",
+    " firewall rules",
+    " folder levels · ",
+    " for the latest release notes.",
+    " free",
+    " in a group. Use the group list in the toolbar to show one group at a time.",
+    " installed games.",
+    " into one file to install it on another PC with Tools › Restore a Program Backup, or to keep as a backup.",
+    " is",
+    " is being installed. Record changes within the monitoring scope for later review and cleanup?",
+    " item",
+    " items and puts back selected ",
+    " items when it stopped. Everything it removed was backed up first.",
+    " keeps things as they are; the backup stays in Tools › Backups.",
+    " kept, but doesn't start",
+    " left)",
+    " leftovers found so far; they are shown when the queue finishes.",
+    " lower-confidence item",
+    " may run on. At least one must stay ticked.",
+    " more",
+    " need",
+    " of ",
+    " offers recorded additions and earlier registry settings for review. Unattributed changes start unchecked; a complete reversal is not guaranteed.",
+    " on",
+    " on ",
+    " or ",
+    " other installation",
+    " other programs use.",
+    " program packages in ",
+    " programs",
+    " programs · ",
+    " programs: their install folders plus the data folders named after them. Click a block for details.",
+    " puts back what it removed (recommended).",
+    " registered a need for it.",
+    " registry values and keys from the earlier snapshot. Review recovery options first and can be undone from Tools › Change History. Changed or removed files are shown for information only.",
+    " removes the remaining items, with the same checks as before.",
+    " saves this PC's settings there; ",
+    " seconds",
+    " selected",
+    " service change",
+    " shared file",
+    " shown but can’t be selected. Turn it off in Tools › Safe Mode.",
+    " start with Windows · ",
+    " starts with Windows",
+    " tasks · ",
+    " to open the command palette. Type a program name or a command like \"uninstall\" and press Enter.",
+    " to remove its extensions.",
+    " to what starts with Windows.",
+    " tweak applied",
+    " uninstalled since Purgeon last looked, from Windows Settings, its own uninstaller or another tool. Uninstallers often leave files and settings behind.",
+    " used by ",
+    " waiting",
+    " will close straight away. Anything it hasn't saved is lost. Purgeon can't undo ending a process.",
+    " would be removed or put back",
+    " {p0} · {p1} GB free",
+    " °C",
+    " · can uninstall silently",
+    " · data {p0}",
+    " · packaged ",
+    " · points at ",
+    " · program ",
+    " · program no longer exists",
+    " · start-up takes about {p0} (last {p1} slow boots)",
+    " · start-up timings need administrator rights",
+    " · {p0} of {p1} GB",
+    " · {p0} unsigned",
+    " · {p0} worth checking",
+    "\"{p0}\" needs administrator rights. Use File › Restart as Administrator.",
+    "\"{p0}\" no longer starts with Windows. Turn it back on in Startup & Services.",
+    "% of the drive",
+    "% · disk under ",
+    "% · memory over ",
+    "(auto-detect)",
+    "(click a line for details)",
+    ") will be deleted. A deleted restore point cannot be brought back.",
+    ", and a restore point is made first",
+    ", and tips appear throughout the app to help you discover what Purgeon can do.",
+    ", total size {p0}",
+    ", which is no longer there",
+    ", with ",
+    ", {p0} hidden{p1}",
+    ", {p0} selected",
+    ", {p0} would be skipped",
+    ". Each restore is checked before changes. Review its operation record and available backups before attempting an undo.",
+    ". Paths in ",
+    ". Windows offers no undo for that, and neither can Purgeon.",
+    "0 (no wait)",
+    "32-bit",
+    "32-bit (from its registry entry)",
+    "64-bit",
+    "64-bit (from its registry entry)",
+    "A Purgeon data file was damaged and could not be read ({p0}). A copy of each was kept beside it with \".damaged\" in the name, and Purgeon is continuing with safe defaults.",
+    "A file or folder path, or a registry key such as HKEY_CURRENT_USER\\Software\\Something",
+    "A name to recognise this snapshot by later, such as Before installing Foo",
+    "A new version of Purgeon is available.",
+    "A plain-words once-over: drives, system files, restore points, updates, crashes, startup load and the battery. Nothing is changed or repaired — each line names the tool that fixes it.",
+    "A program added itself",
+    "A provisioned copy is built into Windows: new user accounts get this app. When you remove the app, Purgeon offers to remove the provisioned copy too.",
+    "A removal did not finish, and its record is damaged.",
+    "A snapshot records the files, folders and registry settings programs use, so you can later see exactly what changed.",
+    "ALLOWED",
+    "About Purgeon",
+    "Active",
+    "Add",
+    "Add Files…",
+    "Add Folder…",
+    "Add a Folder…",
+    "Add files to erase…",
+    "Add the health check (without the slow file verification) to the weekly maintenance run. Maintenance itself is set up in Tools.",
+    "Add to Weekly Maintenance",
+    "Admin",
+    "Administrator",
+    "After generating, place a PortableApps.com launcher executable in the package folder and compile the .nsi script with NSIS (makensis) to produce the .paf.exe installer.",
+    "Alerts while Purgeon runs: processor over ",
+    "All Groups",
+    "All commands ",
+    "All {p0} items done.",
+    "Allow",
+    "Allow All",
+    "Also verify every Windows system file, not just the quick store check. Takes a few minutes.",
+    "Also verify every system file (slower)",
+    "Always",
+    "Always on top is on: Purgeon stays in front of other windows. Click to turn it off.",
+    "Always on top: keep Purgeon in front of other windows, even when you click elsewhere (View › Always on Top).",
+    "Always test the resulting portable package before relying on it.",
+    "An HTML report of a month: programs installed and removed, space freed, startup changes, updates, clean-ups, and programs flagged by the insights.",
+    "An independent project, not affiliated with any other uninstaller.",
+    "An uninstall cannot be undone here. Reinstall the program, or use the restore point made before it.",
+    "Analysis of {p0} cancelled.",
+    "Analyze Leftovers…",
+    "Analyze – {p0}",
+    "Analyzing program for portable packaging…",
+    "Analyzing {p0}: measuring its folders and finding what it hooks into Windows…",
+    "Apply",
+    "Architecture",
+    "Author",
+    "Automatic update checks",
+    "Back",
+    "Back to Contents",
+    "Back to the List",
+    "Backed up from {p0}",
+    "Background monitoring is off.",
+    "Background monitoring is on: Purgeon scans for leftovers while the PC is idle.",
+    "Backing up and removing selected items…",
+    "Backing up {p0}…\nLarge programs can take a few minutes.",
+    "Backup Settings",
+    "Backup limits saved.{p0}",
+    "Backup – {p0}",
+    "Backups older than this many days are deleted (each program’s newest backup is always kept). Empty means no age limit.",
+    "Backups taken before removals. Each new package is test-restored when it is created, so “Restorable” means it was proven, not hoped.",
+    "Bad signature",
+    "Batch Uninstall – {p0} programs",
+    "Battery level",
+    "Battery saver limits background work to stretch the battery once it drains to this level",
+    "Battery saver turns on at",
+    "Boot Options",
+    "Boot menu waits",
+    "Browse...",
+    "Browser Clean-up",
+    "Building the graph… ",
+    "Built-in groups",
+    "Bundled offer",
+    "C:\\ProgramData\\Something  or  HKEY_CURRENT_USER\\Software\\Something",
+    "C:\\\\Path\\\\program.exe",
+    "Cancel",
+    "Cancel Monitoring",
+    "Cancel Scan",
+    "Certificate subject name of a trusted publisher",
+    "Change persistent startup mode to {p0}?",
+    "Change when Purgeon warns you about a busy PC",
+    "Change…",
+    "Check",
+    "Check Now",
+    "Check failed: ",
+    "Check for Updates",
+    "Check what the cleanup would do, without changing anything",
+    "Check what would happen, without changing anything",
+    "Checking GitHub for a newer release…",
+    "Checking Windows clean-up options…",
+    "Checking for a copy of {p0} still on this PC…",
+    "Checking for updates…",
+    "Checking what depends on it…",
+    "Checking {p0} programs…",
+    "Checking {p0}…",
+    "Checking…",
+    "Checking… (drive health, system files, restore points, updates, crashes, startup, battery)",
+    "Choose a folder that holds portable apps, such as D:\\PortableApps. It is remembered and looked at every time: the folder itself and each folder inside it.",
+    "Choose a program…",
+    "Choose a shared folder",
+    "Choose files to erase",
+    "Choose the installer. Purgeon takes a snapshot and then starts it.",
+    "Choose the program file",
+    "Choose which processor cores this process may run on",
+    "Choose…",
+    "Clean",
+    "Clean ",
+    "Clean Up Entry",
+    "Clean Up Selected",
+    "Clean these junk files (to the Recycle Bin)",
+    "Clean up junk files",
+    "Clean up removes selected ",
+    "Clean up:",
+    "Cleaned items go to the Recycle Bin, so you can undo a cleanup from Tools › Change History. Empty the Recycle Bin afterwards to free the space. Files in use are skipped.",
+    "Cleanup records and available registry exports are kept in Tools › Backups. File recovery requires the original Recycle Bin copies. Some actions cannot be undone.",
+    "Clear List",
+    "Clear Queue",
+    "Clear search",
+    "Clear the Record",
+    "Clear the {p0} log?",
+    "Clear…",
+    "Click a snapshot to select it.",
+    "Click to apply this tweak",
+    "Click to restore the Windows default",
+    "Click to select the whole value, then Ctrl+C to copy it",
+    "Close",
+    "Close ",
+    "Close Purgeon (it keeps running in the tray with View › Close to Tray)",
+    "Close Purgeon?",
+    "Close other programs during a trial: anything else that changes is part of the trial too, and Try Over shows the full list for you to review first.",
+    "Close other programs so their changes aren't recorded.",
+    "Close the selected process straight away",
+    "Come back and click ",
+    "Command palette",
+    "Commands · ↓ to choose, Enter to run",
+    "Compare the selected snapshot with the system now",
+    "Compare · {p0}  →  {p1}",
+    "Compare “",
+    "Comparing \"{p0}\" with \"{p1}\"…",
+    "Comparing \"{p0}\" with the system now…\nA fresh snapshot is taken first.",
+    "Comparing with the snapshot taken before {p0}…",
+    "Comparison cancelled.",
+    "Confirm Erase",
+    "Confirm cleanup?",
+    "Confirm removal?",
+    "Confirmation",
+    "Confirmation Prompts",
+    "Confirmation prompt settings saved.",
+    "Confirmations you disabled with \"Don't show again\" are listed below. Restore any you want to see again. Disabled confirmations are answered automatically (as if you clicked Yes) and a warning notice appears instead of the prompt.",
+    "Connected to nothing",
+    "Contents — ",
+    "Continue",
+    "Cookie rules per site",
+    "Core {p0}",
+    "Could not restore {p0}: {p1}",
+    "Covers Program Files, ProgramData, AppData, the Start Menu and desktops, plus the software and services parts of the registry. Temporary files and caches are left out.",
+    "Create a PortableApps.com package from a monitored installation. Purgeon copies the recorded program files into a PortableApps.com folder structure and writes an NSIS installer script (.nsi) that you compile with makensis into a .paf.exe.",
+    "Create a PortableApps.com package from this program. Purgeon copies the program's files into a PortableApps.com folder structure and writes an NSIS installer script that you compile with makensis into a .paf.exe.",
+    "Create a restore point first (recommended)",
+    "Create a restore point right now",
+    "Create a simple task: run a program at sign-in, daily or weekly",
+    "Create one now",
+    "Create the task",
+    "Creating PortableApps.com package…",
+    "Creating a restore point…\nThis can take a minute.",
+    "Ctrl+K",
+    "Ctrl+click a second snapshot to compare the two, or click Now.",
+    "Current folder",
+    "DELAY",
+    "DELAYED",
+    "DISABLED",
+    "Date the folder {p0} was created",
+    "Day",
+    "Decide Later",
+    "Default",
+    "Delete",
+    "Delete Selected",
+    "Delete it",
+    "Delete this restore point (it cannot be brought back)",
+    "Delete this restore point?",
+    "Delete this task (its definition is saved first, and Change History can undo)",
+    "Delete {p0}?",
+    "Delete…",
+    "Depended on by: ",
+    "Depends on it",
+    "Depth",
+    "Description (optional)",
+    "Desktop program",
+    "Digital signature status of the program's main executable",
+    "Direct reference",
+    "Disabled · Restore",
+    "Disk",
+    "Disk Space Map",
+    "Disk space",
+    "Dismiss",
+    "Don't show again",
+    "Don’t ask again. View › Close Button Asks brings this question back.",
+    "Download Page",
+    "Download from GitHub Releases",
+    "Download v",
+    "Drag to move the window; double-click to maximize or restore it",
+    "Drives",
+    "Dry Run",
+    "Dry run · nothing was changed.",
+    "ENABLED",
+    "Each restore can be undone from Tools › Change History.",
+    "Empty this log (a copy is saved first and kept)",
+    "Enabled",
+    "End Process",
+    "End the process now — anything it hasn't saved is lost",
+    "End this process?",
+    "Erase ",
+    "Erase results",
+    "Erasing…",
+    "Error",
+    "Event Logs",
+    "Every command and program in one list",
+    "Every day",
+    "Every week",
+    "Everything Windows runs on a schedule. Windows' own tasks are badged — they can be run or turned off here, but never deleted.",
+    "Everything selected is a system component, which Purgeon will not remove.",
+    "Everything winget knows about is up to date.",
+    "Existing folders and files are never overwritten. Existing registry keys are saved before the backup is merged into them. You can undo the restore from Tools › Change History.",
+    "Exit",
+    "Explorer Context Menu",
+    "Explorer’s right-click menu now has \"Who owns this?\" on files and folders, and \"Uninstall with Purgeon\" on shortcuts and programs (under Show more options on Windows 11).",
+    "Export Plan…",
+    "Export Settings…",
+    "Export saves all Purgeon settings (themes, confirmations, sync, safe mode) to a JSON file. Import restores them. Your programs and backups are not affected.",
+    "Exporting the program list with winget…",
+    "Export…",
+    "Extensions that a program added on its own are flagged and can be removed here, with a backup. Extensions you added yourself are listed for reference; remove those in the browser.",
+    "Failed to analyze program: {p0}",
+    "File…",
+    "Filter",
+    "Find out which installed program a file, folder or registry key belongs to.",
+    "Find registry keys named after something, and values that mention it, in the software part of the registry.",
+    "Finding {p0}'s files and settings…",
+    "Finish Removal",
+    "Finishing the interrupted removal…",
+    "Folder",
+    "Folder…",
+    "Force removal cancelled — the pre-removal check was stopped.",
+    "Freeze the selected process where it stands, without closing it",
+    "Games",
+    "Games the launchers on this PC report, with the space each one takes. Uninstalling a game stays with its launcher — that is where its files and account live. If a game's files are already gone, Purgeon can clean up the leftover entry, with a backup made first.",
+    "Generate Package",
+    "Generating PortableApps.com package…",
+    "Generating…",
+    "Get",
+    "Get Settings",
+    "Get Started",
+    "Getting settings replaces current program settings after review. Files go to the Recycle Bin first; recovery requires those copies and retained operation records. Close the programs first.",
+    "Go up one folder",
+    "Grew from {p0} MB to {p1} MB since {p2}",
+    "Group",
+    "Groups apply to the program lists",
+    "Growing in size — may be accumulating data or logs.",
+    "Health Check",
+    "Help › Welcome Back",
+    "Hidden from the list (Action › Hide From List). It is still installed; Action › Unhide shows it normally again.",
+    "Hidden programs are shown dimmed. Click to hide them again.",
+    "Homepage (optional)",
+    "Honest limit: on modern SSDs the drive moves data around internally, so overwriting lowers the chance of recovery but cannot promise it. For total certainty, encrypt the drive or destroy it physically.",
+    "How each program connects to the rest of the system — worked out entirely on this PC; nothing leaves the machine.",
+    "How it was installed, which decides how it is uninstalled",
+    "How long the list of Windows versions waits at start before the default one loads",
+    "How many entries the list shows, and their total size where it is known",
+    "How much of the processor this process gets when the PC is busy",
+    "How this PC uses power. Every change is recorded in Change History and can be undone there.",
+    "I understand – don't show this notice again",
+    "If Windows will not start at all: hold Shift while choosing Restart (from the sign-in screen if needed) and Windows shows its recovery tools, including Startup Settings, where Safe Mode can be picked directly.",
+    "If left blank, Purgeon picks the largest .exe from the recorded files",
+    "If the installer has already begun copying files, what it copied so far is missed; Tools › Monitor an Installation records from the very start. Tools › Detect Installations turns this question off.",
+    "Import Settings…",
+    "In the group \"{p0}\". Pick it in the group list to show only this group; Set Group (Ctrl+G) changes it.",
+    "In the tray it keeps watching for installers and new startup entries. Left-click its icon to open it again; right-click it to exit.",
+    "Install folder plus the data folders named after it (in ProgramData and AppData), measured now",
+    "Installation Finished",
+    "Installed",
+    "Installed or updated at the same time as: {p0}",
+    "Installed programs that registered that they need this one",
+    "Installed with",
+    "Installer",
+    "Installer Started",
+    "Installer: ",
+    "Installing {p0}…",
+    "Interrupted Removal",
+    "Invalid settings file.",
+    "Issue: {p0}",
+    "It also monitors installations, compares system snapshots, cleans junk files and manages startup programs. Recovery options vary by action; review the plan and available backups before making changes.",
+    "It takes effect when the PC next starts. You can change your mind here any time before then",
+    "It was started ",
+    "Its definition is saved to Purgeon's task-backups folder first, and Change History's undo puts it back from that copy.",
+    "Its folder holds ",
+    "Its name matches a type of program often installed as a bundled offer",
+    "Its name matches programs often installed as bundled offers.",
+    "Its program file is not digitally signed",
+    "Keep It",
+    "Keep It Running",
+    "Keep Purgeon running in the notification area (tray), or exit it completely?",
+    "Keep backups under this total size (MB)",
+    "Keep chosen programs' settings the same on your PCs through a shared folder, such as one in OneDrive. ",
+    "Keep it",
+    "Keep it on",
+    "Keep the task but stop it running on its schedule",
+    "Keyboard Shortcuts",
+    "Last checked: ",
+    "Last result",
+    "Last run",
+    "Last used",
+    "Leave As Is",
+    "Leave the installer on its first page. Purgeon takes a snapshot first, usually in under a minute.",
+    "Leftover scan cancelled.",
+    "Leftovers of Removed Programs",
+    "Let a suspended process run again",
+    "Let scheduled work (updates, backups) bring the PC out of sleep at a set time",
+    "Let scheduled work wake the PC",
+    "Let this process use only the ticked cores",
+    "Let this task run on its schedule again",
+    "Live tracking is on: every file and registry change made by the installer and the programs it starts is recorded as it happens.",
+    "Live tracking needs Purgeon to run as administrator, so only the before and after snapshots are compared.",
+    "Loading",
+    "Loading…",
+    "Location",
+    "Looked at every time, with each folder inside it: {p0}",
+    "Looking for games… ",
+    "Looking for leftovers of programs that are no longer installed…\nThis can take a minute.",
+    "Looking for portable apps…",
+    "Looking up {p0} in winget…",
+    "Looks up each app in winget’s catalogue (the Windows Package Manager) and shows where a newer version exists, with its download page. Nothing is downloaded or changed.",
+    "Main executable",
+    "Main executable (optional)",
+    "Maintenance Report",
+    "Make PortableApps.com Package",
+    "Make a restore point before changing the start mode, so the change sits behind a safety net",
+    "Maximize",
+    "Maximize the window",
+    "Measure this folder again",
+    "Measured from {p0}{p1}",
+    "Measuring programs and their data folders…\nThis can take a minute.",
+    "Measuring… the biggest folders can take a while.",
+    "Memory",
+    "Memory over ",
+    "Migrate Program – {p0}",
+    "Migrate This PC",
+    "Migration Package",
+    "Minimize",
+    "Minimize to Tray",
+    "Minimize to the taskbar (View › Minimize to Tray sends it to the tray instead)",
+    "Minimize to the tray: the window and its taskbar button go away; left-click the tray icon to bring it back (View › Minimize to Tray)",
+    "Monitor It",
+    "Monitor a program trial on this PC. Snapshot differences may include unrelated activity and do not retain changed file contents. Review the proposed changes before choosing ",
+    "Monitor an Installation",
+    "Monitor an installation",
+    "Monitor installations:",
+    "Monitored program",
+    "Monitoring is active. Run the installer to the end, including any first-run setup.",
+    "Month",
+    "Monthly Report",
+    "Name",
+    "Name for this program",
+    "Needed by",
+    "Needed to remove programs installed for all users, and for machine-wide changes",
+    "Never",
+    "New Startup Entries",
+    "New Task",
+    "New Task…",
+    "Newer versions available through winget, the Windows Package Manager",
+    "Next",
+    "Next run",
+    "Next start",
+    "No backups yet. Backups appear here when something is removed.",
+    "No boot entries could be read.",
+    "No categories match.",
+    "No copy of {p0} remains on this PC, and no Store link was recorded for it.",
+    "No copy of {p0} remains on this PC, so its Microsoft Store page was opened instead.",
+    "No differences here.",
+    "No drives found.",
+    "No executable found in program files.",
+    "No fixed drives were found.",
+    "No games were found. Steam, Epic and GOG libraries are checked.",
+    "No installed program matches it. It may be a leftover; Tools › Find Orphaned Leftovers looks for these.",
+    "No installer chosen",
+    "No leftovers found. Everything was removed cleanly.",
+    "No limit",
+    "No logs match.",
+    "No monitored programs with portable files were found. Use Tools › Monitor an Installation to record a program first.",
+    "No new startup entries.",
+    "No portable apps found in the usual places or your folders. Use Add a Folder to point to the folder that holds them.",
+    "No power plans were found.",
+    "No processes match the search.",
+    "No programs match.",
+    "No removal backup is linked to this entry.",
+    "No restore point was made: {p0} Continuing without one.",
+    "No restore points yet.",
+    "No restore storage set up",
+    "No right-click entries from other programs were found.",
+    "No services, tasks or startup entries run this program's files.",
+    "No shared components were found on this PC.",
+    "No startup entries match.",
+    "No tasks match.",
+    "No trials running.",
+    "No trusted publishers yet.",
+    "No tweaks match.",
+    "No update available — you have the latest version.",
+    "No updates found",
+    "No website was recorded for this program.",
+    "None yet.",
+    "Not Elevated – Restart as Administrator",
+    "Not Now",
+    "Not digitally signed",
+    "Not found",
+    "Not measured",
+    "Not recorded",
+    "Not scheduled.",
+    "Not verified",
+    "Not yet",
+    "Nothing beyond its own folder.",
+    "Nothing here matches the search.",
+    "Nothing is changed on this PC. Services, scheduled tasks and drivers are not included; if the program needs them, run its installer on the other PC and then restore My settings only.",
+    "Nothing matches.",
+    "Nothing to clean",
+    "Notice",
+    "Now",
+    "OFF",
+    "OK",
+    "ON",
+    "Off",
+    "Old backups can be removed automatically. Use 0 to keep them all.",
+    "On",
+    "On Windows 11, these entries are under Show more options. Each change is in Change History and can be undone.",
+    "On a desktop PC the battery settings are kept but have no effect until a battery exists. Plan changes apply straight away.",
+    "On battery",
+    "Once a week, Windows runs Purgeon in the background to keep things tidy. Programs are never uninstalled. Cleanup recovery depends on retained records and Recycle Bin copies.",
+    "One of Windows' own tasks — it can be run or turned off here, but not deleted.",
+    "Only safe categories — caches, dumps and temporary files Windows rebuilds.",
+    "Open",
+    "Open Folder",
+    "Open System Restore…",
+    "Open Windows' System Restore window",
+    "Open the folder this process runs from",
+    "Open {p0}",
+    "Open {p0} in Explorer",
+    "Opens {p0} in your browser, to download version {p1}. Unpack it over this folder after backing the folder up.",
+    "Orphaned Leftovers",
+    "Orphaned entries",
+    "Overwrite and delete the listed files",
+    "Overwrite:",
+    "Overwrites each file’s contents before deleting it, so the data cannot be undeleted. There is no backup and no undo — that is the point of this tool. Registry items are not offered: overwriting has no meaning there.",
+    "PARTIAL",
+    "Pack ",
+    "Package name",
+    "Packs the chosen programs into one folder, one package each, plus a winget list of all your programs. On the new PC, use File › Restore Programs From Folder, and run winget import for the rest.",
+    "Parts used by more than one program. These are what Purgeon refuses to delete during a removal — here is exactly why, and who would be affected.",
+    "Paused",
+    "Permanent",
+    "Pick a program to see its connections.",
+    "Pick where you'd like to go first:",
+    "Plugged in",
+    "Portable Apps",
+    "Portable mode: settings, backups and snapshots are kept in the \"Purgeon Data\" folder next to the program.",
+    "Portable version of Foo Editor",
+    "PortableApps.com Installer",
+    "PortableApps.com package generated for \"{p0}\". NSIS script: {p1}",
+    "Power Options",
+    "Power down idle USB devices",
+    "Power plan",
+    "Preparing the cleanup…",
+    "Press ",
+    "Priority",
+    "Priority ▾",
+    "Process",
+    "Processor",
+    "Processor Affinity…",
+    "Processor affinity — {p0}",
+    "Processor over ",
+    "Program",
+    "Program Updates",
+    "Program file",
+    "Program group",
+    "Program – {p0}",
+    "Programs",
+    "Programs Removed Elsewhere",
+    "Programs accepting incoming connections",
+    "Programs are uninstalled one after another, silently where possible, so you don't have to watch. If one needs a restart, Purgeon continues after you sign back in. At the end, every leftover is shown at once for you to review.",
+    "Programs signed by a trusted publisher are never blocked by Safe Mode and are excluded from unsigned-program warnings. Add the certificate subject name as it appears in the digital signature (for example \\\"Microsoft Corporation\\\").",
+    "Programs that run from a folder without being installed, so Windows doesn't list them. Registering one adds it to the program list with its icon, so it gets groups, leftover scans and a clean removal.",
+    "Programs you hid with Action › Hide From List. Click to show them dimmed, so you can unhide them.",
+    "Properties – {p0}",
+    "Protected",
+    "Provisioned copy of {p0} removed.",
+    "Publisher",
+    "Publisher (developer)",
+    "Publisher name",
+    "Publisher of the selected program, as its uninstall entry reports it",
+    "Purgeon",
+    "Purgeon ",
+    "Purgeon can optionally ask GitHub whether a newer release exists. Checking is off by default and never sends data except a standard HTTPS request to api.github.com. It never nags after a dismissal.",
+    "Purgeon helps you inspect installed programs and review what to remove.",
+    "Purgeon hit a problem drawing its window",
+    "Purgeon no longer starts with Windows; its sign-in task was deleted.",
+    "Purgeon now starts when you sign in to Windows (a task in Task Scheduler › Purgeon).{p0}",
+    "Purgeon records file and registry changes within the snapshot scope. Live tracing can attribute changes to an installer. Unrelated changes remain unchecked; changed file contents are not stored for complete rollback.",
+    "Purgeon warns you — once, until things calm down — when the PC stays this busy. Alerts only run while Purgeon is open or in the tray. Set a level to 0 to turn that alert off.",
+    "Purgeon was removed from Explorer’s right-click menu.",
+    "Purgeon was stopped while it was writing down what the removal had done, so it cannot tell which removal it was or what had already been removed. Nothing more will be removed, and any backup the removal made is still in Tools › Backups. Clearing the record just removes the damaged note; it does not change anything else.",
+    "Put ",
+    "Re-check this package: seal, stored files, trial restore, Recycle Bin contents",
+    "Reading Explorer’s right-click entries…",
+    "Reading browser extensions…",
+    "Reading current settings…",
+    "Reading monitored programs…",
+    "Reading restore settings…",
+    "Reading startup entries…",
+    "Reading the backup…",
+    "Reading the boot settings…",
+    "Reading the logs…",
+    "Reading the maintenance schedule…",
+    "Reading the power settings…",
+    "Reading the process list…",
+    "Reading the rules…",
+    "Reading the tasks…",
+    "Reading this PC's details…",
+    "Recording",
+    "Records",
+    "Recovery Packages",
+    "Recovery records were saved. Undo can restore supported changes while their backup payloads and Recycle Bin copies remain available.",
+    "Register",
+    "Registry Search – {p0}",
+    "Reinstalling {p0}…",
+    "Relationship Graph",
+    "Reload the window",
+    "Removal Report",
+    "Remove",
+    "Remove Selected",
+    "Remove backups older than (days)",
+    "Remove from Group",
+    "Remove rule…",
+    "Remove the {p0} rule for {p1}",
+    "Remove this entry — a backup is made first, so it can be restored from the Archive",
+    "Remove this launcher entry — a backup is made first, so it can be restored from the Archive",
+    "Removes the rule, after backing it up",
+    "Remove…",
+    "Rescan",
+    "Resource alerts",
+    "Restart Explorer",
+    "Restart Explorer ({p0})",
+    "Restart as Administrator to clean this",
+    "Restart as Administrator to use this",
+    "Restarting…",
+    "Restorable ✓ verified",
+    "Restore",
+    "Restore ",
+    "Restore All",
+    "Restore Everything",
+    "Restore Program – {p0}",
+    "Restore Programs From Folder",
+    "Restore Report",
+    "Restore Ticked Items",
+    "Restore everything in this package",
+    "Restore only the ticked items",
+    "Restore points",
+    "Restore points are off: the checkbox starts unticked.",
+    "Restore points are on: confirmations offer to create one first.",
+    "Restore points let Windows roll back to how things were. The roll-back itself runs in Windows' own System Restore window — this one manages the storage, the protection and the points.",
+    "Restore results",
+    "Restore the window to its earlier size",
+    "Restoring {p0} of {p1}: {p2}…",
+    "Restoring {p0}…",
+    "Restoring…",
+    "Results start unselected and go through the same protection rules as leftovers; anything removed is backed up first.",
+    "Resume",
+    "Review required",
+    "Review the list once more, then erase",
+    "Review the recovery plan first.",
+    "Right-click entries that programs added to Explorer. Click one to turn it on or off; nothing is deleted. Changes show in new Explorer windows, or everywhere after Restart Explorer.",
+    "Roll Back",
+    "Rollback Report",
+    "Rolling back the interrupted removal…",
+    "Run Now",
+    "Run again",
+    "Run now",
+    "Run the check",
+    "Run the health check now",
+    "Run this task right now",
+    "Running Windows clean-up…\nThis can take several minutes.",
+    "Running maintenance…",
+    "Running the uninstaller for {p0}…",
+    "Running the uninstaller for {p0}…\nFinish the uninstaller's window if one appears.",
+    "Safe Mode is on: cleanup requires strong ownership evidence and excludes services, scheduled tasks, and firewall rules. Internal rule scores are not probabilities.",
+    "Safe Mode persists across restarts until you choose Normal start here or clear the correct boot loader's safeboot setting from Windows Recovery. Nothing here restarts the PC. If you only need a one-time Safe Mode start, use Shift+Restart and Windows Startup Settings instead.",
+    "Safe mode is off: every finding can be selected.",
+    "Safe mode: ",
+    "Safe, reversible Windows tweaks. Every tweak can be undone here.",
+    "Save",
+    "Save Package…",
+    "Save Report…",
+    "Save a copy and clear",
+    "Save a copy…",
+    "Save these alert levels",
+    "Save this log to an .evtx file you choose",
+    "Save this report as a text file",
+    "Save to Folder…",
+    "Saved in {p0}.",
+    "Saved in {p0}. On the new PC: File › Restore Programs From Folder, then winget import -i all-programs.winget.json for the rest.",
+    "Saved to {p0}",
+    "Saving the winget list of all programs…",
+    "Saving…",
+    "Scan Again",
+    "Scan cancelled after {p0} of {p1} programs: {p2} leftover items found so far.",
+    "Scan cancelled — nothing was cleaned.",
+    "Scan cancelled: {p0} folders, registry keys and services found so far match no installed program. Nothing is selected: check each one (Tools › Who Owns This helps) before removing it.",
+    "Scan for Leftovers",
+    "Scan stopped — sizes below are what was measured before it stopped.",
+    "Scanning for leftovers of {p0}",
+    "Scanning for leftovers of {p0}…",
+    "Scanning temporary files, crash dumps and caches…",
+    "Scheduled Maintenance",
+    "Scheduled Tasks",
+    "Scheduled maintenance is off.",
+    "Scheduled. Next run: {p0}{p1}.",
+    "Scheduling needs administrator rights. Use File › Restart as Administrator.",
+    "Search Registry",
+    "Search for",
+    "Search logs…",
+    "Search or run a command",
+    "Search programs…",
+    "Search tasks…",
+    "Searching the registry for \"{p0}\"…",
+    "Seconds",
+    "Secure Erase",
+    "See ",
+    "Select All",
+    "Select None",
+    "Select Shown",
+    "Select exactly two snapshots (Ctrl+click) to compare them.",
+    "Selected",
+    "Selection",
+    "Send",
+    "Send My Settings",
+    "Service starts after a short delay following boot",
+    "Service starts normally after boot",
+    "Set",
+    "Set Group",
+    "Set it",
+    "Set {p0} to {p1} priority",
+    "Settings Received",
+    "Settings Sent",
+    "Settings Sync",
+    "Settings sync is off.",
+    "Settings sync is on.",
+    "Settings sync saved.",
+    "Shared Components",
+    "Shared file",
+    "Shared runtime",
+    "Show drive {p0} — {p1} free of {p2}",
+    "Show more (",
+    "Show one group of programs. Right-click a program › Set Group to add it to one (Ctrl+G).",
+    "Show the {p0} found for this program",
+    "Shown for information: file contents are not stored in snapshots, so this cannot be put back.",
+    "Shows only the changes whose path or value contains this text",
+    "Signature",
+    "Signature problem: {p0}",
+    "Signed",
+    "Signed by {p0}",
+    "Silent uninstall is off: every uninstaller shows its own window.",
+    "Silent uninstall is on: Windows Installer, Inno Setup, NSIS and WiX uninstallers run without their windows. Others run normally.",
+    "Size on disk",
+    "Size trend",
+    "Skip to main content",
+    "Snapshot \"{p0}\" taken: {p1} files and folders, {p2} registry entries in {p3} s.",
+    "Snapshot cancelled — nothing was saved.",
+    "Snapshot timeline",
+    "Start",
+    "Start (I will run the installer)",
+    "Start Monitoring",
+    "Start a Trial…",
+    "Start recording events into this log again",
+    "Start with Windows needs administrator rights, to create its sign-in task. Use File › Restart as Administrator.",
+    "Startup & services:",
+    "Startup entries are listed but not removed here — a startup entry is one value inside a shared registry key, so turn those off in Startup & Services instead. Services and tasks are removed only through the standard backed-up removal.",
+    "State",
+    "Status",
+    "Step ",
+    "Step {p0} of {p1}",
+    "Stop",
+    "Stop Detecting",
+    "Stop after the current file (a file mid-overwrite is left partially overwritten)",
+    "Stop looking in this folder. Nothing in it is changed.",
+    "Stop measuring; what is already measured stays on screen",
+    "Stop recording new events into this log",
+    "Stop the check at the next step",
+    "Stop this task if it is running",
+    "Storage: {p0} used of {p1}",
+    "Suspend",
+    "Suspended",
+    "Switch to the {p0} plan",
+    "Sync folder chosen.",
+    "System Info",
+    "System Restore",
+    "System disk under ",
+    "Take Snapshot",
+    "Take a Snapshot",
+    "Taking a snapshot before the trial of {p0}…",
+    "Taking a snapshot before {p0} installs… Leave its installer on the first page until this is done.",
+    "Taking a snapshot of files and registry before installation…",
+    "Taking snapshot \"{p0}\"…\nThis takes about {p1}.",
+    "Taking the second snapshot and comparing changes…",
+    "Temperatures appear only where Windows reports them.",
+    "Temporary files, crash dumps, error reports and caches that Windows and programs recreate when needed. The registry is not touched.",
+    "That folder has no program packages (.swpkg).",
+    "The PortableApps.com package generator is recent and may make mistakes or produce packages that don't work perfectly. The developer is actively polishing it to mitigate issues. ",
+    "The Security log is the record Windows keeps of sign-ins and security events. Purgeon can save a copy of it, but never clears it or turns it off.",
+    "The actions below apply to every selected program.",
+    "The day of the week",
+    "The day of the week maintenance runs",
+    "The entry could not be removed.",
+    "The file Purgeon treats as the program itself",
+    "The file that remembers your settings from before these tweaks was damaged, so turning a tweak off now restores the Windows default instead of your exact earlier setting. A copy of the damaged file was kept beside it with “.damaged” in the name.",
+    "The folder the program is installed in, as its uninstall entry says",
+    "The installer that was spotted",
+    "The installer to run while monitoring. Use Browse to choose one, or leave it empty and run the installer yourself.",
+    "The log will be emptied. First, a copy is saved into Purgeon's log-backups folder and kept — that copy is the only way back.",
+    "The month the report covers",
+    "The most space restore points may use on this drive. When they need more, the oldest are deleted first.",
+    "The name this recording is listed under in Monitored Programs",
+    "The newest backup of each program is always kept, so the last removal of anything can still be undone. Once a backup is removed, Change History can no longer undo that change. Files in the Recycle Bin are not counted or touched.",
+    "The processor the program’s main file is built for, read from the file itself. .NET programs built for “Any CPU” show as 32-bit here but run as 64-bit.",
+    "The program file the task runs",
+    "The program itself is still running underneath, but the window could not be drawn. The error was:",
+    "The program name shown in the PortableApps.com menu",
+    "The provisioned copy could not be removed: {p0}",
+    "The queue is empty. Right-click programs and choose Add to Uninstall Queue.",
+    "The removal “",
+    "The shared folder settings are kept in, for example one inside OneDrive. Use Folder to choose it.",
+    "The time of day maintenance runs, like 10:00. If the PC is off then, it runs when it is next on.",
+    "The time of day, like 09:00",
+    "The uninstall queue continues after your next restart.",
+    "Then install as usual, including any first-run setup.",
+    "These are written to Chrome's and Edge's own policy settings, so they hold in every profile and while the browser runs. Blocking a site signs you out of it there. Firefox does not read these policies, so the rules do not cover it. Changing them needs administrator rights.",
+    "These programs were",
+    "They are also recorded in View › Uninstall Archive.",
+    "This cannot be undone.",
+    "This change cannot be undone here.",
+    "This change was already undone.",
+    "This comparison is very large; only the first part of each list is shown.",
+    "This folder is empty, or Purgeon cannot read it.",
+    "This installation created {p0} items. Items already removed are skipped.",
+    "This installer was already running when monitoring began, so the before and after snapshots are compared. (Live tracking follows only installers that Purgeon starts itself.)",
+    "This is a read-only view. To uninstall, force-remove, or scan for leftovers, use the action bar or right-click menu on the program list.",
+    "This is the plan in use",
+    "This point cannot be matched to its stored copy, so it can only be removed with the others from the Cleaner",
+    "This program is not digitally signed",
+    "This program was",
+    "Tick the processor cores ",
+    "Time",
+    "Timed wake-ups",
+    "Tip: {p0}",
+    "To disable a confirmation again, check \"Don't show again\" when it appears. Changes take effect immediately.",
+    "To roll Windows back to one of these points, use Windows' own wizard:",
+    "Today",
+    "Total: ",
+    "Trial Installs",
+    "Trial of {p0} started. Install and try it; Tools › Trial Installs › Try Over offers the recorded changes for review.",
+    "Trusted Publishers",
+    "Try Over",
+    "Try Over – {p0}",
+    "Try Over…",
+    "Try again",
+    "Turn Off",
+    "Turn off",
+    "Turn off and delete its points",
+    "Turn off automatic update checks",
+    "Turn off protection for {p0}?",
+    "Turn on",
+    "Turn on automatic update checks",
+    "Turn restore protection off for this drive (deletes its restore points)",
+    "Turn restore protection on for this drive",
+    "Turning one off never deletes it; you can turn it back on in Startup & Services.",
+    "Turning protection off deletes every restore point on ",
+    "Type",
+    "Type a command or a program name…",
+    "Type a new group name, or pick one you used before",
+    "Type part of a command or program name; Up and Down choose, Enter runs, Esc closes",
+    "Type part of a log's name to filter the list",
+    "Type part of a task's name or folder to filter the list",
+    "Type to filter the list by name, publisher or group. Matching menu commands appear below: press Down, then Enter to run one. Esc clears.",
+    "USB devices",
+    "Undo",
+    "Undo Report",
+    "Undo available",
+    "Undo failed.",
+    "Undo removes what was restored and puts back any registry settings it changed. You can also undo it later from Tools › Change History.",
+    "Undo: ",
+    "Undoing…",
+    "Undone: {p0}",
+    "Ungrouped",
+    "Uninstall",
+    "Uninstall Queue",
+    "Uninstall Queue – {p0} programs",
+    "Uninstall cancelled — the pre-uninstall check was stopped.",
+    "Uninstall entry",
+    "Uninstall programs:",
+    "Uninstall – {p0}",
+    "Uninstalling {p0}",
+    "Uninstalling {p0} of {p1}: {p2}",
+    "Uninstalling {p0} silently…",
+    "Uninstalls programs, then hunts down the leftover files, registry keys, startup entries and services they leave behind.",
+    "Uninstall…",
+    "Unknown",
+    "Unregister",
+    "Unsigned",
+    "Update Report",
+    "Update Selected",
+    "Update available:",
+    "Update checks are off by default and never nag after you dismiss them. Turn them on in Settings › Update Check.",
+    "Updater",
+    "Updates run silently one after another. Updating accepts each package's license terms. A restore point is offered first if Create Restore Points is on.",
+    "Updating {p0} of {p1}: {p2}…",
+    "User Guide",
+    "Valid — signed by {p0}",
+    "Verification cancelled — the package keeps its previous verdict.",
+    "Verification failed",
+    "Verification found problems: {p0}",
+    "Verify Selected",
+    "Verifying…",
+    "Version",
+    "View Releases",
+    "View my programs",
+    "Visit the Purgeon releases page to see what’s changed and download the installer.",
+    "Weekly maintenance scheduled: {p0} at {p1}.",
+    "What is running right now, and what it is costing. Windows critical processes are protected.",
+    "What is using the space on each drive, biggest first. Open a folder to look inside it.",
+    "What it hooks into Windows",
+    "What the task is called in the list",
+    "What's New",
+    "What’s New",
+    "When",
+    "When I sign in",
+    "When all backups together are larger than this, the oldest are deleted first (each program’s newest is always kept). Empty means no size limit.",
+    "When any of its program files last ran, from Windows’ Prefetch records",
+    "When setup is done, come back and click ",
+    "When the task runs",
+    "When you uninstall a program, Purgeon runs its uninstaller, then scans for what it left behind — files, registry keys, services, scheduled tasks — and lets you choose what to remove.",
+    "Who Owns This?",
+    "Windows",
+    "Windows Clean-up Report",
+    "Windows Store app",
+    "Windows clean-up · permanent",
+    "Windows is set to a specialist start mode Purgeon does not change. Choosing Normal start above clears it.",
+    "Windows may power down USB devices that are sitting idle, to save power",
+    "Windows measured it slowing start-up {p0} time{p1}",
+    "Windows versions on this PC (read-only)",
+    "Windows writes everything that happens into these logs. Clearing one always saves a copy into Purgeon's log-backups folder first, and the copy is kept.",
+    "Windows' own critical processes can't be ended or suspended — Purgeon says so instead of trying. Updates every 2 seconds while this view is open.",
+    "Without a chosen installer, only the before and after snapshots are compared. Choose the installer to also track it live.",
+    "Yesterday",
+    "You can always reopen this from ",
+    "You can close this window normally. If the problem comes back, the command log in Purgeon's data folder (a file named by date, in the logs folder) shows what the program was doing.",
+    "Your folders:",
+    "Your settings",
+    "Your settings are up to date.",
+    "Zoom {p0}%",
+    "added",
+    "added by a program",
+    "added by a program (waiting)",
+    "added by you",
+    "another PC",
+    "at least ",
+    "bad signature",
+    "by policy",
+    "changed",
+    "check",
+    "counting stopped early",
+    "done by Windows itself; cannot be undone",
+    "e.g. Back up my photos",
+    "e.g. Example Corp",
+    "e.g. Foo Editor",
+    "e.g. FooEditor",
+    "e.g. FooEditor.exe",
+    "e.g. Games, Work, Utilities",
+    "e.g. a program or publisher name",
+    "example.com",
+    "files gone",
+    "growing",
+    "hidden",
+    "https://example.com",
+    "installed with ",
+    "link · not counted",
+    "missing file",
+    "not in winget",
+    "possible offer",
+    "provisioned",
+    "removed",
+    "s",
+    "s apply",
+    "s are",
+    "since ",
+    "size unknown",
+    "system component",
+    "total size of installed ",
+    "unsigned",
+    "up to date",
+    "version unknown",
+    "winget could not export the list: {p0}",
+    "winget could not install {p0}: {p1}",
+    "winget could not reinstall {p0}: {p1}. Use Force instead.",
+    "winget has no package for {p0}, so it can't be repaired that way. Use Force instead.",
+    "winget has no package named \"{p0}\".{p1}",
+    "winget package {p0}, latest version {p1}",
+    "winget’s catalogue has no package with this exact name, so updates can’t be checked.",
+    "{p0}\n{p1}\nClick to select, Ctrl+click to select a second one",
+    "{p0} GB{p1}",
+    "{p0} MB",
+    "{p0} RULES",
+    "{p0} added to the uninstall queue ({p1} waiting). Tools › Uninstall Queue starts it.",
+    "{p0} available",
+    "{p0} backed up to {p1}: {p2} files ({p3}) and {p4} registry entries.{p5}",
+    "{p0} cannot be removed: {p1}. Purgeon lists it so you can see everything installed, but leaves it in place.",
+    "{p0} changes since the trial started ({p1} added, {p2} changed, {p3} removed). Everything added is removed and changed settings are put back. Changes by other programs are listed too, so review before removing.",
+    "{p0} days ago",
+    "{p0} files {p1}",
+    "{p0} folders, registry keys and services match no installed program. Nothing is selected: check each one (Tools › Who Owns This helps) before removing it.",
+    "{p0} hour{p1}",
+    "{p0} in all: program {p1}{p2}",
+    "{p0} is now in the program list.",
+    "{p0} keys and values{p1}{p2}. Nothing is selected; Windows' own keys are never listed.",
+    "{p0} leftover items of {p1} program{p2} removed elsewhere.",
+    "{p0} minutes",
+    "{p0} of {p1} items done, {p2} failed.",
+    "{p0} of {p1} uninstalled. {p2} leftover items found.",
+    "{p0} programs added themselves",
+    "{p0} programs exported to {p1}. On another PC, run: winget import -i \"{p2}\"",
+    "{p0} put in the group \"{p1}\".",
+    "{p0} seconds",
+    "{p0} taken out of {p1}.",
+    "{p0} update{p1} available",
+    "{p0} was reinstalled under a different name; uninstall it from the list.",
+    "{p0} was reinstalled.",
+    "{p0} was restored from the copy still on this PC.",
+    "{p0} {p1} hidden from the list. {p2} still installed, and Windows still lists {p3}. View › Show Hidden Programs shows hidden programs so you can unhide them.",
+    "{p0} {p1} installed{p2}",
+    "{p0} {p1} of {p2}: {p3}…",
+    "{p0} {p1} shown in the list again.",
+    "{p0} — a link to another folder; not counted, so nothing is double-counted",
+    "{p0}% free",
+    "{p0}, {p1}, {p2}. Click to turn {p3}.",
+    "{p0}, {p1}. Click to turn {p2} delayed start.",
+    "{p0}. It is listed so you can see everything that is installed, but Purgeon will not remove it.",
+    "{p0}: install folder is unknown or missing.",
+    "’s profile are restored into yours.",
+    "” did not finish.",
+    "…and ",
+    "↑ Up",
+    "↻ Retry",
+    "⚠ Check",
+    "⚠ Portable compiler is new – may have bugs."
+  ],
+  "namedKeys": [
+    "actionsLabel",
+    "backup",
+    "busyLabel",
+    "cancel",
+    "close",
+    "moreActions",
+    "name",
+    "navLabels",
+    "none",
+    "progressFraction",
+    "recoveryOperation",
+    "recoveryRetained",
+    "recoveryReviewBody",
+    "recoveryReviewTitle",
+    "recoveryTarget",
+    "rowInspectHint",
+    "searchCommand",
+    "selectedCount",
+    "selectionFraction",
+    "sortColumn",
+    "statusScanning",
+    "syncComplete",
+    "syncConflict",
+    "syncDisabled",
+    "syncFirstConnection",
+    "syncFolderLabel",
+    "syncNoConflict",
+    "syncPreferencesTitle",
+    "syncPullAction",
+    "syncPullBody",
+    "syncPullTitle",
+    "syncPushAction",
+    "syncPushBody",
+    "syncPushTitle",
+    "syncSafeFields",
+    "syncUnresolved",
+    "viewApps",
+    "viewArchive",
+    "viewDebloat",
+    "viewJunk",
+    "viewMonitored",
+    "viewPrograms",
+    "viewSnapshots",
+    "viewStartup",
+    "viewTimeline",
+    "viewsLabel"
+  ],
+  "locations": [
+    {
+      "file": "src/App.jsx",
+      "text": "Its program file is not digitally signed"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Signature problem: {p0}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "unsigned"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "bad signature"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Its name matches a type of program often installed as a bundled offer"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "possible offer"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Installed or updated at the same time as: {p0}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "installed with "
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Grew from {p0} MB to {p1} MB since {p2}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "growing"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Drag to move the window; double-click to maximize or restore it"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Purgeon"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Always on top is on: Purgeon stays in front of other windows. Click to turn it off."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Always on top: keep Purgeon in front of other windows, even when you click elsewhere (View › Always on Top)."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Minimize to the tray: the window and its taskbar button go away; left-click the tray icon to bring it back (View › Minimize to Tray)"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Minimize to the taskbar (View › Minimize to Tray sends it to the tray instead)"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Minimize"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Restore the window to its earlier size"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Maximize the window"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Restore"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Maximize"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Close Purgeon (it keeps running in the tray with View › Close to Tray)"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "A Purgeon data file was damaged and could not be read ({p0}). A copy of each was kept beside it with \".damaged\" in the name, and Purgeon is continuing with safe defaults."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Creating a restore point…\nThis can take a minute."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "No restore point was made: {p0} Continuing without one."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Zoom {p0}%"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Undoing…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Undo Report"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Undone: {p0}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Restoring…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Undo Report"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Checking {p0}…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Checking {p0} programs…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Backing up and removing selected items…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Removal Report"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Recovery records were saved. Undo can restore supported changes while their backup payloads and Recycle Bin copies remain available."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Scanning for leftovers of {p0}…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Running the uninstaller for {p0}…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Uninstall – {p0}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "This installation created {p0} items. Items already removed are skipped."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Everything selected is a system component, which Purgeon will not remove."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Uninstall cancelled — the pre-uninstall check was stopped."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Uninstalling {p0} of {p1}: {p2}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Scanning for leftovers of {p0}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Batch Uninstall – {p0} programs"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Taking snapshot \"{p0}\"…\nThis takes about {p1}."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Snapshot cancelled — nothing was saved."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Snapshot \"{p0}\" taken: {p1} files and folders, {p2} registry entries in {p3} s."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Comparing \"{p0}\" with \"{p1}\"…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Comparing \"{p0}\" with the system now…\nA fresh snapshot is taken first."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Comparison cancelled."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Preparing the cleanup…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Running Windows clean-up…\nThis can take several minutes."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Windows Clean-up Report"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Looking for leftovers of programs that are no longer installed…\nThis can take a minute."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Orphaned Leftovers"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Scan cancelled: {p0} folders, registry keys and services found so far match no installed program. Nothing is selected: check each one (Tools › Who Owns This helps) before removing it."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} folders, registry keys and services match no installed program. Nothing is selected: check each one (Tools › Who Owns This helps) before removing it."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Updating {p0} of {p1}: {p2}…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Update Report"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Exporting the program list with winget…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} programs exported to {p1}. On another PC, run: winget import -i \"{p2}\""
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "winget could not export the list: {p0}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Reading the maintenance schedule…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} put in the group \"{p1}\"."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} taken out of {p1}."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Finding {p0}'s files and settings…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Backing up {p0}…\nLarge programs can take a few minutes."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} backed up to {p1}: {p2} files ({p3}) and {p4} registry entries.{p5}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Reading the backup…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Restoring {p0}…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Restore Report"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Undo removes what was restored and puts back any registry settings it changed. You can also undo it later from Tools › Change History."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} added to the uninstall queue ({p1} waiting). Tools › Uninstall Queue starts it."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Uninstalling {p0}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Scanning for leftovers of {p0}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "The uninstall queue continues after your next restart."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Uninstall Queue – {p0} programs"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} of {p1} uninstalled. {p2} leftover items found."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Scanning for leftovers of {p0}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Leftover scan cancelled."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Leftovers of Removed Programs"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Scan cancelled after {p0} of {p1} programs: {p2} leftover items found so far."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} leftover items of {p1} program{p2} removed elsewhere."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Taking a snapshot before the trial of {p0}…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Trial of {p0} started. Install and try it; Tools › Trial Installs › Try Over offers the recorded changes for review."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Comparing with the snapshot taken before {p0}…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Try Over – {p0}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} changes since the trial started ({p1} added, {p2} changed, {p3} removed). Everything added is removed and changed settings are put back. Changes by other programs are listed too, so review before removing."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Looking up {p0} in winget…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "winget has no package for {p0}, so it can't be repaired that way. Use Force instead."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Reinstalling {p0}…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "winget could not reinstall {p0}: {p1}. Use Force instead."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} was reinstalled under a different name; uninstall it from the list."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Measuring programs and their data folders…\nThis can take a minute."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Searching the registry for \"{p0}\"…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Registry Search – {p0}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} keys and values{p1}{p2}. Nothing is selected; Windows' own keys are never listed."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "No new startup entries."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Reading browser extensions…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} {p1} of {p2}: {p3}…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Saving the winget list of all programs…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Migration Package"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Saved in {p0}. On the new PC: File › Restore Programs From Folder, then winget import -i all-programs.winget.json for the rest."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "That folder has no program packages (.swpkg)."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Restoring {p0} of {p1}: {p2}…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Settings Sent"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Saved in {p0}."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Your settings are up to date."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Settings Received"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Looking for portable apps…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Reading monitored programs…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Analyzing program for portable packaging…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Failed to analyze program: {p0}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Analyzing {p0}: measuring its folders and finding what it hooks into Windows…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Analysis of {p0} cancelled."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "This change was already undone."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "An uninstall cannot be undone here. Reinstall the program, or use the restore point made before it."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "This change cannot be undone here."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} cannot be removed: {p1}. Purgeon lists it so you can see everything installed, but leaves it in place."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Uninstall cancelled — the pre-uninstall check was stopped."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Uninstalling {p0} silently…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Running the uninstaller for {p0}…\nFinish the uninstaller's window if one appears."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Uninstall"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Provisioned copy of {p0} removed."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "The provisioned copy could not be removed: {p0}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Force removal cancelled — the pre-removal check was stopped."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0}: install folder is unknown or missing."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Backup – {p0}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Checking for a copy of {p0} still on this PC…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} was restored from the copy still on this PC."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "No copy of {p0} remains on this PC, so its Microsoft Store page was opened instead."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "No copy of {p0} remains on this PC, and no Store link was recorded for it."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Could not restore {p0}: {p1}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Looking up {p0} in winget…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "winget has no package named \"{p0}\".{p1}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Installing {p0}…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} was reinstalled."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "winget could not install {p0}: {p1}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "No website was recorded for this program."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "No removal backup is linked to this entry."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Restoring…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Restore Report"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Restoring…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Restore Report"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} {p1} hidden from the list. {p2} still installed, and Windows still lists {p3}. View › Show Hidden Programs shows hidden programs so you can unhide them."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} {p1} shown in the list again."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Purgeon now starts when you sign in to Windows (a task in Task Scheduler › Purgeon).{p0}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Purgeon no longer starts with Windows; its sign-in task was deleted."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Start with Windows needs administrator rights, to create its sign-in task. Use File › Restart as Administrator."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Reading Explorer’s right-click entries…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Purgeon was removed from Explorer’s right-click menu."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Explorer’s right-click menu now has \"Who owns this?\" on files and folders, and \"Uninstall with Purgeon\" on shortcuts and programs (under Show more options on Windows 11)."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Select exactly two snapshots (Ctrl+click) to compare them."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Safe Mode is on: cleanup requires strong ownership evidence and excludes services, scheduled tasks, and firewall rules. Internal rule scores are not probabilities."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Safe mode is off: every finding can be selected."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Silent uninstall is on: Windows Installer, Inno Setup, NSIS and WiX uninstallers run without their windows. Others run normally."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Silent uninstall is off: every uninstaller shows its own window."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Restore points are on: confirmations offer to create one first."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Restore points are off: the checkbox starts unticked."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Settings sync is on."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Settings sync is off."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Sync folder chosen."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Background monitoring is on: Purgeon scans for leftovers while the PC is idle."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Background monitoring is off."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Taking a snapshot before {p0} installs… Leave its installer on the first page until this is done."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "size unknown"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "The actions below apply to every selected program."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Skip to main content"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Needed to remove programs installed for all users, and for machine-wide changes"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Not Elevated – Restart as Administrator"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Administrator"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Purgeon"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Loading…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} {p1} installed{p2}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Safe, reversible Windows tweaks. Every tweak can be undone here."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Only safe categories — caches, dumps and temporary files Windows rebuilds."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "What is using the space on each drive, biggest first. Open a folder to look inside it."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "What is running right now, and what it is costing. Windows critical processes are protected."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "total size of installed "
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Search or run a command"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Type to filter the list by name, publisher or group. Matching menu commands appear below: press Down, then Enter to run one. Esc clears."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Clear search"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Commands · ↓ to choose, Enter to run"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Every command and program in one list"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "All commands "
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Ctrl+K"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Selection"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Program group"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Show one group of programs. Right-click a program › Set Group to add it to one (Ctrl+G)."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Groups apply to the program lists"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "All Groups"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Built-in groups"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Ungrouped"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Loading…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Loading…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Loading…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Loading…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Loading…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Loading…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Measured from {p0}{p1}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Date the folder {p0} was created"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0}. It is listed so you can see everything that is installed, but Purgeon will not remove it."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "system component"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "A provisioned copy is built into Windows: new user accounts get this app. When you remove the app, Purgeon offers to remove the provisioned copy too."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "provisioned"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Hidden from the list (Action › Hide From List). It is still installed; Action › Unhide shows it normally again."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "hidden"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "In the group \"{p0}\". Pick it in the group list to show only this group; Set Group (Ctrl+G) changes it."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Error"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Try again"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "↻ Retry"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Notice"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Dismiss"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Undo available"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Undo: "
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Undo failed."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Undo"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "How many entries the list shows, and their total size where it is known"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Loading"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": ", total size {p0}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": " (of {p0})"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": ", {p0} selected"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Hidden programs are shown dimmed. Click to hide them again."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Programs you hid with Action › Hide From List. Click to show them dimmed, so you can unhide them."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": ", {p0} hidden{p1}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Publisher of the selected program, as its uninstall entry reports it"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Confirmation prompt settings saved."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Rolling back the interrupted removal…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Finishing the interrupted removal…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Saving…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Rollback Report"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Removal Report"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Backup limits saved.{p0}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Search Registry"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Find registry keys named after something, and values that mention it, in the software part of the registry."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Search for"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "e.g. a program or publisher name"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Results start unselected and go through the same protection rules as leftovers; anything removed is backed up first."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "\"{p0}\" no longer starts with Windows. Turn it back on in Startup & Services."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Restore Report"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Each restore can be undone from Tools › Change History."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Settings sync saved."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "{p0} is now in the program list."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Generating PortableApps.com package…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "PortableApps.com package generated for \"{p0}\". NSIS script: {p1}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Creating PortableApps.com package…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "PortableApps.com package generated for \"{p0}\". NSIS script: {p1}"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "\"{p0}\" needs administrator rights. Use File › Restart as Administrator."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Weekly maintenance scheduled: {p0} at {p1}."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Scheduled maintenance is off."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Scheduling needs administrator rights. Use File › Restart as Administrator."
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Running maintenance…"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Maintenance Report"
+    },
+    {
+      "file": "src/App.jsx",
+      "text": "Saved to {p0}"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": "\"{p0}\" needs administrator rights. Use File › Restart as Administrator."
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": "Reading current settings…"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": "ENABLED"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": " tweak applied"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": "DISABLED"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": " Windows default"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": " change"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": "s"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": " need"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": "s"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": " a reboot"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": "Restarting…"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": "Restart Explorer ({p0})"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": "The file that remembers your settings from before these tweaks was damaged, so turning a tweak off now restores the Windows default instead of your exact earlier setting. A copy of the damaged file was kept beside it with “.damaged” in the name."
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": "No tweaks match."
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": " enabled"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": "Click to restore the Windows default"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": "Click to apply this tweak"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": "ENABLED"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": "PARTIAL"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": "DISABLED"
+    },
+    {
+      "file": "src/debloat.jsx",
+      "text": "Admin"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Purgeon"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Don't show again"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Paused"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Dry run · nothing was changed."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " would be removed or put back"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": ", {p0} would be skipped"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Export Plan…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Back to the List"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Select All"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Select None"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Check what would happen, without changing anything"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Checking…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Dry Run"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Delete Selected"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Safe mode: "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " lower-confidence item"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " is"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "s are"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " shown but can’t be selected. Turn it off in Tools › Safe Mode."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "No leftovers found. Everything was removed cleanly."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "check"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Direct reference"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Review required"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Cleanup records and available registry exports are kept in Tools › Backups. File recovery requires the original Recycle Bin copies. Some actions cannot be undone."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Verification cancelled — the package keeps its previous verdict."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Verification found problems: {p0}"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Restorable ✓ verified"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Verification failed"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Not verified"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Recovery Packages"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Backups taken before removals. Each new package is test-restored when it is created, so “Restorable” means it was proven, not hoped."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Loading…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "No backups yet. Backups appear here when something is removed."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Re-check this package: seal, stored files, trial restore, Recycle Bin contents"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Verifying…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Verify Selected"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Contents — "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " (in the Recycle Bin)"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Restore only the ticked items"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Restoring…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Restore Ticked Items"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Restore everything in this package"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Restore Everything"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Restore results"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Back to Contents"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Shared Components"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Parts used by more than one program. These are what Purgeon refuses to delete during a removal — here is exactly why, and who would be affected."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Loading…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "No shared components were found on this PC."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Depends on it"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Shared runtime"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Shared file"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Secure Erase"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Overwrites each file’s contents before deleting it, so the data cannot be undeleted. There is no backup and no undo — that is the point of this tool. Registry items are not offered: overwriting has no meaning there."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Choose files to erase"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Add files to erase…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Add Files…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Add Folder…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Clear List"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "{p0} MB"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Overwrite:"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Review the list once more, then erase"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Erase "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " File"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "s"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Honest limit: on modern SSDs the drive moves data around internally, so overwriting lowers the chance of recovery but cannot promise it. For total certainty, encrypt the drive or destroy it physically."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "This cannot be undone."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " file"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "s"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " MB) will be overwritten and deleted, with no backup:"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Overwrite and delete the listed files"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Erasing…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Confirm Erase"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Stop after the current file (a file mid-overwrite is left partially overwritten)"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Back"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Erase results"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "The entry could not be removed."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Games"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Games the launchers on this PC report, with the space each one takes. Uninstalling a game stays with its launcher — that is where its files and account live. If a game's files are already gone, Purgeon can clean up the leftover entry, with a backup made first."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Looking for games… "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "No games were found. Steam, Epic and GOG libraries are checked."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "{p0} GB{p1}"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "files gone"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Remove this launcher entry — a backup is made first, so it can be restored from the Archive"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Confirm cleanup?"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Clean Up Entry"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Total: "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " GB across "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " installed games."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "The entry could not be removed."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Relationship Graph"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "How each program connects to the rest of the system — worked out entirely on this PC; nothing leaves the machine."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Search programs…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Building the graph… "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Connected to nothing"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "missing file"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Programs"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " connected"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "No programs match."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "No services, tasks or startup entries run this program's files."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Checking what depends on it…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Depended on by: "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " other installation"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "s"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " registered a need for it."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Its folder holds "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " shared file"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "s"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " other programs use."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Orphaned entries"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " · points at "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": ", which is no longer there"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Remove this entry — a backup is made first, so it can be restored from the Archive"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Confirm removal?"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Remove…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Startup entries are listed but not removed here — a startup entry is one value inside a shared registry key, so turn those off in Startup & Services instead. Services and tasks are removed only through the standard backed-up removal."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Pick a program to see its connections."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Undo"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "OK"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "{p0} of {p1} items done, {p2} failed."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "All {p0} items done."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "…and "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " more"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Properties – {p0}"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "OK"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Click to select the whole value, then Ctrl+C to copy it"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Taking a snapshot of files and registry before installation…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Taking the second snapshot and comparing changes…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Monitor an Installation"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Start Monitoring"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Start (I will run the installer)"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Installation Finished"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Cancel Monitoring"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Purgeon records file and registry changes within the snapshot scope. Live tracing can attribute changes to an installer. Unrelated changes remain unchecked; changed file contents are not stored for complete rollback."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Close other programs so their changes aren't recorded."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Choose the installer. Purgeon takes a snapshot and then starts it."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "When setup is done, come back and click "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Installation Finished"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "No installer chosen"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "The installer to run while monitoring. Use Browse to choose one, or leave it empty and run the installer yourself."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Browse..."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Monitoring is active. Run the installer to the end, including any first-run setup."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Live tracking is on: every file and registry change made by the installer and the programs it starts is recorded as it happens."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "This installer was already running when monitoring began, so the before and after snapshots are compared. (Live tracking follows only installers that Purgeon starts itself.)"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Live tracking needs Purgeon to run as administrator, so only the before and after snapshots are compared."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Without a chosen installer, only the before and after snapshots are compared. Choose the installer to also track it live."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Installer: "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Name for this program"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "e.g. Foo Editor"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "The name this recording is listed under in Monitored Programs"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "System Info"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Reading this PC's details…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " °C"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Temperatures appear only where Windows reports them."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "About Purgeon"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "OK"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "View Releases"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Purgeon "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Portable mode: settings, backups and snapshots are kept in the \"Purgeon Data\" folder next to the program."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Uninstalls programs, then hunts down the leftover files, registry keys, startup entries and services they leave behind."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "It also monitors installations, compares system snapshots, cleans junk files and manages startup programs. Recovery options vary by action; review the plan and available backups before making changes."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "An independent project, not affiliated with any other uninstaller."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "See "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "What's New"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " for the latest release notes."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Interrupted Removal"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Clear the Record"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "A removal did not finish, and its record is damaged."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Purgeon was stopped while it was writing down what the removal had done, so it cannot tell which removal it was or what had already been removed. Nothing more will be removed, and any backup the removal made is still in Tools › Backups. Clearing the record just removes the damaged note; it does not change anything else."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Interrupted Removal"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Roll Back"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Finish Removal"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Leave As Is"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "The removal “"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "” did not finish."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "It was started "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " and had removed "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " of "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " items when it stopped. Everything it removed was backed up first."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Roll Back"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " puts back what it removed (recommended)."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Finish Removal"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " removes the remaining items, with the same checks as before."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Leave As Is"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " keeps things as they are; the backup stays in Tools › Backups."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Backup Settings"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Save"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Export Settings…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Invalid settings file."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Import Settings…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Old backups can be removed automatically. Use 0 to keep them all."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Remove backups older than (days)"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Backups older than this many days are deleted (each program’s newest backup is always kept). Empty means no age limit."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Keep backups under this total size (MB)"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "When all backups together are larger than this, the oldest are deleted first (each program’s newest is always kept). Empty means no size limit."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "The newest backup of each program is always kept, so the last removal of anything can still be undone. Once a backup is removed, Change History can no longer undo that change. Files in the Recycle Bin are not counted or touched."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Export saves all Purgeon settings (themes, confirmations, sync, safe mode) to a JSON file. Import restores them. Your programs and backups are not affected."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Never"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "{p0} minutes"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "{p0} hour{p1}"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "On battery"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Plugged in"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Power Options"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "How this PC uses power. Every change is recorded in Change History and can be undone there."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Reading the power settings…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Power plan"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "This is the plan in use"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Switch to the {p0} plan"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Active"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "No power plans were found."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Battery saver turns on at"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Battery level"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Battery saver limits background work to stretch the battery once it drains to this level"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Never"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Always"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Timed wake-ups"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Let scheduled work (updates, backups) bring the PC out of sleep at a set time"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Let scheduled work wake the PC"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "USB devices"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Windows may power down USB devices that are sitting idle, to save power"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Power down idle USB devices"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "On a desktop PC the battery settings are kept but have no effect until a battery exists. Plan changes apply straight away."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "System Restore"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Restore points let Windows roll back to how things were. The roll-back itself runs in Windows' own System Restore window — this one manages the storage, the protection and the points."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Reading restore settings…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Drives"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Storage: {p0} used of {p1}"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "No restore storage set up"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "The most space restore points may use on this drive. When they need more, the oldest are deleted first."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "% of the drive"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "No limit"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Turn restore protection off for this drive (deletes its restore points)"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Turn restore protection on for this drive"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Turn off"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Turn on"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "No fixed drives were found."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Restore points"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Create a restore point right now"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Create one now"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Delete this restore point (it cannot be brought back)"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "This point cannot be matched to its stored copy, so it can only be removed with the others from the Cleaner"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Delete"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "No restore points yet."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "To roll Windows back to one of these points, use Windows' own wizard:"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Open Windows' System Restore window"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Open System Restore…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Turn off protection for {p0}?"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Keep it on"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Turn off and delete its points"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Turning protection off deletes every restore point on "
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": ". Windows offers no undo for that, and neither can Purgeon."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Delete this restore point?"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Keep it"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Delete it"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": ") will be deleted. A deleted restore point cannot be brought back."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Boot Options"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Safe Mode persists across restarts until you choose Normal start here or clear the correct boot loader's safeboot setting from Windows Recovery. Nothing here restarts the PC. If you only need a one-time Safe Mode start, use Shift+Restart and Windows Startup Settings instead."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Reading the boot settings…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Next start"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Set"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Windows is set to a specialist start mode Purgeon does not change. Choosing Normal start above clears it."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Make a restore point before changing the start mode, so the change sits behind a safety net"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Create a restore point first (recommended)"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Boot menu waits"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Seconds"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "How long the list of Windows versions waits at start before the default one loads"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "0 (no wait)"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "{p0} seconds"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " seconds"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Windows versions on this PC (read-only)"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Default"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "No boot entries could be read."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "If Windows will not start at all: hold Shift while choosing Restart (from the sign-in screen if needed) and Windows shows its recovery tools, including Startup Settings, where Safe Mode can be picked directly."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Change persistent startup mode to {p0}?"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Not yet"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Set it"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "It takes effect when the PC next starts. You can change your mind here any time before then"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": ", and a restore point is made first"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Event Logs"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Windows writes everything that happens into these logs. Clearing one always saves a copy into Purgeon's log-backups folder first, and the copy is kept."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Search logs…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Type part of a log's name to filter the list"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Reading the logs…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "No logs match."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Protected"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Off"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Records"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Size on disk"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Recording"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "On"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Off"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "The Security log is the record Windows keeps of sign-ins and security events. Purgeon can save a copy of it, but never clears it or turns it off."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Save this log to an .evtx file you choose"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Save a copy…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Empty this log (a copy is saved first and kept)"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Clear…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Stop recording new events into this log"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Start recording events into this log again"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Turn off"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Turn on"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Clear the {p0} log?"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Keep it"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Save a copy and clear"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "The log will be emptied. First, a copy is saved into Purgeon's log-backups folder and kept — that copy is the only way back."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Health Check"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "A plain-words once-over: drives, system files, restore points, updates, crashes, startup load and the battery. Nothing is changed or repaired — each line names the tool that fixes it."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Run the health check now"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Run again"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Run the check"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Stop the check at the next step"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Also verify every Windows system file, not just the quick store check. Takes a few minutes."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Also verify every system file (slower)"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Add the health check (without the slow file verification) to the weekly maintenance run. Maintenance itself is set up in Tools."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Add to Weekly Maintenance"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Checking… (drive health, system files, restore points, updates, crashes, startup, battery)"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": " (The run was cancelled, so this covers only the checks that finished.)"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Save this report as a text file"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Save Report…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Scheduled Tasks"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Create a simple task: run a program at sign-in, daily or weekly"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "New Task…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Everything Windows runs on a schedule. Windows' own tasks are badged — they can be run or turned off here, but never deleted."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Search tasks…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Type part of a task's name or folder to filter the list"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Reading the tasks…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "No tasks match."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Windows"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Off"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Folder"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "State"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Author"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Last run"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Last result"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Next run"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Run this task right now"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Run now"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Stop this task if it is running"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Stop"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Let this task run on its schedule again"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Keep the task but stop it running on its schedule"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Turn on"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Turn off"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Delete this task (its definition is saved first, and Change History can undo)"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Delete…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "One of Windows' own tasks — it can be run or turned off here, but not deleted."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Delete {p0}?"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Keep it"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Delete it"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Its definition is saved to Purgeon's task-backups folder first, and Change History's undo puts it back from that copy."
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "New Task"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Create the task"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Name"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "What the task is called in the list"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "e.g. Back up my photos"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Program"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "The program file the task runs"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "C:\\\\Path\\\\program.exe"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Choose the program file"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Choose…"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "When"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "When the task runs"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "When I sign in"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Every day"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Every week"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Day"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "The day of the week"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "Time"
+    },
+    {
+      "file": "src/dialogs.jsx",
+      "text": "The time of day, like 09:00"
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "Drives"
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "Show drive {p0} — {p1} free of {p2}"
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": " free"
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "No drives found."
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "Go up one folder"
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "↑ Up"
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "Current folder"
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "Open {p0}"
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "Stop measuring; what is already measured stays on screen"
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "Measure this folder again"
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "Rescan"
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "Measuring… the biggest folders can take a while."
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "Nothing here matches the search."
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "This folder is empty, or Purgeon cannot read it."
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "Scan stopped — sizes below are what was measured before it stopped."
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "{p0} — a link to another folder; not counted, so nothing is double-counted"
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "Open {p0}"
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "link · not counted"
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "counting stopped early"
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "at least "
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "Open {p0} in Explorer"
+    },
+    {
+      "file": "src/disk.jsx",
+      "text": "Open"
+    },
+    {
+      "file": "src/ErrorBoundary.jsx",
+      "text": "Purgeon hit a problem drawing its window"
+    },
+    {
+      "file": "src/ErrorBoundary.jsx",
+      "text": "The program itself is still running underneath, but the window could not be drawn. The error was:"
+    },
+    {
+      "file": "src/ErrorBoundary.jsx",
+      "text": "You can close this window normally. If the problem comes back, the command log in Purgeon's data folder (a file named by date, in the logs folder) shows what the program was doing."
+    },
+    {
+      "file": "src/ErrorBoundary.jsx",
+      "text": "Reload the window"
+    },
+    {
+      "file": "src/groups.jsx",
+      "text": "Set Group"
+    },
+    {
+      "file": "src/groups.jsx",
+      "text": "Set Group"
+    },
+    {
+      "file": "src/groups.jsx",
+      "text": "Remove from Group"
+    },
+    {
+      "file": "src/groups.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/groups.jsx",
+      "text": "Put "
+    },
+    {
+      "file": "src/groups.jsx",
+      "text": " in a group. Use the group list in the toolbar to show one group at a time."
+    },
+    {
+      "file": "src/groups.jsx",
+      "text": "Group"
+    },
+    {
+      "file": "src/groups.jsx",
+      "text": "Type a new group name, or pick one you used before"
+    },
+    {
+      "file": "src/groups.jsx",
+      "text": "e.g. Games, Work, Utilities"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "Scan cancelled — nothing was cleaned."
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "Scan Again"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "Scanning temporary files, crash dumps and caches…"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "Cancel Scan"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "Temporary files, crash dumps, error reports and caches that Windows and programs recreate when needed. The registry is not touched."
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "Clean "
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "Selected"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": " + {p0} Windows clean-up{p1}"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "No categories match."
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "Clean"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": " item"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "s"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "Restart as Administrator to clean this"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "Admin"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "…and "
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": " more"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "Windows clean-up · permanent"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "done by Windows itself; cannot be undone"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "Checking Windows clean-up options…"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "Nothing to clean"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "Permanent"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "Restart as Administrator to use this"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "Admin"
+    },
+    {
+      "file": "src/junk.jsx",
+      "text": "Cleaned items go to the Recycle Bin, so you can undo a cleanup from Tools › Change History. Empty the Recycle Bin afterwards to free the space. Files in use are skipped."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Uninstall Queue"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " waiting"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Continue"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Start"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Clear Queue"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Programs are uninstalled one after another, silently where possible, so you don't have to watch. If one needs a restart, Purgeon continues after you sign back in. At the end, every leftover is shown at once for you to review."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "The queue is empty. Right-click programs and choose Add to Uninstall Queue."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Remove"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " leftovers found so far; they are shown when the queue finishes."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Programs Removed Elsewhere"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Scan for Leftovers"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Not Now"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "This program was"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "These programs were"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " uninstalled since Purgeon last looked, from Windows Settings, its own uninstaller or another tool. Uninstallers often leave files and settings behind."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "They are also recorded in View › Uninstall Archive."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Trial Installs"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Start a Trial…"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Monitor a program trial on this PC. Snapshot differences may include unrelated activity and do not retain changed file contents. Review the proposed changes before choosing "
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Try Over"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " offers recorded additions and earlier registry settings for review. Unattributed changes start unchecked; a complete reversal is not guaranteed."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "No trials running."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "since "
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Try Over…"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Keep It"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Close other programs during a trial: anything else that changes is part of the trial too, and Try Over shows the full list for you to review first."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Disk Space Map"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " used by "
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " programs: their install folders plus the data folders named after them. Click a block for details."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " · program "
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " · data {p0}"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Analyze Leftovers…"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "New Startup Entries"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Allow All"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Decide Later"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "A program added itself"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "{p0} programs added themselves"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " to what starts with Windows."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Allow"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Turn Off"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Turning one off never deletes it; you can turn it back on in Startup & Services."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Browser Clean-up"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " selected"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Remove Selected"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Extensions that a program added on its own are flagged and can be removed here, with a backup. Extensions you added yourself are listed for reference; remove those in the browser."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Close "
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " to remove its extensions."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "added by a program (waiting)"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "added by a program"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "by policy"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "added by you"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "None yet."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Remove the {p0} rule for {p1}"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Remove"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "example.com"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Add"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Cookie rules per site"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "These are written to Chrome's and Edge's own policy settings, so they hold in every profile and while the browser runs. Blocking a site signs you out of it there. Firefox does not read these policies, so the rules do not cover it. Changing them needs administrator rights."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Reading the rules…"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Migrate This PC"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " programs"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Save to Folder…"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Packs the chosen programs into one folder, one package each, plus a winget list of all your programs. On the new PC, use File › Restore Programs From Folder, and run winget import for the rest."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Restore Programs From Folder"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Restore "
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " program packages in "
+    },
+    {
+      "file": "src/more.jsx",
+      "text": ". Each restore is checked before changes. Review its operation record and available backups before attempting an undo."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Settings Sync"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Send My Settings"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Get Settings"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Save"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Keep chosen programs' settings the same on your PCs through a shared folder, such as one in OneDrive. "
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Send"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " saves this PC's settings there; "
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Get"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " brings in newer settings from another PC."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Choose a shared folder"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "The shared folder settings are kept in, for example one inside OneDrive. Use Folder to choose it."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Folder…"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Getting settings replaces current program settings after review. Files go to the Recycle Bin first; recovery requires those copies and retained operation records. Close the programs first."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Portable Apps"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "{p0} update{p1} available"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "No updates found"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Looks up each app in winget’s catalogue (the Windows Package Manager) and shows where a newer version exists, with its download page. Nothing is downloaded or changed."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Checking…"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Check for Updates"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Choose a folder that holds portable apps, such as D:\\PortableApps. It is remembered and looked at every time: the folder itself and each folder inside it."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Add a Folder…"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Programs that run from a folder without being installed, so Windows doesn't list them. Registering one adds it to the program list with its icon, so it gets groups, leftover scans and a clean removal."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Your folders:"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Looked at every time, with each folder inside it: {p0}"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Stop looking in this folder. Nothing in it is changed."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "No portable apps found in the usual places or your folders. Use Add a Folder to point to the folder that holds them."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "winget package {p0}, latest version {p1}"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "winget’s catalogue has no package with this exact name, so updates can’t be checked."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "not in winget"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "{p0} available"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "up to date"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "version unknown"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Opens {p0} in your browser, to download version {p1}. Unpack it over this folder after backing the folder up."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Download Page"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Unregister"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Register"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Command palette"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Type part of a command or program name; Up and Down choose, Enter runs, Esc closes"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Type a command or a program name…"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Nothing matches."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Monthly Report"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Save Report…"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "An HTML report of a month: programs installed and removed, space freed, startup changes, updates, clean-ups, and programs flagged by the insights."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Month"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "The month the report covers"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Close Purgeon?"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Minimize to Tray"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Exit"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Keep Purgeon running in the notification area (tray), or exit it completely?"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "In the tray it keeps watching for installers and new startup entries. Left-click its icon to open it again; right-click it to exit."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Don’t ask again. View › Close Button Asks brings this question back."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " Remember my choice"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Analyze – {p0}"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Analyze Leftovers…"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Uninstall…"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "The processor the program’s main file is built for, read from the file itself. .NET programs built for “Any CPU” show as 32-bit here but run as 64-bit."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Architecture"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "32-bit (from its registry entry)"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "64-bit (from its registry entry)"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Unknown"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "The file Purgeon treats as the program itself"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Program file"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Not found"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "The folder the program is installed in, as its uninstall entry says"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Folder"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Not recorded"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Install folder plus the data folders named after it (in ProgramData and AppData), measured now"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Disk space"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "{p0} in all: program {p1}{p2}"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Not measured"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "When any of its program files last ran, from Windows’ Prefetch records"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Last used"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "How it was installed, which decides how it is uninstalled"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Installer"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " · can uninstall silently"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Installed programs that registered that they need this one"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Needed by"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "What it hooks into Windows"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "(click a line for details)"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Nothing beyond its own folder."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Show the {p0} found for this program"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "…and "
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " more"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Installer Started"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Monitor It"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Not Now"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Stop Detecting"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " is being installed. Record changes within the monitoring scope for later review and cleanup?"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Leave the installer on its first page. Purgeon takes a snapshot first, usually in under a minute."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Then install as usual, including any first-run setup."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Come back and click "
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Installation Finished"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "The installer that was spotted"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "If the installer has already begun copying files, what it copied so far is missed; Tools › Monitor an Installation records from the very start. Tools › Detect Installations turns this question off."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Explorer Context Menu"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Restart Explorer"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Right-click entries that programs added to Explorer. Click one to turn it on or off; nothing is deleted. Changes show in new Explorer windows, or everywhere after Restart Explorer."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "No right-click entries from other programs were found."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " on"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "ON"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "OFF"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Windows"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Admin"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "On Windows 11, these entries are under Show more options. Each change is in Change History and can be undone."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "PortableApps.com Installer"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Generate Package"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Create a PortableApps.com package from a monitored installation. Purgeon copies the recorded program files into a PortableApps.com folder structure and writes an NSIS installer script (.nsi) that you compile with makensis into a .paf.exe."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "No monitored programs with portable files were found. Use Tools › Monitor an Installation to record a program first."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Monitored program"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Choose a program…"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " ({p0} items)"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Package name"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "e.g. FooEditor"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "The program name shown in the PortableApps.com menu"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Version"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Publisher"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "e.g. Example Corp"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Homepage (optional)"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "https://example.com"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Description (optional)"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Portable version of Foo Editor"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Main executable (optional)"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "e.g. FooEditor.exe"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "If left blank, Purgeon picks the largest .exe from the recorded files"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "After generating, place a PortableApps.com launcher executable in the package folder and compile the .nsi script with NSIS (makensis) to produce the .paf.exe installer."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Trusted Publishers"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Add"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Programs signed by a trusted publisher are never blocked by Safe Mode and are excluded from unsigned-program warnings. Add the certificate subject name as it appears in the digital signature (for example \\\"Microsoft Corporation\\\")."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Publisher name"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Certificate subject name of a trusted publisher"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "No trusted publishers yet."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Remove"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Check for Updates"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Checking…"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Check Now"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Purgeon can optionally ask GitHub whether a newer release exists. Checking is off by default and never sends data except a standard HTTPS request to api.github.com. It never nags after a dismissal."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Automatic update checks"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Turn off automatic update checks"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Turn on automatic update checks"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "ON"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "OFF"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Last checked: "
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Checking GitHub for a newer release…"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Check failed: "
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Update available:"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Download from GitHub Releases"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "No update available — you have the latest version."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Make PortableApps.com Package"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "I understand – don't show this notice again"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Generating…"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Generate Package"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "⚠ Portable compiler is new – may have bugs."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "The PortableApps.com package generator is recent and may make mistakes or produce packages that don't work perfectly. The developer is actively polishing it to mitigate issues. "
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Always test the resulting portable package before relying on it."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Create a PortableApps.com package from this program. Purgeon copies the program's files into a PortableApps.com folder structure and writes an NSIS installer script that you compile with makensis into a .paf.exe."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Package name"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "e.g. FooEditor"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "The program name shown in the PortableApps.com menu"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Version"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Publisher (developer)"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "e.g. Example Corp"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Homepage (optional)"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "https://example.com"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Description (optional)"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Portable version of Foo Editor"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Main executable"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "(auto-detect)"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "No executable found in program files."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "After generating, place a PortableApps.com launcher executable in the package folder and compile the .nsi script with NSIS (makensis) to produce the .paf.exe installer."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Program – {p0}"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": " (v{p0})"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Type"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Windows Store app"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Desktop program"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Architecture"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "32-bit"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "64-bit"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Unknown"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Installed"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Not recorded"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Location"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Not recorded"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Disk space"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "{p0} MB"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Not measured"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Uninstall entry"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Digital signature status of the program's main executable"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Signature"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Valid — signed by {p0}"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Not digitally signed"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Issue: {p0}"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Last used"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Today"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Yesterday"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "{p0} days ago"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Bundled offer"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Its name matches programs often installed as bundled offers."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Installed with"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Size trend"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Growing in size — may be accumulating data or logs."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "This is a read-only view. To uninstall, force-remove, or scan for leftovers, use the action bar or right-click menu on the program list."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Confirmation Prompts"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Restore All"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Save"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Confirmations you disabled with \"Don't show again\" are listed below. Restore any you want to see again. Disabled confirmations are answered automatically (as if you clicked Yes) and a warning notice appears instead of the prompt."
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Confirmation"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Status"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Disabled · Restore"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "Enabled"
+    },
+    {
+      "file": "src/more.jsx",
+      "text": "To disable a confirmation again, check \"Don't show again\" when it appears. Changes take effect immediately."
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Purgeon helps you inspect installed programs and review what to remove."
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "When you uninstall a program, Purgeon runs its uninstaller, then scans for what it left behind — files, registry keys, services, scheduled tasks — and lets you choose what to remove."
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Review the recovery plan first."
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": " Cleanup keeps recovery records, but files require their Recycle Bin copies, and some actions cannot be undone."
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Uninstall programs:"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": " Pick a program, click Uninstall, and review what Purgeon will remove before it happens."
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Monitor installations:"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": " Record what an installer creates, so you can remove it cleanly later (Tools › Monitor an Installation)."
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Clean up:"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": " Remove temporary files, caches, and Windows clutter you don't need (Cleaner view)."
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Startup & services:"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": " Turn off entries that start with Windows without deleting them (Startup & Services view)."
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Pick where you'd like to go first:"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "View my programs"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Monitor an installation"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Clean up junk files"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "You can always reopen this from "
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Help › Welcome Back"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": ", and tips appear throughout the app to help you discover what Purgeon can do."
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Back"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Get Started"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Next"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Step {p0} of {p1}"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Step "
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": " of "
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Press "
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Ctrl+K"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": " to open the command palette. Type a program name or a command like \"uninstall\" and press Enter."
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Tip: {p0}"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Dismiss"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Keyboard Shortcuts"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "User Guide"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "What’s New"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Not Now"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Download v"
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "A new version of Purgeon is available."
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Visit the Purgeon releases page to see what’s changed and download the installer."
+    },
+    {
+      "file": "src/onboarding.jsx",
+      "text": "Update checks are off by default and never nag after you dismiss them. Turn them on in Settings › Update Check."
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Processor"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Memory"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": " · {p0} of {p1} GB"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Disk"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": " {p0} · {p1} GB free"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "{p0}% free"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Alerts while Purgeon runs: processor over "
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "% · memory over "
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "% · disk under "
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": " GB free"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Change when Purgeon warns you about a busy PC"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Change…"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Process"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Processor"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Memory"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Priority"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Suspended"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": " MB"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "No processes match the search."
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Reading the process list…"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Close the selected process straight away"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "End Process"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Let a suspended process run again"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Resume"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Freeze the selected process where it stands, without closing it"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Suspend"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "How much of the processor this process gets when the PC is busy"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Priority ▾"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Set {p0} to {p1} priority"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Choose which processor cores this process may run on"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Processor Affinity…"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Open the folder this process runs from"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Open Folder"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Windows' own critical processes can't be ended or suspended — Purgeon says so instead of trying. Updates every 2 seconds while this view is open."
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "End this process?"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Keep It Running"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "End the process now — anything it hasn't saved is lost"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "End Process"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": " will close straight away. Anything it hasn't saved is lost. Purgeon can't undo ending a process."
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Processor affinity — {p0}"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Let this process use only the ticked cores"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Apply"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Tick the processor cores "
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": " may run on. At least one must stay ticked."
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Core {p0}"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": " Core "
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Resource alerts"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Save these alert levels"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Save"
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Purgeon warns you — once, until things calm down — when the PC stays this busy. Alerts only run while Purgeon is open or in the tray. Set a level to 0 to turn that alert off."
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Processor over "
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "Memory over "
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": "System disk under "
+    },
+    {
+      "file": "src/processes.jsx",
+      "text": " GB free"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Take a Snapshot"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Take Snapshot"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "A snapshot records the files, folders and registry settings programs use, so you can later see exactly what changed."
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Name"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "A name to recognise this snapshot by later, such as Before installing Foo"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Depth"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": " folder levels · "
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Covers Program Files, ProgramData, AppData, the Start Menu and desktops, plus the software and services parts of the registry. Temporary files and caches are left out."
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Compare · {p0}  →  {p1}"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": " selected"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Select Shown"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Select None"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Export…"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Check what the cleanup would do, without changing anything"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Checking…"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Dry Run"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Clean Up Selected"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": " Files"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": " Registry"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Filter"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Shows only the changes whose path or value contains this text"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "This comparison is very large; only the first part of each list is shown."
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "No differences here."
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Shown for information: file contents are not stored in snapshots, so this cannot be put back."
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Show more ("
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": " left)"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Clean up removes selected "
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "added"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": " items and puts back selected "
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "changed"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": " or "
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "removed"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": " registry values and keys from the earlier snapshot. Review recovery options first and can be undone from Tools › Change History. Changed or removed files are shown for information only."
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Snapshot timeline"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "{p0}\n{p1}\nClick to select, Ctrl+click to select a second one"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Compare the selected snapshot with the system now"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Now"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Compare “"
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Ctrl+click a second snapshot to compare the two, or click Now."
+    },
+    {
+      "file": "src/snapshots.jsx",
+      "text": "Click a snapshot to select it."
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "Signed by {p0}"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "Signed"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "This program is not digitally signed"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "Signature problem: {p0}"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "Unsigned"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "Bad signature"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "\"{p0}\" needs administrator rights. Use File › Restart as Administrator."
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "Reading startup entries…"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "ENABLED"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " starts with Windows"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "DISABLED"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " kept, but doesn't start"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " start with Windows · "
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " automatic services ·"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " tasks · "
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " accept connections"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " · {p0} unsigned"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " · {p0} worth checking"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " · start-up takes about {p0} (last {p1} slow boots)"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " · start-up timings need administrator rights"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " change"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "s apply"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " applies"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " at next sign-in"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " service change"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "s apply"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " applies"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " after a restart"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "No startup entries match."
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " enabled"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "{p0}, {p1}, {p2}. Click to turn {p3}."
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "ENABLED"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "DISABLED"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "{p0}, {p1}. Click to turn {p2} delayed start."
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "Service starts normally after boot"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "Service starts after a short delay following boot"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "DELAYED"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "DELAY"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "⚠ Check"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "Windows measured it slowing start-up {p0} time{p1}"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " at start-up"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "Updater"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "Windows"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "Admin"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "Programs accepting incoming connections"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " programs · "
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " firewall rules"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "{p0} RULES"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "ALLOWED"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": " · program no longer exists"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "Removes the rule, after backing it up"
+    },
+    {
+      "file": "src/startup.jsx",
+      "text": "Remove rule…"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Who Owns This?"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Checking…"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Check"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Find out which installed program a file, folder or registry key belongs to."
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "A file or folder path, or a registry key such as HKEY_CURRENT_USER\\Software\\Something"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "C:\\ProgramData\\Something  or  HKEY_CURRENT_USER\\Software\\Something"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Folder…"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "File…"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "No installed program matches it. It may be a leftover; Tools › Find Orphaned Leftovers looks for these."
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Program Updates"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": " selected"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Update Selected"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Close"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Newer versions available through winget, the Windows Package Manager"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Checking for updates…"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Everything winget knows about is up to date."
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "version unknown"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Updates run silently one after another. Updating accepts each package's license terms. A restore point is offered first if Create Restore Points is on."
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Scheduled Maintenance"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Run Now"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Save"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Once a week, Windows runs Purgeon in the background to keep things tidy. Programs are never uninstalled. Cleanup recovery depends on retained records and Recycle Bin copies."
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": " Run weekly maintenance"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "The day of the week maintenance runs"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "The time of day maintenance runs, like 10:00. If the PC is off then, it runs when it is next on."
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": " Take a Quick snapshot"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Clean these junk files (to the Recycle Bin)"
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Scheduled. Next run: {p0}{p1}."
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": "Not scheduled."
+    },
+    {
+      "file": "src/tools.jsx",
+      "text": " Backup limits from Tools › Backup Settings are applied too. Windows' own permanent clean-ups are never run automatically."
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": "Migrate Program – {p0}"
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": " selected"
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": "Save Package…"
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": "Pack "
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": " into one file to install it on another PC with Tools › Restore a Program Backup, or to keep as a backup."
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": "Your settings"
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": "Program"
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": "Nothing is changed on this PC. Services, scheduled tasks and drivers are not included; if the program needs them, run its installer on the other PC and then restore My settings only."
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": "Restore Program – {p0}"
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": " selected"
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": "Restore"
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": "Cancel"
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": " · packaged "
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": " on "
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": "another PC"
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": ", with "
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": ". Paths in "
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": "’s profile are restored into yours."
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": "Backed up from {p0}"
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": "{p0} files {p1}"
+    },
+    {
+      "file": "src/transfer.jsx",
+      "text": "Existing folders and files are never overwritten. Existing registry keys are saved before the backup is merged into them. You can undo the restore from Tools › Change History."
+    }
+  ]
+}

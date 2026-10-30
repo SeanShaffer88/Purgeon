@@ -1,7 +1,8 @@
+import { tx } from './backend/i18n.js';
 // Onboarding: welcome screen, first-run tips, and guided setup for new users.
 // Everything is opt-in and can be revisited from Help › Welcome Back.
 import { useState, useCallback } from 'react';
-import { Dialog } from './dialogs.jsx';
+import { Dialog } from './core-dialog.jsx';
 
 const api = window.api;
 
@@ -16,14 +17,10 @@ export function WelcomeDialog({ onClose, onGetStarted }) {
       title: 'Welcome to Purgeon',
       body: (
         <>
-          <p>Purgeon helps you remove programs completely and safely.</p>
-          <p>When you uninstall a program, Purgeon runs its uninstaller, then
-             scans for what it left behind — files, registry keys, services,
-             scheduled tasks — and lets you choose what to remove.</p>
+          <p>{tx("Purgeon helps you inspect installed programs and review what to remove.")}</p>
+          <p>{tx("When you uninstall a program, Purgeon runs its uninstaller, then scans for what it left behind — files, registry keys, services, scheduled tasks — and lets you choose what to remove.")}</p>
           <p className="welcome-safe">
-            <strong>Everything is backed up first.</strong> Any removal can be
-            undone from Change History, so nothing is ever lost permanently.
-          </p>
+            <strong>{tx("Review the recovery plan first.")}</strong>{tx(" Cleanup keeps recovery records, but files require their Recycle Bin copies, and some actions cannot be undone.")}</p>
         </>
       ),
     },
@@ -32,10 +29,10 @@ export function WelcomeDialog({ onClose, onGetStarted }) {
       body: (
         <>
           <ul className="welcome-list">
-            <li><strong>Uninstall programs:</strong> Pick a program, click Uninstall, and review what Purgeon will remove before it happens.</li>
-            <li><strong>Monitor installations:</strong> Record what an installer creates, so you can remove it cleanly later (Tools › Monitor an Installation).</li>
-            <li><strong>Clean up:</strong> Remove temporary files, caches, and Windows clutter you don't need (Cleaner view).</li>
-            <li><strong>Startup &amp; services:</strong> Turn off entries that start with Windows without deleting them (Startup &amp; Services view).</li>
+            <li><strong>{tx("Uninstall programs:")}</strong>{tx(" Pick a program, click Uninstall, and review what Purgeon will remove before it happens.")}</li>
+            <li><strong>{tx("Monitor installations:")}</strong>{tx(" Record what an installer creates, so you can remove it cleanly later (Tools › Monitor an Installation).")}</li>
+            <li><strong>{tx("Clean up:")}</strong>{tx(" Remove temporary files, caches, and Windows clutter you don't need (Cleaner view).")}</li>
+            <li><strong>{tx("Startup & services:")}</strong>{tx(" Turn off entries that start with Windows without deleting them (Startup & Services view).")}</li>
           </ul>
         </>
       ),
@@ -44,22 +41,13 @@ export function WelcomeDialog({ onClose, onGetStarted }) {
       title: 'Where to start',
       body: (
         <>
-          <p>Pick where you'd like to go first:</p>
+          <p>{tx("Pick where you'd like to go first:")}</p>
           <div className="welcome-paths">
-            <button className="welcome-path primary" onClick={() => onGetStarted('programs')}>
-              View my programs
-            </button>
-            <button className="welcome-path" onClick={() => onGetStarted('monitor')}>
-              Monitor an installation
-            </button>
-            <button className="welcome-path" onClick={() => onGetStarted('junk')}>
-              Clean up junk files
-            </button>
+            <button className="welcome-path primary" onClick={() => onGetStarted('programs')}>{tx("View my programs")}</button>
+            <button className="welcome-path" onClick={() => onGetStarted('monitor')}>{tx("Monitor an installation")}</button>
+            <button className="welcome-path" onClick={() => onGetStarted('junk')}>{tx("Clean up junk files")}</button>
           </div>
-          <p className="welcome-hint">
-            You can always reopen this from <strong>Help › Welcome Back</strong>, and
-            tips appear throughout the app to help you discover what Purgeon can do.
-          </p>
+          <p className="welcome-hint">{tx("You can always reopen this from ")}<strong>{tx("Help › Welcome Back")}</strong>{tx(", and tips appear throughout the app to help you discover what Purgeon can do.")}</p>
         </>
       ),
     },
@@ -70,16 +58,16 @@ export function WelcomeDialog({ onClose, onGetStarted }) {
 
   return (
     <Dialog
-      title={page.title}
+      title={tx(page.title)}
       onClose={onClose}
       width={560}
       buttons={
         <>
           {step > 1 && (
-            <button onClick={() => setStep(step - 1)}>Back</button>
+            <button onClick={() => setStep(step - 1)}>{tx("Back")}</button>
           )}
           <button className="primary" autoFocus onClick={isLast ? () => onGetStarted('done') : () => setStep(step + 1)}>
-            {isLast ? 'Get Started' : 'Next'}
+            {isLast ? tx("Get Started") : tx("Next")}
           </button>
         </>
       }
@@ -87,13 +75,12 @@ export function WelcomeDialog({ onClose, onGetStarted }) {
       <div className="welcome-page">
         <div className="welcome-progress">
           {[1, 2, 3].map((n) => (
-            <span key={n} className={`step-dot ${n <= step ? 'on' : ''}`} aria-label={`Step ${n} of ${totalSteps}`} />
+            <span key={n} className={`step-dot ${n <= step ? 'on' : ''}`} aria-label={tx("Step {p0} of {p1}", { p0: (n), p1: (totalSteps) })} />
           ))}
-          <span className="welcome-step-text" role="status" aria-live="polite">
-            Step {step} of {totalSteps}
+          <span className="welcome-step-text" role="status" aria-live="polite">{tx("Step ")}{step}{tx(" of ")}{totalSteps}
           </span>
         </div>
-        <p className="welcome-body">{page.body}</p>
+        <p className="welcome-body">{tx(page.body)}</p>
       </div>
     </Dialog>
   );
@@ -107,7 +94,7 @@ export const FIRST_RUN_TIPS = [
   {
     id: 'find-anything',
     title: 'Find any command or program',
-    body: (<>Press <kbd>Ctrl+K</kbd> to open the command palette. Type a program name or a command like &quot;uninstall&quot; and press Enter.</>),
+    body: (<>{tx("Press ")}<kbd>{tx("Ctrl+K")}</kbd>{tx(" to open the command palette. Type a program name or a command like \"uninstall\" and press Enter.")}</>),
     action: 'Try it now',
   },
   {
@@ -118,7 +105,7 @@ export const FIRST_RUN_TIPS = [
   },
   {
     id: 'backups',
-    title: 'Everything is backed up',
+    title: 'Review recovery options',
     body: 'Purgeon backs up every removal before it happens. You can undo any change from Change History, or restore individual items from Backups.',
     action: 'Got it',
   },
@@ -135,12 +122,12 @@ export function FirstRunTips({ visible, dismissed, onTipAction, onClose }) {
 
   return (
     <Dialog
-      title={`Tip: ${tip.title}`}
+      title={tx("Tip: {p0}", { p0: (tip.title) })}
       onClose={onClose}
       width={520}
       buttons={
         <>
-          <button onClick={() => onClose()}>Dismiss</button>
+          <button onClick={() => onClose()}>{tx("Dismiss")}</button>
           {tip.action && (
             <button className="primary" autoFocus onClick={() => onTipAction(tip.id)}>
               {tip.action}
@@ -194,12 +181,12 @@ export const SHORTCUTS = [
 export function ShortcutsDialog({ onClose }) {
   return (
     <Dialog
-      title="Keyboard Shortcuts"
+      title={tx("Keyboard Shortcuts")}
       onClose={onClose}
       width={560}
       buttons={
         <>
-          <button className="primary" autoFocus onClick={onClose}>Close</button>
+          <button className="primary" autoFocus onClick={onClose}>{tx("Close")}</button>
         </>
       }
     >
@@ -212,7 +199,7 @@ export function ShortcutsDialog({ onClose }) {
                 {g.items.map(([key, label]) => (
                   <tr key={key}>
                     <td className="shortcut-key">{key}</td>
-                    <td className="shortcut-label">{label}</td>
+                    <td className="shortcut-label">{tx(label)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -234,7 +221,7 @@ export function UserGuide({ onClose }) {
         'Select the program in the Programs list.',
         'Click Uninstall (or press Del). Purgeon runs the program’s own uninstaller.',
         'Purgeon then scans for leftover files, registry keys, services and tasks.',
-        'Choose what to remove. Everything is backed up first and can be undone from Change History.',
+        'Choose what to remove and review the recovery plan. Registry exports and Recycle Bin copies may allow recovery; some actions cannot be undone.',
       ],
     },
     {
@@ -266,12 +253,12 @@ export function UserGuide({ onClose }) {
 
   return (
     <Dialog
-      title="User Guide"
+      title={tx("User Guide")}
       onClose={onClose}
       width={640}
       buttons={
         <>
-          <button className="primary" autoFocus onClick={onClose}>Close</button>
+          <button className="primary" autoFocus onClick={onClose}>{tx("Close")}</button>
         </>
       }
     >
@@ -296,19 +283,19 @@ export function UserGuide({ onClose }) {
 export function UpdateAvailableDialog({ version, onClose, onDownload }) {
   return (
     <Dialog
-      title="What’s New"
+      title={tx("What’s New")}
       onClose={onClose}
       width={560}
       buttons={
         <>
-          <button onClick={onClose}>Not Now</button>
-          <button className="primary" autoFocus onClick={onDownload}>Download v{version}</button>
+          <button onClick={onClose}>{tx("Not Now")}</button>
+          <button className="primary" autoFocus onClick={onDownload}>{tx("Download v")}{version}</button>
         </>
       }
     >
-      <p>A new version of Purgeon is available.</p>
-      <p>Visit the Purgeon releases page to see what’s changed and download the installer.</p>
-      <p className="footnote">Update checks are off by default and never nag after you dismiss them. Turn them on in Settings › Update Check.</p>
+      <p>{tx("A new version of Purgeon is available.")}</p>
+      <p>{tx("Visit the Purgeon releases page to see what’s changed and download the installer.")}</p>
+      <p className="footnote">{tx("Update checks are off by default and never nag after you dismiss them. Turn them on in Settings › Update Check.")}</p>
     </Dialog>
   );
 }
@@ -327,7 +314,7 @@ export const SETTING_HELP = {
   },
   safeMode: {
     title: 'Safe Mode',
-    body: 'When on, Purgeon only offers near-certain matches (90% confidence or higher) for removal, and never offers services, scheduled tasks, or firewall rules. Useful if you want to be extra cautious.',
+    body: 'When on, cleanup requires strong ownership evidence and excludes services, scheduled tasks, and firewall rules. Internal rule scores are selection rules, not measured probabilities. Review every proposed item.',
   },
   gridLines: {
     title: 'Show grid lines',
@@ -337,10 +324,7 @@ export const SETTING_HELP = {
     title: 'Theme',
     body: 'Choose the dark terminal-style theme, a light theme, or high contrast (white on black with strong outlines).',
   },
-  language: {
-    title: 'Language',
-    body: 'Switch Purgeon\'s menus, buttons and messages between English, Spanish, German and French. Restart Purgeon for every menu to use the new language.',
-  },
+
   disabledConfirmations: {
     title: 'Skip confirmation prompts',
     body: 'Prompts you dismissed with "Don\'t show again" are listed here. You can restore any of them so they ask again before acting.',
@@ -380,8 +364,8 @@ export function SettingHelp({ key }) {
   if (!help) return null;
   return (
     <div className="setting-help">
-      <strong>{help.title}</strong>{' '}
-      <span>{help.body}</span>
+      <strong>{tx(help.title)}</strong>{' '}
+      <span>{tx(help.body)}</span>
     </div>
   );
 }

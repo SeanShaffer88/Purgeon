@@ -1,5 +1,7 @@
+import { tx } from './backend/i18n.js';
 import { useMemo, useState } from 'react';
-import { Dialog, PlanView } from './dialogs.jsx';
+import { Dialog } from './core-dialog.jsx';
+import { PlanView } from './dialog-shared.jsx';
 import { PRESETS, revertible } from './backend/snapshots.js';
 
 const defaultName = () => {
@@ -12,38 +14,32 @@ export function TakeSnapshotDialog({ onTake, onClose }) {
   const [preset, setPreset] = useState('standard');
   return (
     <Dialog
-      title="Take a Snapshot"
+      title={tx("Take a Snapshot")}
       onClose={onClose}
       width={560}
       buttons={
         <>
-          <button className="primary" disabled={!name.trim()} onClick={() => onTake(name.trim(), preset)}>
-            Take Snapshot
-          </button>
-          <button onClick={onClose}>Cancel</button>
+          <button className="primary" disabled={!name.trim()} onClick={() => onTake(name.trim(), preset)}>{tx("Take Snapshot")}</button>
+          <button onClick={onClose}>{tx("Cancel")}</button>
         </>
       }
     >
-      <p className="heading">A snapshot records the files, folders and registry settings programs use, so you can later see exactly what changed.</p>
-      <label className="field">
-        Name
-        <input autoFocus title="A name to recognise this snapshot by later, such as Before installing Foo" value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && name.trim() && onTake(name.trim(), preset)} />
+      <p className="heading">{tx("A snapshot records the files, folders and registry settings programs use, so you can later see exactly what changed.")}</p>
+      <label className="field">{tx("Name")}<input autoFocus title={tx("A name to recognise this snapshot by later, such as Before installing Foo")} value={name} onChange={(e) => setName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && name.trim() && onTake(name.trim(), preset)} />
       </label>
-      <div className="field">
-        Depth
-        <div className="preset-row">
+      <div className="field">{tx("Depth")}<div className="preset-row">
           {Object.entries(PRESETS).map(([id, p]) => (
             <label key={id} className={`preset ${preset === id ? 'on' : ''}`}>
               <input type="radio" name="preset" checked={preset === id} onChange={() => setPreset(id)} />
               <b>{p.label}</b>
               <span className="muted">
-                {p.fileDepth} folder levels · {p.hint}
+                {p.fileDepth}{tx(" folder levels · ")}{p.hint}
               </span>
             </label>
           ))}
         </div>
       </div>
-      <p className="footnote">Covers Program Files, ProgramData, AppData, the Start Menu and desktops, plus the software and services parts of the registry. Temporary files and caches are left out.</p>
+      <p className="footnote">{tx("Covers Program Files, ProgramData, AppData, the Start Menu and desktops, plus the software and services parts of the registry. Temporary files and caches are left out.")}</p>
     </Dialog>
   );
 }
@@ -125,19 +121,19 @@ export function ComparisonDialog({ comparison, beforeName, afterName, onCleanup,
 
   return (
     <Dialog
-      title={`Compare · ${beforeName}  →  ${afterName}`}
+      title={tx("Compare · {p0}  →  {p1}", { p0: (beforeName), p1: (afterName) })}
       onClose={onClose}
       width={900}
       buttons={
         <>
-          <span className="button-hint">{chosen.length} selected</span>
-          <button onClick={() => setMany(selectable, true)}>Select Shown</button>
-          <button onClick={() => setSelected(new Set())}>Select None</button>
-          <button onClick={() => onExport(all)}>Export…</button>
+          <span className="button-hint">{chosen.length}{tx(" selected")}</span>
+          <button onClick={() => setMany(selectable, true)}>{tx("Select Shown")}</button>
+          <button onClick={() => setSelected(new Set())}>{tx("Select None")}</button>
+          <button onClick={() => onExport(all)}>{tx("Export…")}</button>
           {onDryRun && (
             <button
               disabled={!chosen.length || planning}
-              title="Check what the cleanup would do, without changing anything"
+              title={tx("Check what the cleanup would do, without changing anything")}
               onClick={async () => {
                 setPlanning(true);
                 try {
@@ -147,41 +143,37 @@ export function ComparisonDialog({ comparison, beforeName, afterName, onCleanup,
                 }
               }}
             >
-              {planning ? 'Checking…' : 'Dry Run'}
+              {planning ? tx("Checking…") : tx("Dry Run")}
             </button>
           )}
-          <button className="primary" disabled={!chosen.length} onClick={() => onCleanup(chosen)}>
-            Clean Up Selected
-          </button>
-          <button onClick={onClose}>Close</button>
+          <button className="primary" disabled={!chosen.length} onClick={() => onCleanup(chosen)}>{tx("Clean Up Selected")}</button>
+          <button onClick={onClose}>{tx("Close")}</button>
         </>
       }
     >
       <div className="compare-tabs" role="tablist">
         {GROUPS.map(([g, label]) => (
           <button key={g} role="tab" aria-selected={tab === g} className={`compare-tab ${g} ${tab === g ? 'on' : ''}`} onClick={() => (setTab(g), setShown(PAGE))}>
-            {label} <span className="count">{comparison[g].length.toLocaleString()}</span>
+            {tx(label)} <span className="count">{comparison[g].length.toLocaleString()}</span>
           </button>
         ))}
         <span className="compare-filters">
           <label>
-            <input type="checkbox" checked={kinds.files} onChange={(e) => setKinds((k) => ({ ...k, files: e.target.checked }))} /> Files
-          </label>
+            <input type="checkbox" checked={kinds.files} onChange={(e) => setKinds((k) => ({ ...k, files: e.target.checked }))} />{tx(" Files")}</label>
           <label>
-            <input type="checkbox" checked={kinds.registry} onChange={(e) => setKinds((k) => ({ ...k, registry: e.target.checked }))} /> Registry
-          </label>
-          <input className="compare-search" placeholder="Filter" title="Shows only the changes whose path or value contains this text" value={query} onChange={(e) => (setQuery(e.target.value), setShown(PAGE))} />
+            <input type="checkbox" checked={kinds.registry} onChange={(e) => setKinds((k) => ({ ...k, registry: e.target.checked }))} />{tx(" Registry")}</label>
+          <input className="compare-search" placeholder={tx("Filter")} title={tx("Shows only the changes whose path or value contains this text")} value={query} onChange={(e) => (setQuery(e.target.value), setShown(PAGE))} />
         </span>
       </div>
-      {comparison.truncated && <div className="error-box">This comparison is very large; only the first part of each list is shown.</div>}
+      {comparison.truncated && <div className="error-box">{tx("This comparison is very large; only the first part of each list is shown.")}</div>}
       {plan && <PlanView results={plan} onBack={() => setPlan(null)} onExport={() => onExportPlan(plan)} />}
       <div className="tree compare-list" hidden={!!plan}>
-        {rows.length === 0 && <div className="empty-box">No differences here.</div>}
+        {rows.length === 0 && <div className="empty-box">{tx("No differences here.")}</div>}
         {rows.slice(0, shown).map((c) => {
           const [main, extra] = describe(c);
           const can = cleanable(c);
           return (
-            <label key={c.id} className={`tree-item compare-row ${can ? '' : 'info'}`} title={can ? undefined : 'Shown for information: file contents are not stored in snapshots, so this cannot be put back.'}>
+            <label key={c.id} className={`tree-item compare-row ${can ? '' : 'info'}`} title={can ? undefined : tx("Shown for information: file contents are not stored in snapshots, so this cannot be put back.")}>
               <input type="checkbox" disabled={!can} checked={selected.has(c.id)} onChange={() => toggle(c.id)} />
               <span className={`kind kind-${c.kind}`} />
               <span className="path">{main}</span>
@@ -190,14 +182,10 @@ export function ComparisonDialog({ comparison, beforeName, afterName, onCleanup,
           );
         })}
         {rows.length > shown && (
-          <button className="link show-more" onClick={() => setShown((n) => n + PAGE * 2)}>
-            Show more ({(rows.length - shown).toLocaleString()} left)
-          </button>
+          <button className="link show-more" onClick={() => setShown((n) => n + PAGE * 2)}>{tx("Show more (")}{(rows.length - shown).toLocaleString()}{tx(" left)")}</button>
         )}
       </div>
-      <p className="footnote">
-        Clean up removes selected <b>added</b> items and puts back selected <b>changed</b> or <b>removed</b> registry values and keys from the earlier snapshot. Everything is backed up first and can be undone from Tools › Change History. Changed or removed files are shown for information only.
-      </p>
+      <p className="footnote">{tx("Clean up removes selected ")}<b>{tx("added")}</b>{tx(" items and puts back selected ")}<b>{tx("changed")}</b>{tx(" or ")}<b>{tx("removed")}</b>{tx(" registry values and keys from the earlier snapshot. Review recovery options first and can be undone from Tools › Change History. Changed or removed files are shown for information only.")}</p>
     </Dialog>
   );
 }
@@ -206,7 +194,7 @@ export function ComparisonDialog({ comparison, beforeName, afterName, onCleanup,
 export function comparisonHtml(all, beforeName, afterName) {
   const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
   const section = (g, label) =>
-    `<h2>${label} (${all[g].length})</h2><table><tr><th>Type</th><th>Path</th><th>Details</th></tr>${all[g]
+    `<h2>${tx(label)} (${all[g].length})</h2><table><tr><th>Type</th><th>Path</th><th>Details</th></tr>${all[g]
       .map((c) => {
         const [main, extra] = describe(c);
         return `<tr><td>${c.kind}</td><td>${esc(main)}</td><td>${esc(extra)}</td></tr>`;
@@ -220,50 +208,6 @@ ${GROUPS.map(([g, l]) => section(g, l)).join('\n')}`;
 
 // A timeline of saved snapshots, ending at "Now". Click a snapshot to select it, Ctrl+click a
 // second one; then compare the two, or the selected one with now.
-export function SnapshotTimeline({ snapshots, marked, onSelect, onCompare, onCompareNow }) {
-  // Rows of another list can arrive for one render while the view switches; only snapshots count.
-  snapshots = snapshots.filter((s) => s && typeof s.created === 'string');
-  if (!snapshots.length) return null;
-  const sorted = [...snapshots].sort((a, b) => a.created.localeCompare(b.created));
-  const now = Date.now();
-  // Evenly spaced in date order, so dots and labels never overlap however close in time they are.
-  const step = 86 / Math.max(sorted.length, 1);
-  const left = (i) => 3 + step * i + step / 2;
-  const width = `${Math.min(18, step - 0.5)}%`;
-  const chosen = sorted.filter((s) => marked.has(s.key));
-  const day = (iso) => new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
-  return (
-    <div className="snapshot-timeline" role="group" aria-label="Snapshot timeline">
-      <div className="timeline-track">
-        <span className="timeline-line" />
-        {sorted.map((s, i) => (
-          <button
-            key={s.key}
-            className={`timeline-dot ${marked.has(s.key) ? 'on' : ''}`}
-            style={{ left: `${left(i)}%`, maxWidth: width }}
-            title={`${s.name}\n${new Date(s.created).toLocaleString()}\nClick to select, Ctrl+click to select a second one`}
-            onClick={(e) => onSelect(s.key, e.ctrlKey || e.metaKey)}
-          >
-            <span className="timeline-label">{s.name}</span>
-            <span className="timeline-date">{day(s.created)}</span>
-          </button>
-        ))}
-        <button className="timeline-dot now" style={{ left: '95%' }} disabled={chosen.length !== 1} onClick={() => onCompareNow(chosen[0])} title="Compare the selected snapshot with the system now">
-          <span className="timeline-label">Now</span>
-          <span className="timeline-date">{day(new Date(now).toISOString())}</span>
-        </button>
-      </div>
-      <div className="timeline-hint">
-        {chosen.length === 2 ? (
-          <button className="link" onClick={() => onCompare(chosen[0], chosen[1])}>
-            Compare “{chosen[0].name}” → “{chosen[1].name}”
-          </button>
-        ) : chosen.length === 1 ? (
-          <span>Ctrl+click a second snapshot to compare the two, or click Now.</span>
-        ) : (
-          <span>Click a snapshot to select it.</span>
-        )}
-      </div>
-    </div>
-  );
-}
+
+
+export { SnapshotTimeline } from './snapshot-timeline.jsx';

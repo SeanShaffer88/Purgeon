@@ -1,13 +1,7 @@
-// Localization: UI strings externalized so Purgeon can run in more than one language.
-// English is built in; other languages live in the same file as translation tables.
-// The user's language is detected from Windows and stored in settings.
-// All user-facing strings go through t(); nothing is hard-coded in UI code.
-import { sys } from './sys.js';
-import { readSettings } from './settings.js';
-
-const LOCALE = {
-  // ---- English (default) ----
-  en: {
+// English-only presentation catalog. Persisted identifiers remain compatible.
+// t() uses stable named keys; tx() preserves English literals and interpolates data.
+import { readSettings, writeSettings } from './settings.js';
+const EN = { ...{
     language: 'English',
     // App
     appName: 'Purgeon',
@@ -15,13 +9,14 @@ const LOCALE = {
     // Views
     viewPrograms: 'Programs',
     viewApps: 'Apps',
-    viewMonitored: 'Monitored Programs',
-    viewStartup: 'Startup & Services',
+    viewMonitored: 'Monitored',
+    viewStartup: 'Startup',
+    viewServices: 'Services',
     viewDebloat: 'Debloat',
     viewJunk: 'Cleaner',
     viewSnapshots: 'Snapshots',
-    viewTimeline: 'Change Timeline',
-    viewArchive: 'Uninstall Archive',
+    viewTimeline: 'History',
+    viewArchive: 'Archives',
     // Actions
     actionUninstall: 'Uninstall',
     actionForce: 'Force',
@@ -46,7 +41,7 @@ const LOCALE = {
     settingsTitle: 'Settings',
     settingsLanguage: 'Language',
     settingsSilentUninstall: 'Silent uninstall when possible',
-    settingsSafeMode: 'Safe mode (only near-certain matches)',
+    settingsSafeMode: 'Safe Mode (strong ownership evidence)',
     settingsCreateRestorePoints: 'Create a restore point before changes',
     settingsBackupMaxDays: 'Keep backups no older than (days, 0 = unlimited)',
     settingsBackupMaxMB: 'Keep backups no larger than (MB, 0 = unlimited)',
@@ -100,339 +95,84 @@ const LOCALE = {
     yesNo: (v) => (v ? 'Yes' : 'No'),
     onOff: (v) => (v ? 'On' : 'Off'),
     enabledDisabled: (v) => (v ? 'Enabled' : 'Disabled'),
-  },
-  // ---- Spanish ----
-  es: {
-    language: 'Español',
-    appName: 'Purgeon',
-    appTagline: 'Desinstalador de Windows con análisis de restos, monitorización de instalaciones y copias de seguridad',
-    viewPrograms: 'Programas',
-    viewApps: 'Aplicaciones',
-    viewMonitored: 'Programas monitorizados',
-    viewStartup: 'Inicio y Servicios',
-    viewDebloat: 'Debloat',
-    viewJunk: 'Limpiador',
-    viewSnapshots: 'Instantáneas',
-    viewTimeline: 'Línea de Cambios',
-    viewArchive: 'Archivo de Desinstalación',
-    actionUninstall: 'Desinstalar',
-    actionForce: 'Forzar',
-    actionAnalyze: 'Analizar',
-    actionSheet: 'Hoja',
-    actionBackup: 'Copia de seguridad',
-    actionQueue: 'Cola',
-    actionGroup: 'Grupo',
-    actionHide: 'Ocultar',
-    actionUnhide: 'Mostrar',
-    actionFolder: 'Carpeta',
-    actionRegistry: 'Registro',
-    actionSearch: 'Buscar',
-    actionProperties: 'Propiedades',
-    statusReady: 'Listo',
-    statusScanning: 'Escaneando…',
-    statusRemoving: 'Eliminando…',
-    statusDone: 'Hecho',
-    statusError: 'Error',
-    settingsTitle: 'Configuración',
-    settingsLanguage: 'Idioma',
-    settingsSilentUninstall: 'Desinstalación silenciosa cuando sea posible',
-    settingsSafeMode: 'Modo seguro (solo coincidencias casi seguras)',
-    settingsCreateRestorePoints: 'Crear un punto de restauración antes de los cambios',
-    settingsBackupMaxDays: 'Mantener copias de seguridad no más antiguas de (días, 0 = ilimitado)',
-    settingsBackupMaxMB: 'Mantener copias de seguridad no más grandes de (MB, 0 = ilimitado)',
-    settingsGridLines: 'Mostrar líneas de cuadrícula',
-    settingsStartWithWindows: 'Iniciar Purgeon con Windows',
-    settingsMonitoring: 'Monitorización en segundo plano',
-    settingsScanLeftovers: 'Buscar restos de programas desinstalados fuera de Purgeon',
-    settingsCheckStartup: 'Alertar en nuevas entradas de inicio',
-    settingsSyncFolder: 'Sincronizar configuración a una carpeta (OneDrive, Dropbox, Google Drive…)',
-    settingsSyncFolderPick: 'Elegir carpeta de sincronización…',
-    settingsSyncFolderClear: 'Borrar carpeta de sincronización',
-    cmdSnapshot: 'Tomar una instantánea',
-    cmdRestorePoint: 'Crear un punto de restauración',
-    cmdAssociations: 'Búsqueda de asociación de archivos',
-    cmdSchedule: 'Monitorización programada',
-    cmdPlugins: 'Gestionar complementos',
-    cmdProfiler: 'Analizador de inicio',
-    ok: 'Aceptar',
-    cancel: 'Cancelar',
-    yes: 'Sí',
-    no: 'No',
-    confirm: 'Confirmar',
-    backup: 'Copia de seguridad',
-    undo: 'Deshacer',
-    restart: 'Reiniciar',
-    restartLater: 'Reiniciar después',
-    never: 'Nunca',
-    more: 'Más',
-    less: 'Menos',
-    none: 'Ninguno',
-    all: 'Todos',
-    search: 'Buscar',
-    filter: 'Filtrar',
-    sort: 'Ordenar',
-    size: 'Tamaño',
-    date: 'Fecha',
-    name: 'Nombre',
-    publisher: 'Editor',
-    version: 'Versión',
-    arch: 'Arquitectura',
-    installedOn: 'Instalado el',
-    removedOn: 'Eliminado el',
-    backedUpOn: 'Copiado el',
-    takenOn: 'Tomado el',
-    entries: 'Entradas',
-    items: 'Elementos',
-    programs: 'Programas',
-    noResults: 'Sin resultados.',
-    yesNo: (v) => (v ? 'Sí' : 'No'),
-    onOff: (v) => (v ? 'Activado' : 'Desactivado'),
-    enabledDisabled: (v) => (v ? 'Habilitado' : 'Deshabilitado'),
-  },
-  // ---- German ----
-  de: {
-    language: 'Deutsch',
-    appName: 'Purgeon',
-    appTagline: 'Windows-Deinstallationsprogramm mit Restesuche, Installationsüberwachung und Backups',
-    viewPrograms: 'Programme',
-    viewApps: 'Apps',
-    viewMonitored: 'Überwachte Programme',
-    viewStartup: 'Start & Dienste',
-    viewDebloat: 'Debloat',
-    viewJunk: 'Reiniger',
-    viewSnapshots: 'Snapshots',
-    viewTimeline: 'Änderungsverlauf',
-    viewArchive: 'Deinstallationsarchiv',
-    actionUninstall: 'Deinstallieren',
-    actionForce: 'Erzwingen',
-    actionAnalyze: 'Analysieren',
-    actionSheet: 'Übersicht',
-    actionBackup: 'Sichern',
-    actionQueue: 'Warteschlange',
-    actionGroup: 'Gruppe',
-    actionHide: 'Ausblenden',
-    actionUnhide: 'Einblenden',
-    actionFolder: 'Ordner',
-    actionRegistry: 'Registrierung',
-    actionSearch: 'Suchen',
-    actionProperties: 'Eigenschaften',
-    statusReady: 'Bereit',
-    statusScanning: 'Wird gescannt…',
-    statusRemoving: 'Wird entfernt…',
-    statusDone: 'Fertig',
-    statusError: 'Fehler',
-    settingsTitle: 'Einstellungen',
-    settingsLanguage: 'Sprache',
-    settingsSilentUninstall: 'Stille Deinstallation, wenn möglich',
-    settingsSafeMode: 'Sicherer Modus (nur nahezu sichere Treffer)',
-    settingsCreateRestorePoints: 'Wiederherstellungspunkt vor Änderungen erstellen',
-    settingsBackupMaxDays: 'Backups nicht älter als (Tage, 0 = unbegrenzt)',
-    settingsBackupMaxMB: 'Backups nicht größer als (MB, 0 = unbegrenzt)',
-    settingsGridLines: 'Rasterlinien anzeigen',
-    settingsStartWithWindows: 'Purgeon mit Windows starten',
-    settingsMonitoring: 'Hintergrundüberwachung',
-    settingsScanLeftovers: 'Nach Resten von Programmen suchen, die anderswo entfernt wurden',
-    settingsCheckStartup: 'Bei neuen Starteinträgen alarmieren',
-    settingsSyncFolder: 'Einstellungen in einen Ordner synchronisieren (OneDrive, Dropbox, Google Drive…)',
-    settingsSyncFolderPick: 'Sync-Ordner wählen…',
-    settingsSyncFolderClear: 'Sync-Ordner löschen',
-    cmdSnapshot: 'Snapshot erstellen',
-    cmdRestorePoint: 'Wiederherstellungspunkt erstellen',
-    cmdAssociations: 'Dateizuordnungs-Lookup',
-    cmdSchedule: 'Geplante Überwachung',
-    cmdPlugins: 'Plugins verwalten',
-    cmdProfiler: 'Start-Profiler',
-    ok: 'OK',
-    cancel: 'Abbrechen',
-    yes: 'Ja',
-    no: 'Nein',
-    confirm: 'Bestätigen',
-    backup: 'Backup',
-    undo: 'Rückgängig',
-    restart: 'Neustart',
-    restartLater: 'Später neu starten',
-    never: 'Nie',
-    more: 'Mehr',
-    less: 'Weniger',
-    none: 'Keine',
-    all: 'Alle',
-    search: 'Suchen',
-    filter: 'Filter',
-    sort: 'Sortieren',
-    size: 'Größe',
-    date: 'Datum',
-    name: 'Name',
-    publisher: 'Herausgeber',
-    version: 'Version',
-    arch: 'Architektur',
-    installedOn: 'Installiert am',
-    removedOn: 'Entfernt am',
-    backedUpOn: 'Gesichert am',
-    takenOn: 'Erstellt am',
-    entries: 'Einträge',
-    items: 'Elemente',
-    programs: 'Programme',
-    noResults: 'Keine Ergebnisse.',
-    yesNo: (v) => (v ? 'Ja' : 'Nein'),
-    onOff: (v) => (v ? 'An' : 'Aus'),
-    enabledDisabled: (v) => (v ? 'Aktiviert' : 'Deaktiviert'),
-  },
-  // ---- French ----
-  fr: {
-    language: 'Français',
-    appName: 'Purgeon',
-    appTagline: 'Désinstalleur Windows avec analyse des résidus, surveillance des installations et sauvegardes',
-    viewPrograms: 'Programmes',
-    viewApps: 'Applis',
-    viewMonitored: 'Programmes surveillés',
-    viewStartup: 'Démarrage & Services',
-    viewDebloat: 'Debloat',
-    viewJunk: 'Nettoyeur',
-    viewSnapshots: 'Instantanés',
-    viewTimeline: 'Historique des modifications',
-    viewArchive: 'Archive de désinstallation',
-    actionUninstall: 'Désinstaller',
-    actionForce: 'Forcer',
-    actionAnalyze: 'Analyser',
-    actionSheet: 'Feuille',
-    actionBackup: 'Sauvegarder',
-    actionQueue: 'File d\'attente',
-    actionGroup: 'Groupe',
-    actionHide: 'Masquer',
-    actionUnhide: 'Afficher',
-    actionFolder: 'Dossier',
-    actionRegistry: 'Registre',
-    actionSearch: 'Rechercher',
-    actionProperties: 'Propriétés',
-    statusReady: 'Prêt',
-    statusScanning: 'Analyse en cours…',
-    statusRemoving: 'Suppression en cours…',
-    statusDone: 'Terminé',
-    statusError: 'Erreur',
-    settingsTitle: 'Paramètres',
-    settingsLanguage: 'Langue',
-    settingsSilentUninstall: 'Désinstallation silencieuse si possible',
-    settingsSafeMode: 'Mode sécurisé (correspondances quasi-certaines uniquement)',
-    settingsCreateRestorePoints: 'Créer un point de restauration avant les modifications',
-    settingsBackupMaxDays: 'Conserver les sauvegardes de moins de (jours, 0 = illimité)',
-    settingsBackupMaxMB: 'Conserver les sauvegardes de moins de (Mo, 0 = illimité)',
-    settingsGridLines: 'Afficher les lignes de grille',
-    settingsStartWithWindows: 'Lancer Purgeon avec Windows',
-    settingsMonitoring: 'Surveillance en arrière-plan',
-    settingsScanLeftovers: 'Rechercher les résidus de programmes désinstallés ailleurs',
-    settingsCheckStartup: 'Alerter sur les nouveaux entrées de démarrage',
-    settingsSyncFolder: 'Synchroniser les paramètres vers un dossier (OneDrive, Dropbox, Google Drive…)',
-    settingsSyncFolderPick: 'Choisir le dossier de synchronisation…',
-    settingsSyncFolderClear: 'Effacer le dossier de synchronisation',
-    cmdSnapshot: 'Prendre un instantané',
-    cmdRestorePoint: 'Créer un point de restauration',
-    cmdAssociations: 'Recherche d\'association de fichiers',
-    cmdSchedule: 'Surveillance planifiée',
-    cmdPlugins: 'Gérer les extensions',
-    cmdProfiler: 'Profileur de démarrage',
-    ok: 'OK',
-    cancel: 'Annuler',
-    yes: 'Oui',
-    no: 'Non',
-    confirm: 'Confirmer',
-    backup: 'Sauvegarde',
-    undo: 'Annuler',
-    restart: 'Redémarrer',
-    restartLater: 'Redémarrer plus tard',
-    never: 'Jamais',
-    more: 'Plus',
-    less: 'Moins',
-    none: 'Aucun',
-    all: 'Tous',
-    search: 'Rechercher',
-    filter: 'Filtrer',
-    sort: 'Trier',
-    size: 'Taille',
-    date: 'Date',
-    name: 'Nom',
-    publisher: 'Éditeur',
-    version: 'Version',
-    arch: 'Architecture',
-    installedOn: 'Installé le',
-    removedOn: 'Supprimé le',
-    backedUpOn: 'Sauvegardé le',
-    takenOn: 'Pris le',
-    entries: 'Entrées',
-    items: 'Éléments',
-    programs: 'Programmes',
-    noResults: 'Aucun résultat.',
-    yesNo: (v) => (v ? 'Oui' : 'Non'),
-    onOff: (v) => (v ? 'Activé' : 'Désactivé'),
-    enabledDisabled: (v) => (v ? 'Activé' : 'Désactivé'),
-  },
-};
-
-const DEFAULT_LANG = 'en';
-const LANGUAGE_SETTING = 'language';
-
-// Detect the user's Windows locale and map it to a supported language, falling back to English.
-function detectLanguage() {
-  const locale = (sys.env('LANGUAGE') || sys.env('LC_ALL') || sys.env('LC_CTYPE') || sys.env('USERNAME') || '').toLowerCase();
-  // Windows locale names look like en-US, de-DE, es-ES, fr-FR.
-  const m = locale.match(/^(en|es|de|fr)[-_]/);
-  if (m && LOCALE[m[1]]) return m[1];
-  // Also accept plain two-letter codes.
-  for (const code of Object.keys(LOCALE)) {
-    if (locale === code || locale.startsWith(`${code}-`)) return code;
-  }
-  return DEFAULT_LANG;
-}
-
-let current = DEFAULT_LANG;
-
-// Resolve the language: saved setting, then detected Windows locale, then English.
-export async function resolveLanguage() {
-  try {
-    const s = await readSettings();
-    if (s.language && LOCALE[s.language]) {
-      current = s.language;
-      return current;
+  }, ...{
+    "close": "Close",
+    "busyLabel": "Operation in progress",
+    "moreActions": "More actions",
+    "actionsLabel": "Actions",
+    "navLabels": "Toggle navigation labels",
+    "viewsLabel": "Views",
+    "syncPreferencesTitle": "Review preference sync",
+    "syncFolderLabel": "Shared folder",
+    "syncSafeFields": "Only theme, text size, reduced motion, and grid preferences sync. The interface stays in English. Secrets, plugin approvals, safety settings, programs, and backups stay on this PC.",
+    "syncDisabled": "Preference sync is off. Choose a folder and enable it before transferring preferences.",
+    "syncFirstConnection": "A shared copy already exists. Nothing was overwritten. Choose which copy to use.",
+    "syncConflict": "Both copies changed. Review the choices before replacing either copy.",
+    "syncNoConflict": "No conflicting preference changes were detected.",
+    "syncPullTitle": "Use shared preferences",
+    "syncPullBody": "Apply the portable preferences from the shared folder to this PC. Machine-specific settings stay here.",
+    "syncPullAction": "Pull to this PC…",
+    "syncPushTitle": "Use this PC’s preferences",
+    "syncPushBody": "Replace the shared portable preferences with the preferences on this PC.",
+    "syncPushAction": "Push to shared folder…",
+    "syncPullConfirm": "Apply the shared preferences to this PC?",
+    "syncPushConfirm": "Replace the shared preferences with this PC’s copy?",
+    "syncUnresolved": "Sync still needs a choice for: {fields}",
+    "syncComplete": "Preferences synced. No program or backup was transferred.",
+    "recoveryReviewTitle": "Interrupted operation needs review",
+    "recoveryReviewBody": "Windows may have changed this item before Purgeon recorded the outcome. Automatic rollback and replay are disabled to avoid changing the wrong data.",
+    "recoveryOperation": "Operation",
+    "recoveryTarget": "Target",
+    "recoveryRetained": "Closing this window keeps the operation journal and available backups. Review the target and backup before attempting manual recovery.",
+    "languageChanged": "Language changed to {language}. Untranslated text falls back to English.",
+    "searchCommand": "Search {items} or type a command",
+    "sortColumn": "Sort by {column}. Activate again to reverse the order.",
+    "selectedCount": {
+      "one": "{count} item selected",
+      "other": "{count} items selected"
+    },
+    "noSelection": "Select a program to inspect it. Double-click opens details.",
+    "rowCount": {
+      "one": "{count} entry",
+      "other": "{count} entries"
     }
-  } catch {}
-  current = detectLanguage();
-  return current;
-}
+  }, ...{
+    "rowInspectHint": "Double-click opens details. Use an explicit action to change or remove items. Ctrl+click or Shift+click selects several.",
+    "selectionFraction": "{selected} of {total} selected",
+    "progressFraction": "{current} of {total}"
+  } };
 
-export function language() {
-  return current;
+export const language = () => 'en';
+export const languages = () => [{ code: 'en', name: 'English' }];
+// Kept for application/backend API compatibility; English never switches at runtime.
+export const subscribeLanguage = () => () => {};
+export async function resolveLanguage() {
+  const settings = await readSettings();
+  if (settings.language && settings.language !== 'en') await writeSettings({ language: 'en' });
+  if (typeof document !== 'undefined') document.documentElement.lang = 'en';
+  return 'en';
 }
-
-export function languages() {
-  return Object.entries(LOCALE).map(([code, table]) => ({ code, name: table.language }));
-}
-
-export async function setLanguage(code) {
-  if (!LOCALE[code]) throw new Error(`Unknown language: ${code}`);
-  current = code;
-  await persistLanguage(code);
-  return { language: code };
-}
-
-// Persist language choice to settings.json.
 export async function persistLanguage(code) {
-  const fs = await import('node:fs');
-  const path = await import('node:path');
-  const file = path.join(sys.info.dataDir, 'settings.json');
-  let settings = {};
-  try {
-    settings = JSON.parse(fs.readFileSync(file, 'utf8'));
-  } catch {}
-  settings.language = code;
-  fs.writeFileSync(file, JSON.stringify(settings, null, 2));
+  if (code !== 'en') throw new Error('Purgeon supports English only. Use language code en.');
+  await writeSettings({ language: 'en' });
 }
-
+export async function setLanguage(code) {
+  await persistLanguage(code);
+  return { language: 'en' };
+}
+function interpolate(value, params) {
+  if (!params) return String(value);
+  return String(value).replace(/\{(\w+)\}/g, (token, name) => params && typeof params === 'object' && Object.hasOwn(params, name) ? String(params[name]) : token);
+}
 export function t(key, params) {
-  const table = LOCALE[current] || LOCALE[DEFAULT_LANG];
-  let value = table[key] || LOCALE[DEFAULT_LANG][key] || key;
+  let value = Object.hasOwn(EN, key) ? EN[key] : key;
   if (typeof value === 'function') value = value(params);
-  return value;
+  if (value && typeof value === 'object') value = value[new Intl.PluralRules('en').select(Number(params?.count) || 0)] ?? value.other;
+  return interpolate(value, params);
 }
-
+export function tx(english, params) {
+  return typeof english === 'string' ? interpolate(english, params) : english ?? '';
+}
 export function tHtml(key, params) {
-  return t(key, params);
+  return t(key, params).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 }

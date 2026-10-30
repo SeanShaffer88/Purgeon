@@ -1,6 +1,6 @@
-// Start with Windows (off unless you turn it on). Purgeon asks for administrator rights,
-// and Windows skips programs like that in the Run registry key at sign-in, so it is a scheduled
-// task instead: started at your sign-in with highest privileges, which needs no UAC prompt. The
+// Start with Windows (off unless you turn it on), using a current-user Limited
+// scheduled task at sign-in. Existing older Highest tasks may need administrator
+// assistance to migrate; their successful downgrade is not assumed. The
 // task itself is the setting: on means the task exists. Turning it off deletes exactly that task.
 import { sys } from './sys.js';
 import { runPS, psq } from './shell.js';
@@ -29,11 +29,10 @@ export async function set(on) {
     $action = New-ScheduledTaskAction -Execute ${psq(sys.info.exe)} -Argument '--started-by-windows'
     $trigger = New-ScheduledTaskTrigger -AtLogOn -User $user
     $trigger.Delay = 'PT20S'
-    $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Highest
+    $principal = New-ScheduledTaskPrincipal -UserId $user -LogonType Interactive -RunLevel Limited
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances IgnoreNew
     Register-ScheduledTask -TaskPath ${psq(TASK_PATH)} -TaskName ${psq(TASK_NAME)} -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description 'Starts Purgeon when you sign in (View › Start with Windows). Delete this task or turn the option off to stop it.' -Force | Out-Null`);
-  // Without administrator rights Windows refuses a highest-privilege task; say so instead of
-  // quietly leaving the option off.
-  if (!(await enabled())) throw new Error('Windows did not create the sign-in task. Start with Windows needs administrator rights.');
+  // Report registration failure instead of quietly leaving the option off.
+  if (!(await enabled())) throw new Error('Windows did not create the sign-in task. Windows refused to create the current-user sign-in task.');
   return true;
 }

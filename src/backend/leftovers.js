@@ -39,7 +39,7 @@ async function walkFiles(dir, depth = 0, out = []) {
   for (const e of await sys.readDir(dir).catch(() => [])) {
     const full = path.join(dir, e.name);
     if (e.dir && !e.link && depth < 4) await walkFiles(full, depth + 1, out);
-    else if (e.file) out.push(full);
+    else if (e.file && /\.(lnk|url)$/i.test(e.name)) out.push(full);
   }
   return out;
 }
@@ -224,8 +224,10 @@ function merge(items) {
     // Never offer a key whose deletion could harm Windows, nor a file in a protected folder.
     if (raw.kind === 'key' && isProtectedKey(raw.path)) continue;
     if ((raw.kind === 'dir' || raw.kind === 'file') && isProtected(raw.path)) continue;
-    const score = scoreFor(raw);
-    const item = { ...raw, score, confidence: score >= AUTO_TICK ? 'high' : 'low' };
+    const nameOnly = /named after|under publisher|publisher (folder|key)|shortcut named|start menu folder/i.test(raw.reason || '');
+    const score = nameOnly ? Math.min(45, scoreFor(raw)) : scoreFor(raw);
+    const evidence = raw.evidence || (nameOnly ? 'Name match — review ownership' : /installer|msi|inno/i.test(raw.reason || '') ? 'Installer record' : /install location/i.test(raw.reason || '') ? 'Registered install folder' : 'Executable or Windows integration reference');
+    const item = { ...raw, evidence, score, confidence: score >= AUTO_TICK ? 'high' : 'low' };
     const id = `${item.kind}|${item.path}|${item.name || ''}`.toLowerCase();
     const prev = byId.get(id);
     if (!prev || prev.score < score) byId.set(id, { ...item, ...(prev?.container && { container: true }) });

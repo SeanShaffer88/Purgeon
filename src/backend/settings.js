@@ -6,6 +6,7 @@ import * as path from './winpath.js';
 import * as datadamage from './datadamage.js';
 
 export const DEFAULT_SETTINGS = {
+  language: 'en',
   createRestorePoints: true,
   silentUninstall: false,
   safeMode: false,
@@ -13,10 +14,13 @@ export const DEFAULT_SETTINGS = {
   backupMaxMB: 0,
   gridLines: true,
   requireSignature: false,
-  encryptionKey: '',
   disabledConfirmations: [],
   textScale: 1,
   reducedMotion: false,
+  detectInstallers: false,
+  startupMonitoring: false,
+  resourceAlerts: false,
+  recordSizeHistory: false,
   alertThresholds: { cpu: 90, mem: 90, diskFreeGB: 20 },
 };
 
@@ -51,7 +55,7 @@ export async function readSettings() {
   }
   if (text !== undefined) {
     try {
-      value = { ...DEFAULT_SETTINGS, ...JSON.parse(text) };
+      value = { ...DEFAULT_SETTINGS, ...JSON.parse(text), language: 'en' };
     } catch {
       // The file is damaged (a crash mid-write used to do this; writes are
       // atomic now, but older damage can still be on disk). Keep a copy of the
@@ -64,6 +68,13 @@ export async function readSettings() {
       cachedMtime = await statMtime();
       return { ...value };
     }
+  }
+  // Migrate legacy plaintext once, before returning/exporting any settings.
+  if (typeof value?.encryptionKey === 'string' && value.encryptionKey) {
+    if (!sys.secretSet) throw new Error('Secure secret storage is unavailable; settings migration stopped');
+    await sys.secretSet(value.encryptionKey);
+    delete value.encryptionKey;
+    await sys.writeTextAtomic(settingsFile(), JSON.stringify(value, null, 2));
   }
   cachedValue = value;
   cachedMtime = mtime;
@@ -94,7 +105,17 @@ const serializeWrite = (fn) => {
 
 export function writeSettings(patch) {
   return serializeWrite(async () => {
-    const next = { ...(await readSettings()), ...patch };
+    // Migrate an older plaintext secret before applying a replacement secret.
+    // Doing this after secretSet would silently restore the old password.
+    const current = await readSettings();
+    patch = { ...patch };
+    if (Object.hasOwn(patch, 'language')) patch.language = 'en';
+    if (Object.hasOwn(patch, 'encryptionKey')) {
+      if (!sys.secretSet || typeof patch.encryptionKey !== 'string') throw new Error('Secure secret storage is unavailable');
+      await sys.secretSet(patch.encryptionKey);
+      delete patch.encryptionKey;
+    }
+    const next = { ...current, ...patch };
     await sys.writeTextAtomic(settingsFile(), JSON.stringify(next, null, 2));
     await refreshCache(next);
     return next;
@@ -103,6 +124,10 @@ export function writeSettings(patch) {
 
 export function replaceSettings(next) {
   return serializeWrite(async () => {
+    next = { ...next };
+    next.language = 'en';
+    delete next.encryptionKey; // imports never replace this machine's secret
+    delete next.pluginApprovals;
     await sys.writeTextAtomic(settingsFile(), JSON.stringify(next, null, 2));
     await refreshCache(next);
     return next;
