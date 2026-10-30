@@ -49,7 +49,7 @@ export async function apply(settings) {
     $ErrorActionPreference = 'Stop'
     $action = New-ScheduledTaskAction -Execute ${psq(sys.info.exe)} -Argument '--maintenance'
     $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek ${m.day} -At ${psq(m.time)}
-    $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Highest
+    $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
     $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -ExecutionTimeLimit (New-TimeSpan -Hours 2)
     Register-ScheduledTask -TaskPath ${psq(TASK_PATH)} -TaskName ${psq(TASK_NAME)} -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description 'Purgeon: weekly snapshot, junk clean-up and backup limits. Nothing is uninstalled.' -Force | Out-Null`);
   return status();

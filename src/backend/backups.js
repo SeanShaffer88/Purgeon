@@ -1,6 +1,7 @@
 // Backs up and removes leftover items, and restores backups.
 // Registry keys are exported to .reg files, values are recorded with their type and data,
 // and files go to the Recycle Bin, so every removal can be undone.
+import { taskRemovalScript, firewallRemovalScript, firewallRestoreScript } from './backup-scripts.js';
 import { sys, env } from './sys.js';
 import * as path from './winpath.js';
 import { reg, runPS, runPSJson, psq, execFile } from './shell.js';
@@ -22,11 +23,12 @@ const setRoot = async (dir) => {
 // Backups made without a key stay unencrypted; backups made with a key require the same key
 // to read or restore. Losing the key means losing the backup.
 
+const recoveryRestoreToken = Symbol('internal interrupted rollback');
 const ENC_PREFIX = 'PURGEON-ENC1:';  // marks an encrypted manifest file
 
 async function encryptionKey() {
-  const s = await readSettings();
-  return s.encryptionKey || '';
+  await readSettings(); // migrate an existing plaintext key before use
+  return sys.secretGet ? sys.secretGet() : '';
 }
 
 async function deriveKey(password, salt) {
@@ -86,8 +88,12 @@ async function readEncryptedText(p) {
   const raw = await sys.readText(p);
   if (!isEncrypted(raw)) return raw;
   const password = await encryptionKey();
-  if (!password) throw new Error('This backup is encrypted but no encryption key is set.');
-  return decryptText(raw, password);
+  const keys = sys.secretKeys ? await sys.secretKeys() : [password].filter(Boolean);
+  if (!keys.length) throw new Error('This backup is encrypted but no encryption key is available for this data root.');
+  for (const key of keys) {
+    try { return await decryptText(raw, key); } catch { /* Try retained prior keys. */ }
+  }
+  throw new Error('No retained encryption key can decrypt this backup. Set its original password to recover it.');
 }
 
 async function writeEncryptedText(p, text) {
@@ -259,11 +265,18 @@ async function planRemoval({ items, owners = [], state }) {
 // `owners`: uninstall keys of the programs being removed (see safety.js). `state` replaces the
 // live system state in tests.
 async function removeItems({ title, items, owners = [], state, trashItem = (p) => sys.trash(p), shouldStop }) {
+  const settings = await readSettings();
+  const refused = [];
+  if (settings.safeMode) items = items.filter((item) => {
+    const allowed = item.kind === 'junk' || !['service', 'task', 'firewall'].includes(item.kind) && Number(item.score || 0) >= 90;
+    if (!allowed) refused.push({ ...item, ok: false, detail: 'Safe Mode refused this operation in the backend' });
+    return allowed;
+  });
   const id = `${new Date().toISOString().replace(/[:.]/g, '-')}_${slug(title)}`;
   const dir = path.join(backupRoot, id);
   await sys.makeDir(dir);
-  const manifest = { id, title, created: new Date().toISOString(), complete: false, entries: [] };
-  const results = [];
+  const manifest = { id, title, created: new Date().toISOString(), complete: false, entries: [], intents: [] };
+  const results = [...refused];
   // Cancellation: `shouldStop` is polled between items. When it trips, everything
   // not yet touched is reported as left in place and the backup seals with only
   // what was actually removed, so a cancelled removal is still fully undoable.
@@ -274,13 +287,27 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
   };
   let stopped = false;
   const stopNow = () => {
+    if (manifest.inFlight) stopped = true;
     if (!stopped && shouldStop && shouldStop()) stopped = true;
     return stopped;
   };
   const save = async () => await writeEncryptedText(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+  const intent = async (entry) => {
+    if (manifest.inFlight) throw new Error('An earlier mutation is uncertain; its recovery journal must be reviewed first');
+    manifest.inFlight = { ...entry, intentId: manifest.intents.length, recorded: new Date().toISOString() };
+    manifest.intents.push(manifest.inFlight);
+    await save();
+  };
   // Each removal is in the manifest before the next one starts.
   const record = async (entry) => {
-    manifest.entries.push(entry);
+    manifest.entries.push({ ...entry, intentId: manifest.inFlight?.intentId });
+    if (manifest.inFlight) manifest.intents[manifest.inFlight.intentId] = { ...manifest.inFlight, status: 'completed' };
+    delete manifest.inFlight;
+    await save();
+  };
+  const unchanged = async () => {
+    if (manifest.inFlight) manifest.intents[manifest.inFlight.intentId] = { ...manifest.inFlight, status: 'not-present' };
+    delete manifest.inFlight;
     await save();
   };
   await save();
@@ -310,6 +337,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
       log(item, /unable to find/i.test(ex.stderr), /unable to find/i.test(ex.stderr) ? 'Already gone' : `Backup failed, not deleted: ${ex.stderr}`);
       continue;
     }
+    await intent({ kind: 'service', path: item.path, file: path.basename(file) });
     await runPS(`Stop-Service -Name ${psq(item.path)} -Force -ErrorAction SilentlyContinue`).catch(() => {});
     const r = await execFile('sc.exe', ['delete', item.path]);
     if (r.ok) await record({ kind: 'service', path: item.path, file: path.basename(file) });
@@ -325,13 +353,9 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
       continue;
     }
     const file = path.join(dir, `task-${++t}.xml`);
-    const out = await runPS(`
-      $t = Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { ($_.TaskPath + $_.TaskName) -eq ${psq(item.path)} } | Select-Object -First 1
-      if (-not $t) { 'GONE'; return }
-      Export-ScheduledTask -TaskName $t.TaskName -TaskPath $t.TaskPath | Set-Content -LiteralPath ${psq(file)} -Encoding Unicode
-      Unregister-ScheduledTask -TaskName $t.TaskName -TaskPath $t.TaskPath -Confirm:$false -ErrorAction Stop
-      if (Get-ScheduledTask -TaskName $t.TaskName -TaskPath $t.TaskPath -ErrorAction SilentlyContinue) { 'ERR Task is still registered' } else { 'OK' }`).catch((e) => `ERR ${e.message}`);
-    if (/^GONE/.test(out.trim())) log(item, true, 'Already gone');
+    await intent({ kind: 'task', path: item.path, file: path.basename(file) });
+    const out = await runPS(taskRemovalScript(item.path, file)).catch((e) => `ERR ${e.message}`);
+    if (/^GONE/.test(out.trim())) { await unchanged(); log(item, true, 'Already gone'); }
     else if (/^OK/.test(out.trim())) {
       await record({ kind: 'task', path: item.path, file: path.basename(file) });
       log(item, true, 'Task removed');
@@ -343,16 +367,9 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
   for (const item of items.filter((i) => i.kind === 'firewall')) {
     if (stopNow()) break;
     const file = path.join(dir, `firewall-${++f}.json`);
-    const out = await runPS(`
-      $r = Get-NetFirewallRule -Name ${psq(item.path)} -ErrorAction SilentlyContinue
-      if (-not $r) { 'GONE'; return }
-      $a = $r | Get-NetFirewallApplicationFilter; $p = $r | Get-NetFirewallPortFilter
-      [pscustomobject]@{ Name = $r.Name; DisplayName = $r.DisplayName; Direction = [string]$r.Direction; Action = [string]$r.Action
-        Profile = [string]$r.Profile; Enabled = [string]$r.Enabled; Program = $a.Program; Protocol = [string]$p.Protocol
-        LocalPort = @($p.LocalPort); RemotePort = @($p.RemotePort) } | ConvertTo-Json -Compress | Set-Content -LiteralPath ${psq(file)} -Encoding UTF8
-      Remove-NetFirewallRule -Name ${psq(item.path)} -ErrorAction Stop
-      if (Get-NetFirewallRule -Name ${psq(item.path)} -ErrorAction SilentlyContinue) { 'ERR Firewall rule is still present' } else { 'OK' }`).catch((e) => `ERR ${e.message}`);
-    if (/^GONE/.test(out.trim())) log(item, true, 'Already gone');
+    await intent({ kind: 'firewall', path: item.path, name: item.name, file: path.basename(file) });
+    const out = await runPS(firewallRemovalScript(item.path, file)).catch((e) => `ERR ${e.message}`);
+    if (/^GONE/.test(out.trim())) { await unchanged(); log(item, true, 'Already gone'); }
     else if (/^OK/.test(out.trim())) {
       await record({ kind: 'firewall', path: item.path, name: item.name, file: path.basename(file) });
       log(item, true, 'Firewall rule removed');
@@ -360,7 +377,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
   }
 
   const values = items.filter((i) => i.kind === 'value');
-  const captured = await readValues(values).catch(() => []);
+  const captured = await readValues(values);
   for (const item of values) {
     if (stopNow()) break;
     const v = captured.find((c) => c.path === item.path && c.name === item.name);
@@ -368,6 +385,8 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
       log(item, true, 'Already gone');
       continue;
     }
+    if (isProtectedKey(item.path)) { log(item, false, 'Protected Windows value, skipped'); continue; }
+    await intent({ kind: 'value', ...v });
     const r = await reg(['delete', item.path, '/v', item.name, '/f']);
     if (r.ok) await record({ kind: 'value', ...v });
     log(item, r.ok, r.ok ? 'Value deleted' : r.stderr);
@@ -391,9 +410,10 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
       log(item, /unable to find/i.test(ex.stderr), /unable to find/i.test(ex.stderr) ? 'Already gone' : `Backup failed, not deleted: ${ex.stderr}`);
       continue;
     }
+    await intent({ kind: 'key', path: item.path, file: path.basename(file) });
     const r = await reg(['delete', item.path, '/f']);
     if (r.ok) await record({ kind: 'key', path: item.path, file: path.basename(file) });
-    else await sys.removePath(file);
+    // Keep the export even on an ambiguous failure for manual recovery.
     log(item, r.ok, r.ok ? 'Key deleted' : r.stderr);
   }
 
@@ -404,6 +424,8 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
       log(item, true, 'Already exists');
       continue;
     }
+    if (isProtectedKey(item.path)) { log(item, false, 'Protected Windows key, skipped'); continue; }
+    await intent({ kind: 'newkey', path: item.path });
     const r = await reg(['add', item.path, '/f']);
     if (r.ok) await record({ kind: 'newkey', path: item.path });
     log(item, r.ok, r.ok ? 'Key recreated' : r.stderr);
@@ -411,7 +433,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
 
   // Values written back from a snapshot. The current value (or its absence) is recorded first.
   const toSet = items.filter((i) => i.kind === 'setvalue');
-  const current = await readValues(toSet).catch(() => []);
+  const current = await readValues(toSet);
   for (const item of toSet) {
     if (stopNow()) break;
     const args = regAddArgs(item.path, item.name, item.valueType, item.data);
@@ -420,6 +442,8 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
       continue;
     }
     const was = current.find((c) => c.path === item.path && c.name === item.name);
+    if (isProtectedKey(item.path)) { log(item, false, 'Protected Windows value, skipped'); continue; }
+    await intent(was ? { kind: 'value', ...was } : { kind: 'newvalue', path: item.path, name: item.name });
     const r = await reg(args);
     if (r.ok) await record(was ? { kind: 'value', ...was } : { kind: 'newvalue', path: item.path, name: item.name });
     log(item, r.ok, r.ok ? (was ? 'Earlier value put back' : 'Value recreated') : r.stderr);
@@ -441,6 +465,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
       continue;
     }
     try {
+      await intent({ kind: item.kind, path: item.path, recycled: true });
       await trashItem(item.path);
       await record({ kind: item.kind, path: item.path, recycled: true });
       log(item, true, 'Moved to Recycle Bin');
@@ -464,16 +489,19 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
       return !live;
     });
   }
-  const errors = stopped ? allowed.map(() => 'cancelled') : sys.trashMany ? await sys.trashMany(allowed.map((i) => i.path)) : await Promise.all(allowed.map((i) => trashItem(i.path).then(() => '', (e) => String(e?.message || e))));
-  if (!stopped)
-    allowed.forEach((item, i) => {
-    if (!errors[i]) {
-      manifest.entries.push({ kind: item.dir ? 'dir' : 'file', path: item.path, recycled: true });
-      log(item, true, 'Moved to Recycle Bin');
-    } else log(item, false, /being used|in use|access is denied|0x80070020|0x80070005/i.test(errors[i]) ? 'In use, skipped' : errors[i]);
-  });
+  // Each file has its own durable intent and completion, including junk cleanup.
+  for (const item of allowed) {
+    if (stopNow()) break;
+    const entry = { kind: item.dir ? 'dir' : 'file', path: item.path, recycled: true };
+    await intent(entry);
+    try { await trashItem(item.path); await record(entry); log(item, true, 'Moved to Recycle Bin'); }
+    catch (e) { log(item, false, String(e?.message || e)); }
+  }
 
   if (stopped) for (const item of items) if (!seen.has(item)) log(item, false, 'Left in place — the removal was cancelled');
+  if (manifest.inFlight) {
+    return { backupId: id, results, cancelled: stopped, interrupted: true, recoveryRequired: true };
+  }
   // Keep a backup only when something was actually removed.
   if (!manifest.entries.length) {
     await sys.removePath(dir);
@@ -488,48 +516,112 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
   return { backupId: id, results, cancelled: stopped };
 }
 
-// Reads the interrupted-removal record. A crash can strike while the record
-// itself is being written, leaving damaged JSON behind: that comes back as
-// { corrupt: true } (never a throw), so the damage is reported and can be
-// cleared instead of silently hiding the interrupted removal forever.
+// Recovery is fail-closed: unreadable evidence is never treated as an empty backup.
+const recoveryError = (detail) => new Error(`Recovery needs review: ${detail}. The journal and backup are retained. Restore access or the original encryption password, then retry.`);
+const isObject = (value) => value !== null && typeof value === 'object' && !Array.isArray(value);
+const nonblank = (value) => typeof value === 'string' && value.trim().length > 0;
+const removalKinds = new Set(['service', 'task', 'firewall', 'value', 'key', 'createkey', 'setvalue', 'file', 'dir', 'junk']);
+const recoveryKinds = new Set(['service', 'task', 'firewall', 'value', 'key', 'newkey', 'newvalue', 'file', 'dir']);
+const validItem = (item, kinds) => isObject(item) && kinds.has(item.kind) && nonblank(item.path);
+const validBackupFile = (name) => nonblank(name) && !/[\\/:<>"|?*\x00-\x1f]/.test(name) && name !== '.' && name !== '..' && !/[. ]$/.test(name) && !/^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i.test(name);
+function validateRecoveryEntry(entry) {
+  if (!validItem(entry, recoveryKinds)) throw new Error('invalid recovery entry');
+  if ('file' in entry && !validBackupFile(entry.file)) throw new Error('invalid stored export filename');
+  if (['key', 'service', 'task', 'firewall'].includes(entry.kind) && !validBackupFile(entry.file)) throw new Error('missing stored export filename');
+  if (['value', 'newvalue'].includes(entry.kind) && typeof entry.name !== 'string') throw new Error('invalid registry value name');
+  if (entry.kind === 'value' && (!Object.hasOwn(REG_TYPE, entry.valueKind) || typeof entry.data !== 'string')) throw new Error('invalid stored registry value');
+  if (['file', 'dir'].includes(entry.kind) && entry.recycled !== true) throw new Error('missing recycled-file recovery evidence');
+  if ('intentId' in entry && entry.intentId !== undefined && (!Number.isInteger(entry.intentId) || entry.intentId < 0)) throw new Error('invalid recovery intent identity');
+}
 async function readPending() {
-  if (!(await sys.exists(pendingFile()))) return null;
   try {
-    const p = JSON.parse(await sys.readText(pendingFile()));
-    return p && p.id && Array.isArray(p.items) ? p : { corrupt: true };
-  } catch {
-    return { corrupt: true };
+    const text = await sys.readOptionalText(pendingFile());
+    if (text === null) return null;
+    const p = JSON.parse(text);
+    if (!isObject(p) || !nonblank(p.title) || !nonblank(p.started) || !Number.isFinite(Date.parse(p.started)) || !Array.isArray(p.items) || !p.items.every((item) => validItem(item, removalKinds)) || (p.owners !== undefined && (!Array.isArray(p.owners) || !p.owners.every(nonblank)))) throw new Error('invalid pending record');
+    backupDir(p.id); // Validate before constructing or reading a manifest path.
+    return p;
+  } catch (error) {
+    return { corrupt: true, reviewRequired: true, detail: recoveryError(error.message).message };
+  }
+}
+async function readRecoveryManifest(p, allowChangedFiles = false) {
+  try {
+    const dir = backupDir(p.id);
+    const m = JSON.parse(await readEncryptedText(path.join(dir, 'manifest.json')));
+    if (!isObject(m) || m.id !== p.id || typeof m.title !== 'string' || !nonblank(m.created) || !Number.isFinite(Date.parse(m.created)) || !Array.isArray(m.entries) || ('complete' in m && typeof m.complete !== 'boolean')) throw new Error('invalid manifest identity or schema');
+    m.entries.forEach(validateRecoveryEntry);
+    if ('intents' in m && !Array.isArray(m.intents)) throw new Error('invalid intent journal');
+    for (const [index, intent] of (m.intents || []).entries()) {
+      validateRecoveryEntry(intent);
+      if (intent.intentId !== index || !nonblank(intent.recorded) || !Number.isFinite(Date.parse(intent.recorded)) || ('status' in intent && !['completed', 'not-present'].includes(intent.status))) throw new Error('invalid intent journal entry');
+    }
+    if ('inFlight' in m) {
+      validateRecoveryEntry(m.inFlight);
+      if (!Number.isInteger(m.inFlight.intentId) || !m.intents?.[m.inFlight.intentId] || JSON.stringify(m.intents[m.inFlight.intentId]) !== JSON.stringify(m.inFlight)) throw new Error('invalid uncertain operation evidence');
+    }
+    if (m.intents) {
+      const identities = new Set();
+      for (const entry of m.entries) {
+        const intent = m.intents[entry.intentId];
+        if (!intent || intent.status !== 'completed' || identities.has(entry.intentId) || intent.kind !== entry.kind || intent.path !== entry.path || intent.file !== entry.file || intent.name !== entry.name) throw new Error('inconsistent completed operation evidence');
+        identities.add(entry.intentId);
+      }
+      for (const intent of m.intents) {
+        if (intent.status === 'completed' && !identities.has(intent.intentId)) throw new Error('completed intent has no recovery entry');
+        if (!intent.status && m.inFlight?.intentId !== intent.intentId) throw new Error('unresolved operation evidence without its in-flight marker');
+      }
+    }
+    if ('recovery' in m && (!isObject(m.recovery) || m.recovery.action !== 'rollback' || m.recovery.status !== 'in-progress' || !nonblank(m.recovery.started))) throw new Error('invalid rollback progress evidence');
+    if (!m.entries.length && !m.inFlight && (m.intents || []).some((intent) => intent.status !== 'not-present')) throw new Error('empty manifest has unresolved operation evidence');
+    if (m.fingerprint && (await verify(dir, m)).size && !allowChangedFiles) throw new Error('stored backup files changed after sealing');
+    return { dir, manifest: m };
+  } catch (error) {
+    throw recoveryError(error.message);
   }
 }
 
-// A removal that was cut off: { id, title, started, done, total } or null.
-// A damaged record comes back as { corrupt: true, ... } with empty counts.
+// An interrupted removal, including evidence that requires manual review.
 async function interrupted() {
   const p = await readPending();
   if (!p) return null;
-  if (p.corrupt) return { id: null, title: '', started: null, done: 0, total: 0, corrupt: true };
-  const m = await readEncryptedText(manifestFile(p.id)).then(JSON.parse).catch(() => null);
-  return { id: p.id, title: p.title, started: p.started, done: m?.entries.length || 0, total: p.items.length };
+  if (p.corrupt) return { id: null, title: '', started: null, done: 0, total: 0, ...p };
+  try {
+    const { manifest: m } = await readRecoveryManifest(p);
+    return { id: p.id, title: p.title, started: p.started, done: m.entries.length, total: p.items.length, uncertain: m.inFlight || null, reviewRequired: !!m.inFlight || !!m.recovery };
+  } catch (error) {
+    return { id: p.id, title: p.title, started: p.started, done: 0, total: p.items.length, reviewRequired: true, detail: error.message };
+  }
 }
 
-// Resolves an interrupted removal: 'rollback' restores what it removed, 'finish' removes the
-// rest, 'keep' leaves things as they are. Its backup is sealed either way.
-// A damaged record cannot be rolled back or finished (nobody can tell what it
-// was removing); any choice just clears the record.
 async function resolveInterrupted(action) {
+  if (!['dismiss', 'keep', 'rollback', 'finish'].includes(action)) throw new Error('Invalid recovery action');
+  // Closing the review never reads, clears, or modifies its evidence.
+  if (action === 'dismiss') return { action, results: [], retained: true };
   const p = await readPending();
   if (!p) return { action, results: [] };
-  if (p.corrupt) {
-    await sys.removePath(pendingFile());
-    return { action, results: [], corrupt: true };
+  if (p.corrupt) throw new Error(p.detail);
+  const { dir, manifest: m } = await readRecoveryManifest(p);
+  if (m.recovery) throw recoveryError('an earlier rollback may have partially restored data; automatic retry is refused');
+  if (m.inFlight) throw recoveryError(`uncertain ${m.inFlight.kind} operation at ${m.inFlight.path}; automatic replay is refused`);
+  // Replaying the original item list could delete an item restored or changed
+  // since the crash. A fresh preview is required instead of guessing identity.
+  if (action === 'finish') throw recoveryError('automatic finish cannot prove the remaining item identities; keep or roll back this backup, then scan and preview again');
+  if (m.entries.length) {
+    if (action === 'rollback') m.recovery = { action: 'rollback', status: 'in-progress', started: new Date().toISOString() };
+    await seal(dir, m);
+    if (action === 'rollback') {
+      const results = await restore(p.id, undefined, undefined, recoveryRestoreToken);
+      if (results.length !== m.entries.length || results.some((result) => !result.ok)) return { action, results, retained: true, reviewRequired: true };
+      await sys.removePath(pendingFile());
+      delete m.recovery;
+      await seal(dir, m);
+      return { action, results };
+    }
+  } else {
+    await sys.removePath(dir);
   }
-  const dir = path.join(backupRoot, p.id);
-  const m = await readEncryptedText(manifestFile(p.id)).then(JSON.parse).catch(() => null);
-  if (m && m.entries.length) await seal(dir, m);
-  else await sys.removePath(dir);
   await sys.removePath(pendingFile());
-  if (action === 'rollback' && m?.entries.length) return { action, results: await restore(p.id) };
-  if (action === 'finish') return { action, ...(await removeItems({ title: p.title, items: p.items, owners: p.owners })) };
   return { action, results: [] };
 }
 
@@ -550,8 +642,9 @@ async function prune({ maxDays = 0, maxMB = 0 } = {}, now = Date.now(), hooks = 
   const newest = new Set();
   const seenTitles = new Set();
   for (const m of all) if (!seenTitles.has(m.title)) (seenTitles.add(m.title), newest.add(m.id));
-  const pending = await sys.readText(pendingFile()).then((t) => JSON.parse(t).id).catch(() => null);
-  const candidates = all.filter((m) => !newest.has(m.id) && m.id !== pending && m.complete !== false).reverse(); // oldest first
+  const pending = await readPending();
+  if (pending?.corrupt) throw new Error(pending.detail);
+  const candidates = all.filter((m) => !newest.has(m.id) && m.id !== pending?.id && m.complete !== false && !m.inFlight && !m.recovery).reverse(); // oldest first
   const removed = [];
   for (const m of candidates) {
     if (maxDays && now - new Date(m.created).getTime() > maxDays * 86400000) {
@@ -749,10 +842,12 @@ const restoreFromRecycleBin = async (original) => (await restoreManyFromRecycleB
 
 // Restores a backup. With `onlyIndexes` (an array of entry positions), only
 // those entries are restored — the Recovery Packages tool's selective restore.
-async function restore(id, onlyIndexes, shouldStop) {
+async function restore(id, onlyIndexes, shouldStop, internalToken) {
   const dir = backupDir(id);
   if (!(await sys.exists(path.join(dir, 'manifest.json')))) throw new Error('This backup no longer exists. It may have been removed by the backup limits in Tools › Backup Settings.');
-  const manifest = JSON.parse(await readEncryptedText(path.join(dir, 'manifest.json')));
+  const { manifest } = await readRecoveryManifest({ id }, true);
+  if (manifest.inFlight) throw recoveryError('an uncertain mutation must be reviewed before restoring');
+  if (manifest.recovery && internalToken !== recoveryRestoreToken) throw recoveryError('an interrupted rollback requires manual review before another restore');
   const changed = await verify(dir, manifest);
   const only = Array.isArray(onlyIndexes) ? new Set(onlyIndexes) : null;
   const results = [];
@@ -795,16 +890,7 @@ async function restore(id, onlyIndexes, shouldStop) {
       ).catch((err) => err.message);
       results.push({ ...e, ok: /^OK/.test(out.trim()), detail: /^OK/.test(out.trim()) ? 'Task restored' : out.trim() });
     } else if (e.kind === 'firewall') {
-      const out = await runPS(`
-        $ErrorActionPreference = 'Stop'
-        $r = Get-Content -LiteralPath ${psq(path.join(dir, e.file))} -Raw | ConvertFrom-Json
-        $params = @{ Name = $r.Name; DisplayName = $r.DisplayName; Direction = $r.Direction; Action = $r.Action; Enabled = $r.Enabled; Profile = ($r.Profile -split ',\\s*') }
-        if ($r.Program -and $r.Program -ne 'Any') { $params.Program = $r.Program }
-        if ($r.Protocol -and $r.Protocol -ne 'Any') { $params.Protocol = $r.Protocol
-          if (@($r.LocalPort) -notcontains 'Any') { $params.LocalPort = @($r.LocalPort) }
-          if (@($r.RemotePort) -notcontains 'Any') { $params.RemotePort = @($r.RemotePort) } }
-        New-NetFirewallRule @params | Out-Null
-        if (Get-NetFirewallRule -Name $r.Name -ErrorAction SilentlyContinue) { 'OK' } else { 'Firewall rule was not recreated' }`).catch((err) => err.message);
+      const out = await runPS(firewallRestoreScript(e.path, path.join(dir, e.file))).catch((err) => err.message);
       results.push({ ...e, ok: /^OK/.test(out.trim()), detail: /^OK/.test(out.trim()) ? 'Firewall rule restored' : out.trim() });
     } else if (e.recycled) {
       const out = String(recycled[e.path] || recycled.error || 'NOTFOUND').trim();
@@ -836,15 +922,24 @@ function backupDir(id) {
   return target;
 }
 
-// Deletes one backup folder by hand (to the Recycle Bin, so it can be brought back).
-function remove(id) {
-  return sys.trash(backupDir(id));
+// Every deletion route respects the same recovery evidence, including pruning.
+async function deletableBackup(id) {
+  const dir = backupDir(id);
+  const pending = await readPending();
+  if (pending?.corrupt) throw new Error(pending.detail);
+  if (pending?.id === id) throw recoveryError('this backup belongs to the active interrupted removal');
+  const { manifest } = await readRecoveryManifest({ id });
+  if (manifest.complete === false || manifest.inFlight || manifest.recovery) throw recoveryError('this backup contains unfinished recovery evidence');
+  return dir;
 }
 
-// Deletes one backup folder for good. Only the automatic limit pruning uses
-// this: the Recycle Bin would keep the bytes, which defeats the size limit.
-function destroy(id) {
-  return sys.removePath(backupDir(id));
+// Manual deletion goes to the Recycle Bin; only limit pruning deletes permanently.
+function remove(id) {
+  backupDir(id); // Preserve immediate validation for existing callers.
+  return deletableBackup(id).then((dir) => sys.trash(dir));
+}
+async function destroy(id) {
+  return sys.removePath(await deletableBackup(id));
 }
 
 // Export a removal plan (the output of planRemoval) to HTML, CSV or JSON so it can be

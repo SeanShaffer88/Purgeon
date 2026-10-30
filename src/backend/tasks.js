@@ -4,7 +4,7 @@
 // and run, but never deleted from here; deleting anything else first
 // saves its definition to Purgeon's task-backups folder, and that saved
 // definition is what Change History's undo re-registers.
-import path from 'node:path';
+import * as path from './winpath.js';
 import { sys } from './sys.js';
 import { runPS, runPSJson } from './shell.js';
 import { record } from './history.js';
@@ -80,11 +80,14 @@ function checkedTask(task) {
 }
 
 export async function list() {
-  const [rows, infos] = await Promise.all([
-    runPSJson(`Get-ScheduledTask -ErrorAction SilentlyContinue | Select-Object TaskName, TaskPath, State, Author | ConvertTo-Json -Compress -Depth 3`).catch(() => []),
-    runPSJson(`Get-ScheduledTask -ErrorAction SilentlyContinue | ForEach-Object { $i = $_ | Get-ScheduledTaskInfo -ErrorAction SilentlyContinue; [pscustomobject]@{ TaskName = $_.TaskName; TaskPath = $_.TaskPath; LastRunTime = if ($i) { $i.LastRunTime.ToString('o') } else { '' }; NextRunTime = if ($i -and $i.NextRunTime) { $i.NextRunTime.ToString('o') } else { '' }; LastTaskResult = if ($i) { $i.LastTaskResult } else { $null } } } | ConvertTo-Json -Compress -Depth 3`).catch(() => []),
-  ]);
-  return shapeTasks(rows, infos);
+  const [result] = await runPSJson(`$tasks = @(Get-ScheduledTask -ErrorAction SilentlyContinue)
+$rows = @($tasks | Select-Object TaskName, TaskPath, State, Author)
+$infos = @(foreach ($t in $tasks) {
+  $i = $t | Get-ScheduledTaskInfo -ErrorAction SilentlyContinue
+  [pscustomobject]@{ TaskName = $t.TaskName; TaskPath = $t.TaskPath; LastRunTime = if ($i) { $i.LastRunTime.ToString('o') } else { '' }; NextRunTime = if ($i -and $i.NextRunTime) { $i.NextRunTime.ToString('o') } else { '' }; LastTaskResult = if ($i) { $i.LastTaskResult } else { $null } }
+})
+[pscustomobject]@{ rows = $rows; infos = $infos } | ConvertTo-Json -Compress -Depth 4`).catch(() => []);
+  return shapeTasks(result?.rows || [], result?.infos || []);
 }
 
 const psQuote = (s) => `'${String(s).replace(/'/g, "''")}'`;

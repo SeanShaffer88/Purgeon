@@ -10,8 +10,14 @@ try {
     $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
     if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Packaging requires a three-part release version.' }
     if (-not $SkipBuild) {
-        & npm.cmd run dist -- --target x86_64-pc-windows-msvc --bundles nsis --ci
-        if ($LASTEXITCODE) { throw 'x64 bundle build failed.' }
+        # Generate an absolute signing command; Tauri's working directory is irrelevant.
+        $signConfig = Join-Path ([IO.Path]::GetTempPath()) ('purgeon-sign-config-' + [guid]::NewGuid() + '.json')
+        try {
+            @{ bundle = @{ windows = @{ signCommand = @{ cmd = 'pwsh'; args = @('-NoProfile', '-File', (Join-Path $PSScriptRoot 'sign-windows.ps1'), '-Binary', '%1') } } } } |
+                ConvertTo-Json -Depth 6 | Set-Content -LiteralPath $signConfig -Encoding utf8
+            & npm.cmd run dist -- --target x86_64-pc-windows-msvc --bundles nsis --ci --config $signConfig
+            if ($LASTEXITCODE) { throw 'x64 bundle build failed.' }
+        } finally { Remove-Item -LiteralPath $signConfig -Force -ErrorAction SilentlyContinue }
     }
     $x64 = Join-Path $root 'src-tauri/target/x86_64-pc-windows-msvc/release'
     $setup64 = Join-Path $x64 "bundle/nsis/Purgeon_${version}_x64-setup.exe"
@@ -19,6 +25,11 @@ try {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing package input: $path" }
     }
     Assert-PeMachine "$x64/purgeon.exe" 0x8664
+    if ($env:CODE_SIGN_CERT -or $env:CODE_SIGN_PASSWORD) {
+        foreach ($binary in @("$x64/purgeon.exe", $setup64)) {
+            if ((Get-AuthenticodeSignature -LiteralPath $binary).Status -ne 'Valid') { throw "Final package input has no valid signature: $binary" }
+        }
+    }
     if (Test-Path -LiteralPath $OutputDirectory) {
         if (@(Get-ChildItem -LiteralPath $OutputDirectory -Force).Count) {
             throw "Output directory must be empty: $OutputDirectory"

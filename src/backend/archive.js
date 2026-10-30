@@ -42,7 +42,13 @@ export async function attachBackup(keys, backupId) {
   if (!backupId || !keys?.length) return;
   const all = await read();
   for (const k of keys) {
-    const e = [...all].reverse().find((x) => x.key && x.key.toLowerCase() === String(k).toLowerCase());
+    let e;
+    for (let i = all.length - 1; i >= 0; i--) {
+      if (all[i].key && all[i].key.toLowerCase() === String(k).toLowerCase()) {
+        e = all[i];
+        break;
+      }
+    }
     if (e && !e.backups.includes(backupId)) e.backups.push(backupId);
   }
   await write(all);

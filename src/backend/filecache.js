@@ -15,6 +15,8 @@ export class FileCache {
     this.file = file;
     this.map = {};
     this.dirty = false;
+    this.count = 0;
+    this.revision = 0;
   }
 
   // Loads the stored map; a missing or corrupt cache file just means an empty cache.
@@ -26,6 +28,11 @@ export class FileCache {
       this.map = {};
     }
     this.dirty = false;
+    const keys = Object.keys(this.map);
+    for (const key of keys.slice(0, Math.max(0, keys.length - MAX_KEYS))) delete this.map[key];
+    this.count = Math.min(keys.length, MAX_KEYS);
+    this.dirty = keys.length > MAX_KEYS;
+    this.revision++;
     return this;
   }
 
@@ -48,19 +55,26 @@ export class FileCache {
   // Remembers a value for a path at a stamp; written out by save(). Once the map
   // grows past MAX_KEYS the oldest-inserted keys are dropped back down to it.
   put(p, stamp, value) {
-    this.map[String(p).toLowerCase()] = { stamp, value };
+    const key = String(p).toLowerCase();
+    const present = Object.hasOwn(this.map, key);
+    Object.defineProperty(this.map, key, { value: { stamp, value }, writable: true, enumerable: true, configurable: true });
+    if (!present) this.count++;
     this.dirty = true;
-    const keys = Object.keys(this.map);
-    if (keys.length > MAX_KEYS) for (const k of keys.slice(0, keys.length - MAX_KEYS)) delete this.map[k];
+    this.revision++;
+    if (this.count > MAX_KEYS) {
+      // Enumerate only on overflow, retaining JavaScript's integer-key ordering.
+      for (const k of Object.keys(this.map).slice(0, this.count - MAX_KEYS)) { delete this.map[k]; this.count--; }
+    }
   }
 
   // Persists pending puts. Failures are swallowed: a lost cache only costs speed,
   // never correctness.
   async save() {
     if (!this.dirty) return;
+    const revision = this.revision;
     try {
       await sys.writeTextAtomic(this.file, JSON.stringify(this.map));
-      this.dirty = false;
+      if (this.revision === revision) this.dirty = false;
     } catch {}
   }
 }

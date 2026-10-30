@@ -64,8 +64,8 @@ const poll = async () => {
   return {
     started: session.started,
     live: true,
-    processes: peek?.processes?.length || 0,
-    events: peek?.events?.length || 0,
+    processes: peek?.processes ?? null,
+    events: peek?.events ?? null,
   };
 };
 
@@ -128,7 +128,7 @@ function recordItems(comparison) {
 // Merges snapshot items with live tracking items and computes uninstall keys.
 // Used by both finish() (permanent record) and testInstallFinish() (disposable test).
 async function buildItems(session, comparison, tracked) {
-  let items = recordItems(comparison);
+  let items = recordItems(comparison).map((item) => ({ ...item, source: 'snapshot', evidence: 'Unattributed snapshot difference', score: 35, confidence: 'low', reason: `${item.reason}; ownership is not established by timing` }));
   if (tracked) {
     const sid = (await runPS('[Security.Principal.WindowsIdentity]::GetCurrent().User.Value').catch(() => '')).trim();
     const live = await stillPresent(liveItems(tracked, sid, path.basename(session.installer || 'the installer')));
@@ -240,7 +240,10 @@ async function list() {
   return records.sort((a, b) => a.name.localeCompare(b.name));
 }
 
-const remove = (id) => sys.removePath(path.join(storeDir, 'programs', `${id}.json`));
+const remove = (id) => {
+  if (!/^\d+$/.test(String(id))) throw new Error('Invalid monitor id');
+  return sys.removePath(path.join(storeDir, 'programs', `${id}.json`));
+};
 
 // ---- live tracking results ------------------------------------------------------------
 
@@ -290,11 +293,12 @@ export function liveItems(t, sid, installer) {
 
 // Snapshot findings plus live findings, without repeating anything a folder or key already covers.
 export function mergeItems(snapshot, live) {
-  const out = [...snapshot];
+  const direct = new Set(live.map((i) => `${i.kind}|${i.path}|${i.name || ''}`.toLowerCase()));
+  const out = snapshot.filter((i) => !direct.has(`${i.kind}|${i.path}|${i.name || ''}`.toLowerCase()));
   const id = (i) => `${i.kind}|${i.path}|${i.name || ''}`.toLowerCase();
   const seen = new Set(out.map(id));
   const covers = (i) =>
-    out.some((o) => (o.kind === 'dir' && (i.kind === 'dir' || i.kind === 'file')) || (o.kind === 'key' && (i.kind === 'key' || i.kind === 'value')) ? i.path.toLowerCase().startsWith(o.path.toLowerCase() + '\\') : false);
+      out.some((o) => o.source !== 'snapshot' && ((o.kind === 'dir' && (i.kind === 'dir' || i.kind === 'file')) || (o.kind === 'key' && (i.kind === 'key' || i.kind === 'value'))) ? i.path.toLowerCase().startsWith(o.path.toLowerCase() + '\\') : false);
   for (const i of live) {
     if (seen.has(id(i)) || covers(i)) continue;
     seen.add(id(i));

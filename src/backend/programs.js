@@ -3,6 +3,7 @@ import { runPSJson, runPS, psq } from './shell.js';
 import { sys } from './sys.js';
 import * as path from './winpath.js';
 import { FileCache } from './filecache.js';
+import { createReadContext, forEachRead } from './read-context.js';
 
 // Icon cache: extracted PNGs keyed by each icon file's stamp, so repeat program-list
 // loads skip the PowerShell extraction for files that have not changed. Null until
@@ -227,18 +228,23 @@ const ICONS_PS = `
      Add-Type -AssemblyName System.Drawing
      $in = [Console]::In.ReadToEnd() | ConvertFrom-Json
      $out = foreach ($w in $in) {
+       $icon = $null; $bmp = $null; $g = $null; $iconBitmap = $null; $ms = $null
        try {
          if (-not (Test-Path -LiteralPath $w.file -PathType Leaf)) { continue }
          $icon = if ($w.file -match '\\.ico$') { New-Object System.Drawing.Icon($w.file, 16, 16) } else { [System.Drawing.Icon]::ExtractAssociatedIcon($w.file) }
          $bmp = New-Object System.Drawing.Bitmap 16, 16
          $g = [System.Drawing.Graphics]::FromImage($bmp)
          $g.InterpolationMode = 'HighQualityBicubic'
-         $g.DrawImage($icon.ToBitmap(), 0, 0, 16, 16)
+         $iconBitmap = $icon.ToBitmap()
+         $g.DrawImage($iconBitmap, 0, 0, 16, 16)
          $ms = New-Object System.IO.MemoryStream
          $bmp.Save($ms, [System.Drawing.Imaging.ImageFormat]::Png)
          [pscustomobject]@{ key = $w.key; png = [Convert]::ToBase64String($ms.ToArray()) }
-         $g.Dispose(); $bmp.Dispose(); $icon.Dispose()
-       } catch {}
+       } catch {} finally {
+         foreach ($resource in @($ms, $g, $iconBitmap, $bmp, $icon)) {
+           if ($null -ne $resource) { try { [void]$resource.Dispose() } catch {} }
+         }
+       }
      }
      @($out) | ConvertTo-Json -Compress`;
 
@@ -246,6 +252,7 @@ const ICONS_PS = `
 // Programs can share one icon file, so extraction (and the cache) work per file;
 // only files without a current-stamp cache entry go to PowerShell.
 async function iconsFor(programs) {
+  const context = createReadContext();
   const wanted = programs.map((p) => ({ key: p.key, file: iconPathFor(p) })).filter((w) => w.file);
   if (!wanted.length) return {};
   const files = [...new Set(wanted.map((w) => w.file))];
@@ -255,9 +262,8 @@ async function iconsFor(programs) {
   let misses = files.map((file) => ({ key: file, file }));
   if (iconCache) {
     misses = [];
-    await Promise.all(
-      files.map(async (file) => {
-        const stamp = await iconCache.stampFor(file);
+    await forEachRead(files, async (file) => {
+        const stamp = await context.stampFor(file);
         if (stamp !== null) {
           stamps.set(file, stamp);
           const v = iconCache.hit(file, stamp);
@@ -267,8 +273,7 @@ async function iconsFor(programs) {
           }
         }
         misses.push({ key: file, file });
-      })
-    );
+      });
   }
   if (misses.length) {
     const rows = await runPSJson(ICONS_PS, { input: JSON.stringify(misses) }).catch(() => []);

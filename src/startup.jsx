@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+import { tx } from './backend/i18n.js';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const api = window.api;
 
@@ -37,8 +38,12 @@ const sameName = (owner, name) => simple(owner).startsWith(simple(name)) || simp
 
 const baseName = (p) => (p || '').split('\\').pop().toLowerCase();
 const secs = (ms) => `${(ms / 1000).toFixed(1)} s`;
+const entriesForMode = (entries, mode) => entries.filter((entry) => mode === 'services' ? entry.type === 'service' : entry.type !== 'service');
 
-export function StartupView({ filter, admin, programs, onError, onStatus, onRemoveRule }) {
+export function StartupView({ mode = 'startup', filter, admin, programs, onError, onStatus, onRemoveRule }) {
+  const servicesOnly = mode === 'services';
+  const alive = useRef(true);
+  const loadGeneration = useRef(0);
   const [entries, setEntries] = useState(null);
   // Extra detail loaded after the list: measured boot delays, signatures, inbound firewall rules.
   const [boot, setBoot] = useState(null);
@@ -50,25 +55,37 @@ export function StartupView({ filter, admin, programs, onError, onStatus, onRemo
   const [pending, setPending] = useState({ signin: new Set(), reboot: new Set() });
 
   const load = async () => {
+    if (!alive.current) return;
+    const generation = ++loadGeneration.current;
+    const current = () => alive.current && generation === loadGeneration.current;
     try {
-      setEntries(await api.invoke('startup:list'));
+      const result = await api.invoke('startup:list');
+      if (current()) setEntries(entriesForMode(result, mode));
     } catch (e) {
+      if (!current()) return;
       onError(e.message);
       setEntries([]);
     }
   };
   useEffect(() => {
+    alive.current = true;
+    let active = true;
     load();
-    api.invoke('running:bootImpact').then(setBoot).catch(() => setBoot({ available: false, boots: [], impact: {} }));
-    api.invoke('running:inbound').then(setInbound).catch(() => setInbound([]));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+    api.invoke('running:bootImpact').then((value) => { if (active) setBoot(value); }).catch(() => { if (active) setBoot({ available: false, boots: [], impact: {} }); });
+    if (!servicesOnly) api.invoke('running:inbound').then((value) => { if (active) setInbound(value); }).catch(() => { if (active) setInbound([]); });
+    return () => { active = false; alive.current = false; loadGeneration.current++; };
+  }, []);
   useEffect(() => {
     if (!entries) return;
+    let active = true;
     const files = [...entries.map((e) => exeOf(e.command)), ...(inbound || []).map((r) => r.program.toLowerCase())].filter((f) => /\.exe$/.test(f));
-    api.invoke('files:signatures', [...new Set(files)]).then(setSigs).catch(() => {});
+    api.invoke('files:signatures', [...new Set(files)]).then((value) => { if (active) setSigs(value); }).catch(() => {});
+    return () => { active = false; };
   }, [entries, inbound]);
   useEffect(() => {
-    if (entries) api.invoke('startup:trust', entries).then(setTrust).catch(() => {});
+    let active = true;
+    if (entries) api.invoke('startup:trust', entries).then((value) => { if (active) setTrust(value); }).catch(() => {});
+    return () => { active = false; };
   }, [entries]);
   const impactOf = (e) => boot?.impact?.[e.type === 'service' ? (e.serviceName || '').toLowerCase() : baseName(exeOf(e.command))] || null;
   const sigOf = (file) => sigs[(file || '').toLowerCase()] || null;
@@ -76,23 +93,23 @@ export function StartupView({ filter, admin, programs, onError, onStatus, onRemo
     const s = sigOf(file);
     if (!s) return null;
     return s.status === 'Valid' ? (
-      <span className="fx fx-signed" title={`Signed by ${s.signer}`}>Signed</span>
+      <span className="fx fx-signed" title={tx("Signed by {p0}", { p0: (s.signer) })}>{tx("Signed")}</span>
     ) : (
-      <span className="fx fx-unsigned" title={s.status === 'NotSigned' ? 'This program is not digitally signed' : `Signature problem: ${s.status}`}>
-        {s.status === 'NotSigned' ? 'Unsigned' : 'Bad signature'}
+      <span className="fx fx-unsigned" title={s.status === 'NotSigned' ? tx("This program is not digitally signed") : tx("Signature problem: {p0}", { p0: (s.status) })}>
+        {s.status === 'NotSigned' ? tx("Unsigned") : tx("Bad signature")}
       </span>
     );
   };
 
   useEffect(() => {
-    if (!entries) return onStatus('Reading startup entries');
-    onStatus(`${entries.filter((e) => e.enabled).length} of ${entries.length} entries start with Windows`);
-  }, [entries]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (!entries) return onStatus(servicesOnly ? 'Reading services' : 'Reading startup entries');
+    onStatus(`${entries.filter((e) => e.enabled).length} of ${entries.length} ${servicesOnly ? 'services enabled' : 'entries start with Windows'}`);
+  }, [entries, servicesOnly]);
 
   const toggle = async (e) => {
     if (working.has(e.id)) return;
     if (e.admin && admin === false) {
-      onError(`"${e.name}" needs administrator rights. Use File › Restart as Administrator.`);
+      onError(tx("\"{p0}\" needs administrator rights. Use File › Restart as Administrator.", { p0: (e.name) }));
       return;
     }
     if (e.enabled && e.windows) {
@@ -100,25 +117,28 @@ export function StartupView({ filter, admin, programs, onError, onStatus, onRemo
         message: `Stop "${e.name}" from starting?`,
         detail: 'This entry is part of Windows or a Microsoft product. Turning it off is reversible, but some Windows features may stop working until you turn it back on.',
       });
-      if (!ok) return;
+      if (!ok || !alive.current) return;
     }
     setWorking((s) => new Set(s).add(e.id));
     try {
       await api.invoke('startup:set', { entry: e, enable: !e.enabled });
+      if (!alive.current) return;
       setPending((p) => {
         const next = new Set(p[e.effect]);
         next.has(e.id) ? next.delete(e.id) : next.add(e.id);
         return { ...p, [e.effect]: next };
       });
     } catch (err) {
-      onError(err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));
+      if (alive.current) onError(err.message.replace(/^Error invoking remote method '[^']+': (Error: )?/, ''));
     } finally {
+      if (alive.current) {
       setWorking((s) => {
         const n = new Set(s);
         n.delete(e.id);
         return n;
       });
       load();
+      }
     }
   };
 
@@ -134,9 +154,9 @@ export function StartupView({ filter, admin, programs, onError, onStatus, onRemo
     })).filter((g) => g.items.length);
   }, [entries, filter, programs]);
 
-  if (!entries) return <div className="list-empty">Reading startup entries…</div>;
+  if (!entries) return <div className="list-empty">{tx(servicesOnly ? 'Reading services…' : 'Reading startup entries…')}</div>;
   const q = filter.trim().toLowerCase();
-  const rules = (inbound || []).filter((r) => !q || `${r.display} ${r.program}`.toLowerCase().includes(q));
+  const rules = servicesOnly ? [] : (inbound || []).filter((r) => !q || `${r.display} ${r.program}`.toLowerCase().includes(q));
   const avgBoot = boot?.boots?.length ? boot.boots.reduce((n, b) => n + b.mainPathMs, 0) / boot.boots.length : 0;
   const unsigned = Object.values(sigs).filter((s) => s.status !== 'Valid').length;
 
@@ -144,34 +164,28 @@ export function StartupView({ filter, admin, programs, onError, onStatus, onRemo
     <div className="tweak-list">
       <div className="debloat-bar">
         <span className="legend">
-          <span className="pill on">ENABLED</span> starts with Windows
-          <span className="pill off">DISABLED</span> kept, but doesn't start
-        </span>
+          <span className="pill on">{tx("ENABLED")}</span>{tx(" starts with Windows")}<span className="pill off">{tx("DISABLED")}</span>{tx(" kept, but doesn't start")}</span>
         <span className="running-summary">
-          {entries.filter((e) => e.enabled && (e.type === 'run' || e.type === 'folder')).length} start with Windows · {entries.filter((e) => e.type === 'service' && e.enabled).length} automatic services ·{' '}
-          {entries.filter((e) => e.type === 'task' && e.enabled).length} tasks · {(inbound || []).length} accept connections
-          {unsigned ? ` · ${unsigned} unsigned` : ''}
-          {Object.keys(trust).length ? ` · ${Object.keys(trust).length} worth checking` : ''}
-          {avgBoot ? ` · start-up takes about ${secs(avgBoot)} (last ${boot.boots.length} slow boots)` : boot && !boot.available ? ' · start-up timings need administrator rights' : ''}
+          {servicesOnly ? tx('{p0} automatic services', { p0: entries.filter((e) => e.enabled).length }) : <>{entries.filter((e) => e.enabled && (e.type === 'run' || e.type === 'folder')).length}{tx(' start with Windows · ')}{entries.filter((e) => e.type === 'task' && e.enabled).length}{tx(' tasks · ')}{(inbound || []).length}{tx(' accept connections')}</>}{unsigned ? tx(" · {p0} unsigned", { p0: (unsigned) }) : ''}
+          {Object.keys(trust).length ? tx(" · {p0} worth checking", { p0: (Object.keys(trust).length) }) : ''}
+          {avgBoot ? tx(" · start-up takes about {p0} (last {p1} slow boots)", { p0: (secs(avgBoot)), p1: (boot.boots.length) }) : boot && !boot.available ? tx(" · start-up timings need administrator rights") : ''}
         </span>
         <span className="debloat-actions">
-          {pending.signin.size > 0 && <span className="pending-signin">{pending.signin.size} change{pending.signin.size > 1 ? 's apply' : ' applies'} at next sign-in</span>}
+          {pending.signin.size > 0 && <span className="pending-signin">{pending.signin.size}{tx(" change")}{pending.signin.size > 1 ? tx("s apply") : tx(" applies")}{tx(" at next sign-in")}</span>}
           {pending.reboot.size > 0 && (
             <span className="pending-reboot">
-              {pending.reboot.size} service change{pending.reboot.size > 1 ? 's apply' : ' applies'} after a restart
-            </span>
+              {pending.reboot.size}{tx(" service change")}{pending.reboot.size > 1 ? tx("s apply") : tx(" applies")}{tx(" after a restart")}</span>
           )}
         </span>
       </div>
 
-      {groups.length === 0 && <div className="list-empty">No startup entries match.</div>}
+      {groups.length === 0 && <div className="list-empty">{tx(servicesOnly ? 'No services match.' : 'No startup entries match.')}</div>}
       {groups.map((g) => (
         <section key={g.id} className="tweak-group">
           <div className="tweak-group-head">
-            <span>{g.label}</span>
+            <span>{tx(g.label)}</span>
             <span className="muted">
-              {g.all.filter((e) => e.enabled).length}/{g.all.length} enabled
-            </span>
+              {g.all.filter((e) => e.enabled).length}/{g.all.length}{tx(" enabled")}</span>
           </div>
           {g.items.map((e) => {
             const fx = EFFECT[e.effect];
@@ -182,10 +196,10 @@ export function StartupView({ filter, admin, programs, onError, onStatus, onRemo
                 className={`tweak ${e.enabled ? 'on' : 'off'} ${busy ? 'busy' : ''}`}
                 onClick={() => toggle(e)}
                 aria-pressed={e.enabled}
-                aria-label={`${e.name}, ${e.enabled ? 'enabled' : 'disabled'}, ${e.where}. Click to turn ${e.enabled ? 'off' : 'on'}.`}
+                aria-label={tx("{p0}, {p1}, {p2}. Click to turn {p3}.", { p0: (e.name), p1: (e.enabled ? 'enabled' : 'disabled'), p2: (e.where), p3: (e.enabled ? 'off' : 'on') })}
                 title={e.command}
               >
-                <span className={`pill ${e.enabled ? 'on' : 'off'}`}>{busy ? '…' : e.enabled ? 'ENABLED' : 'DISABLED'}</span>
+                <span className={`pill ${e.enabled ? 'on' : 'off'}`}>{busy ? '…' : e.enabled ? tx("ENABLED") : tx("DISABLED")}</span>
                 <span className="tweak-text">
                   <span className="tweak-title">
                     {e.name}
@@ -206,36 +220,34 @@ export function StartupView({ filter, admin, programs, onError, onStatus, onRemo
                           if (working.has(e.id)) return;
                           setWorking((s) => new Set(s).add(e.id));
                           api.invoke('startup:delayed', { entry: e, delayed: !e.delayed }).then(() => {
+                            if (!alive.current) return;
                             setPending((p) => {
                               const next = new Set(p.reboot);
                               next.has(e.id) ? next.delete(e.id) : next.add(e.id);
                               return { ...p, [e.effect]: next };
                             });
                             load();
-                          }).catch((err) => onError(err.message)).finally(() => {
-                            setWorking((s) => { const n = new Set(s); n.delete(e.id); return n; });
+                          }).catch((err) => { if (alive.current) onError(err.message); }).finally(() => {
+                            if (alive.current) setWorking((s) => { const n = new Set(s); n.delete(e.id); return n; });
                           });
                         }}
-                        aria-label={`${e.name}, ${e.delayed ? 'delayed start on' : 'delayed start off'}. Click to turn ${e.delayed ? 'off' : 'on'} delayed start.`}
-                        title={e.delayed ? 'Service starts normally after boot' : 'Service starts after a short delay following boot'}
+                        aria-label={tx("{p0}, {p1}. Click to turn {p2} delayed start.", { p0: (e.name), p1: (e.delayed ? 'delayed start on' : 'delayed start off'), p2: (e.delayed ? 'off' : 'on') })}
+                        title={e.delayed ? tx("Service starts normally after boot") : tx("Service starts after a short delay following boot")}
                       >
-                        {e.delayed ? 'DELAYED' : 'DELAY'}
+                        {e.delayed ? tx("DELAYED") : tx("DELAY")}
                       </button>
                     )}
                     {trust[e.id] && (
-                      <span className="fx fx-unsigned" title={trust[e.id].join('\n')}>
-                        ⚠ Check
-                      </span>
+                      <span className="fx fx-unsigned" title={trust[e.id].join('\n')}>{tx("⚠ Check")}</span>
                     )}
                     {impactOf(e) && (
-                      <span className="fx fx-impact" title={`Windows measured it slowing start-up ${impactOf(e).times} time${impactOf(e).times === 1 ? '' : 's'}`}>
-                        +{secs(impactOf(e).avgMs)} at start-up
-                      </span>
+                      <span className="fx fx-impact" title={tx("Windows measured it slowing start-up {p0} time{p1}", { p0: (impactOf(e).times), p1: (impactOf(e).times === 1 ? '' : 's') })}>
+                        +{secs(impactOf(e).avgMs)}{tx(" at start-up")}</span>
                     )}
-                    {/updat/i.test(`${e.name} ${e.command}`) && <span className="fx fx-updater">Updater</span>}
+                    {/updat/i.test(`${e.name} ${e.command}`) && <span className="fx fx-updater">{tx("Updater")}</span>}
                     <SigTag file={exeOf(e.command)} />
-                    {e.windows && <span className="fx fx-windows">Windows</span>}
-                    {e.admin && <span className="fx fx-admin">Admin</span>}
+                    {e.windows && <span className="fx fx-windows">{tx("Windows")}</span>}
+                    {e.admin && <span className="fx fx-admin">{tx("Admin")}</span>}
                   </span>
                 </span>
               </button>
@@ -246,14 +258,14 @@ export function StartupView({ filter, admin, programs, onError, onStatus, onRemo
       {rules.length > 0 && (
         <section className="tweak-group">
           <div className="tweak-group-head">
-            <span>Programs accepting incoming connections</span>
-            <span className="muted">{rules.length} programs · {rules.reduce((n, r) => n + r.names.length, 0)} firewall rules</span>
+            <span>{tx("Programs accepting incoming connections")}</span>
+            <span className="muted">{rules.length}{tx(" programs · ")}{rules.reduce((n, r) => n + r.names.length, 0)}{tx(" firewall rules")}</span>
           </div>
           {rules.map((r) => {
             const owner = ownerOf({ command: `"${r.program}"` }, programs);
             return (
               <div key={r.program} className="tweak inbound">
-                <span className="pill on">{r.names.length > 1 ? `${r.names.length} RULES` : 'ALLOWED'}</span>
+                <span className="pill on">{r.names.length > 1 ? tx("{p0} RULES", { p0: (r.names.length) }) : tx("ALLOWED")}</span>
                 <span className="tweak-text">
                   <span className="tweak-title">
                     {r.display}
@@ -261,13 +273,11 @@ export function StartupView({ filter, admin, programs, onError, onStatus, onRemo
                   </span>
                   <span className="tweak-detail">
                     {r.profile} · {r.program}
-                    {r.exists ? '' : ' · program no longer exists'}
+                    {r.exists ? '' : tx(" · program no longer exists")}
                   </span>
                 </span>
                 <span className="tweak-tags">
-                  <button className="link" onClick={() => onRemoveRule(r)} title="Removes the rule, after backing it up">
-                    Remove rule…
-                  </button>
+                  <button className="link" onClick={() => onRemoveRule(r)} title={tx("Removes the rule, after backing it up")}>{tx("Remove rule…")}</button>
                   <span className="tag-row">
                     <SigTag file={r.program} />
                   </span>

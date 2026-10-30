@@ -1,172 +1,14 @@
+import { Dialog, Busy } from './core-dialog.jsx';
+import { itemLabel, safeAllowed, PlanView, signatureText } from './dialog-shared.jsx';
+export { Dialog, ConfirmDialog, Busy, useModalLayer } from './core-dialog.jsx';
+export { PlanView, planHtml, safeAllowed, signatureText } from './dialog-shared.jsx';
+import { tx } from './backend/i18n.js';
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { SettingHelp } from './onboarding.jsx';
+import { t } from './backend/i18n.js';
+import { leftoverSections } from './leftover-sections.js';
 
 const api = window.api;
-
-export function Dialog({ title, onClose, children, buttons, width = 520 }) {
-  const dialogRef = useRef(null);
-  // The latest onClose, read by the mount-once keyboard listener below. (With an
-  // inline onClose from the parent, an [onClose]-keyed effect re-ran on every
-  // parent render and stole focus back to the dialog container each time —
-  // including right after another layer, like the command palette, had opened
-  // and focused its input.)
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-  useEffect(() => {
-    // Focus the dialog container on open so keyboard users land in the modal.
-    const el = dialogRef.current;
-    if (el) el.focus();
-    const onKey = (e) => {
-      // Only the topmost layer answers the keyboard: when dialogs stack, Escape
-      // closes them one at a time from the top instead of every dialog at once.
-      // The topmost layer is the last dialog in the document (equal z-index,
-      // later in the tree paints on top). The command palette counts as a layer
-      // too, even though it is not a Dialog, so a dialog never closes from
-      // behind an open palette.
-      const layers = document.querySelectorAll('.dialog, .palette');
-      if (!el || layers[layers.length - 1] !== el) return;
-      if (e.key === 'Escape') { onCloseRef.current && onCloseRef.current(); }
-      else if (e.key === 'Enter') {
-        // Activate the primary button if focused element is not a button/input.
-        const active = document.activeElement;
-        const isButtonOrInput = /^(BUTTON|INPUT|TEXTAREA|SELECT)$/.test(active?.tagName || '');
-        if (!isButtonOrInput) {
-          const primary = el.querySelector('button.primary');
-          if (primary) primary.click();
-        }
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, []);
-  return (
-    <div className="overlay">
-      <div className="dialog" ref={dialogRef} role="dialog" aria-modal="true" aria-label={typeof title === 'string' ? title : undefined} tabIndex="-1" style={{ width, maxWidth: '96vw' }}>
-        <div className="dialog-title">
-          <span>{title}</span>
-          {onClose && (
-            <button className="title-close" onClick={onClose} aria-label="Close">
-              ✕
-            </button>
-          )}
-        </div>
-        <div className="dialog-body">{children}</div>
-        {buttons && <div className="dialog-buttons">{buttons}</div>}
-      </div>
-    </div>
-  );
-}
-
-// Yes/No question, optionally with a checkbox (such as "Create a restore point first").
-// Yes/No question, optionally with checkboxes ("Create a restore point first" and/or "Don't show again").
-export function ConfirmDialog({ message, detail, checkboxLabel, checkboxChecked, confirmId, dontShowLabel, onAnswer }) {
-  const [checked, setChecked] = useState(!!checkboxChecked);
-  const [dontShow, setDontShow] = useState(false);
-  const handleAnswer = (ok) => {
-    if (confirmId && dontShow) {
-      api.invoke('settings:get').then((s) => {
-        const disabled = Array.isArray(s.disabledConfirmations) ? [...s.disabledConfirmations] : [];
-        if (!disabled.includes(confirmId)) disabled.push(confirmId);
-        return api.invoke('settings:set', { disabledConfirmations: disabled });
-      }).catch(() => {});
-    }
-    onAnswer({ ok, checked, dontShow });
-  };
-  return (
-    <Dialog
-      title="Purgeon"
-      onClose={() => handleAnswer(false)}
-      width={500}
-      buttons={
-        <>
-          <button className="primary" autoFocus onClick={() => handleAnswer(true)}>Yes</button>
-          <button onClick={() => handleAnswer(false)}>No</button>
-        </>
-      }
-    >
-      <p className="heading">{message}</p>
-      {detail && <p className="confirm-detail">{detail}</p>}
-      {checkboxLabel && (
-        <label className="confirm-check">
-          <input type="checkbox" checked={checked} onChange={(e) => setChecked(e.target.checked)} />
-          {checkboxLabel}
-        </label>
-      )}
-      {confirmId && (
-        <label className="confirm-check">
-          <input type="checkbox" checked={dontShow} onChange={(e) => setDontShow(e.target.checked)} />
-          {dontShowLabel || 'Don\'t show again'}
-        </label>
-      )}
-    </Dialog>
-  );
-}
-
-export function Busy({ busy, onStop, onPause, onCancel }) {
-  // Accept either a string message or a rich busy object.
-  const msg = typeof busy === 'string' ? busy : busy?.message || '';
-  const progress = typeof busy === 'object' ? busy.progress : null;
-  const elapsed = typeof busy === 'object' ? busy.elapsed : null;
-  const current = typeof busy === 'object' ? busy.current : null;
-  const total = typeof busy === 'object' ? busy.total : null;
-  const canPause = typeof busy === 'object' ? !!busy.canPause : false;
-  const canCancel = typeof busy === 'object' ? !!busy.canCancel : false;
-
-  const [stopping, setStopping] = useState(false);
-  const [paused, setPaused] = useState(false);
-  const startTime = useRef(Date.now());
-
-  const pct = progress != null ? progress : (current != null && total ? Math.round((current / total) * 100) : null);
-  const displayElapsed = elapsed != null ? elapsed : Math.floor((Date.now() - startTime.current) / 1000);
-  const timeText = displayElapsed > 0 ? ` (${displayElapsed}s)` : '';
-
-  return (
-    <div className="overlay">
-      <div className="dialog busy" style={{ width: 480 }} aria-live="polite" aria-label="Busy">
-        <div className="dialog-body">
-          <div className="busy-msg">{msg}{timeText}</div>
-          {pct != null && (
-            <>
-              <div className="progress">
-                <div className="progress-bar" style={{ width: `${pct}%` }} />
-              </div>
-              <div className="progress-text">
-                {current != null && total ? `${current} of ${total}` : ''}
-                {pct != null ? ` · ${pct}%` : ''}
-              </div>
-            </>
-          )}
-          {paused && <div className="busy-paused">Paused</div>}
-        </div>
-        <div className="dialog-buttons">
-          {canPause && (
-            <button
-              disabled={stopping}
-              onClick={() => {
-                setPaused((p) => !p);
-                if (onPause) onPause(!p);
-              }}
-            >
-              {paused ? 'Resume' : 'Pause'}
-            </button>
-          )}
-          {(onStop || canCancel) && (
-            <button
-              disabled={stopping}
-              onClick={() => {
-                setStopping(true);
-                if (onStop) onStop();
-                if (onCancel) onCancel();
-              }}
-            >
-              {stopping ? 'Stopping…' : canCancel ? 'Cancel' : 'Stop After This One'}
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
 
 const GROUPS = [
   { id: 'registry', label: 'Registry', kinds: ['key', 'value', 'createkey', 'setvalue'] },
@@ -176,60 +18,6 @@ const GROUPS = [
   { id: 'firewall', label: 'Firewall Rules', kinds: ['firewall'] },
 ];
 
-const itemLabel = (i) =>
-  i.kind === 'value'
-    ? `${i.path}  ›  ${i.name}`
-    : i.kind === 'service'
-      ? `Service: ${i.path}`
-      : i.kind === 'task'
-        ? `Task: ${i.path}`
-        : i.kind === 'firewall'
-          ? `Firewall: ${i.name || i.path}`
-          : i.kind === 'setvalue'
-            ? `Put back: ${i.path}  ›  ${i.name || '(default)'}`
-            : i.kind === 'createkey'
-              ? `Recreate: ${i.path}`
-              : i.path;
-
-// Safe mode offers only near-certain matches and never services, tasks or firewall rules.
-export const safeAllowed = (it, safeMode) => !safeMode || ((typeof it.score === 'number' ? it.score : it.confidence === 'high' ? 80 : 40) >= 90 && !['service', 'task', 'firewall'].includes(it.kind));
-
-// A dry run's results: what would happen to each selected item, with nothing changed.
-export function PlanView({ results, onBack, onExport }) {
-  const skipped = results.filter((r) => !r.ok);
-  return (
-    <div className="plan">
-      <div className="plan-bar">
-        <b>Dry run · nothing was changed.</b>
-        <span className="muted">
-          {results.length - skipped.length} would be removed or put back{skipped.length ? `, ${skipped.length} would be skipped` : ''}.
-        </span>
-        <span className="plan-actions">
-          <button onClick={onExport}>Export Plan…</button>
-          <button onClick={onBack}>Back to the List</button>
-        </span>
-      </div>
-      <div className="tree">
-        {[...skipped, ...results.filter((r) => r.ok)].slice(0, 800).map((r, i) => (
-          <div key={i} className={`result ${r.ok ? 'ok' : 'fail'}`}>
-            <span className="mark">{r.ok ? '→' : '–'}</span>
-            <span className="path">{itemLabel(r)}</span>
-            <span className="muted">{r.detail}</span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-export function planHtml(title, results) {
-  const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]);
-  return `<!doctype html><meta charset="utf-8"><title>Dry run</title>
-<style>body{font:13px Segoe UI,sans-serif;margin:24px}table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:3px 8px;border-bottom:1px solid #ddd;vertical-align:top}th{background:#f3f3f3}.no{color:#a33}</style>
-<h1>Dry run: ${esc(title)}</h1><p>Exported ${new Date().toLocaleString()}. Nothing was changed.</p>
-<table><tr><th>Type</th><th>Item</th><th>What would happen</th></tr>${results.map((r) => `<tr class="${r.ok ? '' : 'no'}"><td>${esc(r.kind)}</td><td>${esc(itemLabel(r))}</td><td>${esc(r.detail)}</td></tr>`).join('')}</table>`;
-}
-
 export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDryRun, onExportPlan, safeMode = false }) {
   const allowed = (it) => safeAllowed(it, safeMode);
   const [checked, setChecked] = useState(() => new Set(items.map((it, idx) => (it.confidence === 'high' && allowed(it) ? idx : -1)).filter((i) => i >= 0)));
@@ -238,20 +26,9 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
   const hidden = items.filter((it) => !allowed(it)).length;
   const [collapsed, setCollapsed] = useState(new Set());
   // Batch results carry `program`; those are grouped by program first, then by type.
-  const programs = useMemo(() => [...new Set(items.map((it) => it.program || ''))], [items]);
+  const sections = useMemo(() => leftoverSections(items, GROUPS), [items]);
+  const programs = sections.map((section) => section.program);
   const byProgram = programs.length > 1 || programs[0] !== '';
-  const sections = useMemo(
-    () =>
-      programs.map((program) => {
-        const groups = GROUPS.map((g) => ({
-          ...g,
-          id: `${program}|${g.id}`,
-          rows: items.map((it, idx) => ({ it, idx })).filter(({ it }) => (it.program || '') === program && g.kinds.includes(it.kind)),
-        })).filter((g) => g.rows.length);
-        return { program, groups, rows: groups.flatMap((g) => g.rows) };
-      }),
-    [items, programs]
-  );
   const toggle = (idx) =>
     setChecked((s) => {
       const n = new Set(s);
@@ -283,27 +60,25 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
       width={680}
       buttons={
         <>
-          <span className="button-hint">{checked.size} of {items.length} selected</span>
-          <button onClick={() => setChecked(new Set(items.map((_, i) => i).filter((i) => allowed(items[i]))))}>Select All</button>
-          <button onClick={() => setChecked(new Set())}>Select None</button>
+          <span className="button-hint">{t('selectionFraction', { selected: checked.size, total: items.length })}</span>
+          <button onClick={() => setChecked(new Set(items.map((_, i) => i).filter((i) => allowed(items[i]))))}>{tx("Select All")}</button>
+          <button onClick={() => setChecked(new Set())}>{tx("Select None")}</button>
           {onDryRun && (
-            <button disabled={!checked.size || planning} onClick={dryRun} title="Check what would happen, without changing anything">
-              {planning ? 'Checking…' : 'Dry Run'}
+            <button disabled={!checked.size || planning} onClick={dryRun} title={tx("Check what would happen, without changing anything")}>
+              {planning ? tx("Checking…") : tx("Dry Run")}
             </button>
           )}
-          <button className="primary" disabled={!checked.size} onClick={() => onRemove(selected())}>
-            Delete Selected
-          </button>
-          <button onClick={onClose}>Close</button>
+          <button className="primary" disabled={!checked.size} onClick={() => onRemove(selected())}>{tx("Delete Selected")}</button>
+          <button onClick={onClose}>{tx("Close")}</button>
         </>
       }
     >
-      <p className="heading">{heading}</p>
-      {safeMode && hidden > 0 && <div className="safe-note">Safe mode: {hidden} lower-confidence item{hidden === 1 ? ' is' : 's are'} shown but can’t be selected. Turn it off in Tools › Safe Mode.</div>}
+      <p className="heading">{tx(heading)}</p>
+      {safeMode && hidden > 0 && <div className="safe-note">{tx("Safe mode: ")}{hidden}{tx(" lower-confidence item")}{hidden === 1 ? tx(" is") : tx("s are")}{tx(" shown but can’t be selected. Turn it off in Tools › Safe Mode.")}</div>}
       {plan ? (
         <PlanView results={plan} onBack={() => setPlan(null)} onExport={() => onExportPlan(plan)} />
       ) : items.length === 0 ? (
-        <div className="empty-box">No leftovers found. Everything was removed cleanly.</div>
+        <div className="empty-box">{tx("No leftovers found. Everything was removed cleanly.")}</div>
       ) : (
         <div className="tree">
           {sections.map((s) => [
@@ -338,17 +113,17 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
                     {open ? '▾' : '▸'}
                   </button>
                   <input type="checkbox" checked={all} ref={(el) => el && (el.indeterminate = some)} onChange={() => toggleGroup(g)} />
-                  <b>{g.label}</b> <span className="muted">({g.rows.length})</span>
+                  <b>{tx(g.label)}</b> <span className="muted">({g.rows.length})</span>
                 </div>
                 {open &&
                   g.rows.map(({ it, idx }) => (
-                    <label key={idx} className={`tree-item ${it.confidence === 'low' ? 'low' : ''} ${allowed(it) ? '' : 'locked'}`} title={`${it.reason}${typeof it.score === 'number' ? ` · match ${it.score}%` : ''}`}>
+                    <label key={idx} className={`tree-item ${it.confidence === 'low' ? 'low' : ''} ${allowed(it) ? '' : 'locked'}`} title={`${it.evidence || 'Ownership evidence'}: ${it.reason}`}>
                       <input type="checkbox" checked={checked.has(idx)} disabled={!allowed(it)} onChange={() => toggle(idx)} />
                       <span className={`kind kind-${it.kind}`} />
                       <span className="path">{itemLabel(it)}</span>
-                      {it.confidence === 'low' && <span className="tag">check</span>}
+                      {it.confidence === 'low' && <span className="tag">{tx("check")}</span>}
                       {typeof it.score === 'number' && (
-                        <span className={`score ${it.score >= 90 ? 'hi' : it.score >= 70 ? 'mid' : 'lo'}`}>{it.score}%</span>
+                        <span className={`score ${it.confidence === 'high' ? 'hi' : 'lo'}`}>{it.evidence || (it.confidence === 'high' ? tx("Direct reference") : tx("Review required"))}</span>
                       )}
                     </label>
                   ))}
@@ -358,7 +133,7 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
           ])}
         </div>
       )}
-      <p className="footnote">Everything you delete is backed up first. Registry entries can be restored from Tools › Backups, and files go to the Recycle Bin.</p>
+      <p className="footnote">{tx("Cleanup records and available registry exports are kept in Tools › Backups. File recovery requires the original Recycle Bin copies. Some actions cannot be undone.")}</p>
     </Dialog>
   );
 }
@@ -397,7 +172,7 @@ export function RecoveryDialog({ onClose }) {
   };
   useEffect(() => {
     load();
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   const selected = (packages || []).find((p) => p.id === selectedId) || null;
   const pick = (p) => {
@@ -414,8 +189,8 @@ export function RecoveryDialog({ onClose }) {
     try {
       const v = await api.invoke('backups:verifyPackage', selected.id);
       await load(selected.id);
-      if (v.cancelled) setError('Verification cancelled — the package keeps its previous verdict.');
-      else if (!v.ok) setError(`Verification found problems: ${v.problems.join('; ')}`);
+      if (v.cancelled) setError(tx("Verification cancelled — the package keeps its previous verdict."));
+      else if (!v.ok) setError(tx("Verification found problems: {p0}", { p0: (v.problems.join('; ')) }));
     } catch (e) {
       setError(e.message);
     } finally {
@@ -442,23 +217,21 @@ export function RecoveryDialog({ onClose }) {
 
   const badge = (p) =>
     p.verified === true ? (
-      <span className="pkg-badge ok">Restorable ✓ verified</span>
+      <span className="pkg-badge ok">{tx("Restorable ✓ verified")}</span>
     ) : p.verified === false ? (
-      <span className="pkg-badge bad">Verification failed</span>
+      <span className="pkg-badge bad">{tx("Verification failed")}</span>
     ) : (
-      <span className="pkg-badge warn">Not verified</span>
+      <span className="pkg-badge warn">{tx("Not verified")}</span>
     );
 
   return (
-    <Dialog title="Recovery Packages" onClose={onClose} width={880} buttons={<button className="primary" onClick={onClose}>Close</button>}>
-      <p className="muted" style={{ marginBottom: 10 }}>
-        Backups taken before removals. Each new package is test-restored when it is created, so “Restorable” means it was proven, not hoped.
-      </p>
+    <Dialog title={tx("Recovery Packages")} onClose={onClose} width={880} buttons={<button className="primary" onClick={onClose}>{tx("Close")}</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>{tx("Backups taken before removals. Each new package is test-restored when it is created, so “Restorable” means it was proven, not hoped.")}</p>
       {error && <div className="error-bar" style={{ marginBottom: 10 }}><span>{error}</span></div>}
       {packages === null ? (
-        <p className="muted">Loading…</p>
+        <p className="muted">{tx("Loading…")}</p>
       ) : packages.length === 0 ? (
-        <p className="muted">No backups yet. Backups appear here when something is removed.</p>
+        <p className="muted">{tx("No backups yet. Backups appear here when something is removed.")}</p>
       ) : (
         <div className="recovery-cols">
           <div className="pkg-list">
@@ -469,10 +242,10 @@ export function RecoveryDialog({ onClose }) {
               </button>
             ))}
             <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-              <button onClick={verify} disabled={!selected || !!busy} title="Re-check this package: seal, stored files, trial restore, Recycle Bin contents">
-                {busy === 'Verifying…' ? 'Verifying…' : 'Verify Selected'}
+              <button onClick={verify} disabled={!selected || !!busy} title={tx("Re-check this package: seal, stored files, trial restore, Recycle Bin contents")}>
+                {busy === 'Verifying…' ? tx("Verifying…") : tx("Verify Selected")}
               </button>
-              {busy === 'Verifying…' && <button onClick={() => api.invoke('backups:verifyCancel').catch(() => {})}>Cancel</button>}
+              {busy === 'Verifying…' && <button onClick={() => api.invoke('backups:verifyCancel').catch(() => {})}>{tx("Cancel")}</button>}
             </div>
             {selected && selected.verified === false && (selected.verifyProblems || []).length > 0 && (
               <ul className="muted" style={{ marginTop: 8, paddingLeft: 16 }}>
@@ -485,7 +258,7 @@ export function RecoveryDialog({ onClose }) {
           <div className="pkg-entries">
             {selected && !results && (
               <>
-                <div className="pkg-entries-head">Contents — {selected.title}</div>
+                <div className="pkg-entries-head">{tx("Contents — ")}{selected.title}</div>
                 {selected.entries.map((e, i) => (
                   <label key={i} className="pkg-entry">
                     <input
@@ -493,30 +266,28 @@ export function RecoveryDialog({ onClose }) {
                       checked={ticked.has(i)}
                       onChange={() => setTicked((t) => { const n = new Set(t); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
                     />
-                    <span>{(ENTRY_LABEL[e.kind] || ((x) => x.path))(e)}{e.recycled ? ' (in the Recycle Bin)' : ''}</span>
+                    <span>{(ENTRY_LABEL[e.kind] || ((x) => x.path))(e)}{e.recycled ? tx(" (in the Recycle Bin)") : ''}</span>
                   </label>
                 ))}
                 <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-                  <button className="primary" onClick={() => restore([...ticked].sort((a, b) => a - b))} disabled={!ticked.size || !!busy} title="Restore only the ticked items">
-                    {busy === 'Restoring…' ? 'Restoring…' : 'Restore Ticked Items'}
+                  <button className="primary" onClick={() => restore([...ticked].sort((a, b) => a - b))} disabled={!ticked.size || !!busy} title={tx("Restore only the ticked items")}>
+                    {busy === 'Restoring…' ? tx("Restoring…") : tx("Restore Ticked Items")}
                   </button>
-                  <button onClick={() => restore(selected.entries.map((_, i) => i))} disabled={!!busy} title="Restore everything in this package">
-                    Restore Everything
-                  </button>
-                  {busy === 'Restoring…' && <button onClick={() => api.invoke('backups:restoreCancel').catch(() => {})}>Cancel</button>}
+                  <button onClick={() => restore(selected.entries.map((_, i) => i))} disabled={!!busy} title={tx("Restore everything in this package")}>{tx("Restore Everything")}</button>
+                  {busy === 'Restoring…' && <button onClick={() => api.invoke('backups:restoreCancel').catch(() => {})}>{tx("Cancel")}</button>}
                 </div>
               </>
             )}
             {selected && results && (
               <>
-                <div className="pkg-entries-head">Restore results</div>
+                <div className="pkg-entries-head">{tx("Restore results")}</div>
                 {results.map((r, i) => (
                   <div key={i} className="pkg-entry">
-                    <span>{r.ok ? '✓' : '✗'} {(ENTRY_LABEL[r.kind] || ((x) => x.path))(r)} <span className="muted">— {r.detail}</span></span>
+                    <span>{r.ok ? '✓' : '✗'} {(ENTRY_LABEL[r.kind] || ((x) => x.path))(r)} <span className="muted">— {tx(r.detail)}</span></span>
                   </div>
                 ))}
                 <div style={{ marginTop: 12 }}>
-                  <button onClick={() => setResults(null)}>Back to Contents</button>
+                  <button onClick={() => setResults(null)}>{tx("Back to Contents")}</button>
                 </div>
               </>
             )}
@@ -541,14 +312,12 @@ export function SharedDialog({ onClose }) {
   const current = items && items.length ? items[Math.min(selected, items.length - 1)] : null;
 
   return (
-    <Dialog title="Shared Components" onClose={onClose} width={880} buttons={<button className="primary" onClick={onClose}>Close</button>}>
-      <p className="muted" style={{ marginBottom: 10 }}>
-        Parts used by more than one program. These are what Purgeon refuses to delete during a removal — here is exactly why, and who would be affected.
-      </p>
+    <Dialog title={tx("Shared Components")} onClose={onClose} width={880} buttons={<button className="primary" onClick={onClose}>{tx("Close")}</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>{tx("Parts used by more than one program. These are what Purgeon refuses to delete during a removal — here is exactly why, and who would be affected.")}</p>
       {items === null ? (
-        <p className="muted">Loading…</p>
+        <p className="muted">{tx("Loading…")}</p>
       ) : items.length === 0 ? (
-        <p className="muted">No shared components were found on this PC.</p>
+        <p className="muted">{tx("No shared components were found on this PC.")}</p>
       ) : (
         <div className="recovery-cols">
           <div className="pkg-list">
@@ -562,9 +331,9 @@ export function SharedDialog({ onClose }) {
           <div className="pkg-entries">
             {current && (
               <>
-                <div className="pkg-entries-head">{current.kind === 'folder' ? 'Depends on it' : current.kind === 'runtime' ? 'Shared runtime' : 'Shared file'}</div>
+                <div className="pkg-entries-head">{current.kind === 'folder' ? tx("Depends on it") : current.kind === 'runtime' ? tx("Shared runtime") : tx("Shared file")}</div>
                 <div className="pkg-entry"><span className="muted">{current.path}</span></div>
-                <p style={{ fontSize: 13, margin: '6px 0 10px' }}>{current.detail}</p>
+                <p style={{ fontSize: 13, margin: '6px 0 10px' }}>{tx(current.detail)}</p>
                 {current.dependents.map((d) => (
                   <div key={d} className="pkg-entry"><span>{d}</span></div>
                 ))}
@@ -619,66 +388,58 @@ export function EraseDialog({ onClose }) {
   const totalBytes = files.reduce((a, f) => a + (f.size || 0), 0);
 
   return (
-    <Dialog title="Secure Erase" onClose={onClose} width={760} buttons={<button className="primary" onClick={onClose}>Close</button>}>
-      <p className="muted" style={{ marginBottom: 10 }}>
-        Overwrites each file’s contents before deleting it, so the data cannot be undeleted. There is no backup and no undo — that is the point of this tool. Registry items are not offered: overwriting has no meaning there.
-      </p>
+    <Dialog title={tx("Secure Erase")} onClose={onClose} width={760} buttons={<button className="primary" onClick={onClose}>{tx("Close")}</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>{tx("Overwrites each file’s contents before deleting it, so the data cannot be undeleted. There is no backup and no undo — that is the point of this tool. Registry items are not offered: overwriting has no meaning there.")}</p>
       {error && <div className="error-bar" style={{ marginBottom: 10 }}><span>{error}</span></div>}
       {!results && !confirming && (
         <>
-          <button className="erase-drop" onClick={() => add(false)} title="Choose files to erase">
-            Add files to erase…
-          </button>
+          <button className="erase-drop" onClick={() => add(false)} title={tx("Choose files to erase")}>{tx("Add files to erase…")}</button>
           <div style={{ display: 'flex', gap: 8, margin: '10px 0' }}>
-            <button onClick={() => add(false)}>Add Files…</button>
-            <button onClick={() => add(true)}>Add Folder…</button>
-            {files.length > 0 && <button className="ghost" onClick={() => { setFiles([]); setRefused([]); }}>Clear List</button>}
+            <button onClick={() => add(false)}>{tx("Add Files…")}</button>
+            <button onClick={() => add(true)}>{tx("Add Folder…")}</button>
+            {files.length > 0 && <button className="ghost" onClick={() => { setFiles([]); setRefused([]); }}>{tx("Clear List")}</button>}
           </div>
           {files.map((f) => (
-            <div key={f.path} className="pkg-entry"><span>{f.path} <span className="muted">{f.size ? `${(f.size / 1048576).toFixed(1)} MB` : ''}</span></span></div>
+            <div key={f.path} className="pkg-entry"><span>{f.path} <span className="muted">{f.size ? tx("{p0} MB", { p0: ((f.size / 1048576).toFixed(1)) }) : ''}</span></span></div>
           ))}
           {refused.map((r) => (
             <div key={r.path} className="pkg-entry"><span className="muted">✗ {r.path} — {r.reason}</span></div>
           ))}
           <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 14 }}>
-            <span className="muted">Overwrite:</span>
+            <span className="muted">{tx("Overwrite:")}</span>
             <span className="seg">
               {[['zero', '1 pass · zeros'], ['random', '1 pass · random'], ['three', '3 passes']].map(([id, label]) => (
-                <button key={id} className={pattern === id ? 'sel' : ''} onClick={() => setPattern(id)}>{label}</button>
+                <button key={id} className={pattern === id ? 'sel' : ''} onClick={() => setPattern(id)}>{tx(label)}</button>
               ))}
             </span>
             <span style={{ flex: 1 }} />
-            <button className="primary danger" disabled={!files.length} onClick={() => setConfirming(true)} title="Review the list once more, then erase">
-              Erase {files.length || ''} File{files.length === 1 ? '' : 's'}…
+            <button className="primary danger" disabled={!files.length} onClick={() => setConfirming(true)} title={tx("Review the list once more, then erase")}>{tx("Erase ")}{files.length || ''}{tx(" File")}{files.length === 1 ? '' : tx("s")}…
             </button>
           </div>
-          <div className="note" style={{ marginTop: 14 }}>
-            Honest limit: on modern SSDs the drive moves data around internally, so overwriting lowers the chance of recovery but cannot promise it. For total certainty, encrypt the drive or destroy it physically.
-          </div>
+          <div className="note" style={{ marginTop: 14 }}>{tx("Honest limit: on modern SSDs the drive moves data around internally, so overwriting lowers the chance of recovery but cannot promise it. For total certainty, encrypt the drive or destroy it physically.")}</div>
         </>
       )}
       {!results && confirming && (
         <>
           <p style={{ fontSize: 13, marginBottom: 8 }}>
-            <strong>This cannot be undone.</strong> {files.length} file{files.length === 1 ? '' : 's'} ({(totalBytes / 1048576).toFixed(1)} MB) will be overwritten and deleted, with no backup:
-          </p>
+            <strong>{tx("This cannot be undone.")}</strong> {files.length}{tx(" file")}{files.length === 1 ? '' : tx("s")} ({(totalBytes / 1048576).toFixed(1)}{tx(" MB) will be overwritten and deleted, with no backup:")}</p>
           {files.map((f) => (
             <div key={f.path} className="pkg-entry"><span>{f.path}</span></div>
           ))}
           <div style={{ display: 'flex', gap: 8, marginTop: 14 }}>
-            <button className="primary danger" onClick={run} disabled={running} title="Overwrite and delete the listed files">
-              {running ? 'Erasing…' : 'Confirm Erase'}
+            <button className="primary danger" onClick={run} disabled={running} title={tx("Overwrite and delete the listed files")}>
+              {running ? tx("Erasing…") : tx("Confirm Erase")}
             </button>
-            {running && <button onClick={() => api.invoke('erase:runCancel')} title="Stop after the current file (a file mid-overwrite is left partially overwritten)">Cancel</button>}
-            {!running && <button onClick={() => setConfirming(false)}>Back</button>}
+            {running && <button onClick={() => api.invoke('erase:runCancel')} title={tx("Stop after the current file (a file mid-overwrite is left partially overwritten)")}>{tx("Cancel")}</button>}
+            {!running && <button onClick={() => setConfirming(false)}>{tx("Back")}</button>}
           </div>
         </>
       )}
       {results && (
         <>
-          <div className="pkg-entries-head">Erase results</div>
+          <div className="pkg-entries-head">{tx("Erase results")}</div>
           {results.map((r, i) => (
-            <div key={i} className="pkg-entry"><span>{r.ok ? '✓' : '✗'} {r.path} <span className="muted">— {r.detail}</span></span></div>
+            <div key={i} className="pkg-entry"><span>{r.ok ? '✓' : '✗'} {r.path} <span className="muted">— {tx(r.detail)}</span></span></div>
           ))}
         </>
       )}
@@ -708,7 +469,7 @@ export function GamesDialog({ onClose }) {
     try {
       const out = await api.invoke('games:cleanup', g);
       if (out.results?.[0]?.ok) setNote(`The entry for ${g.name} was removed. A backup was made first — restore it from the Archive if you ever need it back.`);
-      else setError(out.results?.[0]?.detail || 'The entry could not be removed.');
+      else setError(out.results?.[0]?.detail || tx("The entry could not be removed."));
       load();
     } catch (e) {
       setError(e.message);
@@ -718,16 +479,14 @@ export function GamesDialog({ onClose }) {
   const total = (games || []).reduce((a, g) => a + (g.size || 0), 0);
 
   return (
-    <Dialog title="Games" onClose={onClose} width={760} buttons={<button className="primary" onClick={onClose}>Close</button>}>
-      <p className="muted" style={{ marginBottom: 10 }}>
-        Games the launchers on this PC report, with the space each one takes. Uninstalling a game stays with its launcher — that is where its files and account live. If a game's files are already gone, Purgeon can clean up the leftover entry, with a backup made first.
-      </p>
+    <Dialog title={tx("Games")} onClose={onClose} width={760} buttons={<button className="primary" onClick={onClose}>{tx("Close")}</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>{tx("Games the launchers on this PC report, with the space each one takes. Uninstalling a game stays with its launcher — that is where its files and account live. If a game's files are already gone, Purgeon can clean up the leftover entry, with a backup made first.")}</p>
       {error && <div className="error-bar" style={{ marginBottom: 10 }}><span>{error}</span></div>}
-      {note && <div className="note" style={{ marginBottom: 10 }}>{note}</div>}
+      {note && <div className="note" style={{ marginBottom: 10 }}>{tx(note)}</div>}
       {games === null ? (
-        <p className="muted">Looking for games… <button className="btn small" style={{ marginLeft: 8 }} onClick={() => { api.invoke('games:listCancel').catch(() => {}); setGames([]); setNote('The search was cancelled — sizes shown so far may be incomplete.'); }}>Cancel</button></p>
+        <p className="muted">{tx("Looking for games… ")}<button className="btn small" style={{ marginLeft: 8 }} onClick={() => { api.invoke('games:listCancel').catch(() => {}); setGames([]); setNote('The search was cancelled — sizes shown so far may be incomplete.'); }}>{tx("Cancel")}</button></p>
       ) : games.length === 0 ? (
-        <p className="muted">No games were found. Steam, Epic and GOG libraries are checked.</p>
+        <p className="muted">{tx("No games were found. Steam, Epic and GOG libraries are checked.")}</p>
       ) : (
         <>
           {games.map((g) => (
@@ -737,18 +496,18 @@ export function GamesDialog({ onClose }) {
                 <span className="muted">{g.location}</span>
               </span>
               {g.present ? (
-                <span className="muted" style={{ marginLeft: 'auto', flex: 'none' }}>{g.size ? `${(g.size / 1073741824).toFixed(1)} GB${g.partial ? '+' : ''}` : '—'}</span>
+                <span className="muted" style={{ marginLeft: 'auto', flex: 'none' }}>{g.size ? tx("{p0} GB{p1}", { p0: ((g.size / 1073741824).toFixed(1)), p1: (g.partial ? '+' : '') }) : '—'}</span>
               ) : (
                 <span style={{ marginLeft: 'auto', flex: 'none', display: 'flex', gap: 8, alignItems: 'center' }}>
-                  <span className="pkg-badge warn">files gone</span>
-                  <button onClick={() => cleanup(g)} title="Remove this launcher entry — a backup is made first, so it can be restored from the Archive">
-                    {confirming === g.entryPath ? 'Confirm cleanup?' : 'Clean Up Entry'}
+                  <span className="pkg-badge warn">{tx("files gone")}</span>
+                  <button onClick={() => cleanup(g)} title={tx("Remove this launcher entry — a backup is made first, so it can be restored from the Archive")}>
+                    {confirming === g.entryPath ? tx("Confirm cleanup?") : tx("Clean Up Entry")}
                   </button>
                 </span>
               )}
             </div>
           ))}
-          <p className="muted" style={{ marginTop: 10 }}>Total: {(total / 1073741824).toFixed(1)} GB across {games.filter((g) => g.present).length} installed games.</p>
+          <p className="muted" style={{ marginTop: 10 }}>{tx("Total: ")}{(total / 1073741824).toFixed(1)}{tx(" GB across ")}{games.filter((g) => g.present).length}{tx(" installed games.")}</p>
         </>
       )}
     </Dialog>
@@ -760,6 +519,9 @@ export function GamesDialog({ onClose }) {
 // pointing at files that no longer exist, belonging to no installed
 // program — come first.
 export function GraphDialog({ onClose }) {
+  const alive = useRef(true);
+  const graphGeneration = useRef(0);
+  const selectionGeneration = useRef(0);
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
   const [query, setQuery] = useState('');
@@ -770,15 +532,22 @@ export function GraphDialog({ onClose }) {
   const [error, setError] = useState('');
 
   const load = () => {
+    const generation = ++graphGeneration.current;
+    selectionGeneration.current++;
+    setSelected(null);
+    setDeep(null);
     setLoading(true);
-    api.invoke('graph:graph').then((d) => { setData(d); setLoading(false); if (d.cancelled) setNote('The scan was cancelled — the map may be incomplete.'); }).catch((e) => { setData({ programs: [], orphans: [] }); setLoading(false); setError(e.message); });
+    const current = () => alive.current && generation === graphGeneration.current;
+    api.invoke('graph:graph').then((d) => { if (!current()) return; setData(d); setLoading(false); if (d.cancelled) setNote('The scan was cancelled — the map may be incomplete.'); }).catch((e) => { if (!current()) return; setData({ programs: [], orphans: [] }); setLoading(false); setError(e.message); });
   };
-  useEffect(load, []);
+  useEffect(() => { alive.current = true; load(); return () => { alive.current = false; graphGeneration.current++; selectionGeneration.current++; }; }, []);
 
   const pick = (n) => {
+    const generation = ++selectionGeneration.current;
     setSelected(n);
     setDeep(null);
-    api.invoke('graph:program', n).then(setDeep).catch(() => setDeep({ dependents: [], unknown: 0, note: '', sharedFiles: 0 }));
+    const current = () => alive.current && generation === selectionGeneration.current;
+    api.invoke('graph:program', n).then((value) => { if (current()) setDeep(value); }).catch(() => { if (current()) setDeep({ dependents: [], unknown: 0, note: '', sharedFiles: 0 }); });
   };
 
   const removeOrphan = async (o) => {
@@ -788,11 +557,12 @@ export function GraphDialog({ onClose }) {
     setError('');
     try {
       const out = await api.invoke('graph:removeOrphan', o);
+      if (!alive.current) return;
       if (out.results?.[0]?.ok) setNote(`${o.label} was removed. A backup was made first — restore it from the Archive if needed.`);
-      else setError(out.results?.[0]?.detail || 'The entry could not be removed.');
+      else setError(out.results?.[0]?.detail || tx("The entry could not be removed."));
       load();
     } catch (e) {
-      setError(e.message);
+      if (alive.current) setError(e.message);
     }
   };
 
@@ -801,33 +571,31 @@ export function GraphDialog({ onClose }) {
   const orphans = (data?.orphans || []).filter((o) => !q || o.label.toLowerCase().includes(q));
 
   return (
-    <Dialog title="Relationship Graph" onClose={onClose} width={880} buttons={<button className="primary" onClick={onClose}>Close</button>}>
-      <p className="muted" style={{ marginBottom: 10 }}>
-        How each program connects to the rest of the system — worked out entirely on this PC; nothing leaves the machine.
-      </p>
+    <Dialog title={tx("Relationship Graph")} onClose={onClose} width={880} buttons={<button className="primary" onClick={onClose}>{tx("Close")}</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>{tx("How each program connects to the rest of the system — worked out entirely on this PC; nothing leaves the machine.")}</p>
       {error && <div className="error-bar" style={{ marginBottom: 10 }}><span>{error}</span></div>}
-      {note && <div className="note" style={{ marginBottom: 10 }}>{note}</div>}
-      <input className="pkg-search" type="search" placeholder="Search programs…" value={query} onChange={(e) => setQuery(e.target.value)} />
+      {note && <div className="note" style={{ marginBottom: 10 }}>{tx(note)}</div>}
+      <input className="pkg-search" type="search" placeholder={tx("Search programs…")} value={query} onChange={(e) => setQuery(e.target.value)} />
       {data === null ? (
-        <p className="muted">Building the graph… <button className="btn small" style={{ marginLeft: 8 }} onClick={() => api.invoke('graph:graphCancel').catch(() => {})}>Cancel</button></p>
+        <p className="muted">{tx("Building the graph… ")}<button className="btn small" style={{ marginLeft: 8 }} onClick={() => api.invoke('graph:graphCancel').catch(() => {})}>{tx("Cancel")}</button></p>
       ) : (
         <div className="recovery-cols">
           <div className="pkg-list">
-            {orphans.length > 0 && <div className="pkg-entries-head" style={{ padding: '2px 4px 6px' }}>Connected to nothing</div>}
+            {orphans.length > 0 && <div className="pkg-entries-head" style={{ padding: '2px 4px 6px' }}>{tx("Connected to nothing")}</div>}
             {orphans.map((o) => (
               <div key={`orphan:${o.kind}:${o.label}`} className="pkg-row" style={{ cursor: 'default' }}>
                 <span className="pkg-name">{o.label} <span className="muted">· {o.kind}</span></span>
-                <span className="pkg-badge bad">missing file</span>
+                <span className="pkg-badge bad">{tx("missing file")}</span>
               </div>
             ))}
-            <div className="pkg-entries-head" style={{ padding: '8px 4px 6px' }}>Programs</div>
+            <div className="pkg-entries-head" style={{ padding: '8px 4px 6px' }}>{tx("Programs")}</div>
             {programs.map((n) => (
               <button key={n.name} className={`pkg-row ${selected?.name === n.name ? 'sel' : ''}`} onClick={() => pick(n)}>
                 <span className="pkg-name">{n.name}</span>
-                <span className="muted" style={{ marginLeft: 'auto', flex: 'none' }}>{n.links.length} connected</span>
+                <span className="muted" style={{ marginLeft: 'auto', flex: 'none' }}>{n.links.length}{tx(" connected")}</span>
               </button>
             ))}
-            {programs.length === 0 && <p className="muted" style={{ padding: 4 }}>No programs match.</p>}
+            {programs.length === 0 && <p className="muted" style={{ padding: 4 }}>{tx("No programs match.")}</p>}
           </div>
           <div className="pkg-entries">
             {selected ? (
@@ -836,35 +604,35 @@ export function GraphDialog({ onClose }) {
                 {selected.links.map((l, i) => (
                   <div key={i} className="pkg-entry"><span>{l.kind}: {l.label} <span className="muted">{l.target}</span></span></div>
                 ))}
-                {selected.links.length === 0 && <p className="muted" style={{ fontSize: 13 }}>No services, tasks or startup entries run this program's files.</p>}
+                {selected.links.length === 0 && <p className="muted" style={{ fontSize: 13 }}>{tx("No services, tasks or startup entries run this program's files.")}</p>}
                 {deep === null ? (
-                  <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>Checking what depends on it…</p>
+                  <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>{tx("Checking what depends on it…")}</p>
                 ) : (
                   <>
-                    {deep.dependents.length > 0 && <p style={{ fontSize: 13, marginTop: 8 }}>Depended on by: {deep.dependents.join(', ')}</p>}
-                    {deep.unknown > 0 && <p style={{ fontSize: 13, marginTop: 8 }}>{deep.unknown} other installation{deep.unknown === 1 ? '' : 's'} registered a need for it.</p>}
-                    {deep.sharedFiles > 0 && <p style={{ fontSize: 13, marginTop: 8 }}>Its folder holds {deep.sharedFiles} shared file{deep.sharedFiles === 1 ? '' : 's'} other programs use.</p>}
-                    {deep.note && <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>{deep.note}</p>}
+                    {deep.dependents.length > 0 && <p style={{ fontSize: 13, marginTop: 8 }}>{tx("Depended on by: ")}{deep.dependents.join(', ')}</p>}
+                    {deep.unknown > 0 && <p style={{ fontSize: 13, marginTop: 8 }}>{deep.unknown}{tx(" other installation")}{deep.unknown === 1 ? '' : tx("s")}{tx(" registered a need for it.")}</p>}
+                    {deep.sharedFiles > 0 && <p style={{ fontSize: 13, marginTop: 8 }}>{tx("Its folder holds ")}{deep.sharedFiles}{tx(" shared file")}{deep.sharedFiles === 1 ? '' : tx("s")}{tx(" other programs use.")}</p>}
+                    {deep.note && <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>{tx(deep.note)}</p>}
                   </>
                 )}
               </>
             ) : orphans.length > 0 ? (
               <>
-                <div className="pkg-entries-head">Orphaned entries</div>
+                <div className="pkg-entries-head">{tx("Orphaned entries")}</div>
                 {orphans.map((o) => (
                   <div key={`od:${o.kind}:${o.label}`} className="pkg-entry">
-                    <span>{o.label} <span className="muted">· {o.kind} · points at {o.target}, which is no longer there</span></span>
+                    <span>{o.label} <span className="muted">· {o.kind}{tx(" · points at ")}{o.target}{tx(", which is no longer there")}</span></span>
                     {(o.type === 'service' || o.type === 'task') && (
-                      <button style={{ marginLeft: 'auto', flex: 'none' }} onClick={() => removeOrphan(o)} title="Remove this entry — a backup is made first, so it can be restored from the Archive">
-                        {confirming === `${o.kind}:${o.label}` ? 'Confirm removal?' : 'Remove…'}
+                      <button style={{ marginLeft: 'auto', flex: 'none' }} onClick={() => removeOrphan(o)} title={tx("Remove this entry — a backup is made first, so it can be restored from the Archive")}>
+                        {confirming === `${o.kind}:${o.label}` ? tx("Confirm removal?") : tx("Remove…")}
                       </button>
                     )}
                   </div>
                 ))}
-                <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>Startup entries are listed but not removed here — a startup entry is one value inside a shared registry key, so turn those off in Startup &amp; Services instead. Services and tasks are removed only through the standard backed-up removal.</p>
+                <p className="muted" style={{ fontSize: 13, marginTop: 8 }}>{tx("Startup entries are listed but not removed here — a startup entry is one value inside a shared registry key, so turn those off in Startup & Services instead. Services and tasks are removed only through the standard backed-up removal.")}</p>
               </>
             ) : (
-              <p className="muted">Pick a program to see its connections.</p>
+              <p className="muted">{tx("Pick a program to see its connections.")}</p>
             )}
           </div>
         </div>
@@ -882,15 +650,13 @@ export function ResultsDialog({ title, results, note, onClose, onUndo }) {
       width={640}
       buttons={
         <>
-          {onUndo && results.some((r) => r.ok) && <button onClick={onUndo}>Undo</button>}
-          <button className="primary" onClick={onClose}>
-            OK
-          </button>
+          {onUndo && results.some((r) => r.ok) && <button onClick={onUndo}>{tx("Undo")}</button>}
+          <button className="primary" onClick={onClose}>{tx("OK")}</button>
         </>
       }
     >
       <p className="heading">
-        {failed.length ? `${results.length - failed.length} of ${results.length} items done, ${failed.length} failed.` : `All ${results.length} items done.`}
+        {failed.length ? tx("{p0} of {p1} items done, {p2} failed.", { p0: (results.length - failed.length), p1: (results.length), p2: (failed.length) }) : tx("All {p0} items done.", { p0: (results.length) })}
       </p>
       <div className="tree">
         {/* Problems first; very long reports (a junk cleanup) show the first 500 rows. */}
@@ -898,12 +664,12 @@ export function ResultsDialog({ title, results, note, onClose, onUndo }) {
           <div key={i} className={`result ${r.ok ? 'ok' : 'fail'}`}>
             <span className="mark">{r.ok ? '✓' : '✗'}</span>
             <span className="path">{itemLabel(r)}</span>
-            <span className="muted">{r.detail}</span>
+            <span className="muted">{tx(r.detail)}</span>
           </div>
         ))}
-        {results.length > 500 && <div className="muted result">…and {(results.length - 500).toLocaleString()} more</div>}
+        {results.length > 500 && <div className="muted result">{tx("…and ")}{(results.length - 500).toLocaleString()}{tx(" more")}</div>}
       </div>
-      {note && <p className="footnote">{note}</p>}
+      {note && <p className="footnote">{tx(note)}</p>}
     </Dialog>
   );
 }
@@ -936,7 +702,7 @@ export function PropertiesDialog({ program, onClose }) {
         ['Size history', sizeText(program.sizes)],
       ];
   return (
-    <Dialog title={`Properties – ${program.name}`} onClose={onClose} width={600} buttons={<button className="primary" onClick={onClose}>OK</button>}>
+    <Dialog title={tx("Properties – {p0}", { p0: (program.name) })} onClose={onClose} width={600} buttons={<button className="primary" onClick={onClose}>{tx("OK")}</button>}>
       <table className="props">
         <tbody>
           {rows
@@ -945,7 +711,7 @@ export function PropertiesDialog({ program, onClose }) {
               <tr key={k}>
                 <th>{k}</th>
                 <td>
-                  <input readOnly title="Click to select the whole value, then Ctrl+C to copy it" value={String(v)} onFocus={(e) => e.target.select()} />
+                  <input readOnly title={tx("Click to select the whole value, then Ctrl+C to copy it")} value={String(v)} onFocus={(e) => e.target.select()} />
                 </td>
               </tr>
             ))}
@@ -965,8 +731,7 @@ export function PropertiesDialog({ program, onClose }) {
   );
 }
 
-export const signatureText = (i) =>
-  !i?.signature ? '' : i.signature === 'Valid' ? `Signed by ${i.signer || 'a trusted publisher'}` : i.signature === 'NotSigned' ? 'Not signed' : `Signature problem: ${i.signature}${i.signer ? ` (${i.signer})` : ''}`;
+
 const sizeText = (h) =>
   !h || h.length < 2
     ? ''
@@ -1010,28 +775,26 @@ export function MonitorWizard({ resume, onClose, onRecorded }) {
     onClose();
   };
 
-  if (step === 'before') return <Busy message="Taking a snapshot of files and registry before installation…" />;
-  if (step === 'after') return <Busy message="Taking the second snapshot and comparing changes…" />;
+  if (step === 'before') return <Busy message={tx("Taking a snapshot of files and registry before installation…")} />;
+  if (step === 'after') return <Busy message={tx("Taking the second snapshot and comparing changes…")} />;
 
   return (
     <Dialog
-      title="Monitor an Installation"
+      title={tx("Monitor an Installation")}
       onClose={cancel}
       width={560}
       buttons={
         step === 'pick' ? (
           <>
             <button className="primary" onClick={begin}>
-              {installer ? 'Start Monitoring' : 'Start (I will run the installer)'}
+              {installer ? tx("Start Monitoring") : tx("Start (I will run the installer)")}
             </button>
-            <button onClick={cancel}>Cancel</button>
+            <button onClick={cancel}>{tx("Cancel")}</button>
           </>
         ) : (
           <>
-            <button className="primary" disabled={!name.trim()} onClick={finish}>
-              Installation Finished
-            </button>
-            <button onClick={cancel}>Cancel Monitoring</button>
+            <button className="primary" disabled={!name.trim()} onClick={finish}>{tx("Installation Finished")}</button>
+            <button onClick={cancel}>{tx("Cancel Monitoring")}</button>
           </>
         )
       }
@@ -1039,14 +802,14 @@ export function MonitorWizard({ resume, onClose, onRecorded }) {
       {error && <div className="error-box">{error}</div>}
       {step === 'pick' ? (
         <>
-          <p className="heading">Purgeon records every folder, file and registry setting that an installer creates or changes, so the program can be removed completely later. Running as administrator, it also tracks the installer live.</p>
+          <p className="heading">{tx("Purgeon records file and registry changes within the snapshot scope. Live tracing can attribute changes to an installer. Unrelated changes remain unchecked; changed file contents are not stored for complete rollback.")}</p>
           <ol className="steps">
-            <li>Close other programs so their changes aren't recorded.</li>
-            <li>Choose the installer. Purgeon takes a snapshot and then starts it.</li>
-            <li>When setup is done, come back and click <b>Installation Finished</b>.</li>
+            <li>{tx("Close other programs so their changes aren't recorded.")}</li>
+            <li>{tx("Choose the installer. Purgeon takes a snapshot and then starts it.")}</li>
+            <li>{tx("When setup is done, come back and click ")}<b>{tx("Installation Finished")}</b>.</li>
           </ol>
           <div className="field-row">
-            <input readOnly value={installer} placeholder="No installer chosen" title="The installer to run while monitoring. Use Browse to choose one, or leave it empty and run the installer yourself." />
+            <input readOnly value={installer} placeholder={tx("No installer chosen")} title={tx("The installer to run while monitoring. Use Browse to choose one, or leave it empty and run the installer yourself.")} />
             <button
               onClick={async () => {
                 const f = await api.invoke('monitor:pickInstaller');
@@ -1055,27 +818,23 @@ export function MonitorWizard({ resume, onClose, onRecorded }) {
                   setName(baseName(f));
                 }
               }}
-            >
-              Browse...
-            </button>
+            >{tx("Browse...")}</button>
           </div>
         </>
       ) : (
         <>
-          <p className="heading">Monitoring is active. Run the installer to the end, including any first-run setup.</p>
+          <p className="heading">{tx("Monitoring is active. Run the installer to the end, including any first-run setup.")}</p>
           <p className={`monitor-mode ${live ? 'on' : ''}`}>
             {live
-              ? 'Live tracking is on: every file and registry change made by the installer and the programs it starts is recorded as it happens.'
+              ? tx("Live tracking is on: every file and registry change made by the installer and the programs it starts is recorded as it happens.")
               : resume?.attached
-                ? 'This installer was already running when monitoring began, so the before and after snapshots are compared. (Live tracking follows only installers that Purgeon starts itself.)'
+                ? tx("This installer was already running when monitoring began, so the before and after snapshots are compared. (Live tracking follows only installers that Purgeon starts itself.)")
               : installer
-                ? 'Live tracking needs Purgeon to run as administrator, so only the before and after snapshots are compared.'
-                : 'Without a chosen installer, only the before and after snapshots are compared. Choose the installer to also track it live.'}
+                ? tx("Live tracking needs Purgeon to run as administrator, so only the before and after snapshots are compared.")
+                : tx("Without a chosen installer, only the before and after snapshots are compared. Choose the installer to also track it live.")}
           </p>
-          {installer && <p className="muted">Installer: {installer}</p>}
-          <label className="field">
-            Name for this program
-            <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Foo Editor" title="The name this recording is listed under in Monitored Programs" />
+          {installer && <p className="muted">{tx("Installer: ")}{installer}</p>}
+          <label className="field">{tx("Name for this program")}<input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder={tx("e.g. Foo Editor")} title={tx("The name this recording is listed under in Monitored Programs")} />
           </label>
         </>
       )}
@@ -1087,9 +846,9 @@ const baseName = (p) => (p || '').split('\\').pop().replace(/\.(exe|msi|msix|bat
 
 export function SystemInfoDialog({ data, onClose }) {
   return (
-    <Dialog title="System Info" onClose={onClose} width={600} buttons={<button className="primary" onClick={onClose}>Close</button>}>
+    <Dialog title={tx("System Info")} onClose={onClose} width={600} buttons={<button className="primary" onClick={onClose}>{tx("Close")}</button>}>
       {!data ? (
-        <p className="footnote">Reading this PC's details…</p>
+        <p className="footnote">{tx("Reading this PC's details…")}</p>
       ) : (
         <div className="sysinfo">
           {(data.sections || []).map((s) => (
@@ -1099,14 +858,14 @@ export function SystemInfoDialog({ data, onClose }) {
                 <div key={i} className="sysinfo-row">
                   <div className="sysinfo-main">
                     {r.head}
-                    {r.tempC != null && <span className="sysinfo-temp">{r.tempC} °C</span>}
+                    {r.tempC != null && <span className="sysinfo-temp">{r.tempC}{tx(" °C")}</span>}
                   </div>
                   {r.sub && <div className="sysinfo-sub">{r.sub}</div>}
                 </div>
               ))}
             </div>
           ))}
-          <p className="footnote">Temperatures appear only where Windows reports them.</p>
+          <p className="footnote">{tx("Temperatures appear only where Windows reports them.")}</p>
         </div>
       )}
     </Dialog>
@@ -1115,67 +874,53 @@ export function SystemInfoDialog({ data, onClose }) {
 
 export function AboutDialog({ onClose }) {
   return (
-    <Dialog title="About Purgeon" onClose={onClose} width={560} buttons={<><button className="primary" onClick={onClose}>OK</button><button onClick={() => api.invoke('program:openUrl', 'https://github.com/SeanShaffer88/Purgeon/releases').catch(() => {})}>View Releases</button></>}>
-      <p className="heading">Purgeon {__APP_VERSION__}</p>
-      {window.__sweepPortable && <p className="muted">Portable mode: settings, backups and snapshots are kept in the "Purgeon Data" folder next to the program.</p>}
-      <p>Uninstalls programs, then hunts down the leftover files, registry keys, startup entries and services they leave behind.</p>
-      <p>It also monitors installations, compares system snapshots, cleans junk files and manages startup programs. Every change is backed up first and can be undone.</p>
-      <p className="muted">An independent project, not affiliated with any other uninstaller.</p>
-      <p className="muted">See <a href="https://github.com/SeanShaffer88/Purgeon/releases" target="_blank" rel="noopener noreferrer">What's New</a> for the latest release notes.</p>
+    <Dialog title={tx("About Purgeon")} onClose={onClose} width={560} buttons={<><button className="primary" onClick={onClose}>{tx("OK")}</button><button onClick={() => api.invoke('program:openUrl', 'https://github.com/SeanShaffer88/Purgeon/releases').catch(() => {})}>{tx("View Releases")}</button></>}>
+      <p className="heading">{tx("Purgeon ")}{__APP_VERSION__}</p>
+      {window.__sweepPortable && <p className="muted">{tx("Portable mode: settings, backups and snapshots are kept in the \"Purgeon Data\" folder next to the program.")}</p>}
+      <p>{tx("Uninstalls programs, then hunts down the leftover files, registry keys, startup entries and services they leave behind.")}</p>
+      <p>{tx("It also monitors installations, compares system snapshots, cleans junk files and manages startup programs. Recovery options vary by action; review the plan and available backups before making changes.")}</p>
+      <p className="muted">{tx("An independent project, not affiliated with any other uninstaller.")}</p>
+      <p className="muted">{tx("See ")}<a href="https://github.com/SeanShaffer88/Purgeon/releases" target="_blank" rel="noopener noreferrer">{tx("What's New")}</a>{tx(" for the latest release notes.")}</p>
     </Dialog>
   );
 }
 
 // Shown on start when a removal was cut off (a crash or power cut) partway through.
 export function InterruptedDialog({ pending, onChoose }) {
-  if (pending.corrupt) {
-    return (
-      <Dialog
-        title="Interrupted Removal"
-        onClose={() => onChoose('keep')}
-        width={560}
-        buttons={
-          <button className="primary" onClick={() => onChoose('keep')}>
-            Clear the Record
-          </button>
-        }
-      >
-        <p className="heading">A removal did not finish, and its record is damaged.</p>
-        <p>
-          Purgeon was stopped while it was writing down what the removal had done, so it cannot tell which removal it was or what had already been removed. Nothing more will be removed, and any backup the removal made is still in Tools › Backups. Clearing the record just removes the damaged note; it does not change anything else.
-        </p>
-      </Dialog>
-    );
-  }
+  if (pending.uncertain || pending.reviewRequired || pending.corrupt) return (
+    <Dialog title={t('recoveryReviewTitle')} onClose={() => onChoose('dismiss')} width={580} buttons={<button className="primary" data-safe-default onClick={() => onChoose('dismiss')}>{t('close')}</button>}>
+      <p>{t('recoveryReviewBody')}</p>
+      <div className="recovery-review">
+        <p><strong>{t('name')}:</strong> {pending.title}</p>
+        <p><strong>{t('recoveryOperation')}:</strong> {pending.uncertain?.kind || tx('Review Required')}</p>
+        <p className="recovery-path"><strong>{t('recoveryTarget')}:</strong> {pending.uncertain?.path || pending.detail || tx('The removal record could not be read safely.')}</p>
+        <p className="recovery-path"><strong>{t('backup')}:</strong> {pending.id}</p>
+      </div>
+      <p>{t('recoveryRetained')}</p>
+    </Dialog>
+  );
   return (
     <Dialog
-      title="Interrupted Removal"
-      onClose={() => onChoose('keep')}
+      title={tx("Interrupted Removal")}
+      onClose={() => onChoose('dismiss')}
       width={560}
       buttons={
         <>
-          <button className="primary" onClick={() => onChoose('rollback')}>
-            Roll Back
-          </button>
-          <button onClick={() => onChoose('finish')}>Finish Removal</button>
-          <button onClick={() => onChoose('keep')}>Leave As Is</button>
+          <button className="primary" onClick={() => onChoose('rollback')}>{tx("Roll Back")}</button>
+          <button disabled title={tx("Run a fresh scan and preview before removing more items.")}>{tx("Finish Removal")}</button>
+          <button onClick={() => onChoose('keep')}>{tx("Leave As Is")}</button>
         </>
       }
     >
-      <p className="heading">The removal “{pending.title}” did not finish.</p>
-      <p>
-        It was started {new Date(pending.started).toLocaleString()} and had removed {pending.done} of {pending.total} items when it stopped. Everything it removed was backed up first.
-      </p>
+      <p className="heading">{tx("The removal “")}{pending.title}{tx("” did not finish.")}</p>
+      <p>{tx("It was started ")}{new Date(pending.started).toLocaleString()}{tx(" and had removed ")}{pending.done}{tx(" of ")}{pending.total}{tx(" items when it stopped. Everything it removed was backed up first.")}</p>
       <ul className="choices">
         <li>
-          <b>Roll Back</b> puts back what it removed (recommended).
-        </li>
+          <b>{tx("Roll Back")}</b>{tx(" puts back what it removed (recommended).")}</li>
         <li>
-          <b>Finish Removal</b> removes the remaining items, with the same checks as before.
-        </li>
+          <b>{tx("Finish Removal")}</b>{tx(" is unavailable because the old scan cannot prove the remaining items are unchanged. Run a fresh scan and preview before removing more items.")}</li>
         <li>
-          <b>Leave As Is</b> keeps things as they are; the backup stays in Tools › Backups.
-        </li>
+          <b>{tx("Leave As Is")}</b>{tx(" keeps things as they are; the backup stays in Tools › Backups.")}</li>
       </ul>
     </Dialog>
   );
@@ -1188,14 +933,12 @@ export function BackupSettingsDialog({ settings, onSave, onClose }) {
   const valid = /^\d{1,5}$/.test(days) && /^\d{1,7}$/.test(mb);
   return (
     <Dialog
-      title="Backup Settings"
+      title={tx("Backup Settings")}
       onClose={onClose}
       width={640}
       buttons={
         <>
-          <button className="primary" disabled={!valid} onClick={() => onSave({ backupMaxDays: Number(days), backupMaxMB: Number(mb) })}>
-            Save
-          </button>
+          <button className="primary" disabled={!valid} onClick={() => onSave({ backupMaxDays: Number(days), backupMaxMB: Number(mb) })}>{tx("Save")}</button>
           <button onClick={() => {
             const json = JSON.stringify(settings, null, 2);
             const blob = new Blob([json], { type: 'application/json' });
@@ -1207,7 +950,7 @@ export function BackupSettingsDialog({ settings, onSave, onClose }) {
             a.click();
             document.body.removeChild(a);
             URL.revokeObjectURL(url);
-          }}>Export Settings…</button>
+          }}>{tx("Export Settings…")}</button>
           <button onClick={() => {
             const input = document.createElement('input');
             input.type = 'file';
@@ -1221,7 +964,7 @@ export function BackupSettingsDialog({ settings, onSave, onClose }) {
                   const parsed = JSON.parse(ev.target.result);
                   onSave(parsed);
                 } catch (err) {
-                  setError?.('Invalid settings file.');
+                  api.invoke('dialog:confirm', { message: tx("Invalid settings file."), detail: err.message }).catch(() => {});
                 }
               };
               reader.readAsText(file);
@@ -1229,28 +972,20 @@ export function BackupSettingsDialog({ settings, onSave, onClose }) {
             document.body.appendChild(input);
             input.click();
             document.body.removeChild(input);
-          }}>Import Settings…</button>
-          <button onClick={onClose}>Cancel</button>
+          }}>{tx("Import Settings…")}</button>
+          <button onClick={onClose}>{tx("Cancel")}</button>
         </>
       }
     >
-      <p className="heading">Old backups can be removed automatically. Use 0 to keep them all.</p>
-      <label className="field">
-        Remove backups older than (days)
-        <input inputMode="numeric" title="Backups older than this many days are deleted (each program’s newest backup is always kept). Empty means no age limit." value={days} onChange={(e) => setDays(e.target.value.trim())} />
+      <p className="heading">{tx("Old backups can be removed automatically. Use 0 to keep them all.")}</p>
+      <label className="field">{tx("Remove backups older than (days)")}<input inputMode="numeric" title={tx("Backups older than this many days are deleted (each program’s newest backup is always kept). Empty means no age limit.")} value={days} onChange={(e) => setDays(e.target.value.trim())} />
       </label>
       <SettingHelp key="backupMaxDays" />
-      <label className="field">
-        Keep backups under this total size (MB)
-        <input inputMode="numeric" title="When all backups together are larger than this, the oldest are deleted first (each program’s newest is always kept). Empty means no size limit." value={mb} onChange={(e) => setMb(e.target.value.trim())} />
+      <label className="field">{tx("Keep backups under this total size (MB)")}<input inputMode="numeric" title={tx("When all backups together are larger than this, the oldest are deleted first (each program’s newest is always kept). Empty means no size limit.")} value={mb} onChange={(e) => setMb(e.target.value.trim())} />
       </label>
       <SettingHelp key="backupMaxMB" />
-      <p className="footnote">
-        The newest backup of each program is always kept, so the last removal of anything can still be undone. Once a backup is removed, Change History can no longer undo that change. Files in the Recycle Bin are not counted or touched.
-      </p>
-      <p className="footnote">
-        Export saves all Purgeon settings (themes, confirmations, sync, safe mode) to a JSON file. Import restores them. Your programs and backups are not affected.
-      </p>
+      <p className="footnote">{tx("The newest backup of each program is always kept, so the last removal of anything can still be undone. Once a backup is removed, Change History can no longer undo that change. Files in the Recycle Bin are not counted or touched.")}</p>
+      <p className="footnote">{tx("Export saves all Purgeon settings (themes, confirmations, sync, safe mode) to a JSON file. Import restores them. Your programs and backups are not affected.")}</p>
     </Dialog>
   );
 }
@@ -1274,62 +1009,55 @@ export function PowerDialog({ onClose }) {
   const MINUTES = [0, 1, 2, 3, 5, 10, 15, 20, 25, 30, 45, 60, 120, 180, 240, 300];
   const minuteOptions = (current) => {
     const list = current !== null && current !== undefined && !MINUTES.includes(current) ? [...MINUTES, current].sort((a, b) => a - b) : MINUTES;
-    return list.map((m) => <option key={m} value={m}>{m === 0 ? 'Never' : m < 60 ? `${m} minutes` : `${m / 60} hour${m === 60 ? '' : 's'}`}</option>);
+    return list.map((m) => <option key={m} value={m}>{m === 0 ? tx("Never") : m < 60 ? tx("{p0} minutes", { p0: (m) }) : tx("{p0} hour{p1}", { p0: (m / 60), p1: (m === 60 ? '' : 's') })}</option>);
   };
   const timeoutRow = (label, kind, tip) => (
     <div className="power-row">
-      <span className="power-label">{label}</span>
-      <label className="power-cell">On battery
-        <select disabled={busy || !state} title={tip} value={state?.[kind]?.dc ?? ''} onChange={(e) => run(() => api.invoke('power:setTimeout', { kind, acMin: state[kind].ac, dcMin: Number(e.target.value), previous: state[kind] }))}>{minuteOptions(state?.[kind]?.dc)}</select>
+      <span className="power-label">{tx(label)}</span>
+      <label className="power-cell">{tx("On battery")}<select disabled={busy || !state} title={tip} value={state?.[kind]?.dc ?? ''} onChange={(e) => run(() => api.invoke('power:setTimeout', { kind, acMin: state[kind].ac, dcMin: Number(e.target.value), previous: state[kind] }))}>{minuteOptions(state?.[kind]?.dc)}</select>
       </label>
-      <label className="power-cell">Plugged in
-        <select disabled={busy || !state} title={tip} value={state?.[kind]?.ac ?? ''} onChange={(e) => run(() => api.invoke('power:setTimeout', { kind, acMin: Number(e.target.value), dcMin: state[kind].dc, previous: state[kind] }))}>{minuteOptions(state?.[kind]?.ac)}</select>
+      <label className="power-cell">{tx("Plugged in")}<select disabled={busy || !state} title={tip} value={state?.[kind]?.ac ?? ''} onChange={(e) => run(() => api.invoke('power:setTimeout', { kind, acMin: Number(e.target.value), dcMin: state[kind].dc, previous: state[kind] }))}>{minuteOptions(state?.[kind]?.ac)}</select>
       </label>
     </div>
   );
 
   return (
-    <Dialog title="Power Options" onClose={onClose} width={720} buttons={<button className="primary" onClick={onClose}>Close</button>}>
-      <p className="muted" style={{ marginBottom: 10 }}>How this PC uses power. Every change is recorded in Change History and can be undone there.</p>
+    <Dialog title={tx("Power Options")} onClose={onClose} width={720} buttons={<button className="primary" onClick={onClose}>{tx("Close")}</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>{tx("How this PC uses power. Every change is recorded in Change History and can be undone there.")}</p>
       {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
-      {state === null ? <p className="muted">Reading the power settings…</p> : (
+      {state === null ? <p className="muted">{tx("Reading the power settings…")}</p> : (
         <>
-          <div className="pkg-entries-head">Power plan</div>
+          <div className="pkg-entries-head">{tx("Power plan")}</div>
           <div style={{ marginBottom: 12 }}>
             {state.plans.map((p) => (
-              <button key={p.guid} className={`pkg-row ${p.active ? 'sel' : ''}`} disabled={busy || p.active} title={p.active ? 'This is the plan in use' : `Switch to the ${p.name} plan`} onClick={() => run(() => api.invoke('power:setPlan', { guid: p.guid, name: p.name }))}>
+              <button key={p.guid} className={`pkg-row ${p.active ? 'sel' : ''}`} disabled={busy || p.active} title={p.active ? tx("This is the plan in use") : tx("Switch to the {p0} plan", { p0: (p.name) })} onClick={() => run(() => api.invoke('power:setPlan', { guid: p.guid, name: p.name }))}>
                 <span className="pkg-name">{p.name}</span>
-                {p.active && <span className="pkg-badge ok">Active</span>}
+                {p.active && <span className="pkg-badge ok">{tx("Active")}</span>}
               </button>
             ))}
-            {state.plans.length === 0 && <p className="muted">No power plans were found.</p>}
+            {state.plans.length === 0 && <p className="muted">{tx("No power plans were found.")}</p>}
           </div>
           {timeoutRow('Turn off the screen', 'screen', 'How long the PC waits, doing nothing, before the screen turns off')}
           {timeoutRow('Sleep', 'sleep', 'How long the PC waits, doing nothing, before it sleeps')}
           {timeoutRow('Hibernate', 'hibernate', 'How long the PC waits, doing nothing, before it hibernates (a deeper off that saves everything to disk)')}
           <div className="power-row">
-            <span className="power-label">Battery saver turns on at</span>
-            <label className="power-cell">Battery level
-              <select disabled={busy} title="Battery saver limits background work to stretch the battery once it drains to this level" value={state.batterySaverPct ?? ''} onChange={(e) => run(() => api.invoke('power:setBatterySaver', { pct: Number(e.target.value), previous: state.batterySaverPct }))}>
-                {[0, 10, 20, 30, 40, 50, 100].map((p) => <option key={p} value={p}>{p === 0 ? 'Never' : p === 100 ? 'Always' : `${p}%`}</option>)}
+            <span className="power-label">{tx("Battery saver turns on at")}</span>
+            <label className="power-cell">{tx("Battery level")}<select disabled={busy} title={tx("Battery saver limits background work to stretch the battery once it drains to this level")} value={state.batterySaverPct ?? ''} onChange={(e) => run(() => api.invoke('power:setBatterySaver', { pct: Number(e.target.value), previous: state.batterySaverPct }))}>
+                {[0, 10, 20, 30, 40, 50, 100].map((p) => <option key={p} value={p}>{p === 0 ? tx("Never") : p === 100 ? tx("Always") : `${p}%`}</option>)}
               </select>
             </label>
           </div>
           <div className="power-row">
-            <span className="power-label">Timed wake-ups</span>
+            <span className="power-label">{tx("Timed wake-ups")}</span>
             <label className="power-cell power-check">
-              <input type="checkbox" disabled={busy} checked={!!state.wakeTimers} title="Let scheduled work (updates, backups) bring the PC out of sleep at a set time" onChange={(e) => run(() => api.invoke('power:setWakeTimers', { on: e.target.checked, previous: state.wakeTimers }))} />
-              Let scheduled work wake the PC
-            </label>
+              <input type="checkbox" disabled={busy} checked={!!state.wakeTimers} title={tx("Let scheduled work (updates, backups) bring the PC out of sleep at a set time")} onChange={(e) => run(() => api.invoke('power:setWakeTimers', { on: e.target.checked, previous: state.wakeTimers }))} />{tx("Let scheduled work wake the PC")}</label>
           </div>
           <div className="power-row">
-            <span className="power-label">USB devices</span>
+            <span className="power-label">{tx("USB devices")}</span>
             <label className="power-cell power-check">
-              <input type="checkbox" disabled={busy} checked={!!state.usbSuspend} title="Windows may power down USB devices that are sitting idle, to save power" onChange={(e) => run(() => api.invoke('power:setUsbSuspend', { on: e.target.checked, previous: state.usbSuspend }))} />
-              Power down idle USB devices
-            </label>
+              <input type="checkbox" disabled={busy} checked={!!state.usbSuspend} title={tx("Windows may power down USB devices that are sitting idle, to save power")} onChange={(e) => run(() => api.invoke('power:setUsbSuspend', { on: e.target.checked, previous: state.usbSuspend }))} />{tx("Power down idle USB devices")}</label>
           </div>
-          <p className="muted" style={{ marginTop: 10 }}>On a desktop PC the battery settings are kept but have no effect until a battery exists. Plan changes apply straight away.</p>
+          <p className="muted" style={{ marginTop: 10 }}>{tx("On a desktop PC the battery settings are kept but have no effect until a battery exists. Plan changes apply straight away.")}</p>
         </>
       )}
     </Dialog>
@@ -1359,67 +1087,61 @@ export function RestoreDialog({ onClose }) {
   const PCTS = [1, 2, 3, 5, 10, 15, 20, 30, 50, 100];
 
   return (
-    <Dialog title="System Restore" onClose={onClose} width={760} buttons={<button className="primary" onClick={onClose}>Close</button>}>
-      <p className="muted" style={{ marginBottom: 10 }}>
-        Restore points let Windows roll back to how things were. The roll-back itself runs in Windows' own System Restore window — this one manages the storage, the protection and the points.
-      </p>
+    <Dialog title={tx("System Restore")} onClose={onClose} width={760} buttons={<button className="primary" onClick={onClose}>{tx("Close")}</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>{tx("Restore points let Windows roll back to how things were. The roll-back itself runs in Windows' own System Restore window — this one manages the storage, the protection and the points.")}</p>
       {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
-      {state === null ? <p className="muted">Reading restore settings…</p> : (
+      {state === null ? <p className="muted">{tx("Reading restore settings…")}</p> : (
         <>
-          <div className="pkg-entries-head">Drives</div>
+          <div className="pkg-entries-head">{tx("Drives")}</div>
           <div style={{ marginBottom: 12 }}>
             {state.drives.map((d) => (
               <div key={d.drive} className="pkg-row" style={{ cursor: 'default' }}>
                 <span className="pkg-name">{d.drive}</span>
-                <span className="muted">{d.hasStorage ? `Storage: ${d.used || '0'} used of ${d.unbounded ? 'no limit' : d.maxText}` : 'No restore storage set up'}</span>
+                <span className="muted">{d.hasStorage ? tx("Storage: {p0} used of {p1}", { p0: (d.used || '0'), p1: (d.unbounded ? 'no limit' : d.maxText) }) : tx("No restore storage set up")}</span>
                 {d.hasStorage && (
-                  <select disabled={busy} title="The most space restore points may use on this drive. When they need more, the oldest are deleted first." value={d.unbounded ? 'unbounded' : (d.maxPct ?? '')}
+                  <select disabled={busy} title={tx("The most space restore points may use on this drive. When they need more, the oldest are deleted first.")} value={d.unbounded ? 'unbounded' : (d.maxPct ?? '')}
                     onChange={(e) => run(() => api.invoke('restore:setMax', { drive: d.drive, pct: e.target.value === 'unbounded' ? null : Number(e.target.value), unbounded: e.target.value === 'unbounded', previous: { pct: d.maxPct, unbounded: d.unbounded } }))}>
-                    {PCTS.map((p) => <option key={p} value={p}>{p}% of the drive</option>)}
-                    <option value="unbounded">No limit</option>
+                    {PCTS.map((p) => <option key={p} value={p}>{p}{tx("% of the drive")}</option>)}
+                    <option value="unbounded">{tx("No limit")}</option>
                   </select>
                 )}
-                <button disabled={busy} title={d.hasStorage ? 'Turn restore protection off for this drive (deletes its restore points)' : 'Turn restore protection on for this drive'} onClick={() => (d.hasStorage ? setConfirmOff(d) : run(() => api.invoke('restore:setProtection', { drive: d.drive, on: true })))}>
-                  {d.hasStorage ? 'Turn off' : 'Turn on'}
+                <button disabled={busy} title={d.hasStorage ? tx("Turn restore protection off for this drive (deletes its restore points)") : tx("Turn restore protection on for this drive")} onClick={() => (d.hasStorage ? setConfirmOff(d) : run(() => api.invoke('restore:setProtection', { drive: d.drive, on: true })))}>
+                  {d.hasStorage ? tx("Turn off") : tx("Turn on")}
                 </button>
               </div>
             ))}
-            {state.drives.length === 0 && <p className="muted">No fixed drives were found.</p>}
+            {state.drives.length === 0 && <p className="muted">{tx("No fixed drives were found.")}</p>}
           </div>
-          <div className="pkg-entries-head" style={{ display: 'flex', alignItems: 'center' }}>
-            Restore points
-            <button style={{ marginLeft: 'auto' }} disabled={busy} title="Create a restore point right now" onClick={() => run(() => api.invoke('restore:createPoint', { description: `Created from Purgeon (${new Date().toLocaleString()})` }))}>Create one now</button>
+          <div className="pkg-entries-head" style={{ display: 'flex', alignItems: 'center' }}>{tx("Restore points")}<button style={{ marginLeft: 'auto' }} disabled={busy} title={tx("Create a restore point right now")} onClick={() => run(() => api.invoke('restore:createPoint', { description: `Created from Purgeon (${new Date().toLocaleString()})` }))}>{tx("Create one now")}</button>
           </div>
           <div style={{ marginBottom: 12 }}>
             {state.points.map((p) => (
               <div key={p.sequence} className="pkg-row" style={{ cursor: 'default' }}>
                 <span className="pkg-name">{p.description}</span>
                 <span className="muted">{fmtDate(p.createdISO)}</span>
-                <button disabled={busy || !p.shadowId} title={p.shadowId ? 'Delete this restore point (it cannot be brought back)' : 'This point cannot be matched to its stored copy, so it can only be removed with the others from the Cleaner'} onClick={() => setConfirmDelete(p)}>Delete</button>
+                <button disabled={busy || !p.sequence || !p.created} title={tx("Delete this restore point (it cannot be brought back)")} onClick={() => setConfirmDelete(p)}>{tx("Delete")}</button>
               </div>
             ))}
-            {state.points.length === 0 && <p className="muted">No restore points yet.</p>}
+            {state.points.length === 0 && <p className="muted">{tx("No restore points yet.")}</p>}
           </div>
-          <p className="muted">
-            To roll Windows back to one of these points, use Windows' own wizard:
-            <button style={{ marginLeft: 8 }} disabled={busy} title="Open Windows' System Restore window" onClick={() => run(() => api.invoke('restore:openUi'))}>Open System Restore…</button>
+          <p className="muted">{tx("To roll Windows back to one of these points, use Windows' own wizard:")}<button style={{ marginLeft: 8 }} disabled={busy} title={tx("Open Windows' System Restore window")} onClick={() => run(() => api.invoke('restore:openUi'))}>{tx("Open System Restore…")}</button>
           </p>
         </>
       )}
       {confirmOff && (
-        <Dialog title={`Turn off protection for ${confirmOff.drive}?`} onClose={() => setConfirmOff(null)} width={520} buttons={<>
-          <button onClick={() => setConfirmOff(null)}>Keep it on</button>
-          <button className="danger" onClick={() => { const d = confirmOff; setConfirmOff(null); run(() => api.invoke('restore:setProtection', { drive: d.drive, on: false })); }}>Turn off and delete its points</button>
+        <Dialog title={tx("Turn off protection for {p0}?", { p0: (confirmOff.drive) })} onClose={() => setConfirmOff(null)} width={520} buttons={<>
+          <button onClick={() => setConfirmOff(null)}>{tx("Keep it on")}</button>
+          <button className="danger" onClick={() => { const d = confirmOff; setConfirmOff(null); run(() => api.invoke('restore:setProtection', { drive: d.drive, on: false })); }}>{tx("Turn off and delete its points")}</button>
         </>}>
-          <p>Turning protection off deletes every restore point on {confirmOff.drive}. Windows offers no undo for that, and neither can Purgeon.</p>
+          <p>{tx("Turning protection off deletes every restore point on ")}{confirmOff.drive}{tx(". Windows offers no undo for that, and neither can Purgeon.")}</p>
         </Dialog>
       )}
       {confirmDelete && (
-        <Dialog title="Delete this restore point?" onClose={() => setConfirmDelete(null)} width={520} buttons={<>
-          <button onClick={() => setConfirmDelete(null)}>Keep it</button>
-          <button className="danger" onClick={() => { const p = confirmDelete; setConfirmDelete(null); run(() => api.invoke('restore:removePoint', { shadowId: p.shadowId, description: p.description })); }}>Delete it</button>
+        <Dialog title={tx("Delete this restore point?")} onClose={() => setConfirmDelete(null)} width={520} buttons={<>
+          <button onClick={() => setConfirmDelete(null)}>{tx("Keep it")}</button>
+          <button className="danger" onClick={() => { const p = confirmDelete; setConfirmDelete(null); run(() => api.invoke('restore:removePoint', { sequence: p.sequence, created: p.created, description: p.description })); }}>{tx("Delete it")}</button>
         </>}>
-          <p>“{confirmDelete.description}” ({fmtDate(confirmDelete.createdISO)}) will be deleted. A deleted restore point cannot be brought back.</p>
+          <p>“{confirmDelete.description}” ({fmtDate(confirmDelete.createdISO)}{tx(") will be deleted. A deleted restore point cannot be brought back.")}</p>
         </Dialog>
       )}
     </Dialog>
@@ -1455,54 +1177,51 @@ export function BootDialog({ onClose }) {
   const timeouts = [0, 5, 10, 15, 30, 60];
 
   return (
-    <Dialog title="Boot Options" onClose={onClose} width={700} buttons={<button className="primary" onClick={onClose}>Close</button>}>
-      <p className="muted" style={{ marginBottom: 10 }}>These change what happens at the next start, not this one. Nothing here restarts the PC.</p>
+    <Dialog title={tx("Boot Options")} onClose={onClose} width={700} buttons={<button className="primary" onClick={onClose}>{tx("Close")}</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>{tx("Safe Mode persists across restarts until you choose Normal start here or clear the correct boot loader's safeboot setting from Windows Recovery. Nothing here restarts the PC. If you only need a one-time Safe Mode start, use Shift+Restart and Windows Startup Settings instead.")}</p>
       {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
-      {state === null ? <p className="muted">Reading the boot settings…</p> : (
+      {state === null ? <p className="muted">{tx("Reading the boot settings…")}</p> : (
         <>
-          <div className="pkg-entries-head">Next start</div>
+          <div className="pkg-entries-head">{tx("Next start")}</div>
           <div style={{ marginBottom: 10 }}>
             {MODES.map((m) => (
               <button key={m.id} className={`pkg-row ${state.safeboot === m.id ? 'sel' : ''}`} disabled={busy || state.safeboot === m.id} title={m.detail} onClick={() => setPending(m)}>
-                <span className="pkg-name">{m.label}</span>
-                {state.safeboot === m.id && <span className="pkg-badge ok">Set</span>}
+                <span className="pkg-name">{tx(m.label)}</span>
+                {state.safeboot === m.id && <span className="pkg-badge ok">{tx("Set")}</span>}
               </button>
             ))}
-            {state.safeboot === 'other' && <p className="muted">Windows is set to a specialist start mode Purgeon does not change. Choosing Normal start above clears it.</p>}
+            {state.safeboot === 'other' && <p className="muted">{tx("Windows is set to a specialist start mode Purgeon does not change. Choosing Normal start above clears it.")}</p>}
           </div>
           <label className="power-cell power-check" style={{ marginBottom: 12 }}>
-            <input type="checkbox" checked={withPoint} disabled={busy} onChange={(e) => setWithPoint(e.target.checked)} title="Make a restore point before changing the start mode, so the change sits behind a safety net" />
-            Create a restore point first (recommended)
-          </label>
+            <input type="checkbox" checked={withPoint} disabled={busy} onChange={(e) => setWithPoint(e.target.checked)} title={tx("Make a restore point before changing the start mode, so the change sits behind a safety net")} />{tx("Create a restore point first (recommended)")}</label>
           <div className="power-row">
-            <span className="power-label">Boot menu waits</span>
-            <label className="power-cell">Seconds
-              <select disabled={busy || state.timeout === null} title="How long the list of Windows versions waits at start before the default one loads" value={state.timeout ?? ''} onChange={(e) => run(() => api.invoke('boot:setTimeout', { seconds: Number(e.target.value), previous: state.timeout }))}>
-                {timeouts.map((s) => <option key={s} value={s}>{s === 0 ? '0 (no wait)' : `${s} seconds`}</option>)}
-                {state.timeout !== null && !timeouts.includes(state.timeout) && <option value={state.timeout}>{state.timeout} seconds</option>}
+            <span className="power-label">{tx("Boot menu waits")}</span>
+            <label className="power-cell">{tx("Seconds")}<select disabled={busy || state.timeout === null} title={tx("How long the list of Windows versions waits at start before the default one loads")} value={state.timeout ?? ''} onChange={(e) => run(() => api.invoke('boot:setTimeout', { seconds: Number(e.target.value), previous: state.timeout }))}>
+                {timeouts.map((s) => <option key={s} value={s}>{s === 0 ? tx("0 (no wait)") : tx("{p0} seconds", { p0: (s) })}</option>)}
+                {state.timeout !== null && !timeouts.includes(state.timeout) && <option value={state.timeout}>{state.timeout}{tx(" seconds")}</option>}
               </select>
             </label>
           </div>
-          <div className="pkg-entries-head" style={{ marginTop: 12 }}>Windows versions on this PC (read-only)</div>
+          <div className="pkg-entries-head" style={{ marginTop: 12 }}>{tx("Windows versions on this PC (read-only)")}</div>
           <div style={{ marginBottom: 10 }}>
             {state.entries.map((e) => (
               <div key={e.id} className="pkg-row" style={{ cursor: 'default' }}>
                 <span className="pkg-name">{e.name}</span>
-                {e.isDefault && <span className="pkg-badge ok">Default</span>}
+                {e.isDefault && <span className="pkg-badge ok">{tx("Default")}</span>}
               </div>
             ))}
-            {state.entries.length === 0 && <p className="muted">No boot entries could be read.</p>}
+            {state.entries.length === 0 && <p className="muted">{tx("No boot entries could be read.")}</p>}
           </div>
-          <p className="muted">If Windows will not start at all: hold Shift while choosing Restart (from the sign-in screen if needed) and Windows shows its recovery tools, including Startup Settings, where Safe Mode can be picked directly.</p>
+          <p className="muted">{tx("If Windows will not start at all: hold Shift while choosing Restart (from the sign-in screen if needed) and Windows shows its recovery tools, including Startup Settings, where Safe Mode can be picked directly.")}</p>
         </>
       )}
       {pending && (
-        <Dialog title={`${pending.label} at the next start?`} onClose={() => setPending(null)} width={520} buttons={<>
-          <button onClick={() => setPending(null)}>Not yet</button>
-          <button className="primary" onClick={() => { const m = pending; setPending(null); run(() => api.invoke('boot:setSafeBoot', { mode: m.id, previous: state.safeboot, withRestorePoint: withPoint })); }}>Set it</button>
+        <Dialog title={tx("Change persistent startup mode to {p0}?", { p0: (pending.label) })} onClose={() => setPending(null)} width={520} buttons={<>
+          <button onClick={() => setPending(null)}>{tx("Not yet")}</button>
+          <button className="primary" onClick={() => { const m = pending; setPending(null); run(() => api.invoke('boot:setSafeBoot', { mode: m.id, previous: state.safeboot, withRestorePoint: withPoint })); }}>{tx("Set it")}</button>
         </>}>
-          <p>{pending.detail}</p>
-          <p className="muted">It takes effect when the PC next starts. You can change your mind here any time before then{withPoint ? ', and a restore point is made first' : ''}.</p>
+          <p>{tx(pending.detail)}</p>
+          <p className="muted">{tx("It takes effect when the PC next starts. You can change your mind here any time before then")}{withPoint ? tx(", and a restore point is made first") : ''}.</p>
         </Dialog>
       )}
     </Dialog>
@@ -1532,21 +1251,21 @@ export function LogsDialog({ onClose }) {
 
   const shown = (items || []).filter((c) => !filter || c.name.toLowerCase().includes(filter.toLowerCase()));
   const current = shown.length ? shown[Math.min(selected, shown.length - 1)] : null;
-  const fmtSize = (b) => (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : b >= 1024 ? `${(b / 1024).toFixed(0)} KB` : `${b} B`);
+  const fmtSize = (b) => b === null ? tx("Unknown") : (b >= 1048576 ? `${(b / 1048576).toFixed(1)} MB` : b >= 1024 ? `${(b / 1024).toFixed(0)} KB` : `${b} B`);
 
   return (
-    <Dialog title="Event Logs" onClose={onClose} width={880} buttons={<button className="primary" onClick={onClose}>Close</button>}>
-      <p className="muted" style={{ marginBottom: 10 }}>Windows writes everything that happens into these logs. Clearing one always saves a copy into Purgeon's log-backups folder first, and the copy is kept.</p>
+    <Dialog title={tx("Event Logs")} onClose={onClose} width={880} buttons={<button className="primary" onClick={onClose}>{tx("Close")}</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>{tx("Windows writes everything that happens into these logs. Clearing one always saves a copy into Purgeon's log-backups folder first, and the copy is kept.")}</p>
       {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
-      {note && <p className="muted" style={{ marginBottom: 10 }}>{note}</p>}
-      <input className="search-input" style={{ marginBottom: 10, width: '100%' }} placeholder="Search logs…" title="Type part of a log's name to filter the list" value={filter} onChange={(e) => { setFilter(e.target.value); setSelected(0); }} />
-      {items === null ? <p className="muted">Reading the logs…</p> : shown.length === 0 ? <p className="muted">No logs match.</p> : (
+      {note && <p className="muted" style={{ marginBottom: 10 }}>{tx(note)}</p>}
+      <input className="search-input" style={{ marginBottom: 10, width: '100%' }} placeholder={tx("Search logs…")} title={tx("Type part of a log's name to filter the list")} value={filter} onChange={(e) => { setFilter(e.target.value); setSelected(0); }} />
+      {items === null ? <p className="muted">{tx("Reading the logs…")}</p> : shown.length === 0 ? <p className="muted">{tx("No logs match.")}</p> : (
         <div className="recovery-cols">
           <div className="pkg-list">
             {shown.map((c, i) => (
               <button key={c.name} className={`pkg-row ${current && c.name === current.name ? 'sel' : ''}`} onClick={() => setSelected(i)}>
                 <span className="pkg-name">{c.name}</span>
-                {c.guarded ? <span className="pkg-badge warn">Protected</span> : !c.enabled ? <span className="pkg-badge warn">Off</span> : null}
+                {c.guarded ? <span className="pkg-badge warn">{tx("Protected")}</span> : c.enabled === null ? <span className="pkg-badge warn">{tx("Unknown")}</span> : !c.enabled ? <span className="pkg-badge warn">{tx("Off")}</span> : null}
               </button>
             ))}
           </div>
@@ -1554,14 +1273,15 @@ export function LogsDialog({ onClose }) {
             {current && (
               <>
                 <div className="pkg-entries-head">{current.name}</div>
-                <div className="pkg-entry"><span className="muted">Records</span><span style={{ marginLeft: 'auto' }}>{current.records.toLocaleString()}</span></div>
-                <div className="pkg-entry"><span className="muted">Size on disk</span><span style={{ marginLeft: 'auto' }}>{fmtSize(current.sizeBytes)}</span></div>
-                <div className="pkg-entry"><span className="muted">Recording</span><span style={{ marginLeft: 'auto' }}>{current.enabled ? 'On' : 'Off'}</span></div>
-                {current.guarded && <p style={{ fontSize: 13, margin: '8px 0' }}>The Security log is the record Windows keeps of sign-ins and security events. Purgeon can save a copy of it, but never clears it or turns it off.</p>}
+                <div className="pkg-entry"><span className="muted">{tx("Records")}</span><span style={{ marginLeft: 'auto' }}>{current.records === null ? tx("Unknown") : current.records.toLocaleString()}</span></div>
+                <div className="pkg-entry"><span className="muted">{tx("Size on disk")}</span><span style={{ marginLeft: 'auto' }}>{fmtSize(current.sizeBytes)}</span></div>
+                <div className="pkg-entry"><span className="muted">{tx("Recording")}</span><span style={{ marginLeft: 'auto' }}>{current.enabled === null ? tx("Unknown") : current.enabled ? tx("On") : tx("Off")}</span></div>
+                {(current.metadataError || current.configError) && <p className="error-text">{[current.metadataError, current.configError].filter(Boolean).join("; ")}</p>}
+                {current.guarded && <p style={{ fontSize: 13, margin: '8px 0' }}>{tx("The Security log is the record Windows keeps of sign-ins and security events. Purgeon can save a copy of it, but never clears it or turns it off.")}</p>}
                 <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                  <button disabled={busy} title="Save this log to an .evtx file you choose" onClick={() => run(() => api.invoke('logs:exportPick', { name: current.name }), (r) => { if (r) setNote(`Saved a copy of ${current.name} to ${r.path}.`); })}>Save a copy…</button>
-                  {!current.guarded && <button disabled={busy} title="Empty this log (a copy is saved first and kept)" onClick={() => setConfirmClear(current)}>Clear…</button>}
-                  {!current.guarded && <button disabled={busy} title={current.enabled ? 'Stop recording new events into this log' : 'Start recording events into this log again'} onClick={() => run(() => api.invoke('logs:setEnabled', { name: current.name, on: !current.enabled }))}>{current.enabled ? 'Turn off' : 'Turn on'}</button>}
+                  <button disabled={busy || !current.channelId || !!current.configError} title={tx("Save this log to an .evtx file you choose")} onClick={() => run(() => api.invoke('logs:exportPick', { channelId: current.channelId }), (r) => { if (r) setNote(`Saved a copy of ${current.name} to ${r.path}.`); })}>{tx("Save a copy…")}</button>
+                  {!current.guarded && <button disabled={busy || !current.channelId || !!current.configError} title={tx("Empty this log (a copy is saved first and kept)")} onClick={() => setConfirmClear(current)}>{tx("Clear…")}</button>}
+                  {!current.guarded && <button disabled={busy || !current.channelId || !!current.configError || current.enabled === null || /^(Application|System)$/i.test(current.name)} title={current.enabled ? tx("Stop recording new events into this log") : tx("Start recording events into this log again")} onClick={() => run(() => api.invoke('logs:setEnabled', { channelId: current.channelId, on: !current.enabled }))}>{current.enabled === null ? tx("Change Recording") : current.enabled ? tx("Turn off") : tx("Turn on")}</button>}
                 </div>
               </>
             )}
@@ -1569,11 +1289,11 @@ export function LogsDialog({ onClose }) {
         </div>
       )}
       {confirmClear && (
-        <Dialog title={`Clear the ${confirmClear.name} log?`} onClose={() => setConfirmClear(null)} width={520} buttons={<>
-          <button onClick={() => setConfirmClear(null)}>Keep it</button>
-          <button className="danger" onClick={() => { const c = confirmClear; setConfirmClear(null); run(() => api.invoke('logs:clear', { name: c.name }), (r) => setNote(`Cleared ${c.name}. Its copy was kept at ${r.backup}.`)); }}>Save a copy and clear</button>
+        <Dialog title={tx("Clear the {p0} log?", { p0: (confirmClear.name) })} onClose={() => setConfirmClear(null)} width={520} buttons={<>
+          <button onClick={() => setConfirmClear(null)}>{tx("Keep it")}</button>
+          <button className="danger" onClick={() => { const c = confirmClear; setConfirmClear(null); run(() => api.invoke('logs:clear', { channelId: c.channelId }), (r) => setNote(`Cleared ${c.name}. Its copy was kept at ${r.backup}.`)); }}>{tx("Save a copy and clear")}</button>
         </>}>
-          <p>The log will be emptied. First, a copy is saved into Purgeon's log-backups folder and kept — that copy is the only way back.</p>
+          <p>{tx("The log will be emptied. First, a copy is saved into Purgeon's log-backups folder and kept — that copy is the only way back.")}</p>
         </Dialog>
       )}
     </Dialog>
@@ -1603,37 +1323,33 @@ export function HealthDialog({ onClose }) {
   const BADGE = { pass: ['ok', 'Pass'], warn: ['warn', 'Warning'], fail: ['bad', 'Fail'], unknown: ['', 'Couldn’t check'] };
 
   return (
-    <Dialog title="Health Check" onClose={onClose} width={760} buttons={<button className="primary" onClick={onClose}>Close</button>}>
-      <p className="muted" style={{ marginBottom: 10 }}>A plain-words once-over: drives, system files, restore points, updates, crashes, startup load and the battery. Nothing is changed or repaired — each line names the tool that fixes it.</p>
+    <Dialog title={tx("Health Check")} onClose={onClose} width={760} buttons={<button className="primary" onClick={onClose}>{tx("Close")}</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>{tx("A plain-words once-over: drives, system files, restore points, updates, crashes, startup load and the battery. Nothing is changed or repaired — each line names the tool that fixes it.")}</p>
       {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
-      {note && <p className="muted" style={{ marginBottom: 10 }}>{note}</p>}
+      {note && <p className="muted" style={{ marginBottom: 10 }}>{tx(note)}</p>}
       <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
         {!running
-          ? <button className="primary" title="Run the health check now" onClick={start}>{result ? 'Run again' : 'Run the check'}</button>
-          : <button className="danger" title="Stop the check at the next step" onClick={() => api.invoke('health:cancel')}>Cancel</button>}
+          ? <button className="primary" title={tx("Run the health check now")} onClick={start}>{result ? tx("Run again") : tx("Run the check")}</button>
+          : <button className="danger" title={tx("Stop the check at the next step")} onClick={() => api.invoke('health:cancel')}>{tx("Cancel")}</button>}
         <label className="power-cell power-check">
-          <input type="checkbox" checked={runSfc} disabled={running} title="Also verify every Windows system file, not just the quick store check. Takes a few minutes." onChange={(e) => setRunSfc(e.target.checked)} />
-          Also verify every system file (slower)
-        </label>
+          <input type="checkbox" checked={runSfc} disabled={running} title={tx("Also verify every Windows system file, not just the quick store check. Takes a few minutes.")} onChange={(e) => setRunSfc(e.target.checked)} />{tx("Also verify every system file (slower)")}</label>
         <label className="power-cell power-check">
-          <input type="checkbox" checked={weekly} title="Add the health check (without the slow file verification) to the weekly maintenance run. Maintenance itself is set up in Tools." onChange={(e) => { setWeekly(e.target.checked); api.invoke('health:setWeekly', { on: e.target.checked }).catch((x) => setErr(x.message)); }} />
-          Add to Weekly Maintenance
-        </label>
+          <input type="checkbox" checked={weekly} title={tx("Add the health check (without the slow file verification) to the weekly maintenance run. Maintenance itself is set up in Tools.")} onChange={(e) => { setWeekly(e.target.checked); api.invoke('health:setWeekly', { on: e.target.checked }).catch((x) => setErr(x.message)); }} />{tx("Add to Weekly Maintenance")}</label>
       </div>
-      {running && <p className="muted">Checking… (drive health, system files, restore points, updates, crashes, startup, battery)</p>}
+      {running && <p className="muted">{tx("Checking… (drive health, system files, restore points, updates, crashes, startup, battery)")}</p>}
       {result && (
         <>
-          <p style={{ fontSize: 14, marginBottom: 10 }}>{result.summary.text}{result.cancelled ? ' (The run was cancelled, so this covers only the checks that finished.)' : ''}</p>
+          <p style={{ fontSize: 14, marginBottom: 10 }}>{result.summary.text}{result.cancelled ? tx(" (The run was cancelled, so this covers only the checks that finished.)") : ''}</p>
           <div style={{ marginBottom: 12 }}>
             {result.checks.map((c) => (
               <div key={c.id + c.label} className="pkg-row" style={{ cursor: 'default' }}>
-                <span className="pkg-name">{c.label}</span>
-                <span className="muted" style={{ flex: 1 }}>{c.detail}</span>
+                <span className="pkg-name">{tx(c.label)}</span>
+                <span className="muted" style={{ flex: 1 }}>{tx(c.detail)}</span>
                 <span className={`pkg-badge ${BADGE[c.status]?.[0] || ''}`}>{BADGE[c.status]?.[1] || c.status}</span>
               </div>
             ))}
           </div>
-          <button disabled={running} title="Save this report as a text file" onClick={async () => { try { const r = await api.invoke('health:saveReport', { result }); if (r) setNote(`Report saved to ${r.path}.`); } catch (e) { setErr(e.message); } }}>Save Report…</button>
+          <button disabled={running} title={tx("Save this report as a text file")} onClick={async () => { try { const r = await api.invoke('health:saveReport', { result }); if (r) setNote(`Report saved to ${r.path}.`); } catch (e) { setErr(e.message); } }}>{tx("Save Report…")}</button>
         </>
       )}
     </Dialog>
@@ -1665,20 +1381,20 @@ export function TasksDialog({ onClose }) {
   const resultText = (r) => (r === null || r === undefined ? '—' : r === 0 ? 'Ran fine' : `Finished with code ${r}`);
 
   return (
-    <Dialog title="Scheduled Tasks" onClose={onClose} width={900} buttons={<>
-      <button disabled={busy} title="Create a simple task: run a program at sign-in, daily or weekly" onClick={() => setCreating(true)}>New Task…</button>
-      <button className="primary" onClick={onClose}>Close</button>
+    <Dialog title={tx("Scheduled Tasks")} onClose={onClose} width={900} buttons={<>
+      <button disabled={busy} title={tx("Create a simple task: run a program at sign-in, daily or weekly")} onClick={() => setCreating(true)}>{tx("New Task…")}</button>
+      <button className="primary" onClick={onClose}>{tx("Close")}</button>
     </>}>
-      <p className="muted" style={{ marginBottom: 10 }}>Everything Windows runs on a schedule. Windows' own tasks are badged — they can be run or turned off here, but never deleted.</p>
+      <p className="muted" style={{ marginBottom: 10 }}>{tx("Everything Windows runs on a schedule. Windows' own tasks are badged — they can be run or turned off here, but never deleted.")}</p>
       {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
-      <input className="search-input" style={{ marginBottom: 10, width: '100%' }} placeholder="Search tasks…" title="Type part of a task's name or folder to filter the list" value={filter} onChange={(e) => { setFilter(e.target.value); setSelected(0); }} />
-      {items === null ? <p className="muted">Reading the tasks…</p> : shown.length === 0 ? <p className="muted">No tasks match.</p> : (
+      <input className="search-input" style={{ marginBottom: 10, width: '100%' }} placeholder={tx("Search tasks…")} title={tx("Type part of a task's name or folder to filter the list")} value={filter} onChange={(e) => { setFilter(e.target.value); setSelected(0); }} />
+      {items === null ? <p className="muted">{tx("Reading the tasks…")}</p> : shown.length === 0 ? <p className="muted">{tx("No tasks match.")}</p> : (
         <div className="recovery-cols">
           <div className="pkg-list">
             {shown.map((t, i) => (
               <button key={t.path + t.name} className={`pkg-row ${current && t.name === current.name && t.path === current.path ? 'sel' : ''}`} onClick={() => setSelected(i)}>
                 <span className="pkg-name">{t.name}<span className="muted" style={{ display: 'block', fontSize: 11.5 }}>{t.path}</span></span>
-                {t.isWindows ? <span className="pkg-badge warn">Windows</span> : t.state === 'Disabled' ? <span className="pkg-badge warn">Off</span> : null}
+                {t.isWindows ? <span className="pkg-badge warn">{tx("Windows")}</span> : t.state === 'Disabled' ? <span className="pkg-badge warn">{tx("Off")}</span> : null}
               </button>
             ))}
           </div>
@@ -1686,30 +1402,30 @@ export function TasksDialog({ onClose }) {
             {current && (
               <>
                 <div className="pkg-entries-head">{current.name}</div>
-                <div className="pkg-entry"><span className="muted">Folder</span><span style={{ marginLeft: 'auto' }}>{current.path}</span></div>
-                <div className="pkg-entry"><span className="muted">State</span><span style={{ marginLeft: 'auto' }}>{current.state}</span></div>
-                {current.author && <div className="pkg-entry"><span className="muted">Author</span><span style={{ marginLeft: 'auto' }}>{current.author}</span></div>}
-                <div className="pkg-entry"><span className="muted">Last run</span><span style={{ marginLeft: 'auto' }}>{fmtWhen(current.lastRun)}</span></div>
-                <div className="pkg-entry"><span className="muted">Last result</span><span style={{ marginLeft: 'auto' }}>{resultText(current.lastResult)}</span></div>
-                <div className="pkg-entry"><span className="muted">Next run</span><span style={{ marginLeft: 'auto' }}>{fmtWhen(current.nextRun)}</span></div>
+                <div className="pkg-entry"><span className="muted">{tx("Folder")}</span><span style={{ marginLeft: 'auto' }}>{current.path}</span></div>
+                <div className="pkg-entry"><span className="muted">{tx("State")}</span><span style={{ marginLeft: 'auto' }}>{current.state}</span></div>
+                {current.author && <div className="pkg-entry"><span className="muted">{tx("Author")}</span><span style={{ marginLeft: 'auto' }}>{current.author}</span></div>}
+                <div className="pkg-entry"><span className="muted">{tx("Last run")}</span><span style={{ marginLeft: 'auto' }}>{fmtWhen(current.lastRun)}</span></div>
+                <div className="pkg-entry"><span className="muted">{tx("Last result")}</span><span style={{ marginLeft: 'auto' }}>{resultText(current.lastResult)}</span></div>
+                <div className="pkg-entry"><span className="muted">{tx("Next run")}</span><span style={{ marginLeft: 'auto' }}>{fmtWhen(current.nextRun)}</span></div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                  <button disabled={busy} title="Run this task right now" onClick={() => run(() => api.invoke('tasks:runNow', { task: current }))}>Run now</button>
-                  <button disabled={busy} title="Stop this task if it is running" onClick={() => run(() => api.invoke('tasks:stop', { task: current }))}>Stop</button>
-                  <button disabled={busy} title={current.state === 'Disabled' ? 'Let this task run on its schedule again' : 'Keep the task but stop it running on its schedule'} onClick={() => run(() => api.invoke('tasks:setEnabled', { task: current, on: current.state === 'Disabled' }))}>{current.state === 'Disabled' ? 'Turn on' : 'Turn off'}</button>
-                  {!current.isWindows && <button disabled={busy} className="danger" title="Delete this task (its definition is saved first, and Change History can undo)" onClick={() => setConfirmDelete(current)}>Delete…</button>}
+                  <button disabled={busy} title={tx("Run this task right now")} onClick={() => run(() => api.invoke('tasks:runNow', { task: current }))}>{tx("Run now")}</button>
+                  <button disabled={busy} title={tx("Stop this task if it is running")} onClick={() => run(() => api.invoke('tasks:stop', { task: current }))}>{tx("Stop")}</button>
+                  <button disabled={busy} title={current.state === 'Disabled' ? tx("Let this task run on its schedule again") : tx("Keep the task but stop it running on its schedule")} onClick={() => run(() => api.invoke('tasks:setEnabled', { task: current, on: current.state === 'Disabled' }))}>{current.state === 'Disabled' ? tx("Turn on") : tx("Turn off")}</button>
+                  {!current.isWindows && <button disabled={busy} className="danger" title={tx("Delete this task (its definition is saved first, and Change History can undo)")} onClick={() => setConfirmDelete(current)}>{tx("Delete…")}</button>}
                 </div>
-                {current.isWindows && <p className="muted" style={{ marginTop: 10 }}>One of Windows' own tasks — it can be run or turned off here, but not deleted.</p>}
+                {current.isWindows && <p className="muted" style={{ marginTop: 10 }}>{tx("One of Windows' own tasks — it can be run or turned off here, but not deleted.")}</p>}
               </>
             )}
           </div>
         </div>
       )}
       {confirmDelete && (
-        <Dialog title={`Delete ${confirmDelete.name}?`} onClose={() => setConfirmDelete(null)} width={520} buttons={<>
-          <button onClick={() => setConfirmDelete(null)}>Keep it</button>
-          <button className="danger" onClick={() => { const t = confirmDelete; setConfirmDelete(null); run(() => api.invoke('tasks:remove', { task: t })); }}>Delete it</button>
+        <Dialog title={tx("Delete {p0}?", { p0: (confirmDelete.name) })} onClose={() => setConfirmDelete(null)} width={520} buttons={<>
+          <button onClick={() => setConfirmDelete(null)}>{tx("Keep it")}</button>
+          <button className="danger" onClick={() => { const t = confirmDelete; setConfirmDelete(null); run(() => api.invoke('tasks:remove', { task: t })); }}>{tx("Delete it")}</button>
         </>}>
-          <p>Its definition is saved to Purgeon's task-backups folder first, and Change History's undo puts it back from that copy.</p>
+          <p>{tx("Its definition is saved to Purgeon's task-backups folder first, and Change History's undo puts it back from that copy.")}</p>
         </Dialog>
       )}
       {creating && <TaskCreateDialog onClose={() => setCreating(false)} onDone={() => { setCreating(false); load(); }} />}
@@ -1731,38 +1447,33 @@ function TaskCreateDialog({ onClose, onDone }) {
     catch (e) { setErr(e.message); setBusy(false); }
   };
   return (
-    <Dialog title="New Task" onClose={onClose} width={560} buttons={<>
-      <button onClick={onClose}>Cancel</button>
-      <button className="primary" disabled={busy || !name.trim() || !program} onClick={create}>Create the task</button>
+    <Dialog title={tx("New Task")} onClose={onClose} width={560} buttons={<>
+      <button onClick={onClose}>{tx("Cancel")}</button>
+      <button className="primary" disabled={busy || !name.trim() || !program} onClick={create}>{tx("Create the task")}</button>
     </>}>
       {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
-      <label className="field">Name
-        <input value={name} title="What the task is called in the list" onChange={(e) => setName(e.target.value)} placeholder="e.g. Back up my photos" />
+      <label className="field">{tx("Name")}<input value={name} title={tx("What the task is called in the list")} onChange={(e) => setName(e.target.value)} placeholder={tx("e.g. Back up my photos")} />
       </label>
-      <label className="field">Program
-        <span style={{ display: 'flex', gap: 8 }}>
-          <input value={program} title="The program file the task runs" onChange={(e) => setProgram(e.target.value)} placeholder="C:\\Path\\program.exe" style={{ flex: 1 }} />
-          <button title="Choose the program file" onClick={async () => { const f = await api.invoke('tasks:pickProgram'); if (f) setProgram(f); }}>Choose…</button>
+      <label className="field">{tx("Program")}<span style={{ display: 'flex', gap: 8 }}>
+          <input value={program} title={tx("The program file the task runs")} onChange={(e) => setProgram(e.target.value)} placeholder={tx("C:\\\\Path\\\\program.exe")} style={{ flex: 1 }} />
+          <button title={tx("Choose the program file")} onClick={async () => { const f = await api.invoke('tasks:pickProgram'); if (f) setProgram(f); }}>{tx("Choose…")}</button>
         </span>
       </label>
-      <label className="field">When
-        <select value={trigger} title="When the task runs" onChange={(e) => setTrigger(e.target.value)}>
-          <option value="logon">When I sign in</option>
-          <option value="daily">Every day</option>
-          <option value="weekly">Every week</option>
+      <label className="field">{tx("When")}<select value={trigger} title={tx("When the task runs")} onChange={(e) => setTrigger(e.target.value)}>
+          <option value="logon">{tx("When I sign in")}</option>
+          <option value="daily">{tx("Every day")}</option>
+          <option value="weekly">{tx("Every week")}</option>
         </select>
       </label>
       {trigger !== 'logon' && (
         <div style={{ display: 'flex', gap: 10 }}>
           {trigger === 'weekly' && (
-            <label className="field" style={{ flex: 1 }}>Day
-              <select value={day} title="The day of the week" onChange={(e) => setDay(e.target.value)}>
+            <label className="field" style={{ flex: 1 }}>{tx("Day")}<select value={day} title={tx("The day of the week")} onChange={(e) => setDay(e.target.value)}>
                 {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((d) => <option key={d} value={d}>{d}</option>)}
               </select>
             </label>
           )}
-          <label className="field" style={{ flex: 1 }}>Time
-            <input value={time} title="The time of day, like 09:00" onChange={(e) => setTime(e.target.value)} placeholder="09:00" />
+          <label className="field" style={{ flex: 1 }}>{tx("Time")}<input value={time} title={tx("The time of day, like 09:00")} onChange={(e) => setTime(e.target.value)} placeholder="09:00" />
           </label>
         </div>
       )}

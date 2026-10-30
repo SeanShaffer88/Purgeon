@@ -149,113 +149,109 @@ pub fn take(
     CANCELLED.store(false, Ordering::SeqCst);
     let start = Instant::now();
     let excludes: Vec<String> = excludes.iter().map(|e| e.to_lowercase()).collect();
-    let tmp = format!("{out}.part");
-    let file = File::create(&tmp).map_err(|e| e.to_string())?;
-    let mut w = BufWriter::new(GzEncoder::new(file, Compression::fast()));
-    let mut st = SnapshotStats::default();
-    let created = std::time::SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map(|d| d.as_millis())
-        .unwrap_or(0);
-    writeln!(w, "#SWEEPSNAP\t1\t{}\t{created}", esc(name)).map_err(|e| e.to_string())?;
+    let mut st = crate::atomic_file::write_stream(out, |file| {
+        let mut w = BufWriter::new(GzEncoder::new(file, Compression::fast()));
+        let mut st = SnapshotStats::default();
+        let created = std::time::SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map(|d| d.as_millis())
+            .unwrap_or(0);
+        writeln!(w, "#SWEEPSNAP\t1\t{}\t{created}", esc(name)).map_err(|e| e.to_string())?;
 
-    // Files and folders.
-    for root in file_roots {
-        let mut stack = vec![(root.clone(), 1u32)];
-        while let Some((dir, depth)) = stack.pop() {
-            if cancel_requested() {
-                drop(w);
-                let _ = fs::remove_file(&tmp);
-                return Err(CANCELLED_MSG.to_string());
-            }
-            let Ok(rd) = fs::read_dir(&dir) else { continue };
-            for e in rd.flatten() {
-                let Ok(t) = e.file_type() else { continue };
-                if t.is_symlink() {
-                    continue;
+        // Files and folders.
+        for root in file_roots {
+            let mut stack = vec![(root.clone(), 1u32)];
+            while let Some((dir, depth)) = stack.pop() {
+                if cancel_requested() {
+                    return Err(CANCELLED_MSG.to_string());
                 }
-                let p = e.path().display().to_string();
-                if excluded(&p.to_lowercase(), &excludes) {
-                    continue;
-                }
-                if t.is_dir() {
-                    st.dirs += 1;
-                    let _ = writeln!(w, "D\t{}", esc(&p));
-                    if depth < file_depth {
-                        stack.push((p, depth + 1));
+                let Ok(rd) = fs::read_dir(&dir) else { continue };
+                for e in rd.flatten() {
+                    let Ok(t) = e.file_type() else { continue };
+                    if t.is_symlink() {
+                        continue;
                     }
-                } else if t.is_file() {
-                    let (size, modified) = e
-                        .metadata()
-                        .map(|m| {
-                            (
-                                m.len(),
-                                m.modified()
-                                    .ok()
-                                    .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
-                                    .map(|d| d.as_millis())
-                                    .unwrap_or(0),
-                            )
-                        })
-                        .unwrap_or((0, 0));
-                    st.files += 1;
-                    let _ = writeln!(w, "F\t{}\t{size}\t{modified}", esc(&p));
+                    let p = e.path().display().to_string();
+                    if excluded(&p.to_lowercase(), &excludes) {
+                        continue;
+                    }
+                    if t.is_dir() {
+                        st.dirs += 1;
+                        writeln!(w, "D\t{}", esc(&p)).map_err(|e| e.to_string())?;
+                        if depth < file_depth {
+                            stack.push((p, depth + 1));
+                        }
+                    } else if t.is_file() {
+                        let (size, modified) = e
+                            .metadata()
+                            .map(|m| {
+                                (
+                                    m.len(),
+                                    m.modified()
+                                        .ok()
+                                        .and_then(|t| t.duration_since(UNIX_EPOCH).ok())
+                                        .map(|d| d.as_millis())
+                                        .unwrap_or(0),
+                                )
+                            })
+                            .unwrap_or((0, 0));
+                        st.files += 1;
+                        writeln!(w, "F\t{}\t{size}\t{modified}", esc(&p))
+                            .map_err(|e| e.to_string())?;
+                    }
                 }
             }
         }
-    }
 
-    // Registry keys and values (64-bit view).
-    for root in reg_roots {
-        let (hkey, hive_name) = match root.hive.as_str() {
-            "HKLM" => (HKEY_LOCAL_MACHINE, "HKEY_LOCAL_MACHINE"),
-            "HKCU" => (HKEY_CURRENT_USER, "HKEY_CURRENT_USER"),
-            _ => continue,
-        };
-        let base = RegKey::predef(hkey);
-        let mut stack = vec![(root.path.clone(), 1u32)];
-        while let Some((path, depth)) = stack.pop() {
-            if cancel_requested() {
-                drop(w);
-                let _ = fs::remove_file(&tmp);
-                return Err(CANCELLED_MSG.to_string());
-            }
-            let Ok(key) = base.open_subkey_with_flags(&path, KEY_READ | KEY_WOW64_64KEY) else {
-                continue;
+        // Registry keys and values (64-bit view).
+        for root in reg_roots {
+            let (hkey, hive_name) = match root.hive.as_str() {
+                "HKLM" => (HKEY_LOCAL_MACHINE, "HKEY_LOCAL_MACHINE"),
+                "HKCU" => (HKEY_CURRENT_USER, "HKEY_CURRENT_USER"),
+                _ => continue,
             };
-            let full = format!("{hive_name}\\{path}");
-            if excluded(&full.to_lowercase(), &excludes) {
-                continue;
-            }
-            st.keys += 1;
-            let _ = writeln!(w, "K\t{}", esc(&full));
-            for (vname, value) in key.enum_values().flatten() {
-                st.values += 1;
-                let vtype = value.vtype as u32;
-                let _ = writeln!(
-                    w,
-                    "V\t{}\t{}\t{vtype}\t{}",
-                    esc(&full),
-                    esc(&vname),
-                    value_text(vtype, &value.bytes)
-                );
-            }
-            if depth < root.depth {
-                for sub in key.enum_keys().flatten() {
-                    stack.push((format!("{path}\\{sub}"), depth + 1));
+            let base = RegKey::predef(hkey);
+            let mut stack = vec![(root.path.clone(), 1u32)];
+            while let Some((path, depth)) = stack.pop() {
+                if cancel_requested() {
+                    return Err(CANCELLED_MSG.to_string());
+                }
+                let Ok(key) = base.open_subkey_with_flags(&path, KEY_READ | KEY_WOW64_64KEY) else {
+                    continue;
+                };
+                let full = format!("{hive_name}\\{path}");
+                if excluded(&full.to_lowercase(), &excludes) {
+                    continue;
+                }
+                st.keys += 1;
+                writeln!(w, "K\t{}", esc(&full)).map_err(|e| e.to_string())?;
+                for (vname, value) in key.enum_values().flatten() {
+                    st.values += 1;
+                    let vtype = value.vtype as u32;
+                    writeln!(
+                        w,
+                        "V\t{}\t{}\t{vtype}\t{}",
+                        esc(&full),
+                        esc(&vname),
+                        value_text(vtype, &value.bytes)
+                    )
+                    .map_err(|e| e.to_string())?;
+                }
+                if depth < root.depth {
+                    for sub in key.enum_keys().flatten() {
+                        stack.push((format!("{path}\\{sub}"), depth + 1));
+                    }
                 }
             }
         }
-    }
 
-    w.flush().map_err(|e| e.to_string())?;
-    drop(
+        w.flush().map_err(|e| e.to_string())?;
         w.into_inner()
             .map_err(|e| e.to_string())?
             .finish()
-            .map_err(|e| e.to_string())?,
-    );
-    fs::rename(&tmp, out).map_err(|e| e.to_string())?;
+            .map_err(|e| e.to_string())?;
+        Ok(st)
+    })?;
     st.bytes = fs::metadata(out).map(|m| m.len()).unwrap_or(0);
     st.ms = start.elapsed().as_millis() as u64;
     Ok(st)
@@ -385,6 +381,19 @@ fn under_any(lower: &str, set: &HashSet<String>) -> bool {
 }
 
 // Entries present in `a` but not in `b`, collapsed to top-most folders and keys.
+fn append_change(
+    out: &mut Vec<Change>,
+    limit: usize,
+    truncated: &mut bool,
+    build: impl FnOnce() -> Change,
+) {
+    if out.len() < limit {
+        out.push(build());
+    } else {
+        *truncated = true;
+    }
+}
+
 fn only_in(a: &Snap, b: &Snap, limit: usize, truncated: &mut bool) -> Vec<Change> {
     let dirs = topmost(
         a.dirs
@@ -404,7 +413,7 @@ fn only_in(a: &Snap, b: &Snap, limit: usize, truncated: &mut bool) -> Vec<Change
     let key_set: HashSet<String> = keys.iter().map(|k| k.to_lowercase()).collect();
     let mut out: Vec<Change> = vec![];
     for d in dirs {
-        out.push(Change {
+        append_change(&mut out, limit, truncated, || Change {
             kind: "dir",
             path: d,
             name: None,
@@ -421,7 +430,7 @@ fn only_in(a: &Snap, b: &Snap, limit: usize, truncated: &mut bool) -> Vec<Change
         .collect();
     files.sort_by_key(|f| f.0.to_lowercase());
     for f in files {
-        out.push(Change {
+        append_change(&mut out, limit, truncated, || Change {
             kind: "file",
             path: f.0.clone(),
             name: None,
@@ -431,7 +440,7 @@ fn only_in(a: &Snap, b: &Snap, limit: usize, truncated: &mut bool) -> Vec<Change
         });
     }
     for k in keys {
-        out.push(Change {
+        append_change(&mut out, limit, truncated, || Change {
             kind: "key",
             path: k,
             name: None,
@@ -452,7 +461,7 @@ fn only_in(a: &Snap, b: &Snap, limit: usize, truncated: &mut bool) -> Vec<Change
         .collect();
     values.sort_by_key(|v| (v.0.to_lowercase(), v.1.to_lowercase()));
     for v in values {
-        out.push(Change {
+        append_change(&mut out, limit, truncated, || Change {
             kind: "value",
             path: v.0.clone(),
             name: Some(v.1.clone()),
@@ -460,10 +469,6 @@ fn only_in(a: &Snap, b: &Snap, limit: usize, truncated: &mut bool) -> Vec<Change
             before: None,
             after: Some(v.3.clone()),
         });
-    }
-    if out.len() > limit {
-        out.truncate(limit);
-        *truncated = true;
     }
     out
 }
@@ -535,7 +540,7 @@ pub fn compare(before_path: &str, after_path: &str, limit: usize) -> Result<Comp
         .collect();
     file_changes.sort_by_key(|(f, _)| f.0.to_lowercase());
     for (f, g) in file_changes {
-        changed.push(Change {
+        append_change(&mut changed, limit, &mut truncated, || Change {
             kind: "file",
             path: g.0.clone(),
             name: None,
@@ -556,7 +561,7 @@ pub fn compare(before_path: &str, after_path: &str, limit: usize) -> Result<Comp
         .collect();
     value_changes.sort_by_key(|(v, _)| (v.0.to_lowercase(), v.1.to_lowercase()));
     for (v, w) in value_changes {
-        changed.push(Change {
+        append_change(&mut changed, limit, &mut truncated, || Change {
             kind: "value",
             path: w.0.clone(),
             name: Some(w.1.clone()),
@@ -564,10 +569,6 @@ pub fn compare(before_path: &str, after_path: &str, limit: usize) -> Result<Comp
             before: Some(v.3.clone()),
             after: Some(w.3.clone()),
         });
-    }
-    if changed.len() > limit {
-        changed.truncate(limit);
-        truncated = true;
     }
     Ok(Comparison {
         before: a.name,
@@ -666,5 +667,75 @@ mod tests {
         assert!(limited.truncated);
         assert_eq!(limited.changed.len(), 1);
         assert_eq!(limited.changed[0].path, r"C:\a.exe");
+    }
+
+    #[test]
+    fn result_caps_preserve_order_types_unicode_and_all_three_prefixes() {
+        let before = Fixture::new(concat!(
+            "#SWEEPSNAP\t1\tBefore\t1\n",
+            "F\tC:\\\\Ä.exe\t1\t1\nF\tc:\\\\ä.exe\t2\t1\n",
+            "F\tC:\\\\Removed.exe\t3\t1\n",
+            "V\tHKCU\\\\Shared\tZ\t4\t1\nV\tHKCU\\\\Shared\t日本語\t1\told\n",
+            "V\tHKCU\\\\Shared\tremoved\t1\tretained old data\n",
+        ));
+        let after = Fixture::new(concat!(
+            "#SWEEPSNAP\t1\tAfter\t2\n",
+            "F\tC:\\\\Ä.exe\t4\t1\nF\tC:\\\\Added.exe\t5\t1\n",
+            "V\tHKCU\\\\Shared\tz\t1\t1\nV\tHKCU\\\\Shared\t日本語\t1\tnew\n",
+            "V\tHKCU\\\\Shared\tadded\t1\tnew data\n",
+        ));
+        let full = compare(
+            before.0.to_str().unwrap(),
+            after.0.to_str().unwrap(),
+            usize::MAX,
+        )
+        .unwrap();
+        assert_eq!(full.changed.len(), 3);
+        assert_eq!(full.changed[1].value_type, Some(4));
+        assert_eq!(full.changed[1].before.as_deref(), Some("1"));
+        assert_eq!(full.changed[1].after.as_deref(), Some("1"));
+        for cap in [0, 1, 2, 3, 10] {
+            let actual =
+                compare(before.0.to_str().unwrap(), after.0.to_str().unwrap(), cap).unwrap();
+            for (expected, limited) in [
+                (&full.added, &actual.added),
+                (&full.removed, &actual.removed),
+                (&full.changed, &actual.changed),
+            ] {
+                assert_eq!(
+                    serde_json::to_value(limited).unwrap(),
+                    serde_json::to_value(&expected[..cap.min(expected.len())]).unwrap()
+                );
+            }
+            assert_eq!(
+                actual.truncated,
+                [full.added.len(), full.removed.len(), full.changed.len()]
+                    .iter()
+                    .any(|n| *n > cap)
+            );
+        }
+    }
+
+    #[test]
+    fn discarded_payloads_are_never_materialized() {
+        let count = std::cell::Cell::new(0);
+        let mut result = Vec::new();
+        let mut truncated = false;
+        for _ in 0..1000 {
+            append_change(&mut result, 1, &mut truncated, || {
+                count.set(count.get() + 1);
+                Change {
+                    kind: "value",
+                    path: "key".into(),
+                    name: Some("name".into()),
+                    value_type: Some(1),
+                    before: None,
+                    after: Some("payload".repeat(10000)),
+                }
+            });
+        }
+        assert_eq!(count.get(), 1);
+        assert_eq!(result.len(), 1);
+        assert!(truncated);
     }
 }

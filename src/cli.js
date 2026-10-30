@@ -57,6 +57,7 @@
 // --json wraps every result in { ok, output, code } for scriptable use.
 
 import { sys } from './backend/sys.js';
+import HELP from './cli-help.json' with { type: 'json' };
 import * as snapshots from './backend/snapshots.js';
 import * as monitor from './backend/monitor.js';
 import * as maintenance from './backend/maintenance.js';
@@ -82,79 +83,7 @@ import { parseCliArgs } from './cli-args.js';
 import { collectSysInfo, sectionsToText } from './backend/sysinfo.js';
 import * as diskusage from './backend/diskusage.js';
 
-const HELP = `Purgeon command line
 
-  --help, -h, /?
-        Shows this help. Use one command at a time; unknown, duplicate or
-        misplaced options are errors. Put quotes around names and paths
-        containing spaces. Values cannot start with a dash (-).
-  --snapshot "<name>" [--preset quick|standard|deep]
-        Takes a snapshot of files, folders and registry settings.
-  --compare <before> <after|now> [--report <file.html|file.json|file.txt>]
-        Compares two snapshots, or a snapshot with the system now.
-  --list-snapshots
-        Lists saved snapshots.
-  --timeline [--json]
-        Lists the change timeline (the Change Timeline view): installs,
-        updates, removals and snapshots, newest first.
-  --history [--json]
-        Lists the actions Purgeon has recorded (the Change History view).
-  --archive [--json]
-        Lists the uninstall archive: every program removed, newest first.
-  --maintenance
-        Runs the weekly maintenance chosen in Tools › Scheduled Maintenance.
-  --monitor "<installer>" [--name "<program name>"]
-        Records an installation for later complete removal.
-  --autostart on|off
-        Turns View › Start with Windows on or off.
-  --background-scan
-        Runs a headless leftover + startup scan (used by the scheduled task).
-  --restore-point "<description>"
-        Creates a Windows System Restore point.
-  --associations [--json]
-        Lists every file extension and the program that owns it.
-  --associations-for "<program>" [--json]
-        Lists extensions owned by the named program.
-  --schedule on|off [--scan-leftovers] [--check-startup]
-        Turns background monitoring on or off.
-  --startup list|on|off|delayed|notdelayed --id <id>
-        Lists startup entries, or enables/disables/delays one. id is type|name (e.g. service|Spooler).
-  --trusted list|add|remove --name <publisher>
-        Manages the trusted publisher allowlist (programs signed by these are never blocked).
-  --update settings|enable|disable|check
-        Opt-in update checker: shows settings, turns checking on/off, or checks GitHub for a newer release.
-  --uninstall "<program name>"
-        Runs the named program's own uninstaller. Waits for it to finish, then
-        records the removal in the archive. Use quotes around the name.
-  --language <code> [--json]
-        Sets the UI language (en, es, de, fr).
-  --plugins list|enable|disable <id> [--json]
-        Manages user plugins in the plugins folder.
-  --profiler [--json]
-        Startup performance profile.
-  --settings [--json]
-        Shows current settings.
-  --sync status|apply|now [--files settings.json]
-        Shows or configures cloud-synced settings. apply takes
-        --folder <path> and --on|--off.
-  --portableapps list
-        Lists monitored programs that can be packaged as
-        PortableApps.com installers.
-  --portableapps generate --monitor-id <id> --output <folder>
-        Creates a PortableApps.com directory structure and NSIS installer
-        script from a monitored program's recorded files.
-  --export <type> --format <csv|json|html> --output <path>
-        Exports a list to a file. Types: programs, startup, junk, backups.
-  --sysinfo [--json]
-        Shows system information (the same report as Tools > System Info).
-  --disk ["<folder>"] [--json]
-        Shows what is using disk space: the drives, or the biggest folders
-        and files inside one folder (the system drive when none is named).
-
-Snapshots are named by id, by name, or "latest". Run from an administrator
-terminal to see the output there; with --report the results are also saved
-to a file. Exit code 0 means success, 1 means an error, 2 means a usage error.
-`;
 
 // Exit codes: 0 success, 1 runtime error, 2 usage error.
 const EXIT_OK = 0;
@@ -409,7 +338,7 @@ async function run(args) {
   }
   if (cmd === '--language') {
     const code = option(args, '--language');
-    if (!code || code.startsWith('--')) throw new Error('Use --language <code>, e.g. --language en. Available: en, es, de, fr.');
+    if (code !== 'en') throw new Error('Purgeon is English-only. Use --language en.');
     await i18n.setLanguage(code);
     return wrap(true, `Language set to ${code}.\r\n`);
   }
@@ -514,6 +443,7 @@ async function run(args) {
     throw new Error('Use --portableapps list|generate --monitor-id <id> --output <folder>.');
   }
   if (cmd === '--trusted') {
+    const trusted = await import('./backend/trusted.js');
     const sub = option(args, '--trusted');
     const name = option(args, '--name');
     if (sub === 'list') {
@@ -529,6 +459,7 @@ async function run(args) {
     throw new Error('Use --trusted list|add|remove --name <publisher>.');
   }
   if (cmd === '--update') {
+    const updatecheck = await import('./backend/updatecheck.js');
     const sub = option(args, '--update');
     if (sub === 'settings') {
       const s = await updatecheck.settings();

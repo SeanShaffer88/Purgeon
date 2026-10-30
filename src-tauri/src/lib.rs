@@ -1,6 +1,6 @@
-// Purgeon's native core: a few small, general system commands. The uninstall,
-// scan, backup, debloat and startup logic lives in src/backend (JavaScript) and is built
-// on these.
+// Purgeon's native core. Closed native process and Debloat operation families
+// coexist with transitional generic commands used by remaining JavaScript
+// backend families; the full privilege migration is not complete.
 use base64::{engine::general_purpose::STANDARD, Engine};
 use serde::Serialize;
 use std::fs;
@@ -12,12 +12,246 @@ use std::sync::atomic::{AtomicBool, AtomicU8, Ordering};
 use std::time::{Duration, Instant, UNIX_EPOCH};
 use tauri::{Emitter, Manager};
 
+mod atomic_file;
+mod broker;
+mod debloat_native;
+mod eventlogs_native;
 mod launch_args;
+mod native_operations;
+mod process_io;
+mod protected_artifacts;
+mod registry_native;
+mod restore_native;
+mod security;
 mod snapshot;
+mod state_store;
 mod tracker;
 mod windows_tools;
+static DATA_LOCK: std::sync::OnceLock<fs::File> = std::sync::OnceLock::new();
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+#[tauri::command]
+fn prepare_process_operation(
+    request: broker::ProcessRequest,
+) -> Result<broker::ProcessPlan, String> {
+    broker::prepare(request)
+}
+
+#[tauri::command]
+async fn execute_process_operation(
+    app: tauri::AppHandle,
+    plan_id: String,
+) -> Result<broker::ProcessResult, String> {
+    let data = portable_dir()
+        .or_else(|| app.path().app_data_dir().ok())
+        .ok_or("No application data directory")?;
+    tauri::async_runtime::spawn_blocking(move || broker::execute(&plan_id, &data))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn elevate_handoff() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(broker::elevate_handoff)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn debloat_status() -> Result<Vec<debloat_native::Status>, String> {
+    debloat_native::list()
+}
+#[tauri::command]
+fn prepare_debloat_operation(
+    request: debloat_native::Request,
+) -> Result<debloat_native::PlanView, String> {
+    debloat_native::prepare(request)
+}
+#[tauri::command]
+fn prepare_debloat_recovery(
+    request: debloat_native::RecoveryRequest,
+) -> Result<debloat_native::PlanView, String> {
+    debloat_native::prepare_recovery(request)
+}
+#[tauri::command]
+async fn execute_debloat_operation(plan_id: String) -> Result<debloat_native::ResultView, String> {
+    tauri::async_runtime::spawn_blocking(move || debloat_native::execute(&plan_id))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn query_operation(
+    request: native_operations::QueryRequest,
+) -> Result<native_operations::QueryResult, String> {
+    tauri::async_runtime::spawn_blocking(move || native_operations::query(request))
+        .await
+        .map_err(|error| error.to_string())?
+}
+#[tauri::command]
+async fn select_resource(
+    app: tauri::AppHandle,
+    selection: native_operations::SelectionKind,
+) -> Result<Option<native_operations::SelectionView>, String> {
+    tauri::async_runtime::spawn_blocking(move || native_operations::select(&app, selection))
+        .await
+        .map_err(|error| error.to_string())?
+}
+#[tauri::command]
+async fn prepare_operation(
+    request: native_operations::OperationRequest,
+) -> Result<native_operations::PlanView, String> {
+    tauri::async_runtime::spawn_blocking(move || native_operations::prepare(request))
+        .await
+        .map_err(|error| error.to_string())?
+}
+#[tauri::command]
+async fn execute_operation(plan_id: String) -> Result<native_operations::OperationResult, String> {
+    tauri::async_runtime::spawn_blocking(move || native_operations::execute(&plan_id))
+        .await
+        .map_err(|error| error.to_string())?
+}
+#[tauri::command]
+async fn recover_operation(
+    request: native_operations::RecoveryRequest,
+) -> Result<native_operations::PlanView, String> {
+    tauri::async_runtime::spawn_blocking(move || native_operations::recover(request))
+        .await
+        .map_err(|error| error.to_string())?
+}
+#[tauri::command]
+async fn cancel_operation(plan_id: String) -> Result<native_operations::CancelResult, String> {
+    tauri::async_runtime::spawn_blocking(move || native_operations::cancel(&plan_id))
+        .await
+        .map_err(|error| error.to_string())?
+}
+
+#[derive(serde::Deserialize, Serialize, Default)]
+struct SecretRing {
+    current: String,
+    previous: Vec<String>,
+}
+static SECRET_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn secret_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    use sha2::{Digest, Sha256};
+    let local = app.path().app_data_dir().map_err(|e| e.to_string())?;
+    let effective = portable_dir().unwrap_or_else(|| local.clone());
+    fs::create_dir_all(&effective).map_err(|e| e.to_string())?;
+    let identity = effective
+        .canonicalize()
+        .map_err(|e| e.to_string())?
+        .to_string_lossy()
+        .to_lowercase();
+    let hash = Sha256::digest(identity.as_bytes());
+    let key: String = hash.iter().map(|b| format!("{b:02x}")).collect();
+    Ok(local.join(format!("backup-secret-{key}.dpapi")))
+}
+
+fn read_secret_ring(app: &tauri::AppHandle) -> Result<SecretRing, String> {
+    let p = secret_path(app)?;
+    if !p.exists() {
+        return Ok(SecretRing::default());
+    }
+    use std::io::Read;
+    let file = fs::File::open(p).map_err(|e| e.to_string())?;
+    if file.metadata().map_err(|e| e.to_string())?.len() > 65536 {
+        return Err("Protected secret exceeds size limit".into());
+    }
+    let mut bytes = Vec::new();
+    file.take(65537)
+        .read_to_end(&mut bytes)
+        .map_err(|e| e.to_string())?;
+    if bytes.len() > 65536 {
+        return Err("Protected secret exceeds size limit".into());
+    }
+    serde_json::from_slice(&security::protect(&bytes, true)?).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+fn secret_get(app: tauri::AppHandle) -> Result<String, String> {
+    let _lock = SECRET_LOCK.lock().map_err(|e| e.to_string())?;
+    Ok(read_secret_ring(&app)?.current)
+}
+
+#[tauri::command]
+fn secret_keys(app: tauri::AppHandle) -> Result<Vec<String>, String> {
+    let _lock = SECRET_LOCK.lock().map_err(|e| e.to_string())?;
+    let ring = read_secret_ring(&app)?;
+    let mut keys = ring.previous;
+    if !ring.current.is_empty() {
+        keys.insert(0, ring.current);
+    }
+    keys.dedup();
+    Ok(keys)
+}
+
+#[tauri::command]
+fn secret_set(app: tauri::AppHandle, value: String) -> Result<(), String> {
+    let _lock = SECRET_LOCK.lock().map_err(|e| e.to_string())?;
+    if value.len() > 4096 {
+        return Err("Secret exceeds size limit".into());
+    }
+    let target = secret_path(&app)?;
+    let dir = target.parent().ok_or("No secret directory")?;
+    fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    let mut ring = read_secret_ring(&app)?;
+    if ring.current == value {
+        return Ok(());
+    }
+    if !ring.current.is_empty() && !ring.previous.contains(&ring.current) {
+        ring.previous.push(ring.current.clone());
+    }
+    if ring.previous.len() > 8 {
+        return Err("Secret rotation limit reached. Preserve and migrate old encrypted backups before changing the key again.".into());
+    }
+    ring.previous.retain(|key| key != &value);
+    ring.current = value;
+    let plain = serde_json::to_vec(&ring).map_err(|e| e.to_string())?;
+    let encoded = security::protect(&plain, false)?;
+    atomic_file::write(target.to_str().ok_or("Invalid secret path")?, &encoded)
+}
+
+#[tauri::command]
+async fn copy_file_checked(source: String, target: String) -> Result<u64, String> {
+    security::checked_path(&source)?;
+    security::checked_path(&target)?;
+    tauri::async_runtime::spawn_blocking(move || {
+        use std::io::{Seek, SeekFrom};
+        use std::os::windows::fs::OpenOptionsExt;
+        let mut input = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(1)
+            .open(&source)
+            .map_err(|e| e.to_string())?;
+        security::verify_handle_path(&input, &source)?;
+        if !input.metadata().map_err(|e| e.to_string())?.is_file() {
+            return Err("Source is not a regular file".into());
+        }
+        if let Some(parent) = Path::new(&target).parent() {
+            fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        }
+        security::checked_path(&target)?;
+        let mut output = fs::OpenOptions::new()
+            .read(true)
+            .write(true)
+            .share_mode(0)
+            .create_new(true)
+            .open(&target)
+            .map_err(|e| e.to_string())?;
+        security::verify_handle_path(&output, &target)?;
+        let (copied, source_hash) = process_io::copy_hash(&mut input, &mut output)?;
+        output.sync_all().map_err(|e| e.to_string())?;
+        output.seek(SeekFrom::Start(0)).map_err(|e| e.to_string())?;
+        if source_hash != process_io::hash_reader(&mut output)? {
+            return Err("Copied file failed SHA-256 verification".into());
+        }
+        Ok(copied)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
 
 #[derive(Serialize)]
 struct ExecResult {
@@ -34,31 +268,28 @@ fn text(bytes: &[u8]) -> String {
 /// Runs a PowerShell script (Windows PowerShell 5.1, always present) with optional stdin.
 /// Fails with stderr when the script exits with an error.
 #[tauri::command]
-async fn run_ps(script: String, input: Option<String>) -> Result<String, String> {
+async fn run_ps(
+    script: String,
+    input: Option<String>,
+    timeout_ms: Option<u64>,
+) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
+        process_io::validate_input(input.as_deref())?;
         let wrapped = format!("$ProgressPreference='SilentlyContinue';[Console]::OutputEncoding=[Text.Encoding]::UTF8;{script}");
         let utf16: Vec<u8> = wrapped.encode_utf16().flat_map(|u| u.to_le_bytes()).collect();
         // A PSModulePath inherited from PowerShell 7 stops Windows PowerShell loading its own modules.
-        let mut child = Command::new(windows_tools::command("powershell.exe"))
+        let mut command = Command::new(windows_tools::command("powershell.exe"));
+        command
             .env_remove("PSModulePath")
             .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", &STANDARD.encode(utf16)])
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .creation_flags(CREATE_NO_WINDOW)
-            .spawn()
-            .map_err(|e| e.to_string())?;
-        if let Some(mut stdin) = child.stdin.take() {
-            if let Some(data) = input {
-                let _ = stdin.write_all(data.as_bytes());
-            }
-        }
-        let out = child.wait_with_output().map_err(|e| e.to_string())?;
-        if out.status.success() {
-            Ok(text(&out.stdout))
+            .creation_flags(CREATE_NO_WINDOW);
+        let limit = Duration::from_millis(timeout_ms.unwrap_or(60000).clamp(1000, 1800000));
+        let output = process_io::execute(&mut command, input, limit)?;
+        if output.status.success() {
+            Ok(text(&output.stdout))
         } else {
-            let err = text(&out.stderr);
-            Err(if err.trim().is_empty() { format!("PowerShell exited with {}", out.status) } else { err })
+            let err = text(&output.stderr);
+            Err(if err.trim().is_empty() { format!("PowerShell exited with {}", output.status) } else { err })
         }
     })
     .await
@@ -204,6 +435,7 @@ fn read_text(path: String) -> Result<String, String> {
 
 #[tauri::command]
 fn write_text(path: String, contents: String) -> Result<(), String> {
+    security::checked_path(&path)?;
     if let Some(parent) = Path::new(&path).parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -211,46 +443,79 @@ fn write_text(path: String, contents: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn write_text_atomic(path: String, contents: String) -> Result<(), String> {
-    // Write a sibling temp file, then rename it over the target. A crash or power
-    // cut mid-write leaves the old complete file or the new one, never a torn one —
-    // the backend's JSON stores (settings, groups, the interrupted-removal record,
-    // and the rest) write through here so their data can never be half-written.
-    if let Some(parent) = Path::new(&path).parent() {
-        let _ = fs::create_dir_all(parent);
+async fn write_text_atomic(path: String, contents: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || atomic_file::write(&path, contents.as_bytes()))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn commit_staged_file(source: String, target: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || atomic_file::commit_staged(&source, &target))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+fn read_optional_text(path: String) -> Result<Option<String>, String> {
+    match fs::read_to_string(path) {
+        Ok(text) => Ok(Some(text)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(error.to_string()),
     }
-    let tmp = format!("{}.tmp-{}", path, std::process::id());
-    fs::write(&tmp, contents).map_err(|e| e.to_string())?;
-    // On Windows the rename fails with a permission error while another
-    // reader (an antivirus scan, a second reader of the same store) holds
-    // the target open for a moment. Retry briefly before giving up; if it
-    // still fails, the last error is returned and the caller reports it.
-    let mut last_err = None;
-    for attempt in 0..6 {
-        match fs::rename(&tmp, &path) {
-            Ok(()) => return Ok(()),
-            Err(e) => {
-                last_err = Some(e);
-                if attempt < 5 {
-                    std::thread::sleep(std::time::Duration::from_millis(40));
-                }
-            }
-        }
-    }
-    Err(last_err
-        .map(|e| e.to_string())
-        .unwrap_or_else(|| "rename failed".to_string()))
+}
+
+#[tauri::command]
+async fn list_restore_points() -> Result<Vec<restore_native::Point>, String> {
+    tauri::async_runtime::spawn_blocking(restore_native::list)
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn prepare_restore_removal(
+    request: restore_native::Request,
+) -> Result<restore_native::PlanView, String> {
+    tauri::async_runtime::spawn_blocking(move || restore_native::prepare(request))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn execute_restore_removal(plan_id: String) -> Result<restore_native::ResultView, String> {
+    tauri::async_runtime::spawn_blocking(move || restore_native::execute(&plan_id))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 #[tauri::command]
 fn make_dir(path: String) -> Result<(), String> {
+    security::checked_path(path.trim_end_matches('\\'))?;
     fs::create_dir_all(path).map_err(|e| e.to_string())
 }
 
 /// Deletes Purgeon's own data (backups, records). Program leftovers go to the
 /// Recycle Bin through the JavaScript side instead.
 #[tauri::command]
-fn remove_path(path: String) -> Result<(), String> {
+fn remove_path(app: tauri::AppHandle, path: String) -> Result<(), String> {
+    security::checked_path(&path)?;
+    let normalized = path.trim_end_matches('\\').to_lowercase();
+    let mut roots = Vec::new();
+    if let Ok(data) = app.path().app_data_dir() {
+        roots.push(data);
+    }
+    if let Some(data) = portable_dir() {
+        roots.push(data);
+    }
+    let owned = roots.iter().any(|root| {
+        normalized
+            .starts_with(&(root.to_string_lossy().trim_end_matches('\\').to_lowercase() + "\\"))
+    });
+    let update_marker = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.join("exit-for-update")))
+        .is_some_and(|p| p.to_string_lossy().eq_ignore_ascii_case(&path));
+    if !owned && !update_marker {
+        return Err("Permanent deletion is restricted to Purgeon's own state. User files must go to the Recycle Bin.".into());
+    }
     let p = Path::new(&path);
     if !p.exists() {
         return Ok(());
@@ -266,6 +531,7 @@ fn remove_path(path: String) -> Result<(), String> {
 /// Moves a leftover file or folder to the Recycle Bin, without any Windows dialogs.
 #[tauri::command]
 async fn move_to_trash(path: String) -> Result<(), String> {
+    security::checked_path(&path)?;
     tauri::async_runtime::spawn_blocking(move || trash::delete(&path).map_err(|e| e.to_string()))
         .await
         .map_err(|e| e.to_string())?
@@ -382,6 +648,7 @@ async fn sha256_files(paths: Vec<String>) -> Vec<String> {
 /// Appends text to a file (the command log), creating it and its folder if needed.
 #[tauri::command]
 fn append_text(path: String, contents: String) -> Result<(), String> {
+    security::checked_path(&path)?;
     if let Some(parent) = Path::new(&path).parent() {
         let _ = fs::create_dir_all(parent);
     }
@@ -549,9 +816,9 @@ async fn move_many_to_trash(paths: Vec<String>) -> Vec<String> {
         paths
             .iter()
             .map(|p| {
-                trash::delete(p)
+                security::checked_path(p)
+                    .and_then(|()| trash::delete(p).map_err(|e| e.to_string()))
                     .err()
-                    .map(|e| e.to_string())
                     .unwrap_or_default()
             })
             .collect()
@@ -647,36 +914,42 @@ async fn list_junk(root: String, max_ms: u64) -> Vec<JunkEntry> {
 
 /// Starts live installation tracking (administrator only).
 #[tauri::command]
-fn track_start() -> Result<(), String> {
-    tracker::start()
+async fn track_start() -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(tracker::start)
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 /// Starts an installer as a child of Purgeon, so it and everything it starts are
 /// tracked. .msi packages go through msiexec. Returns the process id.
 #[tauri::command]
-fn track_launch(file: String) -> Result<u32, String> {
-    let lower = file.to_lowercase();
-    let mut cmd = if lower.ends_with(".msi") {
-        let mut c = Command::new(windows_tools::command("msiexec.exe"));
-        c.args(["/i", &file]);
-        c
-    } else if lower.ends_with(".bat") || lower.ends_with(".cmd") {
-        let mut c = Command::new(windows_tools::command("cmd.exe"));
-        c.args(["/c", &file]);
-        c
-    } else {
-        Command::new(&file)
-    };
-    // The installer gets no share of Purgeon's console or output.
-    let child = cmd
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    let pid = child.id();
-    tracker::add_pid(pid, file);
-    Ok(pid)
+async fn track_launch(file: String) -> Result<u32, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let lower = file.to_lowercase();
+        let mut cmd = if lower.ends_with(".msi") {
+            let mut c = Command::new(windows_tools::command("msiexec.exe"));
+            c.args(["/i", &file]);
+            c
+        } else if lower.ends_with(".bat") || lower.ends_with(".cmd") {
+            let mut c = Command::new(windows_tools::command("cmd.exe"));
+            c.args(["/c", &file]);
+            c
+        } else {
+            Command::new(&file)
+        };
+        // The installer gets no share of Purgeon's console or output.
+        let child = cmd
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null())
+            .spawn()
+            .map_err(|e| e.to_string())?;
+        let pid = child.id();
+        tracker::add_pid(pid, file);
+        Ok(pid)
+    })
+    .await
+    .map_err(|error| error.to_string())?
 }
 
 /// Waits for a process to exit; false when it is still running after `timeout_ms`.
@@ -684,14 +957,14 @@ fn track_launch(file: String) -> Result<u32, String> {
 async fn wait_process(pid: u32, timeout_ms: u32) -> bool {
     #[link(name = "kernel32")]
     extern "system" {
-        fn OpenProcess(access: u32, inherit: i32, pid: u32) -> isize;
-        fn WaitForSingleObject(handle: isize, ms: u32) -> u32;
-        fn CloseHandle(handle: isize) -> i32;
+        fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut std::ffi::c_void;
+        fn WaitForSingleObject(handle: *mut std::ffi::c_void, ms: u32) -> u32;
+        fn CloseHandle(handle: *mut std::ffi::c_void) -> i32;
     }
     const SYNCHRONIZE: u32 = 0x0010_0000;
     tauri::async_runtime::spawn_blocking(move || unsafe {
         let h = OpenProcess(SYNCHRONIZE, 0, pid);
-        if h == 0 {
+        if h.is_null() {
             return true; // already gone
         }
         let r = WaitForSingleObject(h, timeout_ms);
@@ -766,7 +1039,7 @@ fn list_processes() -> Vec<ProcessInfo> {
         fn Process32FirstW(snap: isize, entry: *mut ProcessEntry32W) -> i32;
         fn Process32NextW(snap: isize, entry: *mut ProcessEntry32W) -> i32;
         fn ProcessIdToSessionId(pid: u32, session: *mut u32) -> i32;
-        fn CloseHandle(handle: isize) -> i32;
+        fn CloseHandle(handle: *mut std::ffi::c_void) -> i32;
     }
     const TH32CS_SNAPPROCESS: u32 = 2;
     let mut out = Vec::new();
@@ -790,7 +1063,7 @@ fn list_processes() -> Vec<ProcessInfo> {
             });
             ok = Process32NextW(snap, &mut e);
         }
-        CloseHandle(snap);
+        CloseHandle(snap as *mut std::ffi::c_void);
     }
     out
 }
@@ -801,8 +1074,15 @@ fn track_running() -> bool {
 }
 
 #[tauri::command]
-fn track_stop() -> Result<tracker::TrackResult, String> {
-    tracker::stop()
+fn track_peek() -> Result<tracker::TrackProgress, String> {
+    tracker::peek()
+}
+
+#[tauri::command]
+async fn track_stop() -> Result<tracker::TrackResult, String> {
+    tauri::async_runtime::spawn_blocking(tracker::stop)
+        .await
+        .map_err(|error| error.to_string())?
 }
 
 /// Takes a snapshot of files/folders and registry keys/values into a compressed file.
@@ -856,8 +1136,25 @@ fn cancel_erase() {
 /// xorshift generator seeded from the clock and process id — good enough to
 /// overwrite with, and it keeps the crate free of a random-number dependency.
 #[tauri::command]
-fn secure_erase_file(path: String, passes: Vec<String>) -> Result<(), String> {
+async fn secure_erase_file(path: String, passes: Vec<String>) -> Result<(), String> {
+    security::checked_path(&path)?;
+    tauri::async_runtime::spawn_blocking(move || erase_file_inner(path, passes))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn erase_file_inner(path: String, passes: Vec<String>) -> Result<(), String> {
     use std::io::{Seek, SeekFrom, Write};
+    use std::os::windows::fs::OpenOptionsExt;
+    use std::os::windows::io::AsRawHandle;
+    if passes.is_empty()
+        || passes.len() > 3
+        || passes
+            .iter()
+            .any(|p| !["zero", "random"].contains(&p.as_str()))
+    {
+        return Err("Invalid erase pattern".into());
+    }
     ERASE_CANCELLED.store(false, std::sync::atomic::Ordering::SeqCst);
     let cancelled = || ERASE_CANCELLED.load(std::sync::atomic::Ordering::SeqCst);
     let md = std::fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
@@ -882,8 +1179,36 @@ fn secure_erase_file(path: String, passes: Vec<String>) -> Result<(), String> {
     };
     let mut file = std::fs::OpenOptions::new()
         .write(true)
+        .access_mode(0x4001_0080)
+        .share_mode(0)
+        .custom_flags(0x0020_0000)
         .open(&path)
         .map_err(|e| e.to_string())?;
+    #[repr(C)]
+    struct FileInfo {
+        attributes: u32,
+        creation: [u32; 2],
+        access: [u32; 2],
+        write: [u32; 2],
+        volume: u32,
+        size_high: u32,
+        size_low: u32,
+        links: u32,
+        index_high: u32,
+        index_low: u32,
+    }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn GetFileInformationByHandle(handle: *mut std::ffi::c_void, info: *mut FileInfo) -> i32;
+    }
+    let mut info: FileInfo = unsafe { std::mem::zeroed() };
+    if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut info) } == 0 {
+        return Err(std::io::Error::last_os_error().to_string());
+    }
+    if info.links != 1 || info.attributes & 0x400 != 0 {
+        return Err("Hardlinks and reparse points cannot be erased".into());
+    }
+    security::verify_handle_path(&file, &path)?;
     let mut buf = vec![0u8; 1 << 20];
     for pass in &passes {
         if cancelled() {
@@ -901,14 +1226,31 @@ fn secure_erase_file(path: String, passes: Vec<String>) -> Result<(), String> {
                     let bytes = next_random().to_le_bytes();
                     chunk.copy_from_slice(&bytes[..chunk.len()]);
                 }
+            } else {
+                buf[..n].fill(0);
             }
             file.write_all(&buf[..n]).map_err(|e| e.to_string())?;
             written += n as u64;
         }
         file.sync_all().map_err(|e| e.to_string())?;
     }
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn SetFileInformationByHandle(
+            handle: *mut std::ffi::c_void,
+            class: u32,
+            info: *const std::ffi::c_void,
+            size: u32,
+        ) -> i32;
+    }
+    let delete = 1u8;
+    if unsafe {
+        SetFileInformationByHandle(file.as_raw_handle(), 4, (&delete as *const u8).cast(), 1)
+    } == 0
+    {
+        return Err(std::io::Error::last_os_error().to_string());
+    }
     drop(file);
-    std::fs::remove_file(&path).map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -947,7 +1289,7 @@ fn portable_dir() -> Option<PathBuf> {
 
 /// CLI requests, including typos, run without a window and are validated before dispatch.
 fn cli_args() -> Vec<String> {
-    let args: Vec<String> = std::env::args().skip(1).collect();
+    let args = broker::application_args();
     if launch_args::is_window_request(&args) {
         vec![]
     } else {
@@ -968,7 +1310,7 @@ fn reg_string(key_path: &str, value_name: &str) -> String {
             result: *mut isize,
         ) -> i32;
         fn RegQueryValueExW(
-            key: isize,
+            key: *mut std::ffi::c_void,
             value_name: *const u16,
             reserved: *mut u32,
             value_type: *mut u32,
@@ -991,7 +1333,7 @@ fn reg_string(key_path: &str, value_name: &str) -> String {
         let mut buffer = [0u8; 1024];
         let mut data_len = buffer.len() as u32;
         let status = RegQueryValueExW(
-            key,
+            key as *mut std::ffi::c_void,
             name_wide.as_ptr(),
             std::ptr::null_mut(),
             &mut value_type,
@@ -1043,6 +1385,7 @@ fn total_ram_bytes() -> u64 {
 
 #[derive(Serialize)]
 struct SysInfo {
+    pid: u32,
     env: std::collections::HashMap<String, String>,
     home: String,
     data_dir: String,
@@ -1077,6 +1420,7 @@ fn sys_info(app: tauri::AppHandle) -> SysInfo {
         os_name = os_name.replacen("Windows 10", "Windows 11", 1);
     }
     SysInfo {
+        pid: std::process::id(),
         env: windows_tools::environment(),
         home: std::env::var("USERPROFILE").unwrap_or_default(),
         data_dir: portable
@@ -1089,7 +1433,7 @@ fn sys_info(app: tauri::AppHandle) -> SysInfo {
             .unwrap_or_default(),
         portable: portable.is_some(),
         args: cli_args(),
-        launch: std::env::args().skip(1).collect(),
+        launch: broker::application_args(),
         cpu: reg_string(
             "HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
             "ProcessorNameString",
@@ -1381,12 +1725,52 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    match broker::private_mode() {
+        Ok(true) => return,
+        Ok(false) => {}
+        Err(error) => {
+            eprintln!("Purgeon private operation failed: {error}");
+            std::process::exit(2);
+        }
+    }
+    // Valid help never initializes Tauri, WebView, the data directory, backend,
+    // or instance lock. All extra/invalid help arguments retain CLI validation.
+    if launch_args::is_help_request(&broker::application_args()) {
+        attach_console();
+        match launch_args::help_text() {
+            Ok(help) => cli_print(format!("\r\n{}", help.replace('\n', "\r\n"))),
+            Err(error) => {
+                cli_print(format!("\r\nError: {error}\r\n"));
+                std::process::exit(1);
+            }
+        }
+        return;
+    }
     let cli = !cli_args().is_empty();
     if cli {
         attach_console();
     }
     tauri::Builder::default()
         .setup(move |app| {
+            use std::os::windows::fs::OpenOptionsExt;
+            let data = portable_dir().or_else(|| app.path().app_data_dir().ok()).ok_or("No application data directory")?;
+            fs::create_dir_all(&data)?;
+            let lock = match fs::OpenOptions::new().write(true).create(true).truncate(false).share_mode(0).open(data.join("instance.lock")) {
+                Ok(lock) => lock,
+                Err(error) => {
+                    let message = format!("Purgeon is busy or its data directory is unavailable. Close the other instance and retry. No operation was started. ({error})");
+                    if cli { println!("{message}"); } else {
+                        #[link(name = "user32")]
+                        extern "system" { fn MessageBoxW(window: *mut std::ffi::c_void, text: *const u16, title: *const u16, kind: u32) -> i32; }
+                        let text: Vec<u16> = message.encode_utf16().chain(Some(0)).collect();
+                        let title: Vec<u16> = "Purgeon".encode_utf16().chain(Some(0)).collect();
+                        unsafe { MessageBoxW(std::ptr::null_mut(), text.as_ptr(), title.as_ptr(), 0x40); }
+                    }
+                    app.handle().exit(2);
+                    return Ok(());
+                }
+            };
+            let _ = DATA_LOCK.set(lock);
             // The window is created here so that in portable mode the browser data goes in the
             // portable data folder too.
             let config = app
@@ -1470,6 +1854,23 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
+            query_operation,
+            select_resource,
+            prepare_operation,
+            execute_operation,
+            recover_operation,
+            cancel_operation,
+            prepare_process_operation,
+            execute_process_operation,
+            elevate_handoff,
+            debloat_status,
+            prepare_debloat_operation,
+            prepare_debloat_recovery,
+            execute_debloat_operation,
+            secret_get,
+            secret_keys,
+            secret_set,
+            copy_file_checked,
             run_ps,
             exec,
             run_command_line,
@@ -1480,6 +1881,11 @@ pub fn run() {
             read_text,
             write_text,
             write_text_atomic,
+            commit_staged_file,
+            read_optional_text,
+            list_restore_points,
+            prepare_restore_removal,
+            execute_restore_removal,
             make_dir,
             remove_path,
             move_to_trash,
@@ -1501,6 +1907,7 @@ pub fn run() {
             track_start,
             track_launch,
             track_running,
+            track_peek,
             track_stop,
             wait_process,
             sha256_files,
