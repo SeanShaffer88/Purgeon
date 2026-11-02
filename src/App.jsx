@@ -196,6 +196,11 @@ function InsightTags({ i }) {
           duplicate entry
         </span>
       )}
+      {i.oldVersion && (
+        <span className="insight-tag offer" title={`An older copy — version ${i.oldVersion} of this program is also installed. Tools › Advanced Tools › Duplicate Programs shows both together; uninstall the old one from the main list if you don't need it.`}>
+          old version
+        </span>
+      )}
     </>
   );
 }
