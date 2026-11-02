@@ -1,6 +1,7 @@
 ; Purgeon: Tauri 2.12.4's NSIS template (crates/tauri-bundler/src/bundle/windows/nsis/installer.nsi)
-; with one addition, marked "Purgeon" below: an unticked "Start Purgeon with Windows"
-; check box on the finish page. Compare with the template of a newer Tauri CLI when upgrading it.
+; with additions, marked "Purgeon" below: unticked finish-page check boxes for
+; "Start Purgeon with Windows" and for enabling the setup / startup monitors
+; (all monitoring is off by default). Compare with the template of a newer Tauri CLI when upgrading it.
 Unicode true
 ManifestDPIAware true
 ; Add in `dpiAwareness` `PerMonitorV2` to manifest for Windows 10 1607+ (note this should not affect lower versions since they should be able to ignore this and pick up `dpiAware` `true` set by `ManifestDPIAware true`)
@@ -450,7 +451,7 @@ Var AppStartMenuFolder
 !define MUI_FINISHPAGE_RUN
 !define MUI_FINISHPAGE_RUN_FUNCTION RunMainBinary
 !define MUI_PAGE_CUSTOMFUNCTION_PRE SkipIfPassive
-; Purgeon: a third check box, "Start Purgeon with Windows", unticked by default.
+; Purgeon: extra unticked check boxes — "Start Purgeon with Windows" and one per monitor.
 !define MUI_PAGE_CUSTOMFUNCTION_SHOW SweepAutostartShow
 !define MUI_PAGE_CUSTOMFUNCTION_LEAVE SweepAutostartLeave
 !insertmacro MUI_PAGE_FINISH
@@ -459,20 +460,39 @@ Function RunMainBinary
   nsis_tauri_utils::RunAsUser "$INSTDIR\${MAINBINARYNAME}.exe" ""
 FunctionEnd
 
-; Purgeon: the check box sits below the two standard ones (Run at 90u, desktop shortcut at 110u).
+; Purgeon: the check boxes sit below the two standard ones (Run at 90u, desktop shortcut at 110u).
+; All monitoring is off by default; the two monitor boxes are separate opt-ins, unticked.
 Var SweepAutostart
+Var SweepSetupMonitor
+Var SweepStartupMonitor
 Function SweepAutostartShow
   ${NSD_CreateCheckbox} 120u 130u 195u 10u "Start Purgeon with Windows"
   Pop $SweepAutostart
   SetCtlColors $SweepAutostart "${MUI_TEXTCOLOR}" "${MUI_BGCOLOR}"
   ${NSD_Uncheck} $SweepAutostart
+  ${NSD_CreateCheckbox} 120u 150u 280u 10u "Enable the setup monitor (notice installers starting)"
+  Pop $SweepSetupMonitor
+  SetCtlColors $SweepSetupMonitor "${MUI_TEXTCOLOR}" "${MUI_BGCOLOR}"
+  ${NSD_Uncheck} $SweepSetupMonitor
+  ${NSD_CreateCheckbox} 120u 170u 280u 10u "Enable the startup monitor (warn about new startup entries)"
+  Pop $SweepStartupMonitor
+  SetCtlColors $SweepStartupMonitor "${MUI_TEXTCOLOR}" "${MUI_BGCOLOR}"
+  ${NSD_Uncheck} $SweepStartupMonitor
 FunctionEnd
 
-; Ticked: "Purgeon --autostart on" registers the sign-in task, the same as View › Start with Windows.
+; Ticked boxes run the matching headless command, the same as the Settings window's switches.
 Function SweepAutostartLeave
   ${NSD_GetState} $SweepAutostart $0
   ${If} $0 = ${BST_CHECKED}
     ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --autostart on'
+  ${EndIf}
+  ${NSD_GetState} $SweepSetupMonitor $0
+  ${If} $0 = ${BST_CHECKED}
+    ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --setup-monitor on'
+  ${EndIf}
+  ${NSD_GetState} $SweepStartupMonitor $0
+  ${If} $0 = ${BST_CHECKED}
+    ExecWait '"$INSTDIR\${MAINBINARYNAME}.exe" --startup-monitor on'
   ${EndIf}
 FunctionEnd
 
