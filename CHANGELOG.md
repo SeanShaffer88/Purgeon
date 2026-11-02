@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.3.0 - 2026-11-01
 
 ### Added
 - **Download and Install for updates**: when the opt-in update check finds a newer release, the Check for Updates dialog now offers **Download and Install** (also `Purgeon --update install`). The release's `Purgeon-Setup-x64.exe` is downloaded to the Temp folder and run only after its size and SHA-256 match the digest GitHub recorded for that exact asset; a mismatch deletes the download and runs nothing. The installer closes the running Purgeon and can relaunch it afterwards. Portable copies are not installed over — they are pointed at GitHub Releases, as before.
