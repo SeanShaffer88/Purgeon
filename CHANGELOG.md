@@ -1,5 +1,16 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Settings window** (Tools › Settings › Settings…, `Ctrl+,`): every Purgeon option in one window — uninstalling, appearance, window and tray, active monitoring, startup and exit, update checks, and backup limits. Each change applies at once, so several options can be changed without reopening menus.
+- **Duplicate Files** (Tools › Advanced Tools): finds files with identical contents under a folder you pick, grouped by SHA-256 after an exact-size pass. Nothing is ticked for you, at least one copy of each file is always kept, and removed copies go to the Recycle Bin. Also `Purgeon --duplicates scan|remove`.
+- **Organization policies**: an administrator can set `DisableBatchUninstall`, `DisableForceRemove`, and `DisableSecureErase` (DWORD 1) under `HKLM\SOFTWARE\Policies\Purgeon`; the matching operations then refuse, with the policy named. Active policies are listed in About and by `Purgeon --policy`.
+- **Startup monitor toggle**: watching for new startup entries (Tools › Startup Monitor, and in Settings) can now be turned off; the setup monitor (installer detection) keeps its own separate toggle beside it.
+- **Monitored-installation records** now keep the installer's source path with its stamped product, company, and version, and carry editable user notes (Properties of a recording, or `Purgeon --monitor notes`) for where the installer came from and the options chosen in it. `Purgeon --monitor list` shows both.
+- **Duplicate Programs** (Tools › Advanced Tools, or `Purgeon --duplicates apps`): the same program installed more than once — different versions side by side, or the same version in two places. Review only; removal stays in the main list.
+- **Purgeon Health** (Tools › System Tools, or `Purgeon --selfcheck`): a health check for Purgeon itself — settings file, data folder, backups, monitoring records, command log, and the update checker, each Pass / Warning / Fail with the evidence. Nothing is repaired.
+
 ## 1.2.0 - 2026-10-29
 
 ### Added
