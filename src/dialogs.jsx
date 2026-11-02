@@ -1,6 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { SettingHelp } from './onboarding.jsx';
-import { summarizeImpact } from './backend/impact.js';
+import { summarizeImpact, failureHint } from './backend/impact.js';
 
 const api = window.api;
 
@@ -215,7 +215,10 @@ export function PlanView({ results, onBack, onExport }) {
           <div key={i} className={`result ${r.ok ? 'ok' : 'fail'}`}>
             <span className="mark">{r.ok ? '→' : '–'}</span>
             <span className="path">{itemLabel(r)}</span>
-            <span className="muted">{r.detail}</span>
+            <span className="muted">
+              {r.detail}
+              {!r.ok && failureHint(r.detail) && <span className="hint"> · {failureHint(r.detail)}</span>}
+            </span>
           </div>
         ))}
       </div>
@@ -1082,7 +1085,10 @@ export function ResultsDialog({ title, results, note, onClose, onUndo }) {
           <div key={i} className={`result ${r.ok ? 'ok' : 'fail'}`}>
             <span className="mark">{r.ok ? '✓' : '✗'}</span>
             <span className="path">{itemLabel(r)}</span>
-            <span className="muted">{r.detail}</span>
+            <span className="muted">
+              {r.detail}
+              {!r.ok && failureHint(r.detail) && <span className="hint"> · {failureHint(r.detail)}</span>}
+            </span>
           </div>
         ))}
         {results.length > 500 && <div className="muted result">…and {(results.length - 500).toLocaleString()} more</div>}

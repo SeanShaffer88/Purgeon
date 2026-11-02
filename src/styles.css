@@ -504,6 +504,7 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .result .muted { margin-left: auto; padding-left: 12px; }
 .result.ok .mark { color: var(--green); }
 .result.fail .mark, .result.fail .muted { color: var(--red); }
+.result .hint { color: var(--cyan); }
 
 .props { width: 100%; border-collapse: collapse; }
 .props th { text-align: left; font-weight: normal; color: var(--muted); padding: 3px 12px 3px 0; white-space: nowrap; width: 1%; vertical-align: top; }

@@ -126,7 +126,7 @@ Items are marked as part of the program (install folders, shortcuts, machine-wid
 
 **Find Orphaned Leftovers** — looks for folders, registry keys and services of programs no longer installed. Nothing is pre-selected. Windows' own folders, anything an installed program uses, anything used in the last 30 days, game saves in `AppData\LocalLow`, AppData folders (possibly settings/saved games), and folders containing programs (possibly portable) are excluded or flagged.
 
-**Dry Run** — shows exactly what a removal would do, item by item, without changing anything.
+**Dry Run** — shows exactly what a removal would do, item by item, without changing anything. In the results of a removal or a dry run, a failed item also gets a plain **next step** matched to why it failed (a file in use, permission refused, already gone, kept on purpose) — and no suggestion at all when the wording matches nothing known.
 
 **Search Registry** — finds registry keys named after a word, and values mentioning it, in the Software branches of your user and the machine. Results follow the same protection rules, start unticked, and are backed up before removal.
 
