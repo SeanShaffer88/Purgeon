@@ -520,6 +520,49 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
   background: var(--panel); outline: none; caret-color: var(--accent);
 }
 .field-row input:focus, .field input:focus { border-color: var(--accent); }
+/* Settings window: category rail on the left, one page of options on the right. */
+.settings-wrap { display: flex; gap: 0; margin: -12px; min-height: 430px; }
+.settings-rail {
+  width: 178px; flex: none; display: flex; flex-direction: column; gap: 2px;
+  padding: 14px 8px; background: var(--panel); border-right: 1px solid var(--border);
+}
+.settings-rail button {
+  text-align: left; padding: 8px 10px; border: 1px solid transparent; border-radius: 8px;
+  background: none; color: var(--muted); cursor: pointer; font: inherit;
+}
+.settings-rail button:hover { color: var(--text); border-color: var(--border-strong); }
+.settings-rail button.active { background: var(--accent-deep, #8f1d22); color: #fff; font-weight: 600; }
+.settings-pane { flex: 1; padding: 14px 18px; overflow: auto; max-height: 62vh; }
+.set-row {
+  display: flex; align-items: center; gap: 14px; padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+.set-row:last-child { border-bottom: none; }
+.set-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 1px; }
+.set-label { font-weight: 600; }
+.set-desc { color: var(--muted); font-size: 12px; }
+.set-control { flex: none; display: flex; align-items: center; gap: 6px; }
+.set-control input, .set-control select {
+  padding: 5px 8px; border: 1px solid var(--border-strong); border-radius: 9px;
+  background: var(--panel); color: var(--text); outline: none; caret-color: var(--accent);
+}
+.set-control button {
+  padding: 5px 12px; border: 1px solid var(--border-strong); border-radius: 9px;
+  background: var(--panel); color: var(--text); cursor: pointer; font: inherit;
+}
+.set-control button:hover:not(:disabled) { border-color: var(--accent); color: #fff; }
+.set-control button.primary { border-color: var(--accent-ink); color: #fff; background: linear-gradient(180deg, var(--accent-bright), var(--accent-deep)); font-weight: 600; }
+/* The switch used by every on/off setting: a track with a sliding knob. */
+.switch {
+  width: 38px; height: 21px; border-radius: 11px; border: 1px solid var(--border-strong);
+  background: var(--panel); position: relative; cursor: pointer; flex: none; padding: 0;
+}
+.switch .knob {
+  position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 50%;
+  background: var(--muted); transition: left .15s ease, background .15s ease;
+}
+.switch.on { background: var(--accent-deep, #8f1d22); border-color: var(--accent); }
+.switch.on .knob { left: 19px; background: #fff; }
 .field { display: flex; flex-direction: column; gap: 4px; margin-top: 10px; color: var(--muted); }
 .field input { color: var(--text); }
 .debloat-button {

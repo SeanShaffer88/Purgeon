@@ -39,7 +39,7 @@ It runs on Windows 10 and 11 (64-bit). The full app is a **4.0 MB** executable i
 
 **Monitored Programs** (`Ctrl+3`) — lists recordings. Uninstalling one removes exactly what its installation created, put back against a fresh snapshot.
 
-**Detecting installations** — while Purgeon runs (including from the tray), it notices installers starting and offers to record them. **Monitor It** takes the "before" snapshot while the installer waits on its first page, then you install as usual and click **Installation Finished**.
+**Detecting installations** — with the setup monitor on (it is off by default; Settings › Active monitoring), while Purgeon runs (including from the tray), it notices installers starting and offers to record them. **Monitor It** takes the "before" snapshot while the installer waits on its first page, then you install as usual and click **Installation Finished**.
 
 **Disposable test install** — runs an installer and captures every change it makes without storing anything permanently:
 - `--monitor test-install-start --installer setup.exe` — takes the before snapshot and launches the installer.
@@ -234,9 +234,9 @@ Tools › System Tools holds a second set of windows beside Advanced Tools, kept
 
 ## Settings window and organization policies
 
-**Settings** (Tools › Settings › Settings…, `Ctrl+,`) — every Purgeon option in one window: uninstalling (silent mode, restore points, Safe Mode, unsigned-program warnings), appearance (theme, grid lines, text size, reduced motion), window and tray, **active monitoring** (the setup monitor and the startup monitor, each with its own switch), **startup and exit** (start with Windows, start in the tray, what the close button does), update checks, and backup limits. Changes apply at once, so the window can stay open while several options are changed.
+**Settings** (Tools › Settings…, `Ctrl+,`) — every Purgeon option in one standalone window with a category rail: Uninstalling, Appearance, Window & tray, **Active monitoring**, **Startup & exit**, Explorer (Purgeon's right-click entry plus every other program's context-menu items), Backups (limits, and exporting/importing the settings file), Prompts & trust (every confirmation prompt, and trusted publishers), Updates, and Data & logs (the command log). Nothing hides in submenus any more — if it is a setting, it is in this window. Changes apply at once, so the window can stay open while several options are changed.
 
-**Active monitoring, both halves switchable** — the *setup monitor* watches for installers starting and offers to record them; the *startup monitor* checks every 10 minutes whether a program added itself to startup and tells you when one does. Each has its own toggle in Settings and in the Tools menu, and turning one off never affects the other or the manual tools.
+**Active monitoring, off by default, each half its own switch** — the *setup monitor* watches for installers starting and offers to record them; the *startup monitor* checks every 10 minutes whether a program added itself to startup and tells you when one does. Both are **off** until turned on: in Settings (Active monitoring), in the Tools menu, from the command line (`--setup-monitor on`, `--startup-monitor on`), or on the installer's last screen, which offers a separate unticked box for each. Turning one off never affects the other or the manual tools.
 
 **Organization policies** — an administrator can restrict Purgeon for every user of a PC with DWORD values under `HKLM\SOFTWARE\Policies\Purgeon`: `DisableBatchUninstall` (the uninstall queue refuses new programs), `DisableForceRemove` (Force removals are refused), and `DisableSecureErase` (Secure Erase is refused). A refusal names the policy. Policies in effect are listed in About and by `Purgeon --policy`.
 
@@ -326,6 +326,8 @@ Purgeon --monitor notes --id <id> [--notes "<text>"]
 Purgeon --policy [--json]
 Purgeon --duplicates apps [--json]
 Purgeon --selfcheck [--json]
+Purgeon --setup-monitor on|off
+Purgeon --startup-monitor on|off
 Purgeon --duplicates scan --folder "<path>" [--json]
 Purgeon --duplicates remove "<path>" ["<path>"...]
 Purgeon --monitor test-install-start --installer "<path>" [--name "<name>"]

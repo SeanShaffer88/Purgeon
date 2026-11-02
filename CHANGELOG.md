@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Changed
+- **The Settings window is rebuilt** — a category rail (Uninstalling, Appearance, Window & tray, Active monitoring, Startup & exit, Explorer, Backups, Prompts & trust, Updates, Data & logs) with real switches and a plain-words description for every option. The Tools › Settings submenu is gone: the menu now has the single **Settings…** entry, and everything that lived in the submenu — the Explorer right-click toggle and context-menu items, Backup Settings (including settings export/import), Confirmation Prompts, Trusted Publishers, Open Command Log, Check for Updates — lives inside the window.
+- **All monitoring is off by default.** The setup monitor and the startup monitor now start off for everyone (previously the startup monitor ran unless turned off); each still has its own switch. The installer's last screen offers a separate unticked box for each monitor, alongside Start with Windows (`Purgeon --setup-monitor on|off`, `--startup-monitor on|off`).
+
 ## 1.3.0 - 2026-11-01
 
 ### Added

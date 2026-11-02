@@ -17,7 +17,8 @@ export const DEFAULT_SETTINGS = {
   disabledConfirmations: [],
   textScale: 1,
   reducedMotion: false,
-  watchStartupEntries: true,
+  watchStartupEntries: false,
+  detectInstallers: false,
   alertThresholds: { cpu: 90, mem: 90, diskFreeGB: 20 },
 };
 

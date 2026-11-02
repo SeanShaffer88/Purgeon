@@ -362,19 +362,7 @@ const MENUS = [
       ] },
       ['maintenance', 'Scheduled Maintenance...'],
       null,
-      { group: 'Settings', tip: 'How Purgeon itself behaves', items: [
-        ['settings', 'Settings...', 'Ctrl+,'],
-        ['toggleRestore', 'Create Restore Points'],
-        ['toggleSilent', 'Silent Uninstall When Possible'],
-        ['toggleSafe', 'Safe Mode'],
-        ['toggleShell', 'Explorer Right-Click Menu'],
-        ['ctxmenu', 'Explorer Context Menu Items...'],
-        ['backupSettings', 'Backup Settings...'],
-        ['confirmationPrompts', 'Confirmation Prompts...'],
-        ['openLog', 'Open Command Log'],
-        ['trustedPublishers', 'Trusted Publishers...'],
-        ['updateCheck', 'Check for Updates...'],
-      ] },
+      ['settings', 'Settings...', 'Ctrl+,'],
       { group: 'Advanced Tools', tip: 'Powerful tools, kept out of the main window', items: [
         ['recoveryPackages', 'Recovery Packages...'],
         ['sharedComponents', 'Shared Components...'],
@@ -687,7 +675,7 @@ const [tipsActive, setTipsActive] = useState(false);
   // Window options (View menu); Start with Windows is read from Task Scheduler.
   const [win, setWin] = useState({ alwaysOnTop: false, minimizeToTray: false, startInTray: false });
   const [autostartOn, setAutostartOn] = useState(false);
-  const [detectOn, setDetectOn] = useState(true);
+  const [detectOn, setDetectOn] = useState(false);
   const [watchStartupOn, setWatchStartupOn] = useState(true);
   const watchStartupRef = useRef(true);
   // Programs hidden from the lists ({ programKey: name }); View › Show Hidden Programs shows them dimmed.
@@ -2157,9 +2145,9 @@ const [reducedMotion, setReducedMotion] = useState(false);
     setCloseAction(close);
     const w = { alwaysOnTop: !!s.alwaysOnTop, minimizeToTray: !!s.minimizeToTray, startInTray: !!s.startInTray };
     setWin(w);
-    setDetectOn(s.detectInstallers !== false);
-    setWatchStartupOn(s.watchStartupEntries !== false);
-    watchStartupRef.current = s.watchStartupEntries !== false;
+    setDetectOn(s.detectInstallers === true);
+    setWatchStartupOn(s.watchStartupEntries === true);
+    watchStartupRef.current = s.watchStartupEntries === true;
     setHidden(s.hiddenPrograms || {});
     api.invoke('app:setTray', { close, minimize: w.minimizeToTray, visible: w.startInTray }).catch(() => {});
     api.invoke('app:setOnTop', w.alwaysOnTop).catch(() => {});
@@ -3164,6 +3152,9 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {modal?.type === 'settings' && (
         <SettingsDialog
           initial={modal.settings}
+          shellOn={shellOn}
+          onToggleShell={() => act('toggleShell')}
+          onCheckUpdates={() => act('updateCheck')}
           onApply={async (patch) => {
             const s = await api.invoke('settings:set', patch);
             setRestoreOn(s.createRestorePoints);

@@ -1071,111 +1071,224 @@ export function TrustedPublishersDialog({ publishers, onClose }) {
 }
 
 // ---- Settings window ------------------------------------------------------------------
-// Every option that used to be scattered through the menus, in one window. Each toggle
-// applies at once (onApply writes the setting and refreshes the app), so the window can
-// stay open while several options are changed — no menu trips in between.
+// Every option that used to live in the Tools › Settings submenu, in one standalone
+// window with a category rail. Each change applies at once (onApply writes the setting
+// and refreshes the app), so the window can stay open while several options are
+// changed — no menu trips in between.
 
-function SettingToggle({ label, value, onChange, title }) {
+// A real switch: a track with a sliding knob, right-aligned in its row.
+function Switch({ value, onChange, title }) {
   return (
-    <div className="field-row">
-      <label>{label}</label>
-      <button
-        className={`toggle ${value ? 'on' : 'off'}`}
-        onClick={() => onChange(!value)}
-        aria-pressed={!!value}
-        title={title || label}
-      >
-        {value ? 'ON' : 'OFF'}
-      </button>
+    <button
+      className={`switch ${value ? 'on' : ''}`}
+      role="switch"
+      aria-checked={!!value}
+      onClick={() => onChange(!value)}
+      title={title}
+    >
+      <span className="knob" />
+    </button>
+  );
+}
+
+// One settings row: label and plain-words description on the left, control on the right.
+function SetRow({ label, desc, title, children }) {
+  return (
+    <div className="set-row">
+      <div className="set-text">
+        <span className="set-label">{label}</span>
+        {desc && <span className="set-desc">{desc}</span>}
+      </div>
+      <div className="set-control" title={title}>{children}</div>
     </div>
   );
 }
 
-export function SettingsDialog({ initial, onApply, onClose }) {
+const SETTINGS_PAGES = [
+  ['uninstalling', 'Uninstalling'],
+  ['appearance', 'Appearance'],
+  ['window', 'Window & tray'],
+  ['monitoring', 'Active monitoring'],
+  ['startup', 'Startup & exit'],
+  ['explorer', 'Explorer'],
+  ['backups', 'Backups'],
+  ['prompts', 'Prompts & trust'],
+  ['updates', 'Updates'],
+  ['data', 'Data & logs'],
+];
+
+export function SettingsDialog({ initial, onApply, onClose, shellOn, onToggleShell, onCheckUpdates }) {
+  const [page, setPage] = useState('uninstalling');
   const [s, setS] = useState(initial || {});
   const [autostart, setAutostart] = useState(false);
   const [updateOn, setUpdateOn] = useState(false);
+  const [ctxEntries, setCtxEntries] = useState(null);
+  const [publishers, setPublishers] = useState(null);
+  const [newPub, setNewPub] = useState('');
+  const [paneError, setPaneError] = useState('');
 
   useEffect(() => {
     api.invoke('autostart:enabled').then(setAutostart).catch(() => {});
     api.invoke('update:settings').then((u) => setUpdateOn(!!u.enabled)).catch(() => {});
   }, []);
 
+  // The two manager panes load their lists only when first opened.
+  useEffect(() => {
+    if (page === 'explorer' && ctxEntries === null) api.invoke('ctxmenu:list').then(setCtxEntries).catch((e) => { setCtxEntries([]); setPaneError(e.message); });
+    if (page === 'prompts' && publishers === null) api.invoke('trusted:list').then(setPublishers).catch((e) => { setPublishers([]); setPaneError(e.message); });
+  }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const apply = async (patch) => {
     const next = await onApply(patch);
     if (next) setS(next);
   };
   const toggle = (key) => (on) => apply({ [key]: on });
-
   const closeChoice = ['ask', 'tray', 'exit'].includes(s.closeAction) ? s.closeAction : s.tray ? 'tray' : 'ask';
+  const disabled = Array.isArray(s.disabledConfirmations) ? s.disabledConfirmations : [];
+
+  const toggleCtx = async (entry) => {
+    setPaneError('');
+    try {
+      if (entry.enabled && entry.windows && !(await api.invoke('dialog:confirm', { confirmId: 'turnOffCtxMenu', message: `Turn off "${entry.name}"?`, detail: 'This entry is part of Windows or a Microsoft product. Turning it off is reversible.' }))) return;
+      const now = await api.invoke('ctxmenu:set', { entry, enable: !entry.enabled });
+      setCtxEntries((list) => list.map((x) => (x.id === now.id ? now : x)));
+    } catch (e) { setPaneError(e.message); }
+  };
+
+  const exportSettings = () => {
+    const blob = new Blob([JSON.stringify(s, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'purgeon-settings.json';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  };
+  const importSettings = () => {
+    const input = document.createElement('input');
+    input.type = 'file'; input.accept = '.json';
+    input.onchange = (e) => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (ev) => { try { apply(JSON.parse(ev.target.result)); } catch { setPaneError('That file is not a valid settings file.'); } };
+      reader.readAsText(file);
+    };
+    document.body.appendChild(input); input.click(); document.body.removeChild(input);
+  };
 
   return (
-    <Dialog
-      title="Settings"
-      onClose={onClose}
-      width={640}
-      buttons={<button className="primary" onClick={onClose}>Close</button>}
-    >
-      <p className="heading">Uninstalling</p>
-      <SettingToggle label="Silent uninstall when possible" value={!!s.silentUninstall} onChange={toggle('silentUninstall')} title="Uninstallers whose silent switches are known run without their windows" />
-      <SettingToggle label="Offer a restore point before removals" value={s.createRestorePoints !== false} onChange={toggle('createRestorePoints')} title="The confirmation before an uninstall or removal offers to create a restore point" />
-      <SettingToggle label="Safe mode (only near-certain leftovers)" value={!!s.safeMode} onChange={toggle('safeMode')} title="Leftover lists offer only items with a 90%+ match, and never services, tasks or firewall rules" />
-      <SettingToggle label="Warn about unsigned programs" value={!!s.requireSignature} onChange={toggle('requireSignature')} title="Uninstall and Force ask before touching a program whose main file is not validly signed" />
-
-      <p className="heading">Appearance</p>
-      <div className="field-row">
-        <label>Theme</label>
-        <span>
-          {[['dark', 'Dark'], ['light', 'Light'], ['contrast', 'High Contrast']].map(([id, label]) => (
-            <button key={id} className={(s.theme || 'dark') === id ? 'primary' : ''} onClick={() => apply({ theme: id })} title={`Use the ${label.toLowerCase()} theme`}>{label}</button>
+    <Dialog title="Settings" onClose={onClose} width={860} buttons={<button className="primary" onClick={onClose}>Close</button>}>
+      <div className="settings-wrap">
+        <div className="settings-rail" role="tablist" aria-label="Settings categories">
+          {SETTINGS_PAGES.map(([id, label]) => (
+            <button key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)} title={`Settings: ${label}`}>{label}</button>
           ))}
-        </span>
-      </div>
-      <SettingToggle label="Grid lines in lists" value={s.gridLines !== false} onChange={toggle('gridLines')} />
-      <div className="field-row">
-        <label>Text size</label>
-        <select value={String(s.textScale || 1)} onChange={(e) => apply({ textScale: Number(e.target.value) })} title="Scale the app's text">
-          <option value="0.9">Smaller (90%)</option>
-          <option value="1">Normal (100%)</option>
-          <option value="1.15">Larger (115%)</option>
-          <option value="1.3">Largest (130%)</option>
-        </select>
-      </div>
-      <SettingToggle label="Reduced motion" value={!!s.reducedMotion} onChange={toggle('reducedMotion')} title="Calm animations; also follows the Windows setting" />
+        </div>
+        <div className="settings-pane">
+          {paneError && <div className="error-bar" style={{ marginBottom: 10 }}><span>{paneError}</span><button onClick={() => setPaneError('')} title="Dismiss">×</button></div>}
 
-      <p className="heading">Window &amp; tray</p>
-      <SettingToggle label="Always on top" value={!!s.alwaysOnTop} onChange={toggle('alwaysOnTop')} />
-      <SettingToggle label="Minimize to tray" value={!!s.minimizeToTray} onChange={toggle('minimizeToTray')} title="Minimizing hides Purgeon in the notification area" />
+          {page === 'uninstalling' && <>
+            <SetRow label="Silent uninstall when possible" desc="Uninstallers whose silent switches are known run without their windows" title="Silent uninstall"><Switch value={!!s.silentUninstall} onChange={toggle('silentUninstall')} title="Silent uninstall when possible" /></SetRow>
+            <SetRow label="Offer a restore point before removals" desc="The confirmation before an uninstall or removal offers to create a restore point" title="Restore points"><Switch value={s.createRestorePoints !== false} onChange={toggle('createRestorePoints')} title="Offer a restore point before removals" /></SetRow>
+            <SetRow label="Safe mode" desc="Leftover lists offer only near-certain matches (90%+), and never services, tasks or firewall rules" title="Safe mode"><Switch value={!!s.safeMode} onChange={toggle('safeMode')} title="Safe mode" /></SetRow>
+            <SetRow label="Warn about unsigned programs" desc="Uninstall and Force ask first before touching a program whose main file is not validly signed" title="Unsigned warning"><Switch value={!!s.requireSignature} onChange={toggle('requireSignature')} title="Warn about unsigned programs" /></SetRow>
+          </>}
 
-      <p className="heading">Active monitoring</p>
-      <SettingToggle label="Setup monitor — notice installers starting" value={s.detectInstallers !== false} onChange={toggle('detectInstallers')} title="While Purgeon runs, it watches for installers starting and offers to record what they install" />
-      <SettingToggle label="Startup monitor — new startup entries" value={s.watchStartupEntries !== false} onChange={toggle('watchStartupEntries')} title="While Purgeon runs, it checks every 10 minutes whether a program added itself to startup, and tells you when one does" />
+          {page === 'appearance' && <>
+            <SetRow label="Theme" desc="Dark, Light, or High Contrast" title="Theme">
+              <span>{[['dark', 'Dark'], ['light', 'Light'], ['contrast', 'High Contrast']].map(([id, label]) => (
+                <button key={id} className={(s.theme || 'dark') === id ? 'primary' : ''} onClick={() => apply({ theme: id })} title={`Use the ${label.toLowerCase()} theme`}>{label}</button>
+              ))}</span>
+            </SetRow>
+            <SetRow label="Grid lines in lists" desc="Faint lines between rows in the program list" title="Grid lines"><Switch value={s.gridLines !== false} onChange={toggle('gridLines')} title="Grid lines in lists" /></SetRow>
+            <SetRow label="Text size" desc="Scale the app's text" title="Text size">
+              <select value={String(s.textScale || 1)} onChange={(e) => apply({ textScale: Number(e.target.value) })} title="Scale the app's text">
+                <option value="0.9">Smaller (90%)</option>
+                <option value="1">Normal (100%)</option>
+                <option value="1.15">Larger (115%)</option>
+                <option value="1.3">Largest (130%)</option>
+              </select>
+            </SetRow>
+            <SetRow label="Reduced motion" desc="Calm the animations; also follows the Windows setting" title="Reduced motion"><Switch value={!!s.reducedMotion} onChange={toggle('reducedMotion')} title="Reduced motion" /></SetRow>
+          </>}
 
-      <p className="heading">Startup &amp; exit</p>
-      <SettingToggle label="Start with Windows" value={autostart} onChange={async (on) => { const r = await api.invoke('autostart:set', on); setAutostart(!!r); }} title="Start Purgeon when you sign in" />
-      <SettingToggle label="Start minimized to tray" value={!!s.startInTray} onChange={toggle('startInTray')} title="Purgeon starts hidden in the notification area instead of opening its window" />
-      <div className="field-row">
-        <label>When the window is closed</label>
-        <select value={closeChoice} onChange={(e) => apply({ closeAction: e.target.value, tray: e.target.value === 'tray' })} title="What the window's close button does">
-          <option value="ask">Ask each time</option>
-          <option value="tray">Keep running in the tray</option>
-          <option value="exit">Exit Purgeon</option>
-        </select>
+          {page === 'window' && <>
+            <SetRow label="Always on top" desc="Keep Purgeon's window above other windows" title="Always on top"><Switch value={!!s.alwaysOnTop} onChange={toggle('alwaysOnTop')} title="Always on top" /></SetRow>
+            <SetRow label="Minimize to tray" desc="Minimizing hides Purgeon in the notification area instead of the taskbar" title="Minimize to tray"><Switch value={!!s.minimizeToTray} onChange={toggle('minimizeToTray')} title="Minimize to tray" /></SetRow>
+            <SetRow label="When the window is closed" desc="What the window's close button does" title="Close behaviour">
+              <select value={closeChoice} onChange={(e) => apply({ closeAction: e.target.value, tray: e.target.value === 'tray' })} title="What the window's close button does">
+                <option value="ask">Ask each time</option>
+                <option value="tray">Keep running in the tray</option>
+                <option value="exit">Exit Purgeon</option>
+              </select>
+            </SetRow>
+          </>}
+
+          {page === 'monitoring' && <>
+            <p className="muted" style={{ marginBottom: 6 }}>Both monitors are off by default, run only while Purgeon is open, and each works on its own. The installer can also turn them on — it asks on its last screen.</p>
+            <SetRow label="Setup monitor" desc="Notice installers starting and offer to record what they install" title="Setup monitor"><Switch value={!!s.detectInstallers} onChange={toggle('detectInstallers')} title="Setup monitor" /></SetRow>
+            <SetRow label="Startup monitor" desc="Check every 10 minutes and tell you when a program adds itself to startup" title="Startup monitor"><Switch value={!!s.watchStartupEntries} onChange={toggle('watchStartupEntries')} title="Startup monitor" /></SetRow>
+          </>}
+
+          {page === 'startup' && <>
+            <SetRow label="Start with Windows" desc="Start Purgeon when you sign in" title="Start with Windows"><Switch value={autostart} onChange={async (on) => { const r = await api.invoke('autostart:set', on); setAutostart(!!r); }} title="Start with Windows" /></SetRow>
+            <SetRow label="Start minimized to tray" desc="Purgeon starts hidden in the notification area instead of opening its window" title="Start minimized to tray"><Switch value={!!s.startInTray} onChange={toggle('startInTray')} title="Start minimized to tray" /></SetRow>
+          </>}
+
+          {page === 'explorer' && <>
+            <SetRow label="Purgeon in Explorer's right-click menu" desc={'Adds "Who owns this?" on files and folders, and "Uninstall with Purgeon" on shortcuts and programs'} title="Explorer right-click menu"><Switch value={!!shellOn} onChange={() => onToggleShell && onToggleShell()} title="Explorer right-click menu" /></SetRow>
+            <p className="heading" style={{ marginTop: 14 }}>Context menu items from other programs</p>
+            {ctxEntries === null ? <p className="muted">Reading Explorer's context menus…</p>
+              : ctxEntries.length === 0 ? <p className="muted">No context menu items found.</p>
+                : ctxEntries.map((e) => (
+                  <SetRow key={e.id} label={e.name} desc={e.place} title={e.name}><Switch value={!!e.enabled} onChange={() => toggleCtx(e)} title={`${e.name} in Explorer's right-click menu`} /></SetRow>
+                ))}
+          </>}
+
+          {page === 'backups' && <>
+            <SetRow label="Keep backups for (days)" desc="0 keeps them forever. Older backups are removed, always keeping each program's newest" title="Backup age limit">
+              <input type="number" min="0" style={{ width: 90 }} defaultValue={s.backupMaxDays || 0} key={`d${s.backupMaxDays}`} onBlur={(e) => apply({ backupMaxDays: Math.max(0, Number(e.target.value) || 0) })} title="Days to keep backups" />
+            </SetRow>
+            <SetRow label="Keep backups up to (MB)" desc="0 means no limit. When backups pass this size the oldest are removed, always keeping each program's newest" title="Backup size limit">
+              <input type="number" min="0" style={{ width: 90 }} defaultValue={s.backupMaxMB || 0} key={`m${s.backupMaxMB}`} onBlur={(e) => apply({ backupMaxMB: Math.max(0, Number(e.target.value) || 0) })} title="Megabytes of backups to keep" />
+            </SetRow>
+            <SetRow label="Settings file" desc="Take your Purgeon settings to another PC, or bring them back" title="Settings file">
+              <span><button onClick={exportSettings} title="Download all settings as a file">Export Settings…</button>{' '}<button onClick={importSettings} title="Load settings from a file">Import Settings…</button></span>
+            </SetRow>
+          </>}
+
+          {page === 'prompts' && <>
+            <p className="heading">Confirmation prompts</p>
+            <p className="muted" style={{ marginBottom: 6 }}>A switch on means Purgeon asks first. Turn one off here, or with "Don't ask again" on the prompt itself.</p>
+            {CONFIRMATIONS.map((c) => (
+              <SetRow key={c.id} label={c.label} title={c.label}><Switch value={!disabled.includes(c.id)} onChange={(on) => apply({ disabledConfirmations: on ? disabled.filter((x) => x !== c.id) : [...disabled, c.id] })} title={`Ask before: ${c.label}`} /></SetRow>
+            ))}
+            <p className="heading" style={{ marginTop: 14 }}>Trusted publishers</p>
+            <p className="muted" style={{ marginBottom: 6 }}>Insights never flag programs from these publishers as bundled offers or unwanted extras.</p>
+            {publishers === null ? <p className="muted">Loading…</p>
+              : publishers.length === 0 ? <p className="muted">No trusted publishers yet.</p>
+                : publishers.map((name) => (
+                  <SetRow key={name} label={name} title={name}><button onClick={async () => { await api.invoke('trusted:remove', name); setPublishers(await api.invoke('trusted:list')); }} title={`Remove ${name} from trusted publishers`}>Remove</button></SetRow>
+                ))}
+            <SetRow label="Add a publisher" title="Add a publisher">
+              <span><input value={newPub} onChange={(e) => setNewPub(e.target.value)} placeholder="Publisher name" title="Publisher name to trust" />{' '}<button disabled={!newPub.trim()} onClick={async () => { await api.invoke('trusted:add', newPub.trim()); setNewPub(''); setPublishers(await api.invoke('trusted:list')); }} title="Add this publisher to the trusted list">Add</button></span>
+            </SetRow>
+          </>}
+
+          {page === 'updates' && <>
+            <SetRow label="Check for Purgeon updates" desc="Occasionally ask GitHub whether a newer Purgeon release exists. Off by default; nothing is ever downloaded without asking, and downloads are verified before they run" title="Update checks"><Switch value={updateOn} onChange={async (on) => { await api.invoke('update:enable', on); setUpdateOn(on); }} title="Check for Purgeon updates" /></SetRow>
+            <SetRow label="Check now" desc="Look for a newer release right away, whether or not automatic checks are on" title="Check now">
+              <button onClick={() => onCheckUpdates && onCheckUpdates()} title="Check for updates now">Check for Updates…</button>
+            </SetRow>
+          </>}
+
+          {page === 'data' && <>
+            <SetRow label="Command log" desc="Every command Purgeon runs, kept for 14 days" title="Command log">
+              <button onClick={() => api.invoke('log:open')} title="Open the command log folder">Open Command Log</button>
+            </SetRow>
+          </>}
+        </div>
       </div>
-
-      <p className="heading">Updates</p>
-      <SettingToggle label="Check for Purgeon updates" value={updateOn} onChange={async (on) => { await api.invoke('update:enable', on); setUpdateOn(on); }} title="Occasionally ask GitHub whether a newer Purgeon release exists; off by default" />
-
-      <p className="heading">Backups</p>
-      <div className="field-row">
-        <label>Keep backups for (days, 0 = forever)</label>
-        <input type="number" min="0" defaultValue={s.backupMaxDays || 0} key={`d${s.backupMaxDays}`} onBlur={(e) => apply({ backupMaxDays: Math.max(0, Number(e.target.value) || 0) })} title="Older backups are removed, always keeping each program's newest" />
-      </div>
-      <div className="field-row">
-        <label>Keep backups up to (MB, 0 = no limit)</label>
-        <input type="number" min="0" defaultValue={s.backupMaxMB || 0} key={`m${s.backupMaxMB}`} onBlur={(e) => apply({ backupMaxMB: Math.max(0, Number(e.target.value) || 0) })} title="When backups pass this size the oldest are removed, always keeping each program's newest" />
-      </div>
-      <p className="muted">Confirmation prompts you have turned off, trusted publishers, and restore-point options keep their own windows under Tools — everything else lives here.</p>
     </Dialog>
   );
 }
@@ -1538,11 +1651,9 @@ export function ProgramDetailDialog({ program, insight = {}, sizes = {}, onClose
   );
 }
 
-// Confirmation settings: lets the user re-enable confirmation prompts they previously disabled.
-export function ConfirmationSettingsDialog({ settings, onSave, onClose }) {
-  const [disabled, setDisabled] = useState(Array.isArray(settings.disabledConfirmations) ? [...settings.disabledConfirmations] : []);
-
-  const allConfirmations = [
+// Every confirmation prompt Purgeon can ask, shared by the old Confirmation Prompts
+// window and the Settings window's Prompts & trust page.
+export const CONFIRMATIONS = [
     { id: 'confirmUninstall', label: 'Uninstall a program' },
     { id: 'confirmForce', label: 'Force-remove a program' },
     { id: 'confirmBatchUninstall', label: 'Batch uninstall several programs' },
@@ -1576,6 +1687,10 @@ export function ConfirmationSettingsDialog({ settings, onSave, onClose }) {
     { id: 'cleanJunk', label: 'Clean junk files' },
     { id: 'cleanSystemWindows', label: 'Run permanent Windows clean-up' },
   ];
+
+// Confirmation settings: lets the user re-enable confirmation prompts they previously disabled.
+export function ConfirmationSettingsDialog({ settings, onSave, onClose }) {
+  const [disabled, setDisabled] = useState(Array.isArray(settings.disabledConfirmations) ? [...settings.disabledConfirmations] : []);
 
   const isDisabled = (id) => disabled.includes(id);
 
@@ -1617,7 +1732,7 @@ export function ConfirmationSettingsDialog({ settings, onSave, onClose }) {
           </tr>
         </thead>
         <tbody>
-          {allConfirmations.map((c) => (
+          {CONFIRMATIONS.map((c) => (
             <tr key={c.id}>
               <td>{c.label}</td>
               <td>
