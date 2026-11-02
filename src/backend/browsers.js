@@ -27,6 +27,29 @@ $in = [Console]::In.ReadToEnd() | ConvertFrom-Json
 
 const readJson = (p) => sys.readText(p).then((t) => JSON.parse(t.replace(/^\uFEFF/, ''))).catch(() => null);
 
+// Pure: the details worth showing about an extension, from its manifest — who made it
+// (author, when stamped) and what it can do (API permissions plus the sites it can
+// reach). Host patterns are shortened to the site part. Nothing is invented: a field
+// the manifest does not carry stays empty.
+export function extensionDetails(manifest) {
+  const m = manifest || {};
+  const api = Array.isArray(m.permissions) ? m.permissions.filter((p) => typeof p === 'string' && !p.includes('://') && p !== '<all_urls>') : [];
+  const hosts = [
+    ...(Array.isArray(m.permissions) ? m.permissions.filter((p) => typeof p === 'string' && (p.includes('://') || p === '<all_urls>')) : []),
+    ...(Array.isArray(m.host_permissions) ? m.host_permissions : []),
+  ].map((h) => (h === '<all_urls>' || h === '*://*/*' ? 'all websites' : String(h).replace(/^[^/]+:\/\//, '').replace(/\/.*$/, '')));
+  const author = typeof m.author === 'string' ? m.author : (m.author?.name || m.developer?.name || '');
+  return { author, permissions: [...new Set([...api, ...hosts])] };
+}
+
+// The extension's manifest.json on disk (newest version folder), or null.
+async function diskManifest(dir, id) {
+  const versions = (await sys.readDir(path.join(dir, id)).catch(() => [])).filter((e) => e.dir);
+  const v = versions[versions.length - 1];
+  if (!v) return null;
+  return readJson(path.join(dir, id, v.name, 'manifest.json'));
+}
+
 async function extensionName(dir, id, fallback) {
   if (fallback && !/^__MSG_/.test(fallback)) return fallback;
   const versions = (await sys.readDir(path.join(dir, id)).catch(() => [])).filter((e) => e.dir);
@@ -67,6 +90,7 @@ export async function list() {
         if (s.location === 5 || s.location === 10 || id.length !== 32) continue; // built into the browser
         const reg = registered.filter((r) => r.browser === b.id && r.id === id);
         const addedBy = s.location === 3 || s.location === 6 || reg.length ? 'program' : s.location === 2 || s.location === 9 ? 'policy' : 'you';
+        const details = extensionDetails(s.manifest?.permissions ? s.manifest : (await diskManifest(path.join(dir, 'Extensions'), id)) || s.manifest);
         out.push({
           browser: b.id,
           browserName: b.name,
@@ -74,6 +98,8 @@ export async function list() {
           id,
           name: await extensionName(path.join(dir, 'Extensions'), id, s.manifest?.name),
           version: s.manifest?.version || '',
+          author: details.author,
+          permissions: details.permissions,
           enabled: s.state !== 0 && !s.disable_reasons,
           addedBy,
           removable: reg.map((r) => ({ kind: 'key', path: r.key, confidence: 'high', reason: `${b.name} extension added by a program` })),
@@ -99,6 +125,8 @@ export async function list() {
         id: a.id,
         name: a.defaultLocale?.name || a.id,
         version: a.version || '',
+        author: a.defaultLocale?.creator?.name || a.creator?.name || '',
+        permissions: Array.isArray(a.permissions) ? a.permissions.filter((p) => typeof p === 'string') : [],
         enabled: !!a.active,
         addedBy: byProgram ? 'program' : 'you',
         removable: byProgram && a.path && /^[a-z]:\\/i.test(a.path) ? [{ kind: /\.xpi$/i.test(a.path) ? 'file' : 'dir', path: a.path, confidence: 'high', reason: 'Firefox add-on put in place by a program' }] : [],
