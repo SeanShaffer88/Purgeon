@@ -125,6 +125,10 @@ const HELP = `Purgeon command line
         Sends named duplicate copies to the Recycle Bin; one copy of each file is always kept.
   --autostart on|off
         Turns View › Start with Windows on or off.
+  --setup-monitor on|off
+        Turns the setup monitor (notice installers starting) on or off. Off by default.
+  --startup-monitor on|off
+        Turns the startup monitor (new startup entries) on or off. Off by default.
   --background-scan
         Runs a headless leftover + startup scan (used by the scheduled task).
   --restore-point "<description>"
@@ -417,6 +421,13 @@ async function run(args) {
     if (v !== 'on' && v !== 'off') throw new Error('Use --autostart on or --autostart off.');
     const on = await autostart.set(v === 'on');
     return wrap(true, on ? 'Purgeon now starts when you sign in to Windows.\r\n' : 'Purgeon no longer starts with Windows.\r\n');
+  }
+  if (cmd === '--setup-monitor' || cmd === '--startup-monitor') {
+    const v = String(option(args, cmd) || '').toLowerCase();
+    if (v !== 'on' && v !== 'off') throw new Error(`Use ${cmd} on or off.`);
+    const { writeSettings } = await import('./backend/settings.js');
+    await writeSettings({ [cmd === '--setup-monitor' ? 'detectInstallers' : 'watchStartupEntries']: v === 'on' });
+    return wrap(true, `${cmd === '--setup-monitor' ? 'Setup monitor' : 'Startup monitor'} is now ${v}.\r\n`);
   }
   if (cmd === '--background-scan') {
     const result = await schedule.backgroundScan();
@@ -718,7 +729,7 @@ async function run(args) {
 // parser and keep their existing dispatch below; a disposable test install under
 // --monitor also stays on that path because it takes its own options.
 const PARSER_COMMANDS = new Set(['--snapshot', '--compare', '--list-snapshots', '--monitor', '--maintenance', '--autostart', '--help', '-h', '/?']);
-const LEGACY_COMMANDS = new Set(['--background-scan', '--restore-point', '--associations', '--associations-for', '--schedule', '--startup', '--trusted', '--update', '--sync', '--plugins', '--portableapps', '--export', '--uninstall', '--language', '--settings', '--profiler', '--timeline', '--history', '--archive', '--policy', '--duplicates', '--selfcheck', '--quiet', '-q', '--json']);
+const LEGACY_COMMANDS = new Set(['--background-scan', '--restore-point', '--associations', '--associations-for', '--schedule', '--startup', '--trusted', '--update', '--sync', '--plugins', '--portableapps', '--export', '--uninstall', '--language', '--settings', '--profiler', '--timeline', '--history', '--archive', '--policy', '--duplicates', '--selfcheck', '--setup-monitor', '--startup-monitor', '--quiet', '-q', '--json']);
 
 async function dispatch(args, initialize) {
   const first = Array.isArray(args) && typeof args[0] === 'string' ? args[0].toLowerCase() : null;
