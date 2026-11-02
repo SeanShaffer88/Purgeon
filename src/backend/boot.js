@@ -86,8 +86,8 @@ export async function setSafeBoot(mode, previous, withRestorePoint) {
   if (mode === 'none') await bcd(['/deletevalue', '{current}', 'safeboot']);
   else await bcd(['/set', '{current}', 'safeboot', mode]);
   note({
-    type: 'Boot', title: mode === 'none' ? 'Next start is a normal start' : `Next start is Safe Mode (${mode === 'network' ? 'with networking' : 'minimal'})`,
-    detail: `Applies when the PC next starts.${pointNote}`,
+    type: 'Boot', title: mode === 'none' ? 'Normal startup restored' : `Safe Mode enabled until changed back (${mode === 'network' ? 'with networking' : 'minimal'})`,
+    detail: `This setting persists across restarts. Select Normal start to disable Safe Mode. Recovery: hold Shift while choosing Restart, then Troubleshoot > Advanced options > Command Prompt; use bcdedit to inspect the correct loader before deleting its safeboot value.${pointNote}`,
     undo: previous && MODES.includes(previous) ? { channel: 'boot:setSafeBoot', arg: { mode: previous, previous: null, withRestorePoint: false } } : null,
   });
   return { ok: true };

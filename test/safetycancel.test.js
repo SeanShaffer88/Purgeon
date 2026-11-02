@@ -78,7 +78,7 @@ test('deleting a backup sends its folder to the Recycle Bin', async () => {
   await backups.setRoot(root);
   const id = '2026-01-01_test-backup';
   fs.mkdirSync(path.join(root, id));
-  fs.writeFileSync(path.join(root, id, 'manifest.json'), '{}');
+  fs.writeFileSync(path.join(root, id, 'manifest.json'), JSON.stringify({ id, title: 'Fixture', created: '2026-01-01T00:00:00Z', complete: true, entries: [] }));
   trashedTo.length = 0;
   await backups.remove(id);
   assert.equal(trashedTo.length, 1);

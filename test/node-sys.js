@@ -77,6 +77,7 @@ export function createNodeSys(dataDir = path.join(os.tmpdir(), 'purgeon-test-dat
     },
     exists: async (p) => fs.existsSync(p),
     readText: async (p) => fs.readFileSync(p, 'utf8'),
+    readOptionalText: async (p) => { try { return fs.readFileSync(p, 'utf8'); } catch (error) { if (error.code === 'ENOENT') return null; throw error; } },
     writeText: async (p, s) => {
       fs.mkdirSync(path.dirname(p), { recursive: true });
       fs.writeFileSync(p, s);

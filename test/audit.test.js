@@ -23,10 +23,9 @@ test('a damaged interrupted-removal record is reported, not silently lost', asyn
   const found = await backups.interrupted();
   assert.ok(found, 'the damaged record still surfaces');
   assert.equal(found.corrupt, true);
-  const out = await backups.resolveInterrupted('keep');
-  assert.equal(out.corrupt, true);
-  assert.equal(fs.existsSync(pending), false, 'choosing to leave things as they are clears the damaged record');
-  assert.equal(await backups.interrupted(), null);
+  await assert.rejects(() => backups.resolveInterrupted('keep'), /journal and backup are retained/);
+  assert.equal(fs.existsSync(pending), true, 'a damaged record remains available for recovery review');
+  assert.equal((await backups.interrupted()).reviewRequired, true);
   fs.rmSync(root, { recursive: true, force: true });
 });
 
@@ -105,7 +104,7 @@ test('no bare view-name style rule can restyle the generic row icon', async () =
   for (const view of ['desktop', 'store', 'monitored', 'backups', 'snapshots', 'history', 'timeline', 'archive', 'startup', 'debloat', 'junk', 'disk']) {
     assert.ok(!new RegExp(`^\\.${view} \\{`, 'm').test(css), `bare .${view} rule would restyle generic row icons`);
   }
-  const snapshots = fs.readFileSync(new URL('../src/snapshots.jsx', import.meta.url), 'utf8');
+  const snapshots = fs.readFileSync(new URL('../src/snapshot-timeline.jsx', import.meta.url), 'utf8');
   assert.ok(snapshots.includes('className="snapshot-timeline"'), 'the snapshot strip uses its own class name');
 });
 

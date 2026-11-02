@@ -1,19 +1,17 @@
 // System Restore point integration. Creates named restore points before destructive operations
 // and lists existing ones, so the user can roll Windows back to a known-good state.
 // Uses PowerShell's CheckPoint-Computer (System Restore API).
-import { runPS, runPSJson } from './shell.js';
+import { runPSJson, psq } from './shell.js';
 
 // Create a restore point with a description. Returns { ok, created, sequenceNumber }.
 export async function create(description) {
-  const safe = String(description).replace(/'/g, "''");
-  const out = await runPS(
-    `$ErrorActionPreference = 'Stop'\n$r = CheckPoint-Computer -Description '${safe}' -RestorePointType 'MODIFY_SETTINGS'\n[pscustomobject]@{ ok = $true; created = (Get-Date).ToUniversalTime().ToString('o'); sequenceNumber = $r.SequenceNumber } | ConvertTo-Json -Compress`
-  );
-  try {
-    return JSON.parse(out.trim());
-  } catch {
-    return { ok: false, created: new Date().toISOString(), sequenceNumber: 0, error: String(out) };
-  }
+  const label = String(description).slice(0, 200);
+  const [result] = await runPSJson(`$ErrorActionPreference = 'Stop'
+$before = @(Get-ComputerRestorePoint -ErrorAction SilentlyContinue | Select-Object -ExpandProperty SequenceNumber)
+Checkpoint-Computer -Description ${psq(label)} -RestorePointType 'MODIFY_SETTINGS' -WarningAction SilentlyContinue
+$new = Get-ComputerRestorePoint -ErrorAction SilentlyContinue | Where-Object { $_.SequenceNumber -notin $before -and $_.Description -eq ${psq(label)} } | Sort-Object SequenceNumber -Descending | Select-Object -First 1
+[pscustomobject]@{ ok = [bool]$new; created = if ($new) { [string]$new.CreationTime } else { '' }; sequenceNumber = if ($new) { $new.SequenceNumber } else { 0 }; error = if ($new) { '' } else { 'Windows did not create a new restore point. System Protection may be off or throttled.' } } | ConvertTo-Json -Compress`, { timeout: 180000 });
+  return result || { ok: false, error: 'Restore point could not be verified' };
 }
 
 // List recent system restore points.

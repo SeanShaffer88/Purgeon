@@ -11,7 +11,8 @@ import { createNodeSys } from './node-sys.js';
 import * as backups from '../src/backend/backups.js';
 import * as winpath from '../src/backend/winpath.js';
 
-const nodeSys = createNodeSys();
+const commands = [];
+const nodeSys = { ...createNodeSys(), exec: async (file, args) => { commands.push([file, args]); return { ok: true, stdout: '', stderr: '' }; }, runPS: async () => '{}' };
 setSys(nodeSys);
 
 const REG = 'Windows Registry Editor Version 5.00\r\n\r\n[HKEY_LOCAL_MACHINE\\SOFTWARE\\Test]\r\n"A"=dword:00000001\r\n';
@@ -76,6 +77,8 @@ test('restore with entry indexes restores only the chosen entries', async () => 
   await backups.setRoot(root);
   await makePackage(root, 'test1', true);
   const only = await backups.restore('test1', [1]);
+  assert.equal(commands.length, 1, 'only one mocked import command was dispatched');
+  assert.equal(commands[0][1][0], 'import');
   assert.equal(only.length, 1, 'exactly one entry was attempted');
   assert.equal(only[0].path, 'HKLM\\SOFTWARE\\Other');
   const all = await backups.restore('test1');

@@ -1,9 +1,9 @@
 // PowerShell, reg.exe and uninstall command lines, through the system layer.
 import { sys } from './sys.js';
 
-export async function runPS(script, { input } = {}) {
+export async function runPS(script, { input, timeout = 60000 } = {}) {
   try {
-    return await sys.runPS(script, input);
+    return await sys.runPS(script, input, timeout);
   } catch (e) {
     throw new Error(typeof e === 'string' ? e : e?.message || String(e));
   }
