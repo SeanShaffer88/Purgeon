@@ -314,6 +314,11 @@ export function BrowsersDialog({ data, running, onRemove, onClose }) {
             />
             <span className="path">
               <b>{e.name}</b> <span className="muted">{[e.browserName, e.profile, e.version].filter(Boolean).join(' · ')}</span>
+              {(e.author || (e.permissions || []).length > 0) && (
+                <span className="muted" style={{ display: 'block', fontSize: 12 }}>
+                  {[e.author ? `by ${e.author}` : '', (e.permissions || []).length ? `can access: ${e.permissions.slice(0, 6).join(', ')}${e.permissions.length > 6 ? `, +${e.permissions.length - 6} more` : ''}` : ''].filter(Boolean).join(' · ')}
+                </span>
+              )}
             </span>
             <span className={`insight-tag ${e.addedBy === 'program' ? 'offer' : 'together'}`}>{e.addedBy === 'program' ? (e.pendingInstall ? 'added by a program (waiting)' : 'added by a program') : e.addedBy === 'policy' ? 'by policy' : 'added by you'}</span>
           </label>
