@@ -612,6 +612,14 @@ Purgeon is an independent project, written from scratch using documented Windows
 It is not affiliated with any other uninstaller and contains no code from one.
 Uninstalling software changes your system, so review what is selected before deleting.
 
+## Documentation
+
+- [Feature list](docs/FEATURES.md) · [Roadmap](docs/ROADMAP.md) · [Changelog](docs/CHANGELOG.md)
+- [Install](docs/INSTALL.md) · [Compatibility](docs/COMPATIBILITY.md) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [Migration](docs/MIGRATION.md)
+- [Security and privacy](docs/SECURITY.md) · [Audit notes](docs/AUDIT.md) · [Support](docs/SUPPORT.md)
+- [Architecture](docs/ARCHITECTURE.md) · [Contributing](docs/CONTRIBUTING.md) · [Development notes](docs/DEVELOPMENT.md)
+- [Credits](docs/CREDITS.md) · [Maintainers](docs/MAINTAINERS.md) · [Governance](docs/GOVERNANCE.md) · [Code of conduct](docs/CODE_OF_CONDUCT.md)
+
 ## License
 
 [MIT](LICENSE)
