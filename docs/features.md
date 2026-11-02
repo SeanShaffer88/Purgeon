@@ -21,7 +21,7 @@ It runs on Windows 10 and 11 (64-bit). The full app is a **4.0 MB** executable i
 - Explorer right-click entries, shell extensions, file types and URL handlers;
 - data and cache folders named after the program's own executables.
 
-**Choosing what to remove** — every item gets a match score from 0 to 100%. Items scoring 70% or more start ticked; weaker guesses start unticked. Publisher folders count only when named exactly after the publisher, so removing one Google program never offers another's folders.
+**Choosing what to remove** — every item gets a match score from 0 to 100%. Items scoring 70% or more start ticked; weaker guesses start unticked. Publisher folders count only when named exactly after the publisher, so removing one Google program never offers another's folders. Above the list, an **impact summary** follows your ticks: how many files or folders, registry entries and other items are selected, about how much space removing them frees (the removal backup's own size forecast), and a warning when the selection includes a service, scheduled task or driver that may need a restart to finish removing.
 
 **Force** (`Shift+Del`) handles programs whose uninstaller is broken or missing. **Rescue Broken Uninstall** reinstalls the program through winget over the existing copy, then uninstalls it normally. **Analyze Leftovers** (`Ctrl+L`) shows what belongs to a program without uninstalling it.
 
