@@ -26,6 +26,10 @@ import * as owners from './owners.js';
 import * as winget from './winget.js';
 import * as trusted from './trusted.js';
 import * as updatecheck from './updatecheck.js';
+import * as duplicates from './duplicates.js';
+import * as appdupes from './appdupes.js';
+import * as selfhealth from './selfhealth.js';
+import * as policy from './policy.js';
 import { readSettings, writeSettings, DEFAULT_SETTINGS } from './settings.js';
 // Cold-path modules are loaded on first use (lazy) to speed up startup:
 // transfer, archive, insights, maintenance, queue, explore, browsers, portable,
@@ -188,6 +192,12 @@ const handlers = {
   'program:processes': (location) => leftovers.processesIn(location),
   'program:killProcesses': (ids) => runPS(`Stop-Process -Id ${ids.map(Number).join(',')} -Force -ErrorAction SilentlyContinue`),
   'items:remove': async ({ title, items, owners }) => {
+    // Force removals arrive here with the Force flow's title; the policy check is in
+    // the operation, so no window path can bypass it.
+    if (/^Force\s*[–-]/i.test(String(title || ''))) {
+      const blocked = policy.blockedBy(await policy.readPolicy(), 'force');
+      if (blocked) throw new Error(blocked);
+    }
     const rp = await maybeCreateRestorePoint('removal', `Purgeon: before removing ${title}`);
     const stop = newStop('removeItems');
     const result = await backups.removeItems({ title, items, owners, shouldStop: () => stop.stopped });
@@ -213,6 +223,7 @@ const handlers = {
   'monitor:poll': () => monitor.poll(),
   'monitor:list': () => monitor.list(),
   'monitor:remove': (id) => monitor.remove(id),
+  'monitor:setNotes': (args) => monitor.setNotes(args?.id ?? args, args?.notes ?? ''),
   // Disposable isolated test environment for portable packaging.
   // Runs an installer, captures every change it makes, but stores nothing
   // permanently. Results can be kept (packaged as portable) or reverted.
@@ -264,6 +275,8 @@ const handlers = {
   },
   'erase:collect': (paths) => erase.collect(paths),
   'erase:run': async ({ files, pattern }) => {
+    const blocked = policy.blockedBy(await policy.readPolicy(), 'erase');
+    if (blocked) throw new Error(blocked);
     const stop = newStop('eraseRun');
     return erase.erase({ files, pattern, shouldStop: () => stop.stopped });
   },
@@ -271,6 +284,23 @@ const handlers = {
     stopOp('eraseRun');
     return sys.cancelErase ? sys.cancelErase() : undefined;
   },
+  'policy:get': async () => {
+    const p = await policy.readPolicy();
+    return { ...p, restrictions: policy.activeRestrictions(p) };
+  },
+  'duplicates:pick': async () => {
+    const { open: openDialog } = await import('@tauri-apps/plugin-dialog');
+    const picked = await openDialog({ title: 'Choose a folder to scan for duplicate files', directory: true, multiple: false });
+    return picked ? [picked] : [];
+  },
+  'duplicates:scan': (roots) => {
+    const stop = newStop('duplicatesScan');
+    return duplicates.scan(roots, () => stop.stopped);
+  },
+  'duplicates:scanCancel': () => stopOp('duplicatesScan'),
+  'duplicates:remove': (paths) => duplicates.remove(paths),
+  'programs:duplicates': () => appdupes.scan(),
+  'selfhealth:check': () => selfhealth.check(),
   'games:list': () => {
     const stop = newStop('gamesLoad');
     return games.list(() => stop.stopped);
@@ -372,7 +402,11 @@ const handlers = {
   },
   // 1. uninstall queue
   'queue:get': () => queue.get(),
-  'queue:add': (programs) => queue.add(programs),
+  'queue:add': async (programs) => {
+    const blocked = policy.blockedBy(await policy.readPolicy(), 'batch');
+    if (blocked) throw new Error(blocked);
+    return queue.add(programs);
+  },
   'queue:remove': (key) => queue.remove(key),
   'queue:save': (q) => queue.save(q),
   'queue:clear': () => queue.clear(),
@@ -726,6 +760,11 @@ const recorders = {
     title: `Securely erased ${out.results.filter((r) => r.ok).length} of ${out.results.length} files`,
     detail: out.cancelled ? 'The erase was cancelled partway' : 'Overwritten before deletion — not recoverable',
   }),
+  'duplicates:remove': (_arg, out) => (out?.removed ? {
+    type: 'Duplicate cleanup',
+    title: `Sent ${plural(out.removed, 'duplicate file')} to the Recycle Bin`,
+    detail: 'At least one copy of each file was kept. Restore from the Recycle Bin to undo.',
+  } : null),
   'backups:restoreEntries': ({ id }, results) => ({
     type: 'Restore',
     title: `Restored selected items from the backup of ${String(id).replace(/^[^_]*_/, '').replace(/-/g, ' ') || 'removed items'}`,

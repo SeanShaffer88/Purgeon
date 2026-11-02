@@ -6,7 +6,7 @@
 // happens, at any depth, and added to what the snapshots found.
 import { sys } from './sys.js';
 import * as path from './winpath.js';
-import { runPS } from './shell.js';
+import { runPS, runPSJson, psq } from './shell.js';
 import { isProtected, isProtectedKey } from './paths.js';
 import { capture, revertible } from './snapshots.js';
 import { stillPresent } from './installers.js';
@@ -138,6 +138,29 @@ async function buildItems(session, comparison, tracked) {
   return { items, uninstallKeys };
 }
 
+// What can be known about the installer itself: where it came from (its path) and the
+// product/company/version its own file stamps carry. Best effort — an installer that
+// stamps nothing records empty fields, never a guess.
+export async function installerInfo(installer) {
+  const info = { path: installer || '', product: '', company: '', version: '' };
+  if (!installer) return info;
+  try {
+    const data = await runPSJsonSafe(installer);
+    const row = Array.isArray(data) ? data[0] : (data || {});
+    info.product = String(row.product || '');
+    info.company = String(row.company || '');
+    info.version = String(row.version || '');
+  } catch { /* keep the path only */ }
+  return info;
+}
+
+async function runPSJsonSafe(file) {
+  return runPSJson(`
+$v = [System.Diagnostics.FileVersionInfo]::GetVersionInfo(${psq(file)})
+[pscustomobject]@{ product = [string]$v.ProductName; company = [string]$v.CompanyName; version = [string]$v.FileVersion } | ConvertTo-Json -Compress
+`);
+}
+
 async function finish(name) {
   const session = JSON.parse(await sys.readText(sessionFile()));
   const tracked = sys.trackRunning && (await sys.trackRunning()) ? await sys.trackStop().catch(() => null) : null;
@@ -149,6 +172,8 @@ async function finish(name) {
     id: `${Date.now()}`,
     name: name || path.basename(session.installer || 'Monitored program'),
     installer: session.installer,
+    installerInfo: await installerInfo(session.installer),
+    notes: '',
     started: session.started,
     finished: new Date().toISOString(),
     uninstallKeys,
@@ -190,6 +215,7 @@ async function testInstallFinish(name) {
   const result = {
     name: name || path.basename(session.installer || 'Test install'),
     installer: session.installer,
+    installerInfo: await installerInfo(session.installer),
     started: session.started,
     finished: new Date().toISOString(),
     uninstallKeys,
@@ -241,6 +267,23 @@ async function list() {
 }
 
 const remove = (id) => sys.removePath(path.join(storeDir, 'programs', `${id}.json`));
+
+// User notes on a recording: free text the user keeps with the record (where the
+// installer came from, options chosen, anything the recording itself cannot know).
+// Selected installer components cannot be read back from a finished install, so the
+// notes field is where they are recorded — by the person who chose them.
+const MAX_NOTES = 4000;
+export function cleanNotes(notes) {
+  return String(notes ?? '').slice(0, MAX_NOTES);
+}
+
+async function setNotes(id, notes) {
+  const file = path.join(storeDir, 'programs', `${id}.json`);
+  const record = JSON.parse(await sys.readText(file));
+  record.notes = cleanNotes(notes);
+  await sys.writeTextAtomic(file, JSON.stringify(record, null, 2));
+  return record;
+}
 
 // ---- live tracking results ------------------------------------------------------------
 
@@ -303,4 +346,4 @@ export function mergeItems(snapshot, live) {
   return out;
 }
 
-export { setRoot, start, attach, launch, status, cancel, finish, list, remove, collapse, recordItems, buildItems, testInstallStart, testInstallFinish, revertTestInstall, poll };
+export { setRoot, start, attach, launch, status, cancel, finish, list, remove, setNotes, collapse, recordItems, buildItems, testInstallStart, testInstallFinish, revertTestInstall, poll };
