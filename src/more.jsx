@@ -1070,6 +1070,116 @@ export function TrustedPublishersDialog({ publishers, onClose }) {
   );
 }
 
+// ---- Settings window ------------------------------------------------------------------
+// Every option that used to be scattered through the menus, in one window. Each toggle
+// applies at once (onApply writes the setting and refreshes the app), so the window can
+// stay open while several options are changed — no menu trips in between.
+
+function SettingToggle({ label, value, onChange, title }) {
+  return (
+    <div className="field-row">
+      <label>{label}</label>
+      <button
+        className={`toggle ${value ? 'on' : 'off'}`}
+        onClick={() => onChange(!value)}
+        aria-pressed={!!value}
+        title={title || label}
+      >
+        {value ? 'ON' : 'OFF'}
+      </button>
+    </div>
+  );
+}
+
+export function SettingsDialog({ initial, onApply, onClose }) {
+  const [s, setS] = useState(initial || {});
+  const [autostart, setAutostart] = useState(false);
+  const [updateOn, setUpdateOn] = useState(false);
+
+  useEffect(() => {
+    api.invoke('autostart:enabled').then(setAutostart).catch(() => {});
+    api.invoke('update:settings').then((u) => setUpdateOn(!!u.enabled)).catch(() => {});
+  }, []);
+
+  const apply = async (patch) => {
+    const next = await onApply(patch);
+    if (next) setS(next);
+  };
+  const toggle = (key) => (on) => apply({ [key]: on });
+
+  const closeChoice = ['ask', 'tray', 'exit'].includes(s.closeAction) ? s.closeAction : s.tray ? 'tray' : 'ask';
+
+  return (
+    <Dialog
+      title="Settings"
+      onClose={onClose}
+      width={640}
+      buttons={<button className="primary" onClick={onClose}>Close</button>}
+    >
+      <p className="heading">Uninstalling</p>
+      <SettingToggle label="Silent uninstall when possible" value={!!s.silentUninstall} onChange={toggle('silentUninstall')} title="Uninstallers whose silent switches are known run without their windows" />
+      <SettingToggle label="Offer a restore point before removals" value={s.createRestorePoints !== false} onChange={toggle('createRestorePoints')} title="The confirmation before an uninstall or removal offers to create a restore point" />
+      <SettingToggle label="Safe mode (only near-certain leftovers)" value={!!s.safeMode} onChange={toggle('safeMode')} title="Leftover lists offer only items with a 90%+ match, and never services, tasks or firewall rules" />
+      <SettingToggle label="Warn about unsigned programs" value={!!s.requireSignature} onChange={toggle('requireSignature')} title="Uninstall and Force ask before touching a program whose main file is not validly signed" />
+
+      <p className="heading">Appearance</p>
+      <div className="field-row">
+        <label>Theme</label>
+        <span>
+          {[['dark', 'Dark'], ['light', 'Light'], ['contrast', 'High Contrast']].map(([id, label]) => (
+            <button key={id} className={(s.theme || 'dark') === id ? 'primary' : ''} onClick={() => apply({ theme: id })} title={`Use the ${label.toLowerCase()} theme`}>{label}</button>
+          ))}
+        </span>
+      </div>
+      <SettingToggle label="Grid lines in lists" value={s.gridLines !== false} onChange={toggle('gridLines')} />
+      <div className="field-row">
+        <label>Text size</label>
+        <select value={String(s.textScale || 1)} onChange={(e) => apply({ textScale: Number(e.target.value) })} title="Scale the app's text">
+          <option value="0.9">Smaller (90%)</option>
+          <option value="1">Normal (100%)</option>
+          <option value="1.15">Larger (115%)</option>
+          <option value="1.3">Largest (130%)</option>
+        </select>
+      </div>
+      <SettingToggle label="Reduced motion" value={!!s.reducedMotion} onChange={toggle('reducedMotion')} title="Calm animations; also follows the Windows setting" />
+
+      <p className="heading">Window &amp; tray</p>
+      <SettingToggle label="Always on top" value={!!s.alwaysOnTop} onChange={toggle('alwaysOnTop')} />
+      <SettingToggle label="Minimize to tray" value={!!s.minimizeToTray} onChange={toggle('minimizeToTray')} title="Minimizing hides Purgeon in the notification area" />
+
+      <p className="heading">Active monitoring</p>
+      <SettingToggle label="Setup monitor — notice installers starting" value={s.detectInstallers !== false} onChange={toggle('detectInstallers')} title="While Purgeon runs, it watches for installers starting and offers to record what they install" />
+      <SettingToggle label="Startup monitor — new startup entries" value={s.watchStartupEntries !== false} onChange={toggle('watchStartupEntries')} title="While Purgeon runs, it checks every 10 minutes whether a program added itself to startup, and tells you when one does" />
+
+      <p className="heading">Startup &amp; exit</p>
+      <SettingToggle label="Start with Windows" value={autostart} onChange={async (on) => { const r = await api.invoke('autostart:set', on); setAutostart(!!r); }} title="Start Purgeon when you sign in" />
+      <SettingToggle label="Start minimized to tray" value={!!s.startInTray} onChange={toggle('startInTray')} title="Purgeon starts hidden in the notification area instead of opening its window" />
+      <div className="field-row">
+        <label>When the window is closed</label>
+        <select value={closeChoice} onChange={(e) => apply({ closeAction: e.target.value, tray: e.target.value === 'tray' })} title="What the window's close button does">
+          <option value="ask">Ask each time</option>
+          <option value="tray">Keep running in the tray</option>
+          <option value="exit">Exit Purgeon</option>
+        </select>
+      </div>
+
+      <p className="heading">Updates</p>
+      <SettingToggle label="Check for Purgeon updates" value={updateOn} onChange={async (on) => { await api.invoke('update:enable', on); setUpdateOn(on); }} title="Occasionally ask GitHub whether a newer Purgeon release exists; off by default" />
+
+      <p className="heading">Backups</p>
+      <div className="field-row">
+        <label>Keep backups for (days, 0 = forever)</label>
+        <input type="number" min="0" defaultValue={s.backupMaxDays || 0} key={`d${s.backupMaxDays}`} onBlur={(e) => apply({ backupMaxDays: Math.max(0, Number(e.target.value) || 0) })} title="Older backups are removed, always keeping each program's newest" />
+      </div>
+      <div className="field-row">
+        <label>Keep backups up to (MB, 0 = no limit)</label>
+        <input type="number" min="0" defaultValue={s.backupMaxMB || 0} key={`m${s.backupMaxMB}`} onBlur={(e) => apply({ backupMaxMB: Math.max(0, Number(e.target.value) || 0) })} title="When backups pass this size the oldest are removed, always keeping each program's newest" />
+      </div>
+      <p className="muted">Confirmation prompts you have turned off, trusted publishers, and restore-point options keep their own windows under Tools — everything else lives here.</p>
+    </Dialog>
+  );
+}
+
 // ---- Update check dialog --------------------------------------------------------------
 
 export function UpdateCheckDialog({ enabled, lastCheck, onClose }) {

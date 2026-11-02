@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, SystemInfoDialog, RecoveryDialog, SharedDialog, EraseDialog, GamesDialog, GraphDialog, PowerDialog, RestoreDialog, BootDialog, LogsDialog, HealthDialog, TasksDialog, planHtml } from './dialogs.jsx';
+import { AboutDialog, Busy, ConfirmDialog, LeftoversDialog, MonitorWizard, PropertiesDialog, ResultsDialog, InterruptedDialog, BackupSettingsDialog, SystemInfoDialog, RecoveryDialog, SharedDialog, EraseDialog, GamesDialog, DuplicatesDialog, DuplicateProgramsDialog, SelfHealthDialog, GraphDialog, PowerDialog, RestoreDialog, BootDialog, LogsDialog, HealthDialog, TasksDialog, planHtml } from './dialogs.jsx';
 import { WelcomeDialog, FirstRunTips, FIRST_RUN_TIPS, SettingHelp, SHORTCUTS, ShortcutsDialog, UpdateAvailableDialog, UserGuide } from './onboarding.jsx';
 import { setConfirmUI } from './backend/api.js';
 import { iconPathFor } from './backend/programs.js';
@@ -20,7 +20,7 @@ const JunkView = lazy(() => import('./junk.jsx').then((m) => ({ default: m.JunkV
 import { GroupDialog } from './groups.jsx';
 import { ProgramBackupDialog, ProgramRestoreDialog } from './transfer.jsx';
 import { WhoOwnsDialog, UpdatesDialog, MaintenanceDialog } from './tools.jsx';
-import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, PortableAppsDialog, MakePortableDialog, TrustedPublishersDialog, UpdateCheckDialog, CommandPalette, ReportDialog, ContextMenuDialog, InstallerFoundDialog, AnalysisDialog, ProgramDetailDialog, ConfirmationSettingsDialog, ARCH_LABEL, CloseDialog } from './more.jsx';
+import { QueueDialog, OutsideDialog, TrialsDialog, DiskMapDialog, PromptDialog, StartupAlertDialog, BrowsersDialog, MigratePcDialog, FolderRestoreDialog, SyncDialog, PortableDialog, PortableAppsDialog, MakePortableDialog, TrustedPublishersDialog, UpdateCheckDialog, SettingsDialog, CommandPalette, ReportDialog, ContextMenuDialog, InstallerFoundDialog, AnalysisDialog, ProgramDetailDialog, ConfirmationSettingsDialog, ARCH_LABEL, CloseDialog } from './more.jsx';
 
 const api = window.api;
 
@@ -334,7 +334,8 @@ const MENUS = [
     'Tools',
     [
       ['monitor', 'Monitor an Installation...', 'Ctrl+M'],
-      ['toggleDetect', 'Detect Installations'],
+      ['toggleDetect', 'Setup Monitor (Detect Installations)'],
+      ['toggleWatchStartup', 'Startup Monitor (New Startup Entries)'],
       ['trials', 'Trial Installs...'],
       ['queue', 'Uninstall Queue...'],
       null,
@@ -362,6 +363,7 @@ const MENUS = [
       ['maintenance', 'Scheduled Maintenance...'],
       null,
       { group: 'Settings', tip: 'How Purgeon itself behaves', items: [
+        ['settings', 'Settings...', 'Ctrl+,'],
         ['toggleRestore', 'Create Restore Points'],
         ['toggleSilent', 'Silent Uninstall When Possible'],
         ['toggleSafe', 'Safe Mode'],
@@ -377,6 +379,8 @@ const MENUS = [
         ['recoveryPackages', 'Recovery Packages...'],
         ['sharedComponents', 'Shared Components...'],
         ['secureErase', 'Secure Erase...'],
+        ['duplicateFiles', 'Duplicate Files...'],
+        ['duplicatePrograms', 'Duplicate Programs...'],
         ['gamesLibrary', 'Games...'],
         ['relationshipGraph', 'Relationship Graph...'],
       ] },
@@ -386,6 +390,7 @@ const MENUS = [
         ['bootOptions', 'Boot Options...'],
         ['eventLogs', 'Event Logs...'],
         ['healthCheck', 'Health Check...'],
+        ['selfHealth', 'Purgeon Health...'],
         ['scheduledTasks', 'Scheduled Tasks...'],
       ] },
     ],
@@ -683,6 +688,8 @@ const [tipsActive, setTipsActive] = useState(false);
   const [win, setWin] = useState({ alwaysOnTop: false, minimizeToTray: false, startInTray: false });
   const [autostartOn, setAutostartOn] = useState(false);
   const [detectOn, setDetectOn] = useState(true);
+  const [watchStartupOn, setWatchStartupOn] = useState(true);
+  const watchStartupRef = useRef(true);
   // Programs hidden from the lists ({ programKey: name }); View › Show Hidden Programs shows them dimmed.
   const [hidden, setHidden] = useState({});
   const [showHidden, setShowHidden] = useState(false);
@@ -1700,6 +1707,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
     } catch {}
   };
   const checkStartup = async (quietIfNone = true) => {
+    if (!watchStartupRef.current) return;
     const found = await api.invoke('startup:newEntries').catch(() => []);
     if (!found.length) return !quietIfNone && setNotice({ tone: 'ok', text: 'No new startup entries.' });
     notify('New startup entry', `${found.map((e) => e.name).join(', ')} added ${found.length === 1 ? 'itself' : 'themselves'} to what starts with Windows.`);
@@ -2150,6 +2158,8 @@ const [reducedMotion, setReducedMotion] = useState(false);
     const w = { alwaysOnTop: !!s.alwaysOnTop, minimizeToTray: !!s.minimizeToTray, startInTray: !!s.startInTray };
     setWin(w);
     setDetectOn(s.detectInstallers !== false);
+    setWatchStartupOn(s.watchStartupEntries !== false);
+    watchStartupRef.current = s.watchStartupEntries !== false;
     setHidden(s.hiddenPrograms || {});
     api.invoke('app:setTray', { close, minimize: w.minimizeToTray, visible: w.startInTray }).catch(() => {});
     api.invoke('app:setOnTop', w.alwaysOnTop).catch(() => {});
@@ -2202,7 +2212,12 @@ const [reducedMotion, setReducedMotion] = useState(false);
     toggleDetect: () =>
       setOption(
         { detectInstallers: !detectOn },
-        !detectOn ? 'Purgeon now watches for installers starting, and asks whether to record them.' : 'Installer detection is off. Tools › Monitor an Installation still records installations.'
+        !detectOn ? 'Setup monitor is on: Purgeon watches for installers starting, and asks whether to record them.' : 'Setup monitor is off. Tools › Monitor an Installation still records installations.'
+      ),
+    toggleWatchStartup: () =>
+      setOption(
+        { watchStartupEntries: !watchStartupOn },
+        !watchStartupOn ? 'Startup monitor is on: Purgeon tells you when a program adds itself to startup.' : 'Startup monitor is off: new startup entries are no longer watched for. Startup & Services still lists everything that starts with Windows.'
       ),
     toggleAutostart: async () => {
       try {
@@ -2299,6 +2314,10 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       setSafeOn(s.safeMode);
       setNotice({ tone: 'ok', text: s.safeMode ? 'Safe mode is on: leftover lists offer only items with a 90%+ match, and never services, scheduled tasks or firewall rules.' : 'Safe mode is off: every finding can be selected.' });
     },
+    settings: async () => setModal({ type: 'settings', settings: await api.invoke('settings:get') }),
+    duplicateFiles: () => setModal({ type: 'duplicates' }),
+    duplicatePrograms: () => setModal({ type: 'duplicatePrograms' }),
+    selfHealth: () => setModal({ type: 'selfHealth' }),
     backupSettings: async () => setModal({ type: 'backupSettings', settings: await api.invoke('settings:get') }),
     recoveryPackages: () => setModal({ type: 'recovery' }),
     powerOptions: () => setModal({ type: 'power' }),
@@ -2718,7 +2737,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             <span className="elevated">Administrator</span>
           ) : null
         }
-        checked={{ toggleRestore: restoreOn, toggleSilent: silentOn, toggleSafe: safeOn, toggleGrid: gridOn, 'theme:dark': theme === 'dark', 'theme:light': theme === 'light', 'theme:contrast': theme === 'contrast', 'filter:all': quickFilter === 'all', 'filter:desktop': quickFilter === 'desktop', 'filter:store': quickFilter === 'store', 'filter:recent': quickFilter === 'recent', 'filter:large': quickFilter === 'large', 'filter:unsigned': quickFilter === 'unsigned', 'filter:used': quickFilter === 'used', 'close:ask': closeAction === 'ask', 'close:tray': closeAction === 'tray', 'close:exit': closeAction === 'exit', toggleShell: shellOn, toggleOnTop: win.alwaysOnTop, toggleMinTray: win.minimizeToTray, toggleStartTray: win.startInTray, toggleAutostart: autostartOn, toggleDetect: detectOn, toggleHidden: showHidden, toggleSync: syncOn, toggleSchedule: scheduleOn }} />
+        checked={{ toggleRestore: restoreOn, toggleSilent: silentOn, toggleSafe: safeOn, toggleGrid: gridOn, 'theme:dark': theme === 'dark', 'theme:light': theme === 'light', 'theme:contrast': theme === 'contrast', 'filter:all': quickFilter === 'all', 'filter:desktop': quickFilter === 'desktop', 'filter:store': quickFilter === 'store', 'filter:recent': quickFilter === 'recent', 'filter:large': quickFilter === 'large', 'filter:unsigned': quickFilter === 'unsigned', 'filter:used': quickFilter === 'used', 'close:ask': closeAction === 'ask', 'close:tray': closeAction === 'tray', 'close:exit': closeAction === 'exit', toggleShell: shellOn, toggleOnTop: win.alwaysOnTop, toggleMinTray: win.minimizeToTray, toggleStartTray: win.startInTray, toggleAutostart: autostartOn, toggleDetect: detectOn, toggleWatchStartup: watchStartupOn, toggleHidden: showHidden, toggleSync: syncOn, toggleSchedule: scheduleOn }} />
       {/* Premium header band: the open view's name, a one-line summary, and its headline number. */}
       <div className="view-band">
         <div className="band-logo"><ViewIcon id={view} /></div>
@@ -3139,6 +3158,28 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {modal?.type === 'shared' && <SharedDialog onClose={() => setModal(null)} />}
       {modal?.type === 'erase' && <EraseDialog onClose={() => setModal(null)} />}
       {modal?.type === 'games' && <GamesDialog onClose={() => setModal(null)} />}
+      {modal?.type === 'duplicates' && <DuplicatesDialog onClose={() => setModal(null)} />}
+      {modal?.type === 'duplicatePrograms' && <DuplicateProgramsDialog onClose={() => setModal(null)} />}
+      {modal?.type === 'selfHealth' && <SelfHealthDialog onClose={() => setModal(null)} />}
+      {modal?.type === 'settings' && (
+        <SettingsDialog
+          initial={modal.settings}
+          onApply={async (patch) => {
+            const s = await api.invoke('settings:set', patch);
+            setRestoreOn(s.createRestorePoints);
+            setSilentOn(!!s.silentUninstall);
+            setSafeOn(!!s.safeMode);
+            setGridOn(s.gridLines !== false);
+            setTheme(s.theme || 'dark');
+            setTextScale(s.textScale || 1);
+            setReducedMotion(!!s.reducedMotion);
+            setSyncOn(!!s.syncOn);
+            applyWindow(s);
+            return s;
+          }}
+          onClose={() => setModal(null)}
+        />
+      )}
       {modal?.type === 'graph' && <GraphDialog onClose={() => setModal(null)} />}
       {modal?.type === 'backupSettings' && (
         <BackupSettingsDialog
