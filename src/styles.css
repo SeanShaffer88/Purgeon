@@ -825,6 +825,7 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .plan .result .mark { color: var(--green); }
 .plan .result.fail .mark { color: var(--amber); }
 .safe-note { color: var(--cyan); border-left: 2px solid var(--cyan); padding: 2px 8px; margin-bottom: 6px; }
+.impact-note { color: var(--muted); border-left: 2px solid var(--border); padding: 2px 8px; margin-bottom: 6px; }
 .tree-item.locked { opacity: 0.45; }
 .choices { margin: 6px 0 0 18px; padding: 0; }
 .choices li { margin: 4px 0; }
