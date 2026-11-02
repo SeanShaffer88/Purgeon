@@ -651,6 +651,7 @@ const handlers = {
   'update:settings': () => updatecheck.settings(),
   'update:enable': (on) => updatecheck.enable(on),
   'update:check': () => updatecheck.check(),
+  'update:install': () => updatecheck.downloadAndInstall(),
   // Backup removal plan export (Enhancement 7)
   'backups:exportPlan': ({ plan, format, fileName }) => backups.exportPlan({ plan, format, fileName }),
   'debloat:list': () => debloat.list(),
