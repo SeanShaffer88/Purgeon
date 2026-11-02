@@ -755,6 +755,162 @@ export function GamesDialog({ onClose }) {
   );
 }
 
+// Duplicate Files (Tools › Advanced Tools): files with identical contents under a
+// folder the user picks. A review tool — nothing is ticked for you, removal goes to
+// the Recycle Bin, and the backend keeps at least one copy of every group.
+export function DuplicatesDialog({ onClose }) {
+  const [roots, setRoots] = useState([]);
+  const [scanning, setScanning] = useState(false);
+  const [result, setResult] = useState(null);
+  const [picked, setPicked] = useState({});
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+
+  const gb = (n) => `${(n / 1073741824).toFixed(2)} GB`;
+  const mb = (n) => `${(n / 1048576).toFixed(1)} MB`;
+
+  const pickFolder = async () => {
+    const chosen = await api.invoke('duplicates:pick').catch(() => []);
+    if (chosen?.length) setRoots(chosen);
+  };
+
+  const scan = async () => {
+    setScanning(true);
+    setError('');
+    setNote('');
+    setPicked({});
+    try {
+      const r = await api.invoke('duplicates:scan', roots);
+      if (r.error) setError(r.error);
+      setResult(r);
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const selected = Object.keys(picked).filter((p) => picked[p]);
+  const remove = async () => {
+    setError('');
+    try {
+      const out = await api.invoke('duplicates:remove', selected);
+      if (!out.ok) { setError(out.error || 'Some files could not be removed.'); return; }
+      setNote(`${out.removed} file${out.removed === 1 ? '' : 's'} sent to the Recycle Bin. Restore them from there to undo. Scan again to refresh the list.`);
+      setResult(null);
+      setPicked({});
+    } catch (e) {
+      setError(e.message);
+    }
+  };
+
+  return (
+    <Dialog title="Duplicate Files" onClose={onClose} width={760} buttons={<button className="primary" onClick={onClose}>Close</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>
+        Finds files with exactly the same contents (checked by SHA-256, never by name alone) inside one folder and everything under it.
+        Nothing is ticked for you, at least one copy of each file is always kept, and removed copies go to the Recycle Bin.
+        Protected locations such as Windows and Program Files are not scanned.
+      </p>
+      {error && <div className="error-bar" style={{ marginBottom: 10 }}><span>{error}</span></div>}
+      {note && <div className="note" style={{ marginBottom: 10 }}>{note}</div>}
+      <div className="field-row">
+        <label>Folder</label>
+        <span className="path">{roots[0] || 'None chosen'}</span>
+        <button onClick={pickFolder} title="Choose the folder to scan for duplicate files">Choose…</button>
+        <button disabled={!roots.length || scanning} onClick={scan} title="Scan the chosen folder and everything under it">
+          {scanning ? 'Scanning…' : 'Scan'}
+        </button>
+        {scanning && <button onClick={() => api.invoke('duplicates:scanCancel').catch(() => {})}>Cancel</button>}
+      </div>
+      {result && !result.error && (
+        <p className="muted">
+          {result.groups.length} duplicate group{result.groups.length === 1 ? '' : 's'} in {result.scanned.toLocaleString()} files scanned
+          {result.truncated ? ' (scan stopped early — results are partial)' : ''}.
+        </p>
+      )}
+      {result?.groups?.map((g) => (
+        <div key={g.sha256} className="tweak-group">
+          <div className="tweak-group-head">
+            <span>{g.files.length} identical files · {mb(g.size)} each</span>
+            <span className="muted">recoverable {gb(g.wasted)}</span>
+          </div>
+          {g.files.map((p) => (
+            <div key={p} className="tree-item">
+              <input type="checkbox" checked={!!picked[p]} onChange={(e) => setPicked((s) => ({ ...s, [p]: e.target.checked }))} title="Tick copies to send to the Recycle Bin — one copy must stay" />
+              <span className="path">{p}</span>
+            </div>
+          ))}
+        </div>
+      ))}
+      {selected.length > 0 && (
+        <p>
+          <button onClick={remove} title="Send the ticked copies to the Recycle Bin">Send {selected.length} to Recycle Bin</button>
+        </p>
+      )}
+    </Dialog>
+  );
+}
+
+// Duplicate Programs (Tools › Advanced Tools): the same program installed more than
+// once. Review only — removal stays in the main list, one at a time.
+export function DuplicateProgramsDialog({ onClose }) {
+  const [groups, setGroups] = useState(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    api.invoke('programs:duplicates').then(setGroups).catch((e) => { setGroups([]); setError(e.message); });
+  }, []);
+  const KIND = { versions: 'different versions side by side', copies: 'same version in two places', entries: 'more than one entry' };
+  return (
+    <Dialog title="Duplicate Programs" onClose={onClose} width={760} buttons={<button className="primary" onClick={onClose}>Close</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>
+        Programs whose names match once version numbers and edition words are removed. Old versions left beside new ones are common and usually safe to uninstall — from the main program list, one at a time, so each gets its own backup and leftover review.
+      </p>
+      {error && <div className="error-bar" style={{ marginBottom: 10 }}><span>{error}</span></div>}
+      {groups === null ? <p className="muted">Comparing the program list…</p>
+        : groups.length === 0 ? <p className="muted">No duplicate programs found.</p>
+          : groups.map((g) => (
+            <div key={g.core} className="tweak-group">
+              <div className="tweak-group-head"><span>{g.core}</span><span className="muted">{KIND[g.kind] || g.kind}</span></div>
+              {g.entries.map((e) => (
+                <div key={e.key} className="tree-item">
+                  <span className="path">{e.name}{e.version ? ` · ${e.version}` : ''}</span>
+                  <span className="muted">{e.location}</span>
+                </div>
+              ))}
+            </div>
+          ))}
+    </Dialog>
+  );
+}
+
+// Purgeon Health (Tools › System Tools): the PC Health Check's counterpart for the
+// app itself — settings, data folder, backups, monitoring, log, update checker.
+export function SelfHealthDialog({ onClose }) {
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState('');
+  useEffect(() => {
+    api.invoke('selfhealth:check').then(setResult).catch((e) => setError(e.message));
+  }, []);
+  const MARK = { pass: '✓ Pass', warn: '! Warning', fail: '✗ Fail' };
+  return (
+    <Dialog title="Purgeon Health" onClose={onClose} width={680} buttons={<button className="primary" onClick={onClose}>Close</button>}>
+      <p className="muted" style={{ marginBottom: 10 }}>Whether Purgeon's own working parts are functioning: settings, data folder, backups, monitoring records, command log and the update checker. Nothing is repaired here — each line says what it found.</p>
+      {error && <div className="error-bar" style={{ marginBottom: 10 }}><span>{error}</span></div>}
+      {result === null && !error ? <p className="muted">Checking…</p> : result && (
+        <>
+          <p className="heading">{result.summary.text}</p>
+          {result.checks.map((c) => (
+            <div key={c.id} className="tree-item">
+              <span className="path">{c.label}</span>
+              <span className="muted">{MARK[c.status] || c.status} — {c.detail}</span>
+            </div>
+          ))}
+        </>
+      )}
+    </Dialog>
+  );
+}
+
 // Relationship Graph (Tools › Advanced Tools): how each program connects
 // to the rest of the system, joined entirely on this PC. Orphans — entries
 // pointing at files that no longer exist, belonging to no installed
@@ -908,11 +1064,36 @@ export function ResultsDialog({ title, results, note, onClose, onUndo }) {
   );
 }
 
+// Editable notes on a monitored-installation record, saved with the record itself.
+function MonitorNotes({ program }) {
+  const [notes, setNotes] = useState(program.notes || '');
+  const [saved, setSaved] = useState(false);
+  const save = async () => {
+    await api.invoke('monitor:setNotes', { id: program.id, notes });
+    program.notes = notes;
+    setSaved(true);
+    setTimeout(() => setSaved(false), 2000);
+  };
+  return (
+    <div style={{ marginTop: 10 }}>
+      <p className="heading">Your notes</p>
+      <p className="muted">Where the installer came from, the options you picked in it, anything the recording cannot know. Saved with the recording.</p>
+      <textarea value={notes} onChange={(e) => { setNotes(e.target.value); setSaved(false); }} rows={4} style={{ width: '100%' }} maxLength={4000} title="Notes kept with this recording" />
+      <p>
+        <button onClick={save} title="Save these notes with the recording">{saved ? 'Saved ✓' : 'Save Notes'}</button>
+      </p>
+    </div>
+  );
+}
+
 export function PropertiesDialog({ program, onClose }) {
   const rows = program.items
     ? [
         ['Name', program.name],
         ['Installer', program.installer],
+        ['Installer product', program.installerInfo?.product],
+        ['Installer company', program.installerInfo?.company],
+        ['Installer version', program.installerInfo?.version],
         ['Monitored', `${new Date(program.started).toLocaleString()} – ${new Date(program.finished).toLocaleString()}`],
         ['Recorded changes', program.items.length],
         ['Uninstall entries', (program.uninstallKeys || []).join('\n')],
@@ -961,6 +1142,7 @@ export function PropertiesDialog({ program, onClose }) {
           ))}
         </div>
       )}
+      {program.items && program.id && <MonitorNotes program={program} />}
     </Dialog>
   );
 }
@@ -1114,9 +1296,17 @@ export function SystemInfoDialog({ data, onClose }) {
 }
 
 export function AboutDialog({ onClose }) {
+  const [policies, setPolicies] = useState([]);
+  useEffect(() => { api.invoke('policy:get').then((p) => setPolicies(p.restrictions || [])).catch(() => {}); }, []);
   return (
     <Dialog title="About Purgeon" onClose={onClose} width={560} buttons={<><button className="primary" onClick={onClose}>OK</button><button onClick={() => api.invoke('program:openUrl', 'https://github.com/SeanShaffer88/Purgeon/releases').catch(() => {})}>View Releases</button></>}>
       <p className="heading">Purgeon {__APP_VERSION__}</p>
+      {policies.length > 0 && (
+        <div className="tweak-group">
+          <div className="tweak-group-head"><span>Organization policies in effect</span></div>
+          {policies.map((r) => <p key={r} className="muted">{r}</p>)}
+        </div>
+      )}
       {window.__sweepPortable && <p className="muted">Portable mode: settings, backups and snapshots are kept in the "Purgeon Data" folder next to the program.</p>}
       <p>Uninstalls programs, then hunts down the leftover files, registry keys, startup entries and services they leave behind.</p>
       <p>It also monitors installations, compares system snapshots, cleans junk files and manages startup programs. Every change is backed up first and can be undone.</p>

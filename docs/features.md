@@ -73,6 +73,9 @@ Try a program and undo it completely — a snapshot is taken, the installer runs
 Tools › Advanced Tools holds the powerful tools, deliberately kept out of the main window:
 
 - **Recovery Packages**: every removal backup with its verification state.
+- **Duplicate Files**: files with identical contents under a folder you pick — grouped by exact size, then confirmed by SHA-256. A review tool: nothing is ticked for you, at least one copy of each file is always kept, and removed copies go to the Recycle Bin. Protected locations are not scanned.
+- **Duplicate Programs**: the same program installed more than once (names compared with version numbers and edition words removed) — different versions side by side, or the same version in two places. Review only; uninstall from the main list.
+- **Purgeon Health** (in System Tools): a health check for Purgeon itself — settings file, data folder, removal backups, monitoring records, command log, and the update checker, each with Pass / Warning / Fail and the evidence. Nothing is repaired.
 - **Shared Components**: the shared runtimes, shared install folders and shared files Purgeon keeps during removals.
 - **Secure Erase**: overwrites files (zeros, random data, or three passes)
 - **Games**: the games Steam, Epic and GOG report
@@ -229,6 +232,16 @@ Tools › System Tools holds a second set of windows beside Advanced Tools, kept
 
 **Monthly Report** (`File › Monthly Report`) — saves an HTML page for a month: programs installed and removed, space freed, startup changes, updates, clean-ups, and programs flagged by the insights.
 
+## Settings window and organization policies
+
+**Settings** (Tools › Settings › Settings…, `Ctrl+,`) — every Purgeon option in one window: uninstalling (silent mode, restore points, Safe Mode, unsigned-program warnings), appearance (theme, grid lines, text size, reduced motion), window and tray, **active monitoring** (the setup monitor and the startup monitor, each with its own switch), **startup and exit** (start with Windows, start in the tray, what the close button does), update checks, and backup limits. Changes apply at once, so the window can stay open while several options are changed.
+
+**Active monitoring, both halves switchable** — the *setup monitor* watches for installers starting and offers to record them; the *startup monitor* checks every 10 minutes whether a program added itself to startup and tells you when one does. Each has its own toggle in Settings and in the Tools menu, and turning one off never affects the other or the manual tools.
+
+**Organization policies** — an administrator can restrict Purgeon for every user of a PC with DWORD values under `HKLM\SOFTWARE\Policies\Purgeon`: `DisableBatchUninstall` (the uninstall queue refuses new programs), `DisableForceRemove` (Force removals are refused), and `DisableSecureErase` (Secure Erase is refused). A refusal names the policy. Policies in effect are listed in About and by `Purgeon --policy`.
+
+**Monitored installations remember more** — each recording keeps the installer's source path and the product, company, and version stamped in the installer file, plus your own notes (in the recording's Properties) for where the installer came from and the options you chose in it — the parts a recording cannot know by itself.
+
 ## Themes and accessibility
 
 - **View** offers Dark terminal theme, Light theme and High Contrast.
@@ -308,6 +321,13 @@ Purgeon --history [--json]
 Purgeon --archive [--json]
 Purgeon --maintenance
 Purgeon --monitor "<installer>" [--name "<program name>"]
+Purgeon --monitor list [--json]
+Purgeon --monitor notes --id <id> [--notes "<text>"]
+Purgeon --policy [--json]
+Purgeon --duplicates apps [--json]
+Purgeon --selfcheck [--json]
+Purgeon --duplicates scan --folder "<path>" [--json]
+Purgeon --duplicates remove "<path>" ["<path>"...]
 Purgeon --monitor test-install-start --installer "<path>" [--name "<name>"]
 Purgeon --monitor test-install-finish [--name "<name>"]
 Purgeon --monitor revert-test-install

@@ -59,6 +59,10 @@
 import { sys } from './backend/sys.js';
 import * as snapshots from './backend/snapshots.js';
 import * as monitor from './backend/monitor.js';
+import * as duplicates from './backend/duplicates.js';
+import * as appdupes from './backend/appdupes.js';
+import * as selfhealth from './backend/selfhealth.js';
+import * as policy from './backend/policy.js';
 import * as maintenance from './backend/maintenance.js';
 import * as autostart from './backend/autostart.js';
 import * as schedule from './backend/schedule.js';
@@ -105,6 +109,20 @@ const HELP = `Purgeon command line
         Runs the weekly maintenance chosen in Tools › Scheduled Maintenance.
   --monitor "<installer>" [--name "<program name>"]
         Records an installation for later complete removal.
+  --monitor list [--json]
+        Lists monitored programs with their installer source and notes.
+  --monitor notes --id <id> [--notes "<text>"]
+        Shows a recording's notes, or replaces them when --notes is given.
+  --policy [--json]
+        Lists the organization policies in effect (HKLM\SOFTWARE\Policies\Purgeon).
+  --duplicates apps [--json]
+        Finds programs installed more than once (same core name, different versions or places).
+  --duplicates scan --folder "<path>" [--json]
+        Finds files with identical contents (SHA-256) under a folder.
+  --selfcheck [--json]
+        Checks Purgeon's own working parts: settings, data folder, backups, monitoring, log, updates.
+  --duplicates remove "<path>" ["<path>"...]
+        Sends named duplicate copies to the Recycle Bin; one copy of each file is always kept.
   --autostart on|off
         Turns View › Start with Windows on or off.
   --background-scan
@@ -268,8 +286,68 @@ async function run(args) {
     };
     return wrap(true, entries.map((e) => `${local(e.removed)}  ${e.name}${e.version ? ` ${e.version}` : ''}  (${e.how})`).join('\\r\\n') + '\\r\\n');
   }
+  if (cmd === '--policy') {
+    const p = await policy.readPolicy();
+    if (j) return wrap(true, JSON.stringify(p, null, 2));
+    const active = policy.activeRestrictions(p);
+    return wrap(true, active.length ? `Organization policies in effect:\r\n${active.map((r) => `  ${r}`).join('\r\n')}\r\n` : 'No organization policies are set (HKLM\\SOFTWARE\\Policies\\Purgeon).\r\n');
+  }
+  if (cmd === '--selfcheck') {
+    const r = await selfhealth.check();
+    if (j) return wrap(true, JSON.stringify(r, null, 2));
+    return wrap(r.summary.status !== 'fail', `${r.summary.text}\r\n${r.checks.map((c) => `  ${c.status.toUpperCase().padEnd(4)} ${c.label}: ${c.detail}`).join('\r\n')}\r\n`, r.summary.status === 'fail' ? EXIT_ERROR : EXIT_OK);
+  }
+  if (cmd === '--duplicates') {
+    const sub = option(args, '--duplicates');
+    if (sub === 'apps') {
+      const groups = await appdupes.scan();
+      if (j) return wrap(true, JSON.stringify(groups, null, 2));
+      if (!groups.length) return wrap(true, 'No duplicate programs found.\r\n');
+      return wrap(true, groups.map((g) => `${g.core} (${g.kind}):\r\n${g.entries.map((e) => `  ${e.name}${e.version ? ` ${e.version}` : ''} — ${e.location}`).join('\r\n')}`).join('\r\n') + '\r\n');
+    }
+    if (sub === 'scan') {
+      const folder = option(args, '--folder');
+      if (!folder || folder.startsWith('--')) throw new Error('Specify the folder: --duplicates scan --folder "D:\\Data"');
+      const r = await duplicates.scan([folder]);
+      if (j) return wrap(true, JSON.stringify(r, null, 2));
+      if (r.error) return wrap(false, `${r.error}\r\n`, EXIT_ERROR);
+      const lines = r.groups.map((g) => `${g.files.length} copies x ${(g.size / 1048576).toFixed(1)} MB (recoverable ${(g.wasted / 1048576).toFixed(1)} MB):\r\n${g.files.map((f) => `  ${f}`).join('\r\n')}`);
+      return wrap(true, `${r.groups.length} duplicate groups in ${r.scanned} files scanned${r.truncated ? ' (partial)' : ''}.\r\n${lines.join('\r\n')}\r\n`);
+    }
+    if (sub === 'remove') {
+      const files = args.slice(2).filter((a) => a !== '--json' && a !== '--quiet' && a !== '-q');
+      if (!files.length) throw new Error('Name the copies to remove: --duplicates remove "path" ["path"...]');
+      // A fresh CLI process has no scan in memory, so scan the files' own folders first.
+      const folders = [...new Set(files.map((f) => String(f).replace(/[\\/][^\\/]*$/, '')).filter(Boolean))];
+      const scan = await duplicates.scan(folders);
+      if (scan.error) return wrap(false, `${scan.error}\r\n`, EXIT_ERROR);
+      const r = await duplicates.remove(files);
+      if (j) return wrap(true, JSON.stringify(r, null, 2));
+      if (!r.ok) return wrap(false, `${r.error || 'Some files could not be removed.'}\r\n`, EXIT_ERROR);
+      return wrap(true, `${r.removed} duplicate files sent to the Recycle Bin.\r\n`);
+    }
+    throw new Error('Use --duplicates scan --folder <path>, or --duplicates remove <path>...');
+  }
   if (cmd === '--monitor') {
     const sub = option(args, '--monitor');
+    if (sub === 'list') {
+      const records = await monitor.list();
+      if (j) return wrap(true, JSON.stringify(records.map((r) => ({ id: r.id, name: r.name, installer: r.installer, installerInfo: r.installerInfo, notes: r.notes || '', changes: r.items?.length || 0 })), null, 2));
+      if (!records.length) return wrap(true, 'No monitored programs.\r\n');
+      return wrap(true, records.map((r) => `${r.id}  ${r.name}\r\n  Installer: ${r.installer || ''}${r.installerInfo?.version ? ` (${r.installerInfo.product || ''} ${r.installerInfo.version})` : ''}\r\n  Changes: ${r.items?.length || 0}${r.notes ? `\r\n  Notes: ${r.notes}` : ''}`).join('\r\n') + '\r\n');
+    }
+    if (sub === 'notes') {
+      const id = option(args, '--id');
+      if (!id || id.startsWith('--')) throw new Error('Specify the recording: --monitor notes --id <id> [--notes "text"]');
+      const text = option(args, '--notes');
+      if (text === null || text === undefined) {
+        const rec = (await monitor.list()).find((r) => r.id === id);
+        if (!rec) throw new Error(`No monitored program with id ${id}.`);
+        return wrap(true, `${rec.notes || '(no notes)'}\r\n`);
+      }
+      const rec = await monitor.setNotes(id, text);
+      return wrap(true, `Notes saved for ${rec.name}.\r\n`);
+    }
     // Disposable test install subcommands
     if (sub === 'test-install-start') {
       const installer = option(args, '--installer');
@@ -640,7 +718,7 @@ async function run(args) {
 // parser and keep their existing dispatch below; a disposable test install under
 // --monitor also stays on that path because it takes its own options.
 const PARSER_COMMANDS = new Set(['--snapshot', '--compare', '--list-snapshots', '--monitor', '--maintenance', '--autostart', '--help', '-h', '/?']);
-const LEGACY_COMMANDS = new Set(['--background-scan', '--restore-point', '--associations', '--associations-for', '--schedule', '--startup', '--trusted', '--update', '--sync', '--plugins', '--portableapps', '--export', '--uninstall', '--language', '--settings', '--profiler', '--timeline', '--history', '--archive', '--quiet', '-q', '--json']);
+const LEGACY_COMMANDS = new Set(['--background-scan', '--restore-point', '--associations', '--associations-for', '--schedule', '--startup', '--trusted', '--update', '--sync', '--plugins', '--portableapps', '--export', '--uninstall', '--language', '--settings', '--profiler', '--timeline', '--history', '--archive', '--policy', '--duplicates', '--selfcheck', '--quiet', '-q', '--json']);
 
 async function dispatch(args, initialize) {
   const first = Array.isArray(args) && typeof args[0] === 'string' ? args[0].toLowerCase() : null;
