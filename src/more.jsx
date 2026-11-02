@@ -1075,6 +1075,8 @@ export function TrustedPublishersDialog({ publishers, onClose }) {
 export function UpdateCheckDialog({ enabled, lastCheck, onClose }) {
   const [checking, setChecking] = useState(false);
   const [result, setResult] = useState(null);
+  const [installing, setInstalling] = useState(false);
+  const [install, setInstall] = useState(null);
 
   const toggle = async () => {
     await api.invoke('update:enable', !enabled);
@@ -1084,6 +1086,7 @@ export function UpdateCheckDialog({ enabled, lastCheck, onClose }) {
   const checkNow = async () => {
     setChecking(true);
     setResult(null);
+    setInstall(null);
     try {
       const r = await api.invoke('update:check');
       setResult(r);
@@ -1091,6 +1094,19 @@ export function UpdateCheckDialog({ enabled, lastCheck, onClose }) {
       setResult({ enabled: true, update: null, error: e.message });
     } finally {
       setChecking(false);
+    }
+  };
+
+  const installNow = async () => {
+    setInstalling(true);
+    setInstall(null);
+    try {
+      const r = await api.invoke('update:install');
+      setInstall(r);
+    } catch (e) {
+      setInstall({ ok: false, error: e.message });
+    } finally {
+      setInstalling(false);
     }
   };
 
@@ -1144,6 +1160,21 @@ export function UpdateCheckDialog({ enabled, lastCheck, onClose }) {
               <p>
                 <a href={result.update.url} target="_blank" rel="noopener noreferrer">Download from GitHub Releases</a>
               </p>
+              {result.update.installer && !install?.ok && (
+                <p>
+                  <button disabled={installing} onClick={installNow} title="Download the Setup program, check its SHA-256 against GitHub's record, then run it">
+                    {installing ? 'Downloading & verifying…' : 'Download and Install'}
+                  </button>
+                </p>
+              )}
+              {install && !install.ok && (
+                <p className="muted" style={{ color: 'var(--red)' }}>
+                  Install failed: {install.error}
+                </p>
+              )}
+              {install?.ok && (
+                <p>The Setup program is running. Purgeon will close while the update installs, and the installer can relaunch it afterwards.</p>
+              )}
             </>
           )}
           {result.update && !result.update.newer && (
