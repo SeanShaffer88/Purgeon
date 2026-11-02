@@ -126,11 +126,11 @@ async function checkStartup(count) {
 }
 
 async function checkBattery() {
-  const rows = await runPSJson(`Get-CimInstance -Namespace root\\wmi -ClassName BatteryFullChargedCapacity -ErrorAction SilentlyContinue | Select-Object -First 1 FullChargedCapacity | ConvertTo-Json -Compress
-Get-CimInstance -Namespace root\\wmi -ClassName BatteryStaticData -ErrorAction SilentlyContinue | Select-Object -First 1 DesignedCapacity | ConvertTo-Json -Compress`).catch(() => null);
-  const text = String(rows || '');
-  const full = Number(/"FullChargedCapacity"\s*:\s*(\d+)/.exec(text)?.[1]);
-  const design = Number(/"DesignedCapacity"\s*:\s*(\d+)/.exec(text)?.[1]);
+  const [row] = await runPSJson(`$full = Get-CimInstance -Namespace root\\wmi -ClassName BatteryFullChargedCapacity -ErrorAction SilentlyContinue | Select-Object -First 1
+$design = Get-CimInstance -Namespace root\\wmi -ClassName BatteryStaticData -ErrorAction SilentlyContinue | Select-Object -First 1
+[pscustomobject]@{ full = $full.FullChargedCapacity; design = $design.DesignedCapacity } | ConvertTo-Json -Compress`).catch(() => []);
+  const full = Number(row?.full);
+  const design = Number(row?.design);
   if (!full || !design) return check('battery', 'Battery health', 'unknown', 'This PC has no battery Windows can report on.');
   const wear = Math.round((1 - full / design) * 100);
   const s = batteryWearStatus(wear);
