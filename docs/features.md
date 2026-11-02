@@ -75,7 +75,7 @@ Tools › Advanced Tools holds the powerful tools, deliberately kept out of the 
 - **Recovery Packages**: every removal backup with its verification state.
 - **Duplicate Files**: files with identical contents under a folder you pick — grouped by exact size, then confirmed by SHA-256. A review tool: nothing is ticked for you, at least one copy of each file is always kept, and removed copies go to the Recycle Bin. Protected locations are not scanned.
 - **Duplicate Programs**: the same program installed more than once (names compared with version numbers and edition words removed) — different versions side by side, or the same version in two places. Review only; uninstall from the main list.
-- **Purgeon Health** (in System Tools): a health check for Purgeon itself — settings file, data folder, removal backups, monitoring records, command log, and the update checker, each with Pass / Warning / Fail and the evidence. Nothing is repaired.
+- **Purgeon Health** (in System Tools): a health check for Purgeon itself — settings file, data folder, removal backups, monitoring records, command log, the startup and setup monitor states, the Background Monitoring and Weekly Maintenance Windows tasks (present, matching their settings, last run and result), and the update checker — when update checks are on it runs the real check, so "reachable" means GitHub answered. Each line is Pass / Warning / Fail with the evidence. Nothing is repaired.
 - **Shared Components**: the shared runtimes, shared install folders and shared files Purgeon keeps during removals.
 - **Secure Erase**: overwrites files (zeros, random data, or three passes)
 - **Games**: the games Steam, Epic and GOG report
