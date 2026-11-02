@@ -51,3 +51,27 @@ export async function scan() {
   const list = await programs.listDesktop();
   return findDuplicates(list);
 }
+
+// Pure: installed entries that duplicate each other exactly — same name, same
+// version, same location. Unlike findDuplicates (the same program installed
+// twice over), these are two registry listings for what can only be one install:
+// one of them is almost always a stale leftover from an update or a repair, and
+// deleting the stale listing (Remove Entry) is safe because the program itself
+// is untouched. Matching is exact on purpose, and an entry without a recorded
+// version or location is never accused.
+// Returns [{ name, version, location, keys }] with 2+ keys each.
+export function findDuplicateEntries(list) {
+  const byIdentity = new Map();
+  for (const p of list || []) {
+    if (!p?.key || p.store) continue;
+    const name = String(p.name || '').trim().toLowerCase();
+    const version = String(p.version || '').trim().toLowerCase();
+    const location = String(p.location || '').trim().toLowerCase();
+    if (!name || !version || !location) continue;
+    const id = `${name}|${version}|${location}`;
+    const group = byIdentity.get(id) || { name: p.name, version: p.version, location: p.location, keys: [] };
+    group.keys.push(p.key);
+    byIdentity.set(id, group);
+  }
+  return [...byIdentity.values()].filter((g) => g.keys.length > 1).sort((a, b) => String(a.name).localeCompare(String(b.name)));
+}
