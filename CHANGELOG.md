@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **Impact summary in the leftover review**: above the item list, a line follows your ticks — how many files or folders, registry entries and other items are selected, about how much space removing them will free (the removal backup's own size forecast), and a warning when the selection includes a service, scheduled task or driver that may need a restart to finish.
 - **Browser Clean-up on the command line**: `Purgeon --browsers list [--json]` lists the same extensions, search engines and home pages as the Browser Clean-up window, and `Purgeon --browsers remove <browser> <extension-id>...` removes program-added extensions with a backup. Extensions you added yourself or that a policy added are refused (remove those in the browser itself), and removal refuses while that browser is running.
 - **Browser Clean-up shows who made each extension and what it can access**: each extension now carries a second line with its author (from its manifest, when it states one) and a short list of what it can do — its permissions and the sites it can reach, shortened to the site name (`<all_urls>` reads "all websites"). Nothing is guessed: an extension whose manifest names no author shows none.
 
