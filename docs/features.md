@@ -163,7 +163,7 @@ Items are marked as part of the program (install folders, shortcuts, machine-wid
 
 ## Browser clean-up
 
-**Browser Clean-up** — lists extensions, search engine and home page of Chrome, Edge, Brave and Firefox. Extensions a program added on its own (through the registry or into Firefox's shared folders) are flagged and can be removed with a backup. Extensions you added yourself are listed for reference only. Nothing is changed while the browser is running. The same window carries **cookie rules per site**: Blocked and Allowed lists written to Chrome's and Edge's policy keys, holding in every profile and while the browsers run (adding a block warns that it signs you out of that site). Firefox does not read those policies and is stated as not covered.
+**Browser Clean-up** — lists extensions, search engine and home page of Chrome, Edge, Brave and Firefox. Extensions a program added on its own (through the registry or into Firefox's shared folders) are flagged and can be removed with a backup. Extensions you added yourself are listed for reference only. Nothing is changed while the browser is running. The same window carries **cookie rules per site**: Blocked and Allowed lists written to Chrome's and Edge's policy keys, holding in every profile and while the browsers run (adding a block warns that it signs you out of that site). Firefox does not read those policies and is stated as not covered. The same listing and removal are available headlessly: `Purgeon --browsers list [--json]` and `Purgeon --browsers remove <browser> <extension-id>...` (program-added extensions only, with a backup, and never while that browser is running).
 
 ## Startup & Services
 

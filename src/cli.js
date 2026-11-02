@@ -62,6 +62,7 @@ import * as monitor from './backend/monitor.js';
 import * as duplicates from './backend/duplicates.js';
 import * as appdupes from './backend/appdupes.js';
 import * as selfhealth from './backend/selfhealth.js';
+import * as browsers from './backend/browsers.js';
 import * as policy from './backend/policy.js';
 import * as maintenance from './backend/maintenance.js';
 import * as autostart from './backend/autostart.js';
@@ -123,6 +124,12 @@ const HELP = `Purgeon command line
         Checks Purgeon's own working parts: settings, data folder, backups, monitoring, log, updates.
   --duplicates remove "<path>" ["<path>"...]
         Sends named duplicate copies to the Recycle Bin; one copy of each file is always kept.
+  --browsers list [--json]
+        Lists browser extensions (Chrome, Edge, Brave, Firefox), who added each one,
+        and each browser's search engine and home page.
+  --browsers remove <browser> <extension-id> [<extension-id>...]
+        Removes program-added extensions with a backup (the Browser Clean-up window's
+        removals). Browsers: chrome, edge, brave, firefox. Close the browser first.
   --autostart on|off
         Turns View › Start with Windows on or off.
   --setup-monitor on|off
@@ -331,6 +338,36 @@ async function run(args) {
       return wrap(true, `${r.removed} duplicate files sent to the Recycle Bin.\r\n`);
     }
     throw new Error('Use --duplicates scan --folder <path>, or --duplicates remove <path>...');
+  }
+  if (cmd === '--browsers') {
+    const sub = option(args, '--browsers');
+    const data = await browsers.list();
+    const tag = (e) => (e.addedBy === 'program' ? (e.pendingInstall ? 'added by a program (waiting)' : 'added by a program') : e.addedBy === 'policy' ? 'by policy' : 'added by you');
+    if (sub === 'list' || !sub) {
+      if (j) return wrap(true, JSON.stringify(data, null, 2));
+      if (!data.extensions.length) return wrap(true, 'No browser extensions found.\r\n');
+      const lines = data.extensions.map((e) => `${e.name}${e.version ? ` ${e.version}` : ''} — ${e.browserName}${e.profile ? ` (${e.profile})` : ''} [${tag(e)}] id: ${e.id}`);
+      const foot = data.settings.map((x) => `${x.browserName} (${x.profile}): search ${x.search || 'default'}${x.home ? `, home page ${x.home}` : ''}`);
+      return wrap(true, lines.join('\r\n') + (foot.length ? `\r\n${foot.join('\r\n')}` : '') + '\r\n');
+    }
+    if (sub === 'remove') {
+      const positional = args.slice(2).filter((a) => a !== '--json' && a !== '--quiet' && a !== '-q');
+      const [browserId, ...ids] = positional;
+      if (!browserId || !ids.length) throw new Error('Name the browser and extension ids: --browsers remove chrome <extension-id>...');
+      const targets = data.extensions.filter((e) => e.browser === browserId && ids.includes(e.id));
+      const missing = ids.filter((id) => !targets.some((e) => e.id === id));
+      if (missing.length) return wrap(false, `Extension not found in ${browserId}: ${missing.join(', ')}\r\n`, EXIT_ERROR);
+      const kept = targets.filter((e) => !e.removable.length);
+      if (kept.length) return wrap(false, `${kept.map((e) => e.name).join(', ')}: added by you or by policy — remove those in the browser itself.\r\n`, EXIT_ERROR);
+      const proc = { chrome: 'chrome', edge: 'msedge', brave: 'brave', firefox: 'firefox' }[browserId];
+      if (proc && (await browsers.running()).includes(proc)) return wrap(false, `Close ${targets[0].browserName} first, then run this again.\r\n`, EXIT_ERROR);
+      const r = await backups.removeItems({ title: `Browser extensions (${targets.map((e) => e.name).join(', ')})`, items: targets.flatMap((e) => e.removable), owners: [] });
+      if (j) return wrap(true, JSON.stringify(r, null, 2));
+      const done = r.results.filter((x) => x.ok).length;
+      const failed = r.results.length - done;
+      return wrap(failed === 0, `Removed ${done} item(s) for ${targets.length} extension(s), with a backup.${failed ? ` ${failed} item(s) could not be removed.` : ''}\r\n`, failed ? EXIT_ERROR : EXIT_OK);
+    }
+    throw new Error('Use --browsers list, or --browsers remove <browser> <extension-id>...');
   }
   if (cmd === '--monitor') {
     const sub = option(args, '--monitor');
@@ -729,7 +766,7 @@ async function run(args) {
 // parser and keep their existing dispatch below; a disposable test install under
 // --monitor also stays on that path because it takes its own options.
 const PARSER_COMMANDS = new Set(['--snapshot', '--compare', '--list-snapshots', '--monitor', '--maintenance', '--autostart', '--help', '-h', '/?']);
-const LEGACY_COMMANDS = new Set(['--background-scan', '--restore-point', '--associations', '--associations-for', '--schedule', '--startup', '--trusted', '--update', '--sync', '--plugins', '--portableapps', '--export', '--uninstall', '--language', '--settings', '--profiler', '--timeline', '--history', '--archive', '--policy', '--duplicates', '--selfcheck', '--setup-monitor', '--startup-monitor', '--quiet', '-q', '--json']);
+const LEGACY_COMMANDS = new Set(['--background-scan', '--restore-point', '--associations', '--associations-for', '--schedule', '--startup', '--trusted', '--update', '--sync', '--plugins', '--portableapps', '--export', '--uninstall', '--language', '--settings', '--profiler', '--timeline', '--history', '--archive', '--policy', '--duplicates', '--selfcheck', '--browsers', '--setup-monitor', '--startup-monitor', '--quiet', '-q', '--json']);
 
 async function dispatch(args, initialize) {
   const first = Array.isArray(args) && typeof args[0] === 'string' ? args[0].toLowerCase() : null;
