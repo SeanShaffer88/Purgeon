@@ -191,6 +191,11 @@ function InsightTags({ i }) {
           growing
         </span>
       )}
+      {i.duplicate && (
+        <span className="insight-tag offer" title={`${i.duplicate} installed entries share this name, version and location — one is usually a stale leftover. Right-click a copy and choose Remove Entry... to delete the stale listing; the program itself is not uninstalled.`}>
+          duplicate entry
+        </span>
+      )}
     </>
   );
 }
