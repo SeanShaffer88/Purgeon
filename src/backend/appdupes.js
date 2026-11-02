@@ -6,6 +6,7 @@
 // A review list only: removing stays in the main program list, one program at a time,
 // through the normal backed-up uninstall.
 import * as programs from './programs.js';
+import { compareVersions } from './updatecheck.js';
 
 const EDITION_WORDS = /\b(community|professional|enterprise|standard|edition|free|trial|beta|alpha|preview|portable|x64|x86|64[- ]bit|32[- ]bit|win64|win32)\b/g;
 
@@ -50,6 +51,22 @@ export function findDuplicates(list) {
 export async function scan() {
   const list = await programs.listDesktop();
   return findDuplicates(list);
+}
+
+// Pure: entries superseded by a newer copy of the same program installed beside
+// them (the 'versions' groups of findDuplicates). Returns a Map of entry key ->
+// the newest version present. An entry whose version is blank is never accused:
+// with nothing recorded, "older" would be a guess.
+export function findOldVersions(list) {
+  const out = new Map();
+  for (const g of findDuplicates(list)) {
+    if (g.kind !== 'versions') continue;
+    let newest = '';
+    for (const e of g.entries) if (e.version && compareVersions(e.version, newest) > 0) newest = e.version;
+    if (!newest) continue;
+    for (const e of g.entries) if (e.version && compareVersions(e.version, newest) < 0) out.set(e.key, newest);
+  }
+  return out;
 }
 
 // Pure: installed entries that duplicate each other exactly — same name, same

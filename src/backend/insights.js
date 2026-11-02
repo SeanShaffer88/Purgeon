@@ -7,7 +7,7 @@ import { sys } from './sys.js';
 import * as path from './winpath.js';
 import { runPSJson } from './shell.js';
 import { iconPathFor } from './programs.js';
-import { findDuplicateEntries } from './appdupes.js';
+import { findDuplicateEntries, findOldVersions } from './appdupes.js';
 import { publisherKey } from './leftovers.js';
 import { FileCache } from './filecache.js';
 
@@ -235,6 +235,8 @@ export async function programInsights(programs) {
   // entries share that identity, so the row can be tagged as a duplicate entry.
   const dupEntries = new Map();
   for (const g of findDuplicateEntries(programs)) for (const k of g.keys) dupEntries.set(k, g.keys.length);
+  // Older copies superseded by a newer install of the same program: key -> newest version.
+  const oldVersions = findOldVersions(programs);
   const out = {};
   for (const p of programs) {
     const sig = exes.get(p.key) && sigs.get(exes.get(p.key).toLowerCase());
@@ -244,6 +246,7 @@ export async function programInsights(programs) {
       ...(together.has(p.key) && { together: together.get(p.key) }),
       ...(looksLikeOffer(p.name) && { offer: true }),
       ...(dupEntries.has(p.key) && { duplicate: dupEntries.get(p.key) }),
+      ...(oldVersions.has(p.key) && { oldVersion: oldVersions.get(p.key) }),
       ...(g && { growth: g }),
       ...(times[p.key] && { written: times[p.key] }),
       ...(exes.get(p.key) && archs.get(exes.get(p.key).toLowerCase()) && { arch: archs.get(exes.get(p.key).toLowerCase()), exe: exes.get(p.key) }),
