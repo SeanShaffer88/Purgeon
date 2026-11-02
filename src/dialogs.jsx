@@ -1,5 +1,6 @@
 import { useMemo, useState, useEffect, useRef } from 'react';
 import { SettingHelp } from './onboarding.jsx';
+import { summarizeImpact } from './backend/impact.js';
 
 const api = window.api;
 
@@ -237,6 +238,27 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
   const [planning, setPlanning] = useState(false);
   const hidden = items.filter((it) => !allowed(it)).length;
   const [collapsed, setCollapsed] = useState(new Set());
+  // Pre-change impact summary for the current selection: what is going, about how
+  // much it frees, and whether a restart may be needed. The size is the removal
+  // backup's own forecast for the selection, refreshed as the ticks change.
+  const [impact, setImpact] = useState(null);
+  const impactSeq = useRef(0);
+  useEffect(() => {
+    const sel = items.filter((_, i) => checked.has(i));
+    if (!sel.length) {
+      setImpact(null);
+      return;
+    }
+    const seq = ++impactSeq.current;
+    api
+      .invoke('backups:forecast', { items: sel })
+      .then((bytes) => {
+        if (impactSeq.current === seq) setImpact(summarizeImpact(sel, bytes));
+      })
+      .catch(() => {
+        if (impactSeq.current === seq) setImpact(summarizeImpact(sel, 0));
+      });
+  }, [checked, items]);
   // Batch results carry `program`; those are grouped by program first, then by type.
   const programs = useMemo(() => [...new Set(items.map((it) => it.program || ''))], [items]);
   const byProgram = programs.length > 1 || programs[0] !== '';
@@ -300,6 +322,12 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
     >
       <p className="heading">{heading}</p>
       {safeMode && hidden > 0 && <div className="safe-note">Safe mode: {hidden} lower-confidence item{hidden === 1 ? ' is' : 's are'} shown but can’t be selected. Turn it off in Tools › Safe Mode.</div>}
+      {impact && (
+        <div className="impact-note">
+          {impact.text}
+          {impact.needsRestart && ' A restart may be needed to finish removing a service, scheduled task or driver.'}
+        </div>
+      )}
       {plan ? (
         <PlanView results={plan} onBack={() => setPlan(null)} onExport={() => onExportPlan(plan)} />
       ) : items.length === 0 ? (
