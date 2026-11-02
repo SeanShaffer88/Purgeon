@@ -13,7 +13,7 @@
 //   Purgeon --schedule on|off [--scan-leftovers] [--check-startup] [--missed]
 //   Purgeon --startup list|on|off|delayed|notdelayed --id <id>
 //   Purgeon --trusted list|add|remove --name <publisher>
-//   Purgeon --update settings|enable|disable|check
+//   Purgeon --update settings|enable|disable|check|install
 //         Turns background monitoring on or off. --missed marks the last scheduled scan as missed.
 //   Purgeon --sync status|apply|now [--files settings.json]
 //         Shows or configures cloud-synced settings. apply takes --folder <path> and --on|--off.
@@ -139,8 +139,10 @@ const HELP = `Purgeon command line
         Lists startup entries, or enables/disables/delays one. id is type|name (e.g. service|Spooler).
   --trusted list|add|remove --name <publisher>
         Manages the trusted publisher allowlist (programs signed by these are never blocked).
-  --update settings|enable|disable|check
+  --update settings|enable|disable|check|install
         Opt-in update checker: shows settings, turns checking on/off, or checks GitHub for a newer release.
+        install downloads the newer release's Setup program, verifies its SHA-256 against the digest
+        GitHub recorded for it, and runs it only when the digest matches (installed copies only).
   --uninstall "<program name>"
         Runs the named program's own uninstaller. Waits for it to finish, then
         records the removal in the archive. Use quotes around the name.
@@ -624,11 +626,17 @@ async function run(args) {
       if (result.error) return wrap(true, `Update check failed: ${result.error}\r\n`);
       if (!result.update) return wrap(true, 'No update information available.\r\n');
       if (result.update.newer) {
-        return wrap(true, `Update available: ${result.update.version} (current 0.8.0) · ${result.update.name}${result.update.body ? ` · ${result.update.body}` : ''}\r\n${result.update.url}\r\n`);
+        return wrap(true, `Update available: ${result.update.version} (current ${result.current}) · ${result.update.name}${result.update.body ? ` · ${result.update.body}` : ''}\r\n${result.update.url}\r\nInstall it with: Purgeon --update install\r\n`);
       }
-      return wrap(true, `No update available (current 0.8.0, latest ${result.update.version}).\r\n`);
+      return wrap(true, `No update available (current ${result.current}, latest ${result.update.version}).\r\n`);
     }
-    throw new Error('Use --update settings|enable|disable|check.');
+    if (sub === 'install') {
+      const result = await updatecheck.downloadAndInstall();
+      if (j) return wrap(true, JSON.stringify(result, null, 2));
+      if (!result.ok) return wrap(false, `${result.error}\r\n`, EXIT_ERROR);
+      return wrap(true, `Purgeon ${result.version} downloaded and verified against GitHub's SHA-256 digest. The Setup program is running: ${result.file}\r\n`);
+    }
+    throw new Error('Use --update settings|enable|disable|check|install.');
   }
   if (cmd === '--settings') {
     const settings = await (await import('./backend/api.js')).readSettings();

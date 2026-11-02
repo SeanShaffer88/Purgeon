@@ -1061,6 +1061,8 @@ struct SysInfo {
     os_version: String,
     /// OS build number (0 when unreadable).
     os_build: u32,
+    /// This build's own version (Cargo package version), for the update checker.
+    version: String,
 }
 
 #[tauri::command]
@@ -1100,6 +1102,7 @@ fn sys_info(app: tauri::AppHandle) -> SysInfo {
         os_name,
         os_version: reg_string(os_key, "DisplayVersion"),
         os_build,
+        version: env!("CARGO_PKG_VERSION").to_string(),
     }
 }
 

@@ -339,7 +339,7 @@ Purgeon --associations-for "<program>" [--json]
 Purgeon --schedule on|off [--scan-leftovers] [--check-startup] [--missed]
 Purgeon --startup list|on|off|delayed|notdelayed --id <id>
 Purgeon --trusted list|add|remove --name <publisher>
-Purgeon --update settings|enable|disable|check
+Purgeon --update settings|enable|disable|check|install
 Purgeon --sync status|apply|now [--files settings.json]
 Purgeon --plugins list|enable|disable|validate <id> [--json]
 Purgeon --portableapps list
