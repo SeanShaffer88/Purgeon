@@ -4,6 +4,7 @@
 
 ### Added
 - **Browser Clean-up on the command line**: `Purgeon --browsers list [--json]` lists the same extensions, search engines and home pages as the Browser Clean-up window, and `Purgeon --browsers remove <browser> <extension-id>...` removes program-added extensions with a backup. Extensions you added yourself or that a policy added are refused (remove those in the browser itself), and removal refuses while that browser is running.
+- **Browser Clean-up shows who made each extension and what it can access**: each extension now carries a second line with its author (from its manifest, when it states one) and a short list of what it can do — its permissions and the sites it can reach, shortened to the site name (`<all_urls>` reads "all websites"). Nothing is guessed: an extension whose manifest names no author shows none.
 
 ### Changed
 - **The Settings window is rebuilt** — a category rail (Uninstalling, Appearance, Window & tray, Active monitoring, Startup & exit, Explorer, Backups, Prompts & trust, Updates, Data & logs) with real switches and a plain-words description for every option. The Tools › Settings submenu is gone: the menu now has the single **Settings…** entry, and everything that lived in the submenu — the Explorer right-click toggle and context-menu items, Backup Settings (including settings export/import), Confirmation Prompts, Trusted Publishers, Open Command Log, Check for Updates — lives inside the window.
