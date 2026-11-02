@@ -1,96 +1,71 @@
-// Event Logs (Tools › System Tools): Windows' event logs — how big each
-// one is, saving a copy out to a file, clearing one, turning one off.
-//
-// Safety shape: clearing always saves a copy first (into Purgeon's own
-// backup folder for log copies), and the copy is kept even after the log
-// is cleared — clearing is the one action here with no undo, so the copy
-// IS the undo. The Security log is view-and-save only: Purgeon will never
-// clear it or turn it off, and that guard lives here in the backend, not
-// just in the window.
-import path from 'node:path';
+// Event Logs use only the closed native operation family. Renderer paths/names
+// are display data; only fresh native channel/destination grants authorize work.
 import { sys } from './sys.js';
-import { runPSJson } from './shell.js';
 import { record } from './history.js';
-
 const note = (entry) => record(entry).catch(() => {});
-
+const opaque = (value, length = 32) => typeof value === 'string' && new RegExp(`^[a-f0-9]{${length}}$`, 'i').test(value);
+const text = (value) => typeof value === 'string' && value.length > 0;
+const fail = () => { throw new Error('Windows returned an invalid event-log response. Refresh the log list before retrying.'); };
+const tagged = (value, kind) => { if (!value || typeof value !== 'object' || value.kind !== kind) fail(); return value; };
 export function channelGuard(name) {
-  if (String(name || '').trim().toLowerCase() === 'security') {
-    return 'The Security log is never cleared or turned off from Purgeon — it is the record Windows keeps of sign-ins and security events. You can save a copy of it.';
-  }
-  return null;
+  return String(name || '').trim().toLowerCase() === 'security' ? 'The Security log is view-and-save only. Purgeon never clears it or changes its recording state.' : null;
 }
-
 export function shapeChannels(rows) {
-  return (Array.isArray(rows) ? rows : [rows])
-    .filter((r) => r && r.LogName)
-    .map((r) => ({
-      name: String(r.LogName),
-      records: Number(r.RecordCount) || 0,
-      sizeBytes: Number(r.FileSize) || 0,
-      enabled: r.IsEnabled !== false,
-      guarded: !!channelGuard(r.LogName),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  if (!Array.isArray(rows)) fail();
+  return rows.map((row) => {
+    if (!row || !text(row.name) || ![row.records,row.sizeBytes].every((value) => value === null || Number.isSafeInteger(value) && value >= 0)
+      || !(row.enabled === null || typeof row.enabled === 'boolean') || typeof row.guarded !== 'boolean'
+      || !(row.channelId === null || opaque(row.channelId)) || ![row.metadataError,row.configError].every((value) => value === null || typeof value === 'string')) fail();
+    return { ...row, guarded: row.guarded || !!channelGuard(row.name) };
+  }).sort((a,b) => a.name.localeCompare(b.name));
 }
-
 export async function channels() {
-  const rows = await runPSJson(`Get-WinEvent -ListLog * -ErrorAction SilentlyContinue | Select-Object LogName, RecordCount, FileSize, IsEnabled | ConvertTo-Json -Compress`).catch(() => []);
-  return shapeChannels(rows);
+  return shapeChannels(tagged(await sys.queryOperation({ kind: 'eventLogChannels' }), 'eventLogChannels').channels);
 }
-
-const CHANNEL_RE = /^[\w\-./ ]+$/;
-
-function checkedChannel(name) {
-  const n = String(name || '').trim();
-  if (!n || !CHANNEL_RE.test(n) || n.includes('..')) throw new Error('That event log name does not look right.');
-  return n;
+async function config(channelId) {
+  if (!opaque(channelId)) throw new Error('This event channel is unavailable. Refresh the log list before retrying.');
+  const value = tagged(await sys.queryOperation({ kind: 'eventLogConfig', channelId }), 'eventLogConfig').config;
+  if (!value || value.channelId !== channelId || !text(value.name) || typeof value.enabled !== 'boolean' || typeof value.guarded !== 'boolean') fail();
+  return value;
 }
-
-async function wevt(args) {
-  const r = await sys.exec('wevtutil.exe', args);
-  if (!r.ok) throw new Error(((r.stderr || r.stdout || 'wevtutil failed').trim().split('\n').find((l) => l.trim()) || 'wevtutil failed').trim());
-  return r;
+async function execute(request) {
+  const plan = await sys.prepareOperation(request);
+  if (!plan || !opaque(plan.id) || !text(plan.summary) || typeof plan.requiresElevation !== 'boolean' || typeof plan.recoveryLimits !== 'string') fail();
+  const result = tagged(await sys.executeOperation(plan.id), request.kind);
+  if (result.ok !== true || !opaque(result.journalId,64)) throw new Error('The event-log operation did not confirm success. Its native recovery journal must be reviewed before retrying.');
+  return result;
 }
-
-// Save a copy of a log to a caller-chosen .evtx file.
-export async function exportLog(name, destPath) {
-  const channel = checkedChannel(name);
-  if (!destPath || !/\.evtx$/i.test(destPath)) throw new Error('Choose a place to save the .evtx copy.');
-  await wevt(['epl', channel, destPath]);
-  note({ type: 'Event log', title: `Saved a copy of the ${channel} log`, detail: destPath, undo: null });
-  return { ok: true, path: destPath };
+export async function exportLog(channelId) {
+  const channel = await config(channelId);
+  const destination = await sys.selectResource({ kind: 'eventLogExportDestination', channelId });
+  if (destination === null) return null;
+  if (!destination || !opaque(destination.id) || !text(destination.displayPath)) fail();
+  const result = await execute({ kind: 'eventLogExport', channelId, destinationGrant: destination.id });
+  if (!text(result.path)) fail();
+  note({ type: 'Event log', title: `Saved a copy of the ${channel.name} log`, detail: result.path, undo: null });
+  return result;
 }
-
-// Clear a log — always after saving a copy into Purgeon's log-backup
-// folder, which is kept. Returns where the copy went.
-export async function clearLog(name) {
-  const channel = checkedChannel(name);
-  const guard = channelGuard(channel);
-  if (guard) throw new Error(guard);
-  const dir = path.join(sys.info.dataDir, 'log-backups');
-  await sys.makeDir(dir);
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const backup = path.join(dir, `${channel.replace(/[\\/:*?"<>|]/g, '_')}-${stamp}.evtx`);
-  await wevt(['epl', channel, backup]);
-  await wevt(['cl', channel]);
-  note({
-    type: 'Event log', title: `Cleared the ${channel} log`,
-    detail: `A copy was saved first: ${backup}. The copy is kept — it is the only way back.`,
-    undo: null,
-  });
-  return { ok: true, backup };
+export async function clearLog(channelId) {
+  const channel = await config(channelId);
+  if (channel.guarded || channelGuard(channel.name)) throw new Error(channelGuard(channel.name) || 'This event log is protected.');
+  const result = await execute({ kind: 'eventLogClear', channelId });
+  if (!text(result.backup)) fail();
+  note({ type: 'Event log', title: `Cleared the ${channel.name} log`, detail: `Windows saved and cleared the log in one operation. Recovery copy: ${result.backup}`, undo: null });
+  return result;
 }
-
-export async function setEnabled(name, on) {
-  const channel = checkedChannel(name);
-  const guard = channelGuard(channel);
-  if (guard) throw new Error(guard);
-  await wevt(['sl', channel, on ? '/e:true' : '/e:false']);
-  note({
-    type: 'Event log', title: `${channel} log turned ${on ? 'on' : 'off'}`,
-    detail: on ? 'New events will be recorded again.' : 'Events stop being recorded while it is off.',
-    undo: { channel: 'logs:setEnabled', arg: { name: channel, on: !on } },
-  });
-  return { ok: true };
+export async function setEnabled(channelId, on, expectedCurrentEnabled) {
+  if (typeof on !== 'boolean') throw new Error('Choose a recording state.');
+  const channel = await config(channelId);
+  if (expectedCurrentEnabled !== undefined && channel.enabled !== expectedCurrentEnabled) throw new Error('The event channel changed before undo could be prepared. Refresh and review it.');
+  if (channel.guarded || channelGuard(channel.name) || /^(Application|System)$/i.test(channel.name)) throw new Error('Windows does not allow Purgeon to change recording for this built-in log.');
+  const result = await execute({ kind: 'eventLogSetEnabled', channelId, enabled: on });
+  if (typeof result.previousEnabled !== 'boolean') fail();
+  note({ type: 'Event log', title: `${channel.name} log turned ${on ? 'on' : 'off'}`, detail: `Native journal: ${result.journalId}`, undo: { channel: 'logs:undoEnabled', arg: { name: channel.name, on: result.previousEnabled, expectedCurrentEnabled: on, journalId: result.journalId } } });
+  return result;
+}
+export async function undoEnabled({ name, on, expectedCurrentEnabled, journalId }) {
+  if (!text(name) || typeof on !== 'boolean' || typeof expectedCurrentEnabled !== 'boolean' || !opaque(journalId,64)) throw new Error('This event-log undo entry is incomplete. Review it before changing the channel.');
+  const matches = (await channels()).filter((channel) => channel.name === name);
+  if (matches.length !== 1 || !matches[0].channelId || matches[0].configError || matches[0].enabled !== expectedCurrentEnabled) throw new Error('The event channel is unavailable or changed since this action. Refresh and review its current state before undoing.');
+  return setEnabled(matches[0].channelId,on,expectedCurrentEnabled);
 }
