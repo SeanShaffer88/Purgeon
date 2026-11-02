@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Added
+- **Standard project documents**: the project's guides now live under `docs/` in the standard set — install, compatibility, troubleshooting, security, architecture, audit notes, support, contributing, credits, maintainers, governance and migration guides alongside the feature list and roadmap. The changelog moved to `docs/CHANGELOG.md`.
 - **Old versions are tagged in the program list**: when a newer copy of the same program is installed beside an older one, the older copy gets an "old version" tag naming the newer version, and pointing at Duplicate Programs (Tools › Advanced Tools), which shows both together.
 - **Duplicate installed entries are tagged in the program list**: when two installed entries share the same name, version and location, both get a "duplicate entry" tag — one is usually a stale leftover from an update or repair. The tag explains the fix: right-click a copy and choose Remove Entry… to delete the stale listing; the program itself is not uninstalled. Matching is exact, and entries without a recorded version or location are never tagged.
 - **Purgeon Health checks that things work, not just that they can be read**: it now reports the startup and setup monitor states, whether the Background Monitoring and Weekly Maintenance Windows tasks exist and match their settings (and when each last ran and how it ended, with the fix named when one is missing), and — only when update checks are on — whether the update endpoint actually answers, running the real check.
