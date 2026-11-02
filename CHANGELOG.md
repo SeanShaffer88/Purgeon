@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased
+
+### Added
+- **Download and Install for updates**: when the opt-in update check finds a newer release, the Check for Updates dialog now offers **Download and Install** (also `Purgeon --update install`). The release's `Purgeon-Setup-x64.exe` is downloaded to the Temp folder and run only after its size and SHA-256 match the digest GitHub recorded for that exact asset; a mismatch deletes the download and runs nothing. The installer closes the running Purgeon and can relaunch it afterwards. Portable copies are not installed over — they are pointed at GitHub Releases, as before.
+
+### Fixed
+- The update checker compared releases against version 0.0.0 because the app never reported its own version, so any release looked newer. The app now reports its real version, and `Purgeon --update check` prints it instead of a stale hard-coded one.
+
 ## 1.2.0 - 2026-10-29
 
 ### Added
