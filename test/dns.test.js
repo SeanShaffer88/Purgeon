@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { PROVIDERS, providerForServers, dohModeFor, buildApplyScript, buildResetScript } from '../src/backend/dns.js';
+import { PROVIDERS, providerForServers, dohModeFor, buildApplyScript, buildResetScript, buildNagleScript } from '../src/backend/dns.js';
 
 test('providerForServers matches exact provider lists, in any order', () => {
   assert.equal(providerForServers(['1.1.1.1', '1.0.0.1']), 'cloudflare');
@@ -50,4 +50,17 @@ test('every provider has two servers and an https DoH template', () => {
     assert.equal(p.servers.length, 2);
     assert.match(p.dohTemplate, /^https:\/\//);
   }
+});
+
+test('buildNagleScript finds the interface key from the adapter number', () => {
+  const on = buildNagleScript({ index: 5, off: true });
+  assert.match(on, /ifIndex -eq 5/);
+  assert.match(on, /New-ItemProperty -Path \$path -Name TcpNoDelay -PropertyType DWord -Value 1/);
+  assert.match(on, /New-ItemProperty -Path \$path -Name TcpAckFrequency -PropertyType DWord -Value 1/);
+  assert.doesNotMatch(on, /Interfaces\\\\\{/, 'no caller-supplied GUID is baked into the path');
+  const off = buildNagleScript({ index: 5, off: false });
+  assert.match(off, /Remove-ItemProperty -Path \$path -Name TcpNoDelay/);
+  assert.match(off, /Remove-ItemProperty -Path \$path -Name TcpAckFrequency/);
+  assert.throws(() => buildNagleScript({ index: -2, off: true }), /adapter/);
+  assert.throws(() => buildNagleScript({ index: 5, off: 'yes' }), /Nagle/);
 });

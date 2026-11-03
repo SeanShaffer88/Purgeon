@@ -2335,5 +2335,21 @@
         "off": "400"
       }
     ]
+  },
+  {
+    "id": "storagesense",
+    "category": "Storage & cleanup",
+    "title": "Turn on Storage Sense",
+    "detail": "Windows automatically frees space when the drive runs low: temporary files and old Recycle Bin contents are cleaned up on the schedule set in Settings > System > Storage. This is the Settings switch itself; your own cleanup choices there stay yours.",
+    "effect": "immediate",
+    "values": [
+      {
+        "key": "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\StorageSense\\Parameters\\StoragePolicy",
+        "name": "01",
+        "type": "REG_DWORD",
+        "on": 1,
+        "off": 0
+      }
+    ]
   }
 ]

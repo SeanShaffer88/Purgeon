@@ -282,7 +282,7 @@ async function run(args) {
       const data = await dns.status();
       if (j) return wrap(true, JSON.stringify(data, null, 2));
       if (!data.adapters.length) return wrap(true, 'No network adapters found.\r\n');
-      const lines = data.adapters.map((a) => `${a.index}  ${a.alias}${a.up ? '' : ' (not connected)'}  DNS: ${a.servers.length ? a.servers.join(', ') : 'automatic'}  (${providerName(a.provider)})  encrypted lookups: ${data.dohSupported ? a.doh : 'needs Windows 11'}`);
+      const lines = data.adapters.map((a) => `${a.index}  ${a.alias}${a.up ? '' : ' (not connected)'}  DNS: ${a.servers.length ? a.servers.join(', ') : 'automatic'}  (${providerName(a.provider)})  encrypted lookups: ${data.dohSupported ? a.doh : 'needs Windows 11'}  nagle: ${a.nagleOff ? 'off' : 'default'}`);
       return wrap(true, lines.join('\r\n') + '\r\n');
     }
     if (sub === 'set') {
@@ -295,6 +295,15 @@ async function run(args) {
       const a = r.adapters.find((x) => x.index === index);
       return wrap(true, `${a ? `${a.alias} now uses ${providerName(a.provider)} (${a.servers.join(', ')})` : 'DNS updated.'}\r\n`);
     }
+    if (sub === 'nagle') {
+      const positional = args.slice(2).filter((a) => a !== '--json' && a !== '--quiet' && a !== '-q');
+      const index = Number(positional[0]);
+      const mode = positional[1];
+      if (!Number.isInteger(index) || !['off', 'default'].includes(mode)) throw new Error('Use --dns nagle <adapter-number> <off|default> (adapter numbers: --dns list)');
+      const r = await dns.setNagle({ index, off: mode === 'off' });
+      const a = r.adapters.find((x) => x.index === index);
+      return wrap(true, `${a ? `${a.alias}: Nagle's algorithm is ${a.nagleOff ? 'off (small packets sent immediately)' : 'back to the Windows default'}.` : 'Nagle setting updated.'}\r\n`);
+    }
     if (sub === 'reset') {
       const positional = args.slice(2).filter((a) => a !== '--json' && a !== '--quiet' && a !== '-q');
       const index = Number(positional[0]);
@@ -303,7 +312,7 @@ async function run(args) {
       const a = r.adapters.find((x) => x.index === index);
       return wrap(true, `${a ? `${a.alias} is back to automatic DNS.` : 'DNS reset.'}\r\n`);
     }
-    throw new Error('Use --dns list, --dns set <adapter-number> <provider> [--doh off|preferred|only], or --dns reset <adapter-number>');
+    throw new Error('Use --dns list, --dns set <adapter-number> <provider> [--doh off|preferred|only], --dns reset <adapter-number>, or --dns nagle <adapter-number> <off|default>');
   }
   if (cmd === '--monitor') {
     const sub = option(args, '--monitor');

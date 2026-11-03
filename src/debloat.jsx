@@ -9,7 +9,7 @@ const EFFECT = {
   reboot: { label: 'Needs reboot', className: 'fx-reboot' },
 };
 
-const CATEGORY_ORDER = ['Privacy & telemetry', 'Start, search & taskbar', 'Ads & suggestions', 'Explorer & UI', 'Windows Update', 'App Privacy', 'Settings sync', 'Microsoft Edge', 'Performance'];
+const CATEGORY_ORDER = ['Privacy & telemetry', 'Start, search & taskbar', 'Ads & suggestions', 'Explorer & UI', 'Windows Update', 'App Privacy', 'Settings sync', 'Microsoft Edge', 'Performance', 'Storage & cleanup'];
 
 const RECOVERY_OUTCOMES = {
   applied: 'Change applied.', noChanges: 'No changes were needed.',
@@ -75,6 +75,22 @@ function DnsSection({ filter, beforeChange }) {
     }
   };
 
+  const applyNagle = async (a, off) => {
+    if (beforeChange && !(await beforeChange(tx("Nagle's algorithm")))) return;
+    setBusy(`nagle-${a.index}`);
+    setError('');
+    setNote('');
+    try {
+      const r = await api.invoke('dns:setNagle', { index: a.index, off });
+      setState(r);
+      setNote(off ? tx("Nagle's algorithm off for {p0} — new connections use it right away.", { p0: a.alias }) : tx("{p0} is back to the Windows default for Nagle's algorithm.", { p0: a.alias }));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   return (
     <section className="tweak-group">
       <div className="tweak-group-head">
@@ -116,6 +132,16 @@ function DnsSection({ filter, beforeChange }) {
               <button className="debloat-button" onClick={() => apply(a)} disabled={busy === a.index || !changed}>
                 {busy === a.index ? tx('Applying…') : tx('Apply')}
               </button>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <label>
+                {tx("Nagle's algorithm")}{' '}
+                <select value={a.nagleOff ? 'off' : 'default'} onChange={(e) => applyNagle(a, e.target.value === 'off')} title={tx("Nagle's algorithm for this adapter")} disabled={busy === `nagle-${a.index}`}>
+                  <option value="default">{tx('Windows default')}</option>
+                  <option value="off">{tx('Off — send small packets immediately')}</option>
+                </select>
+              </label>
+              <span className="muted">{tx('Can shave delay in some online games; most programs see no difference, and it can waste a little bandwidth.')}</span>
             </div>
           </div>
         );

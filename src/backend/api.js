@@ -449,14 +449,6 @@ const handlers = {
     return diskusage.scan(dir, () => stop.stopped);
   },
   'disk:scanCancel': () => stopOp('diskScan'),
-  // The Disk Usage view lists first (instant) and measures folders in
-  // batches, filling sizes in as they land.
-  'disk:list': (dir) => diskusage.list(dir),
-  'disk:measure': (paths) => {
-    const stop = newStop('diskMeasure');
-    return diskusage.measureFolders(Array.isArray(paths) ? paths : [], () => stop.stopped);
-  },
-  'disk:measureCancel': () => stopOp('diskMeasure'),
   // Opens a folder (or a file's folder) in Explorer, from the Disk Usage view.
   'disk:open': async (entry) => {
     const target = entry?.dir ? entry.path : entry?.path ? entry.path.replace(/[\\/][^\\/]*$/, '') : '';
@@ -707,6 +699,11 @@ const handlers = {
     const p = dns.PROVIDERS[request?.provider];
     const rp = await maybeCreateRestorePoint('dns', `Purgeon: before changing DNS to ${p?.name || 'custom'}`);
     const result = await dns.apply(request);
+    return { ...result, restorePoint: rp };
+  },
+  'dns:setNagle': async (request) => {
+    const rp = await maybeCreateRestorePoint('dns', 'Purgeon: before changing TCP latency settings');
+    const result = await dns.setNagle(request);
     return { ...result, restorePoint: rp };
   },
   'dns:reset': async ({ index }) => {

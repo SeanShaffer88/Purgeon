@@ -38,9 +38,16 @@ export function dohModeFor(entries) {
 const STATUS_SCRIPT = `
 $rows = Get-DnsClientServerAddress -AddressFamily IPv4 -ErrorAction SilentlyContinue
 $up = @{}
-Get-NetAdapter -ErrorAction SilentlyContinue | ForEach-Object { $up[[int]$_.ifIndex] = [string]$_.Status }
+$guids = @{}
+Get-NetAdapter -ErrorAction SilentlyContinue | ForEach-Object { $up[[int]$_.ifIndex] = [string]$_.Status; $guids[[int]$_.ifIndex] = [string]$_.InterfaceGuid }
 $adapters = @($rows | Where-Object { $_.InterfaceAlias -notmatch 'Loopback' } | ForEach-Object {
-  [pscustomobject]@{ index = [int]$_.InterfaceIndex; alias = [string]$_.InterfaceAlias; status = $up[[int]$_.InterfaceIndex]; servers = @($_.ServerAddresses) }
+  $guid = $guids[[int]$_.InterfaceIndex]
+  $nagleOff = $false
+  if ($guid) {
+    $props = Get-ItemProperty -Path "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\$guid" -ErrorAction SilentlyContinue
+    $nagleOff = ($props.TcpNoDelay -eq 1 -and $props.TcpAckFrequency -eq 1)
+  }
+  [pscustomobject]@{ index = [int]$_.InterfaceIndex; alias = [string]$_.InterfaceAlias; status = $up[[int]$_.InterfaceIndex]; servers = @($_.ServerAddresses); nagleOff = $nagleOff }
 } | Sort-Object @{ Expression = { if ($_.status -eq 'Up') { 0 } else { 1 } } }, alias)
 $dohSupported = [bool](Get-Command Get-DnsClientDohServerAddress -ErrorAction SilentlyContinue)
 $doh = @()
@@ -66,6 +73,7 @@ export async function status() {
       servers,
       provider: providerForServers(servers),
       doh: dohModeFor(entries),
+      nagleOff: !!a.nagleOff,
     };
   });
   return { adapters, dohSupported: !!raw.dohSupported };
@@ -128,6 +136,40 @@ Clear-DnsClientCache
 
 export async function apply(request) {
   const script = buildApplyScript(request);
+  await runPS(script).catch((e) => {
+    throw new Error(denied(e.message));
+  });
+  return status();
+}
+
+// Nagle's algorithm batches small outgoing packets briefly before sending.
+// Turning it off (TcpNoDelay=1 with TcpAckFrequency=1) sends them at once,
+// which can shave delay in some online games; most programs see no
+// difference and it can waste a little bandwidth. The values live under the
+// adapter's own interface key; the script finds that key from the adapter
+// number, so no identifier from the caller reaches the registry path.
+// "Windows default" removes both values — a fresh Windows has neither.
+export function buildNagleScript({ index, off }) {
+  checkIndex(index);
+  if (typeof off !== 'boolean') throw new Error('Say whether Nagle should be off or back to the Windows default.');
+  const write =
+    off === true
+      ? `
+  New-Item -Path $path -Force | Out-Null
+  New-ItemProperty -Path $path -Name TcpNoDelay -PropertyType DWord -Value 1 -Force | Out-Null
+  New-ItemProperty -Path $path -Name TcpAckFrequency -PropertyType DWord -Value 1 -Force | Out-Null`
+      : `
+  Remove-ItemProperty -Path $path -Name TcpNoDelay -ErrorAction SilentlyContinue
+  Remove-ItemProperty -Path $path -Name TcpAckFrequency -ErrorAction SilentlyContinue`;
+  return `
+$adapter = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.ifIndex -eq ${index} } | Select-Object -First 1
+if (-not $adapter) { throw 'That network adapter could not be found.' }
+$path = "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\$($adapter.InterfaceGuid)"${write}
+`;
+}
+
+export async function setNagle(request) {
+  const script = buildNagleScript(request);
   await runPS(script).catch((e) => {
     throw new Error(denied(e.message));
   });
