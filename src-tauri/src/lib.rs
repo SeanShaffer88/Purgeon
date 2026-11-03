@@ -1523,6 +1523,8 @@ fn show_main(app: &tauri::AppHandle) {
 // real size in the window's placement, so put it back there.
 // The window's last normal (not minimized or maximized) position and size, kept as it moves.
 static LAST_NORMAL: std::sync::Mutex<Option<[i32; 4]>> = std::sync::Mutex::new(None);
+// Whether the window is currently maximized (its normal rect stays in LAST_NORMAL).
+static WINDOW_MAXIMIZED: AtomicBool = AtomicBool::new(false);
 
 #[link(name = "user32")]
 extern "system" {
@@ -1673,6 +1675,112 @@ fn start_in_tray(app: &tauri::App) -> bool {
         .unwrap_or(false)
 }
 
+// The remembered close behaviour, read from the settings file before the page
+// loads: the first close of a launch must already honour the choice the user
+// remembered, without waiting for the page's own settings load to apply it.
+fn init_close_mode(app: &tauri::App) {
+    let dir = portable_dir().or_else(|| app.path().app_data_dir().ok());
+    let value = dir
+        .and_then(|d| fs::read_to_string(d.join("settings.json")).ok())
+        .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok());
+    let Some(v) = value else { return };
+    let close = match v.get("closeAction").and_then(|c| c.as_str()) {
+        Some("tray") => 1,
+        Some("exit") => 2,
+        _ if v.get("tray").and_then(|b| b.as_bool()) == Some(true) => 1,
+        _ => 0,
+    };
+    CLOSE_MODE.store(close, Ordering::SeqCst);
+    if let Some(m) = v.get("minimizeToTray").and_then(|b| b.as_bool()) {
+        MINIMIZE_TO_TRAY.store(m, Ordering::SeqCst);
+    }
+}
+
+// The last saved window geometry, so a launch reopens where the user left the
+// window. The rect is the normal (not minimized or maximized) one, in physical
+// pixels; `maximized` says to maximize again on top of it.
+static LAST_SAVED_GEOMETRY: std::sync::Mutex<Option<String>> = std::sync::Mutex::new(None);
+
+fn save_window_state(data: &std::path::Path) {
+    let Some(r) = *LAST_NORMAL.lock().unwrap() else {
+        return;
+    };
+    if !sane(&r) {
+        return;
+    }
+    let text = serde_json::json!({
+        "x": r[0],
+        "y": r[1],
+        "w": r[2] - r[0],
+        "h": r[3] - r[1],
+        "maximized": WINDOW_MAXIMIZED.load(Ordering::SeqCst),
+    })
+    .to_string();
+    let mut saved = LAST_SAVED_GEOMETRY.lock().unwrap();
+    if saved.as_deref() == Some(text.as_str()) {
+        return;
+    }
+    let path = data.join("window-state.json");
+    if atomic_file::write(&path.to_string_lossy(), text.as_bytes()).is_ok() {
+        *saved = Some(text);
+    }
+}
+
+fn track_window_state(w: &tauri::WebviewWindow, data: &std::path::Path) {
+    if let Ok(hwnd) = w.hwnd() {
+        let zoomed = unsafe { IsZoomed(hwnd.0 as isize) } != 0;
+        WINDOW_MAXIMIZED.store(zoomed, Ordering::SeqCst);
+    }
+    save_window_state(data);
+}
+
+fn restore_window_state(window: &tauri::WebviewWindow, data: &std::path::Path) -> bool {
+    let Ok(text) = fs::read_to_string(data.join("window-state.json")) else {
+        return false;
+    };
+    let Ok(v) = serde_json::from_str::<serde_json::Value>(&text) else {
+        return false;
+    };
+    let (Some(x), Some(y), Some(w), Some(h)) = (
+        v.get("x").and_then(|n| n.as_i64()),
+        v.get("y").and_then(|n| n.as_i64()),
+        v.get("w").and_then(|n| n.as_i64()),
+        v.get("h").and_then(|n| n.as_i64()),
+    ) else {
+        return false;
+    };
+    let rect = [x as i32, y as i32, (x + w) as i32, (y + h) as i32];
+    if !sane(&rect) {
+        return false;
+    }
+    // The saved spot must still be on a connected screen.
+    let Ok(monitors) = window.available_monitors() else {
+        return false;
+    };
+    let visible = monitors.iter().any(|m| {
+        let p = m.position();
+        let size = m.size();
+        rect[0] < p.x + size.width as i32
+            && rect[2] > p.x
+            && rect[1] < p.y + size.height as i32
+            && rect[3] > p.y
+    });
+    if !visible {
+        return false;
+    }
+    let _ = window.set_position(tauri::PhysicalPosition::new(rect[0], rect[1]));
+    let _ = window.set_size(tauri::PhysicalSize::new(
+        (rect[2] - rect[0]) as u32,
+        (rect[3] - rect[1]) as u32,
+    ));
+    *LAST_NORMAL.lock().unwrap() = Some(rect);
+    if v.get("maximized").and_then(|b| b.as_bool()) == Some(true) {
+        WINDOW_MAXIMIZED.store(true, Ordering::SeqCst);
+        let _ = window.maximize();
+    }
+    true
+}
+
 fn build_tray(app: &tauri::App) -> tauri::Result<()> {
     use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
     use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -1774,6 +1882,7 @@ pub fn run() {
                 }
             };
             let _ = DATA_LOCK.set(lock);
+            init_close_mode(app);
             // The window is created here so that in portable mode the browser data goes in the
             // portable data folder too.
             let config = app
@@ -1793,8 +1902,10 @@ pub fn run() {
             }
             build_tray(app)?;
             let hide = window.clone();
+            let event_data = data.clone();
             window.on_window_event(move |e| match e {
                 tauri::WindowEvent::CloseRequested { api, .. } => {
+                    track_window_state(&hide, &event_data);
                     match CLOSE_MODE.load(Ordering::SeqCst) {
                         0 if !FRONTEND_READY.load(Ordering::SeqCst) => {}
                         1 => {
@@ -1824,11 +1935,15 @@ pub fn run() {
                     });
                 }
                 tauri::WindowEvent::Resized(_) | tauri::WindowEvent::Moved(_) => {
-                    remember_normal(&hide)
+                    remember_normal(&hide);
+                    track_window_state(&hide, &event_data);
                 }
                 _ => {}
             });
             let in_tray = start_in_tray(app);
+            // Reopen where the user left the window; only a first run (or a saved
+            // spot that no longer exists) falls back to the default size below.
+            if !restore_window_state(&window, &data) {
             // Size the window to the screen it opens on (in Windows' scaled units, so the
             // display scale setting is respected), then show it.
             if let Ok(Some(monitor)) = window.current_monitor() {
@@ -1842,6 +1957,7 @@ pub fn run() {
                 let height = (h * 0.7).clamp(560.0, 1100.0).min(h * 0.92);
                 let _ = window.set_size(tauri::LogicalSize::new(width, height));
                 let _ = window.center();
+            }
             }
             // Window events start after setup, so record the starting size here.
             remember_normal(&window);

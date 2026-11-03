@@ -1,7 +1,7 @@
 import { tx } from './backend/i18n.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { formatBytes } from './format.js';
-import { crumbsOf, parentOf, shareText, systemDriveRoot } from './backend/diskusage.js';
+import { crumbsOf, parentOf, shareText, sortEntries, systemDriveRoot } from './backend/diskusage.js';
 
 const api = window.api;
 
@@ -14,15 +14,37 @@ export function DiskUsageView({ filter, onError, onStatus }) {
   const [scanning, setScanning] = useState(false);
   const run = useRef(0);
 
+  // The folder's contents list at once; folder sizes are then measured in
+  // small batches and filled in as they land, so a big drive shows results
+  // immediately instead of after every folder has been measured.
   const scan = async (dir) => {
     const id = ++run.current;
+    api.invoke('disk:measureCancel').catch(() => {});
     setPath(dir);
     setData(null);
     setScanning(true);
     try {
-      const r = await api.invoke('disk:scan', dir);
+      const listed = await api.invoke('disk:list', dir);
       if (run.current !== id) return; // a newer scan took over
-      setData(r);
+      let entries = listed.entries;
+      const totalOf = (rows) => rows.reduce((n, e) => n + Math.max(0, e.bytes), 0);
+      setData({ path: dir, entries, total: totalOf(entries), complete: false });
+      const folders = entries.filter((e) => e.pending).map((e) => e.path);
+      let allMeasured = true;
+      for (let i = 0; i < folders.length; i += 3) {
+        if (run.current !== id) return;
+        const r = await api.invoke('disk:measure', folders.slice(i, i + 3));
+        if (run.current !== id) return;
+        const byPath = new Map(r.measured.map((m) => [m.path, m]));
+        entries = sortEntries(entries.map((e) => (byPath.has(e.path) ? { ...e, bytes: byPath.get(e.path).bytes, partial: byPath.get(e.path).partial, pending: false } : e)));
+        setData({ path: dir, entries, total: totalOf(entries), complete: false });
+        if (!r.complete) {
+          allMeasured = false;
+          break;
+        }
+      }
+      if (run.current !== id) return;
+      setData({ path: dir, entries, total: totalOf(entries), complete: allMeasured });
     } catch (e) {
       if (run.current === id) onError(e.message);
     } finally {
@@ -53,7 +75,11 @@ export function DiskUsageView({ filter, onError, onStatus }) {
     return onStatus('Disk Usage');
   }, [data, scanning, path]);
 
-  const cancel = () => api.invoke('disk:scanCancel').catch(() => {});
+  const cancel = () => {
+    run.current++;
+    api.invoke('disk:measureCancel').catch(() => {});
+    setScanning(false);
+  };
   const up = parentOf(path || '');
   const crumbs = useMemo(() => crumbsOf(path || ''), [path]);
   const shown = useMemo(() => {
@@ -94,7 +120,7 @@ export function DiskUsageView({ filter, onError, onStatus }) {
 
       {scanning && !data && <div className="list-empty">{tx("Measuring… the biggest folders can take a while.")}</div>}
       {data && !shown.length && <div className="list-empty">{data.entries.length ? tx("Nothing here matches the search.") : tx("This folder is empty, or Purgeon cannot read it.")}</div>}
-      {data && !data.complete && <div className="disk-note">{tx("Scan stopped — sizes below are what was measured before it stopped.")}</div>}
+      {data && !scanning && !data.complete && <div className="disk-note">{tx("Scan stopped — sizes below are what was measured before it stopped.")}</div>}
 
       <div className="disk-list">
         {shown.map((e) => (
@@ -108,6 +134,7 @@ export function DiskUsageView({ filter, onError, onStatus }) {
               <span className="disk-name">
                 {e.name}
                 {e.link && <span className="disk-tag">{tx("link · not counted")}</span>}
+                {e.pending && <span className="disk-tag">{tx("measuring…")}</span>}
                 {e.partial && <span className="disk-tag">{tx("counting stopped early")}</span>}
               </span>
               <span className="disk-bar">
@@ -115,9 +142,15 @@ export function DiskUsageView({ filter, onError, onStatus }) {
               </span>
             </button>
             <span className="disk-size">
-              {e.partial ? tx("at least ") : ''}
-              {formatBytes(e.bytes)}
-              <span className="disk-share">{shareText(e.bytes, data.total)}</span>
+              {e.pending ? (
+                '…'
+              ) : (
+                <>
+                  {e.partial ? tx("at least ") : ''}
+                  {formatBytes(e.bytes)}
+                  <span className="disk-share">{shareText(e.bytes, data.total)}</span>
+                </>
+              )}
             </span>
             <button className="link" onClick={() => api.invoke('disk:open', e).catch(() => {})} title={tx("Open {p0} in Explorer", { p0: (e.dir ? 'this folder' : "this file's folder") })}>{tx("Open")}</button>
           </div>

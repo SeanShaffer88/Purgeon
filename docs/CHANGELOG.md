@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Added
+- **The window reopens where you left it**: Purgeon now remembers its size, position and whether it was maximized, and restores them on the next launch. A saved spot that no longer fits a connected screen is ignored and the default size is used instead.
+
+### Changed
+- **Disk Usage shows a folder's contents at once**: files and folders are listed immediately and each folder's size is filled in as it is measured, instead of the whole view waiting until every folder has been measured. The Cancel button still stops the measuring, keeping whatever sizes have landed.
+
+### Fixed
+- **The Debloat view failed to load** with an "Invalid compiled Debloat resource" message and showed no tweaks: the tweak catalog is checked the same way Windows treats registry paths (letter case does not matter), and the full tweak list loads again.
+- **The close button's remembered choice could be lost**: the choice the close question saves ("Remember my choice") is now also read by Purgeon itself as it starts, so the first close of a launch already follows it, and saving the choice can no longer be blocked by another operation running at the same moment.
+
 ## 1.4.0 - 2026-11-02
 
 ### Added

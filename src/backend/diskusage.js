@@ -77,6 +77,48 @@ export const systemDriveRoot = () => `${(env('SystemDrive') || 'C:').replace(/[\
 // the bound is marked partial — its size is a lower bound). `shouldStop` is
 // polled between entries; entries not yet measured come back with bytes -1
 // left out, and the result's `complete` says whether everything was measured.
+// Lists one folder's children without measuring any folder: files carry
+// their real size, folders come back `pending` with no size yet. This is
+// what the Disk Usage view shows first, so a drive's contents appear at
+// once instead of after every folder has been measured.
+export async function list(dir) {
+  const entries = await sys.readDir(dir).catch(() => []);
+  const out = [];
+  for (const e of entries) {
+    const full = path.join(dir, e.name);
+    if (e.link) out.push({ name: e.name, path: full, dir: !!e.dir, bytes: 0, partial: false, link: true });
+    else if (e.dir) out.push({ name: e.name, path: full, dir: true, bytes: 0, partial: false, pending: true });
+    else {
+      const st = await sys.stat(full).catch(() => null);
+      out.push({ name: e.name, path: full, dir: false, bytes: st?.size || 0, partial: false });
+    }
+  }
+  return { path: dir, entries: sortEntries(out) };
+}
+
+// Measures folders (the bounded folder-size engine, three at a time) for
+// the progressive view: returns one result per folder measured, in the
+// order they finished. `shouldStop` is polled between folders; folders
+// not measured when it fires are absent and `complete` is false.
+export async function measureFolders(paths, shouldStop) {
+  const out = [];
+  let stopped = false;
+  const queue = [...paths];
+  const worker = async () => {
+    while (queue.length) {
+      if (shouldStop && shouldStop()) {
+        stopped = true;
+        return;
+      }
+      const full = queue.shift();
+      const r = await sys.folderSize(full, 2000000, 20000).catch(() => ({ bytes: 0, truncated: false }));
+      out.push({ path: full, bytes: r.bytes || 0, partial: !!r.truncated });
+    }
+  };
+  await Promise.all(Array.from({ length: 3 }, worker));
+  return { measured: out, complete: !stopped };
+}
+
 export async function scan(dir, shouldStop) {
   const entries = await sys.readDir(dir).catch(() => []);
   const out = [];

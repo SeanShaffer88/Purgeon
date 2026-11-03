@@ -448,6 +448,14 @@ const handlers = {
     return diskusage.scan(dir, () => stop.stopped);
   },
   'disk:scanCancel': () => stopOp('diskScan'),
+  // The Disk Usage view lists first (instant) and measures folders in
+  // batches, filling sizes in as they land.
+  'disk:list': (dir) => diskusage.list(dir),
+  'disk:measure': (paths) => {
+    const stop = newStop('diskMeasure');
+    return diskusage.measureFolders(Array.isArray(paths) ? paths : [], () => stop.stopped);
+  },
+  'disk:measureCancel': () => stopOp('diskMeasure'),
   // Opens a folder (or a file's folder) in Explorer, from the Disk Usage view.
   'disk:open': async (entry) => {
     const target = entry?.dir ? entry.path : entry?.path ? entry.path.replace(/[\\/][^\\/]*$/, '') : '';

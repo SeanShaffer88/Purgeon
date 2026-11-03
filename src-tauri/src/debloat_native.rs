@@ -68,12 +68,14 @@ fn catalog() -> Result<&'static Catalog, String> {
                 }
                 let mut resources = HashSet::new();
                 for resource in &tweak.values {
-                    if !(resource.key.starts_with("HKCU\\Software\\")
-                        || resource.key.starts_with("HKCU\\Control Panel\\")
-                        || resource.key.starts_with("HKLM\\SOFTWARE\\")
-                        || resource
-                            .key
-                            .starts_with("HKLM\\SYSTEM\\CurrentControlSet\\Control\\"))
+                    // Registry paths are case-insensitive, and the catalog mixes
+                    // casings (HKLM\Software\..., HKCU\SOFTWARE\...): compare
+                    // the allowed prefixes case-insensitively.
+                    let key_lc = resource.key.to_lowercase();
+                    if !(key_lc.starts_with("hkcu\\software\\")
+                        || key_lc.starts_with("hkcu\\control panel\\")
+                        || key_lc.starts_with("hklm\\software\\")
+                        || key_lc.starts_with("hklm\\system\\currentcontrolset\\control\\"))
                         || resource.key.len() > 1024
                         || resource.name.len() > 256
                         || resource
@@ -1296,4 +1298,19 @@ pub fn list() -> Result<Vec<Status>, String> {
             })
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    // The embedded catalog must always pass the runtime validator: a catalog
+    // edit that the validator rejects takes the whole Debloat view down
+    // ("Invalid compiled Debloat resource"), so lock it here.
+    #[test]
+    fn embedded_catalog_validates() {
+        let catalog = super::catalog().expect("embedded Debloat catalog must validate");
+        assert!(
+            catalog.tweaks.len() > 100,
+            "catalog should hold the full tweak set"
+        );
+    }
 }

@@ -2257,7 +2257,18 @@ const [reducedMotion, setReducedMotion] = useState(false);
   // The close button was pressed and the question is due (see the close-requested event).
   const answerClose = async (choice, remember) => {
     setCloseAsk(false);
-    if (remember && choice) applyWindow(await api.invoke('settings:set', { closeAction: choice, tray: choice === 'tray' }));
+    if (remember && choice) {
+      // The remembered choice must land even if another operation is briefly
+      // holding the mutation slot: retry once, and never let a failed write
+      // block the close answer itself.
+      const patch = { closeAction: choice, tray: choice === 'tray' };
+      try {
+        applyWindow(await api.invoke('settings:set', patch));
+      } catch {
+        await new Promise((r) => setTimeout(r, 400));
+        await api.invoke('settings:set', patch).then(applyWindow).catch(() => {});
+      }
+    }
     await api.invoke('app:closeAnswered').catch(() => {});
     if (choice === 'tray') api.invoke('app:hideToTray');
     else if (choice === 'exit') api.invoke('app:quit');

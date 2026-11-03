@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { setSys } from '../src/backend/sys.js';
 import { createNodeSys } from './node-sys.js';
-import { sortEntries, crumbsOf, parentOf, shareText, scan, toText } from '../src/backend/diskusage.js';
+import { sortEntries, crumbsOf, parentOf, shareText, scan, list, measureFolders, toText } from '../src/backend/diskusage.js';
 
 test('sortEntries is biggest first, folders first on ties', () => {
   const out = sortEntries([
@@ -76,4 +76,45 @@ test('toText renders drives and a folder scan', () => {
   assert.match(text, /C:\\ {2}50\.00 GB free of 150\.00 GB/);
   assert.match(text, /Windows\\/);
   assert.match(text, /100\.0%/);
+});
+
+test('list returns files sized and folders pending, without measuring', async () => {
+  const nodeSys = createNodeSys();
+  let measured = 0;
+  setSys({
+    ...nodeSys,
+    readDir: async () => [
+      { name: 'Docs', dir: true, file: false, link: false },
+      { name: 'big.iso', dir: false, file: true, link: false },
+      { name: 'Junction', dir: true, file: false, link: true },
+    ],
+    stat: async () => ({ size: 2048 }),
+    folderSize: async () => {
+      measured++;
+      return { bytes: 1, entries: 1, truncated: false };
+    },
+  });
+  const r = await list('C:\\');
+  const docs = r.entries.find((e) => e.name === 'Docs');
+  const iso = r.entries.find((e) => e.name === 'big.iso');
+  const junction = r.entries.find((e) => e.name === 'Junction');
+  assert.equal(docs.pending, true, 'folders come back pending');
+  assert.equal(iso.bytes, 2048, 'files carry their real size');
+  assert.equal(junction.link, true, 'links stay unmeasured');
+  assert.equal(measured, 0, 'listing never measures a folder');
+});
+
+test('measureFolders sizes folders and honours the stop flag', async () => {
+  const nodeSys = createNodeSys();
+  setSys({
+    ...nodeSys,
+    folderSize: async (p) => ({ bytes: p.length * 100, entries: 1, truncated: p.includes('Big') }),
+  });
+  const done = await measureFolders(['C:\\A', 'C:\\Big'], () => false);
+  assert.equal(done.complete, true);
+  assert.equal(done.measured.length, 2);
+  assert.equal(done.measured.find((m) => m.path.endsWith('Big')).partial, true);
+  const stopped = await measureFolders(['C:\\A', 'C:\\B'], () => true);
+  assert.equal(stopped.complete, false);
+  assert.equal(stopped.measured.length, 0);
 });
