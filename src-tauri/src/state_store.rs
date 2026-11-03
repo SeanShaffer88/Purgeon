@@ -28,6 +28,7 @@ pub enum Domain {
     EventLogs,
     Boot,
     Drivers,
+    Tasks,
 }
 impl Domain {
     fn directory(self) -> &'static str {
@@ -37,6 +38,7 @@ impl Domain {
             Self::EventLogs => "EventLogs",
             Self::Boot => "Boot",
             Self::Drivers => "Drivers",
+            Self::Tasks => "Tasks",
         }
     }
 }

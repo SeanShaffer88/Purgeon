@@ -3,9 +3,10 @@ import * as path from './winpath.js';
 // Startup manager: programs that start with Windows (Run keys, Startup folders), scheduled
 // tasks outside \Microsoft\, and third-party services. Turning an entry off never deletes it:
 // - Run keys and Startup folders use Windows' own StartupApproved switches (as Task Manager does)
-// - Scheduled tasks are disabled with Disable-ScheduledTask
+// - Scheduled tasks use the native caller-owned task boundary
 // - Services that start automatically are set to Manual; their original start mode is remembered
 import { runPS, runPSJson, reg, psq, execFile } from './shell.js';
+import * as scheduledTasks from './tasks.js';
 
 const APPROVED = 'Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\StartupApproved';
 // Run-key locations and the StartupApproved key Windows uses for each.
@@ -99,12 +100,6 @@ foreach ($f in $in.folders) {
     [void]$out.Add([pscustomobject]@{ type = 'folder'; source = $f.id; name = $file.Name; command = $target; approved = (Approved $f.approved $file.Name); company = (Company "\`"$target\`"") })
   }
 }
-foreach ($t in Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskPath -notlike '\\Microsoft\\*' }) {
-  $a = @($t.Actions)[0]
-  $cmd = if ($a.Execute) { ('"' + $a.Execute + '" ' + $a.Arguments).Trim() } else { '' }
-  $triggers = (@($t.Triggers) | ForEach-Object { ($_.CimClass.CimClassName -replace '^MSFT_Task|Trigger$','') }) -join ', '
-  [void]$out.Add([pscustomobject]@{ type = 'task'; source = 'task'; name = $t.TaskName; path = "$($t.TaskPath)$($t.TaskName)"; command = $cmd; enabled = ($t.State -ne 'Disabled'); triggers = $triggers; company = (Company $cmd) })
-}
 $managed = @($in.managedServices)
 foreach ($s in Get-CimInstance Win32_Service -ErrorAction SilentlyContinue) {
   $isManaged = $managed -contains $s.Name
@@ -128,7 +123,8 @@ async function list() {
     managedServices: Object.keys(state.services || {}),
   });
   const rows = await runPSJson(LIST, { input });
-  return rows.map((r) => ({ ...shape(r, state), windows: /^Microsoft/i.test(r.company || '') }));
+  const native = (await scheduledTasks.list()).filter((task) => !task.isWindows).map((task) => ({ type: 'task', source: 'task', name: task.name, path: task.path + task.name, taskId: task.taskId, command: task.command, enabled: task.enabled, unsupportedReason: task.unsupportedReason, company: '', triggers: '' }));
+  return [...rows, ...native].map((r) => ({ ...shape(r, state), windows: /^Microsoft/i.test(r.company || '') }));
 }
 
 // Adds the id, on/off state, location text and admin/effect hints the UI shows.
@@ -167,10 +163,7 @@ async function setEnabled(entry, enable) {
     return;
   }
   if (entry.type === 'task') {
-    const split = entry.path.lastIndexOf('\\') + 1;
-    await runPS(`${enable ? 'Enable' : 'Disable'}-ScheduledTask -TaskPath ${psq(entry.path.slice(0, split))} -TaskName ${psq(entry.path.slice(split))} -ErrorAction Stop | Out-Null`).catch((e) => {
-      throw new Error(denied(e.message));
-    });
+    await scheduledTasks.setEnabled(entry, enable);
     return;
   }
   if (entry.type === 'service') {

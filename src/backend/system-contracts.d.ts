@@ -29,6 +29,12 @@ export interface SystemAdapter {
   executeProcess(planId: string): Promise<{ ok: boolean; previousPriority: string | null; error: string | null }>;
   elevateHandoff(): Promise<void>;
   bootState(): Promise<{timeout: number | null; safeboot: 'none' | 'minimal' | 'network' | 'other'; entries: Array<{id: string; name: string; isCurrent: boolean; isDefault: boolean}>}>;
+  taskInventory(cursor?:string|null):Promise<{rows:Array<{name:string;path:string;state:string;taskId:string|null;enabled:boolean|null;[key:string]:unknown}>;nextCursor:string|null}>;
+  taskOwnedStatus(role:'signin'|'maintenance'|'background'):Promise<{registered:boolean;enabled:boolean;owned:boolean;nextRun:string;lastRun:string;lastResult:number|null}>;
+  selectTaskProgram():Promise<{id:string;displayPath:string}|null>;
+  prepareTask(request:unknown):Promise<{id:string;summary:string;requiresElevation:boolean}>;
+  executeTask(planId:string):Promise<{ok:boolean;journalId:string;changed:boolean;settled:boolean;recoverable:boolean;detail:string}>;
+  taskRecovery(journalId:string):Promise<{journalId:string;completed:boolean;recovered:boolean;recoverable:boolean;deleted:boolean;path:string}>;
   driverInventory(): Promise<Array<{PublishedName:string; OriginalName:string; InfFile:string; Date:string; Version:string; Provider:string; DriverClass:string; driverId:string|null; eligible:boolean; reason:string|null}>>;
   prepareDriver(request:{kind:'remove';driverId:string}|{kind:'recover';journalId:string}):Promise<{id:string;summary:string;requiresElevation:boolean}>;
   executeDriver(planId:string):Promise<{ok:boolean;journalId:string;stagedOnly:boolean;detail:string}>;

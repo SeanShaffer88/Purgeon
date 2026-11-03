@@ -554,12 +554,13 @@ const handlers = {
   'tasks:runNow': ({ task }) => tasks.runNow(task),
   'tasks:stop': ({ task }) => tasks.stop(task),
   'tasks:remove': ({ task }) => tasks.remove(task),
-  'tasks:restore': ({ file, name }) => tasks.restoreFromBackup(file, name),
+  'tasks:restore': ({ journalId, file, name }) => {
+    if (file !== undefined || name !== undefined) throw new Error('Legacy task XML/name recovery requires manual review; choose a native journal.');
+    return tasks.restoreFromBackup(journalId);
+  },
   'tasks:create': (spec) => tasks.create(spec),
   'tasks:pickProgram': async () => {
-    const { open: openDialog } = await import('@tauri-apps/plugin-dialog');
-    const file = await openDialog({ title: 'Choose the program the task runs', multiple: false, filters: [{ name: 'Programs', extensions: ['exe', 'bat', 'cmd', 'ps1'] }] });
-    return typeof file === 'string' ? file : null;
+    return tasks.pickProgram();
   },
   // Per-site cookie rules (Browser Clean-up).
   'cookies:rules': () => cookierules.rules(),

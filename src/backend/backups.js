@@ -1,7 +1,8 @@
 // Backs up and removes leftover items, and restores backups.
 // Registry keys are exported to .reg files, values are recorded with their type and data,
 // and files go to the Recycle Bin, so every removal can be undone.
-import { taskRemovalScript, firewallRemovalScript, firewallRestoreScript } from './backup-scripts.js';
+import { firewallRemovalScript, firewallRestoreScript } from './backup-scripts.js';
+import * as nativeTasks from './tasks.js';
 import { sys, env } from './sys.js';
 import * as path from './winpath.js';
 import { reg, runPS, runPSJson, psq, execFile } from './shell.js';
@@ -231,16 +232,18 @@ async function planRemoval({ items, owners = [], state }) {
   }
   const tasks = items.filter((i) => i.kind === 'task');
   const firewall = items.filter((i) => i.kind === 'firewall');
-  const present = tasks.length || firewall.length
+  const present = firewall.length
     ? await runPSJson(
         `$in = [Console]::In.ReadToEnd() | ConvertFrom-Json
-         $tasks = @(Get-ScheduledTask -ErrorAction SilentlyContinue | ForEach-Object { $_.TaskPath + $_.TaskName })
-         @(foreach ($i in $in) { if ($i.kind -eq 'task') { $tasks -contains $i.path } else { [bool](Get-NetFirewallRule -Name $i.path -ErrorAction SilentlyContinue) } }) | ConvertTo-Json -Compress`,
-        { input: JSON.stringify([...tasks, ...firewall].map((i) => ({ kind: i.kind, path: i.path }))) }
+         @(foreach ($i in $in) { [bool](Get-NetFirewallRule -Name $i.path -ErrorAction SilentlyContinue) }) | ConvertTo-Json -Compress`,
+        { input: JSON.stringify(firewall.map((i) => ({ path: i.path }))) }
       ).catch(() => [])
     : [];
-  tasks.forEach((item, i) => (/^\\Microsoft\\/i.test(item.path) ? log(item, false, 'Windows task, would be skipped') : log(item, true, present[i] ? 'Would export and remove the task' : 'Already gone')));
-  firewall.forEach((item, i) => log(item, true, present[tasks.length + i] ? 'Would save and remove the firewall rule' : 'Already gone'));
+  if (tasks.length) {
+    const native = await nativeTasks.list();
+    for (const item of tasks) { const task = native.find((row) => row.path + row.name === item.path); log(item, /^[a-f0-9]{32}$/i.test(item.taskId || '') && !!task?.taskId && !task.isWindows && task.enabled === false && !(task.instanceGuids?.length), task?.taskId ? 'Native definition/ACL backup and fresh grant checks are required before disabled-task removal' : 'No current supported native task identity; refresh the scan'); }
+  }
+  firewall.forEach((item, i) => log(item, true, present[i] ? 'Would save and remove the firewall rule' : 'Already gone'));
   const values = items.filter((i) => i.kind === 'value');
   const captured = await readValues(values).catch(() => []);
   for (const item of values) log(item, true, captured.some((c) => c.path === item.path && c.name === item.name) ? 'Would record and delete the value' : 'Already gone');
@@ -344,22 +347,29 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
     log(item, r.ok, r.ok ? 'Service deleted' : r.out);
   }
 
-  // Scheduled tasks: exported to XML, then unregistered.
-  let t = 0;
+  // Task definitions/ACLs are native protected journals, never caller XML.
   for (const item of items.filter((i) => i.kind === 'task')) {
     if (stopNow()) break;
     if (/^\\Microsoft\\/i.test(item.path)) {
       log(item, false, 'Windows task, skipped');
       continue;
     }
-    const file = path.join(dir, `task-${++t}.xml`);
-    await intent({ kind: 'task', path: item.path, file: path.basename(file) });
-    const out = await runPS(taskRemovalScript(item.path, file)).catch((e) => `ERR ${e.message}`);
-    if (/^GONE/.test(out.trim())) { await unchanged(); log(item, true, 'Already gone'); }
-    else if (/^OK/.test(out.trim())) {
-      await record({ kind: 'task', path: item.path, file: path.basename(file) });
-      log(item, true, 'Task removed');
-    } else log(item, false, out.trim().replace(/^ERR /, ''));
+    let nativeIntent = null;
+    try {
+      const result = await nativeTasks.remove(item, { onPrepared: async (journalId) => {
+        try { await intent({ kind: 'task', path: item.path, taskId: item.taskId, nativeTaskJournalId: journalId }); }
+        finally { if (manifest.inFlight) nativeIntent = { ...manifest.inFlight }; }
+      } });
+      await record({ kind: 'task', path: item.path, nativeTaskJournalId: result.journalId }); log(item, true, 'Task removed after native definition/ACL backup');
+    }
+    catch (error) {
+      if (nativeIntent) {
+        manifest.inFlight = nativeIntent; manifest.intents[nativeIntent.intentId] = nativeIntent;
+        manifest.entries = manifest.entries.filter((entry) => entry.intentId !== nativeIntent.intentId);
+        stopped = true; await save().catch(() => {});
+      }
+      log(item, false, `${error.message}${nativeIntent?.nativeTaskJournalId ? ` Native task journal ${nativeIntent.nativeTaskJournalId} is retained for review.` : ''}`);
+    }
   }
 
   // Firewall rules: settings saved to JSON, then removed.
@@ -527,7 +537,8 @@ const validBackupFile = (name) => nonblank(name) && !/[\\/:<>"|?*\x00-\x1f]/.tes
 function validateRecoveryEntry(entry) {
   if (!validItem(entry, recoveryKinds)) throw new Error('invalid recovery entry');
   if ('file' in entry && !validBackupFile(entry.file)) throw new Error('invalid stored export filename');
-  if (['key', 'service', 'task', 'firewall'].includes(entry.kind) && !validBackupFile(entry.file)) throw new Error('missing stored export filename');
+  if (['key', 'service', 'firewall'].includes(entry.kind) && !validBackupFile(entry.file)) throw new Error('missing stored export filename');
+  if (entry.kind === 'task' && !(/^[a-f0-9]{32}$/i.test(entry.nativeTaskJournalId || '') || validBackupFile(entry.file))) throw new Error('missing native task journal or retained legacy export');
   if (['value', 'newvalue'].includes(entry.kind) && typeof entry.name !== 'string') throw new Error('invalid registry value name');
   if (entry.kind === 'value' && (!Object.hasOwn(REG_TYPE, entry.valueKind) || typeof entry.data !== 'string')) throw new Error('invalid stored registry value');
   if (['file', 'dir'].includes(entry.kind) && entry.recycled !== true) throw new Error('missing recycled-file recovery evidence');
@@ -603,6 +614,17 @@ async function resolveInterrupted(action) {
   if (p.corrupt) throw new Error(p.detail);
   const { dir, manifest: m } = await readRecoveryManifest(p);
   if (m.recovery) throw recoveryError('an earlier rollback may have partially restored data; automatic retry is refused');
+  // An explicit rollback may reconcile a completed native task whose outer
+  // completion save was interrupted. Unknown/native-uncertain records stay held.
+  if (action === 'rollback' && m.inFlight?.kind === 'task' && /^[a-f0-9]{32}$/i.test(m.inFlight.nativeTaskJournalId || '')) {
+    const native = await nativeTasks.recoveryStatus(m.inFlight.nativeTaskJournalId);
+    if (native?.completed && native.deleted === true && native.recoverable && native.path === m.inFlight.path) {
+      const original = m.inFlight;
+      m.entries.push({ kind: 'task', path: original.path, nativeTaskJournalId: original.nativeTaskJournalId, intentId: original.intentId });
+      m.intents[original.intentId] = { ...original, status: 'completed' }; delete m.inFlight;
+      await writeEncryptedText(path.join(dir, 'manifest.json'), JSON.stringify(m, null, 2));
+    }
+  }
   if (m.inFlight) throw recoveryError(`uncertain ${m.inFlight.kind} operation at ${m.inFlight.path}; automatic replay is refused`);
   // Replaying the original item list could delete an item restored or changed
   // since the crash. A fresh preview is required instead of guessing identity.
@@ -754,6 +776,12 @@ async function verifyPackage(id, shouldStop) {
     await sys.makeDir(scratch);
     for (const e of manifest.entries) {
       if (shouldStop && shouldStop()) return { ok: false, cancelled: true, at: new Date().toISOString(), problems: ['The check was cancelled before it finished'], exportsChecked, binChecked: 0 }; // not recorded: a cancelled check is not a verdict on the package
+      if (e.kind === 'task') {
+        if (!/^[a-f0-9]{32}$/i.test(e.nativeTaskJournalId || '')) { problems.push(`Legacy task XML for ${e.path} requires manual review`); continue; }
+        try { const native = await nativeTasks.recoveryStatus(e.nativeTaskJournalId); if (!native?.completed || native.deleted !== true || !native.recoverable || native.path !== e.path) problems.push(`Native task deletion recovery evidence for ${e.path} needs review`); else exportsChecked++; }
+        catch (error) { problems.push(error.message); }
+        continue;
+      }
       if (!e.file || changed.has(e.file)) continue;
       if (e.kind !== 'key' && e.kind !== 'service' && e.kind !== 'task' && e.kind !== 'firewall') continue;
       const text = await sys.readText(path.join(dir, e.file)).catch(() => '');
@@ -881,14 +909,9 @@ async function restore(id, onlyIndexes, shouldStop, internalToken) {
       const r = await reg(['import', path.join(dir, e.file)]);
       results.push({ ...e, ok: r.ok, detail: r.ok ? 'Service restored; restart Windows to start it' : r.stderr });
     } else if (e.kind === 'task') {
-      const split = e.path.lastIndexOf('\\') + 1;
-      // Success is confirmed by finding the task again, not by the command merely finishing.
-      const out = await runPS(`
-        $ErrorActionPreference = 'Stop'
-        Register-ScheduledTask -Xml (Get-Content -LiteralPath ${psq(path.join(dir, e.file))} -Raw) -TaskName ${psq(e.path.slice(split))} -TaskPath ${psq(e.path.slice(0, split))} -Force | Out-Null
-        if (Get-ScheduledTask -TaskName ${psq(e.path.slice(split))} -TaskPath ${psq(e.path.slice(0, split))} -ErrorAction SilentlyContinue) { 'OK' } else { 'Task was not recreated' }`
-      ).catch((err) => err.message);
-      results.push({ ...e, ok: /^OK/.test(out.trim()), detail: /^OK/.test(out.trim()) ? 'Task restored' : out.trim() });
+      if (!/^[a-f0-9]{32}$/i.test(e.nativeTaskJournalId || '')) { results.push({ ...e, ok: false, detail: 'Legacy task XML requires manual review; it is not elevated recovery authority.' }); continue; }
+      try { const native = await nativeTasks.recoveryStatus(e.nativeTaskJournalId); if (!native?.completed || native.deleted !== true || native.path !== e.path) throw new Error('Task backup does not reference a completed native deletion journal.'); await nativeTasks.restoreDeleted(e.nativeTaskJournalId); results.push({ ...e, ok: true, detail: 'Native task original restored disabled without overwriting another task' }); }
+      catch (error) { results.push({ ...e, ok: false, detail: error.message }); }
     } else if (e.kind === 'firewall') {
       const out = await runPS(firewallRestoreScript(e.path, path.join(dir, e.file))).catch((err) => err.message);
       results.push({ ...e, ok: /^OK/.test(out.trim()), detail: /^OK/.test(out.trim()) ? 'Firewall rule restored' : out.trim() });

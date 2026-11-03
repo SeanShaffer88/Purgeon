@@ -4,6 +4,7 @@ import * as path from './winpath.js';
 // entries and shell extensions, file associations, and app data folders named after the
 // program's own executables. Every item carries a 0-100 score of how sure the match is.
 import { runPSJson } from './shell.js';
+import * as scheduledTasks from './tasks.js';
 import { GENERIC, isProtected } from './paths.js';
 
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -57,14 +58,6 @@ function InLoc($text) { $loc -and $text -and ([string]$text).ToLower().Replace('
 $res = New-Object System.Collections.ArrayList
 function Add($kind, $path, $score, $reason, $name) { [void]$res.Add([pscustomobject]@{ kind=$kind; path=$path; name=$name; score=$score; reason=$reason }) }
 
-# Scheduled tasks outside \\Microsoft\\
-foreach ($t in Get-ScheduledTask -ErrorAction SilentlyContinue | Where-Object { $_.TaskPath -notlike '\\Microsoft\\*' }) {
-  $full = "$($t.TaskPath)$($t.TaskName)"
-  $byPath = @($t.Actions | Where-Object { (InLoc $_.Execute) -or (InLoc $_.Arguments) -or (InLoc $_.WorkingDirectory) }).Count -gt 0
-  if ($byPath) { Add 'task' $full 95 'Scheduled task runs a file from the install folder' $t.TaskName }
-  elseif (M $t.TaskName $in.nameKey) { Add 'task' $full 60 'Scheduled task named after program' $t.TaskName }
-}
-
 # Firewall rules for programs in the install folder
 if ($loc) {
   foreach ($f in Get-NetFirewallApplicationFilter -ErrorAction SilentlyContinue | Where-Object { InLoc $_.Program }) {
@@ -113,7 +106,15 @@ async function scanDeep(program, { nameKey, location }) {
   const exes = await exeNames(loc);
   const input = JSON.stringify({ nameKey, location: loc, exes, generic: [...GENERIC] });
   const [registry, folders] = await Promise.all([runPSJson(SCAN_DEEP, { input }).catch(() => []), exeDataFolders(loc, exes)]);
-  return [...registry, ...folders];
+  const prefix = loc ? loc.replace(/[\\/]+$/, '').toLowerCase() + '\\' : '';
+  const taskItems = [];
+  for (const task of await scheduledTasks.list()) {
+    if (task.isWindows) continue;
+    const byPath = prefix && [task.command, task.arguments, task.workingDirectory].some((text) => typeof text === 'string' && text.toLowerCase().replace(/"/g, '').includes(prefix));
+    const key = norm(task.name); const nameMatch = key && nameKey && !GENERIC.has(key) && (key === nameKey || (key.length >= 5 && nameKey.startsWith(key)) || (nameKey.length >= 5 && key.startsWith(nameKey)));
+    if (byPath || nameMatch) taskItems.push({ kind: 'task', path: task.path + task.name, name: task.name, taskId: task.taskId, score: byPath ? 95 : 60, reason: byPath ? 'Native task action references the install folder' : 'Native task name matches the program', unsupportedReason: task.unsupportedReason });
+  }
+  return [...registry, ...folders, ...taskItems];
 }
 
 export { scanDeep, exeNames, exeDataFolders };

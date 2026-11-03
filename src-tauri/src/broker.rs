@@ -909,6 +909,7 @@ pub(crate) enum HelperKind {
     EventLogs,
     Boot,
     Drivers,
+    Tasks,
 }
 pub(crate) fn launch_domain_helper(kind: HelperKind, pipe_name: &str) -> Result<Owned, String> {
     let mode = match kind {
@@ -917,6 +918,7 @@ pub(crate) fn launch_domain_helper(kind: HelperKind, pipe_name: &str) -> Result<
         HelperKind::EventLogs => "--operation-broker",
         HelperKind::Boot => "--boot-broker",
         HelperKind::Drivers => "--driver-broker",
+        HelperKind::Tasks => "--task-broker",
     };
     launch_elevated(&format!("{mode} {pipe_name}"))
 }
@@ -1160,6 +1162,13 @@ pub fn private_mode() -> Result<bool, String> {
                 return Err("Invalid restore broker arguments".into());
             }
             crate::restore_native::helper(&args[1])?;
+            Ok(true)
+        }
+        Some("--task-broker") => {
+            if args.len() != 2 {
+                return Err("Invalid scheduled-task broker arguments".into());
+            }
+            crate::task_native::helper(&args[1])?;
             Ok(true)
         }
         Some("--driver-broker") => {

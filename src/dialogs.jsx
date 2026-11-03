@@ -1609,7 +1609,7 @@ export function TasksDialog({ onClose }) {
       <button disabled={busy} title={tx("Create a simple task: run a program at sign-in, daily or weekly")} onClick={() => setCreating(true)}>{tx("New Task…")}</button>
       <button className="primary" onClick={onClose}>{tx("Close")}</button>
     </>}>
-      <p className="muted" style={{ marginBottom: 10 }}>{tx("Everything Windows runs on a schedule. Windows' own tasks are badged — they can be run or turned off here, but never deleted.")}</p>
+      <p className="muted" style={{ marginBottom: 10 }}>{tx("Scheduled tasks are listed read-only unless their native identity, current-user principal, executable and permissions are supported. Windows tasks are never deleted.")}</p>
       {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
       <input className="search-input" style={{ marginBottom: 10, width: '100%' }} placeholder={tx("Search tasks…")} title={tx("Type part of a task's name or folder to filter the list")} value={filter} onChange={(e) => { setFilter(e.target.value); setSelected(0); }} />
       {items === null ? <p className="muted">{tx("Reading the tasks…")}</p> : shown.length === 0 ? <p className="muted">{tx("No tasks match.")}</p> : (
@@ -1633,12 +1633,12 @@ export function TasksDialog({ onClose }) {
                 <div className="pkg-entry"><span className="muted">{tx("Last result")}</span><span style={{ marginLeft: 'auto' }}>{resultText(current.lastResult)}</span></div>
                 <div className="pkg-entry"><span className="muted">{tx("Next run")}</span><span style={{ marginLeft: 'auto' }}>{fmtWhen(current.nextRun)}</span></div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
-                  <button disabled={busy} title={tx("Run this task right now")} onClick={() => run(() => api.invoke('tasks:runNow', { task: current }))}>{tx("Run now")}</button>
-                  <button disabled={busy} title={tx("Stop this task if it is running")} onClick={() => run(() => api.invoke('tasks:stop', { task: current }))}>{tx("Stop")}</button>
-                  <button disabled={busy} title={current.state === 'Disabled' ? tx("Let this task run on its schedule again") : tx("Keep the task but stop it running on its schedule")} onClick={() => run(() => api.invoke('tasks:setEnabled', { task: current, on: current.state === 'Disabled' }))}>{current.state === 'Disabled' ? tx("Turn on") : tx("Turn off")}</button>
-                  {!current.isWindows && <button disabled={busy} className="danger" title={tx("Delete this task (its definition is saved first, and Change History can undo)")} onClick={() => setConfirmDelete(current)}>{tx("Delete…")}</button>}
+                  <button disabled={busy || !current.taskId} title={current.unsupportedReason || tx("Request a task start; completion is not assumed")} onClick={() => run(() => api.invoke('tasks:runNow', { task: current }))}>{tx("Run now")}</button>
+                  <button disabled={busy || !current.taskId || !current.instanceGuids?.length} title={current.unsupportedReason || tx("Stop only the captured running task instances")} onClick={() => run(() => api.invoke('tasks:stop', { task: current }))}>{tx("Stop")}</button>
+                  <button disabled={busy || !current.taskId} title={current.unsupportedReason || (current.enabled === false ? tx("Let this task run on its schedule again") : tx("Keep the task but stop it running on its schedule"))} onClick={() => run(() => api.invoke('tasks:setEnabled', { task: current, on: current.enabled === false }))}>{current.enabled === false ? tx("Turn on") : tx("Turn off")}</button>
+                  {!current.isWindows && <button disabled={busy || !current.taskId || current.enabled !== false || !!current.instanceGuids?.length} className="danger" title={current.unsupportedReason || tx("Delete only a disabled, nonrunning task after protected native backup")} onClick={() => setConfirmDelete(current)}>{tx("Delete…")}</button>}
                 </div>
-                {current.isWindows && <p className="muted" style={{ marginTop: 10 }}>{tx("One of Windows' own tasks — it can be run or turned off here, but not deleted.")}</p>}
+                {(current.isWindows || current.unsupportedReason) && <p className="muted" style={{ marginTop: 10 }}>{current.unsupportedReason || tx("Windows tasks are never deleted. Other actions require the supported current-user native policy.")}</p>}
               </>
             )}
           </div>
@@ -1649,7 +1649,7 @@ export function TasksDialog({ onClose }) {
           <button onClick={() => setConfirmDelete(null)}>{tx("Keep it")}</button>
           <button className="danger" onClick={() => { const t = confirmDelete; setConfirmDelete(null); run(() => api.invoke('tasks:remove', { task: t })); }}>{tx("Delete it")}</button>
         </>}>
-          <p>{tx("Its definition is saved to Purgeon's task-backups folder first, and Change History's undo puts it back from that copy.")}</p>
+          <p>{tx("Its native definition and permissions are saved in a protected journal first. Recovery recreates it disabled, without overwriting another task; enabling requires a separate review.")}</p>
         </Dialog>
       )}
       {creating && <TaskCreateDialog onClose={() => setCreating(false)} onDone={() => { setCreating(false); load(); }} />}
@@ -1660,6 +1660,7 @@ export function TasksDialog({ onClose }) {
 function TaskCreateDialog({ onClose, onDone }) {
   const [name, setName] = useState('');
   const [program, setProgram] = useState('');
+  const [programGrant, setProgramGrant] = useState(null);
   const [trigger, setTrigger] = useState('daily');
   const [time, setTime] = useState('09:00');
   const [day, setDay] = useState('Monday');
@@ -1667,20 +1668,20 @@ function TaskCreateDialog({ onClose, onDone }) {
   const [busy, setBusy] = useState(false);
   const create = async () => {
     setBusy(true); setErr('');
-    try { await api.invoke('tasks:create', { name, program, trigger, time, day }); onDone(); }
+    try { await api.invoke('tasks:create', { name, programGrant, trigger, time, day }); onDone(); }
     catch (e) { setErr(e.message); setBusy(false); }
   };
   return (
     <Dialog title={tx("New Task")} onClose={onClose} width={560} buttons={<>
       <button onClick={onClose}>{tx("Cancel")}</button>
-      <button className="primary" disabled={busy || !name.trim() || !program} onClick={create}>{tx("Create the task")}</button>
+      <button className="primary" disabled={busy || !name.trim() || !programGrant} onClick={create}>{tx("Create Disabled Task")}</button>
     </>}>
       {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
       <label className="field">{tx("Name")}<input value={name} title={tx("What the task is called in the list")} onChange={(e) => setName(e.target.value)} placeholder={tx("e.g. Back up my photos")} />
       </label>
       <label className="field">{tx("Program")}<span style={{ display: 'flex', gap: 8 }}>
-          <input value={program} title={tx("The program file the task runs")} onChange={(e) => setProgram(e.target.value)} placeholder={tx("C:\\\\Path\\\\program.exe")} style={{ flex: 1 }} />
-          <button title={tx("Choose the program file")} onClick={async () => { const f = await api.invoke('tasks:pickProgram'); if (f) setProgram(f); }}>{tx("Choose…")}</button>
+          <input value={program} title={tx("Choose a native EXE; editing invalidates the selected program grant")} onChange={(e) => { setProgram(e.target.value); setProgramGrant(null); }} placeholder={tx("C:\\\\Path\\\\program.exe")} style={{ flex: 1 }} />
+          <button title={tx("Choose the native EXE program file")} onClick={async () => { try { const f = await api.invoke('tasks:pickProgram'); if (f) { setProgram(f.displayPath); setProgramGrant(f.id); } } catch (error) { setErr(error.message); } }}>{tx("Choose…")}</button>
         </span>
       </label>
       <label className="field">{tx("When")}<select value={trigger} title={tx("When the task runs")} onChange={(e) => setTrigger(e.target.value)}>

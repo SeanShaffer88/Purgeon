@@ -1,23 +1,5 @@
 import { psq } from './shell.js';
 
-export const taskRemovalScript = (target, file) => `
-$ErrorActionPreference = 'Stop'
-$tasks = @(Get-ScheduledTask -ErrorAction Stop | Where-Object { ($_.TaskPath + $_.TaskName) -ceq ${psq(target)} })
-if (-not $tasks.Count) { 'GONE'; return }
-if ($tasks.Count -ne 1) { throw 'Task identity is ambiguous' }
-$t = $tasks[0]
-$text = Export-ScheduledTask -TaskName $t.TaskName -TaskPath $t.TaskPath -ErrorAction Stop
-if (-not ([string]$text).Trim()) { throw 'Task backup is empty' }
-[xml]$exported = $text
-if ($exported.DocumentElement.LocalName -cne 'Task') { throw 'Export is not task XML' }
-$text | Set-Content -LiteralPath ${psq(file)} -Encoding Unicode -ErrorAction Stop
-if ((Get-Item -LiteralPath ${psq(file)} -ErrorAction Stop).Length -le 0) { throw 'Task backup was not saved' }
-[xml]$saved = Get-Content -LiteralPath ${psq(file)} -Raw -ErrorAction Stop
-if ($saved.DocumentElement.LocalName -cne 'Task' -or $saved.OuterXml -cne $exported.OuterXml) { throw 'Task backup does not match exported task XML' }
-Unregister-ScheduledTask -TaskName $t.TaskName -TaskPath $t.TaskPath -Confirm:$false -ErrorAction Stop
-if (Get-ScheduledTask -TaskName $t.TaskName -TaskPath $t.TaskPath -ErrorAction SilentlyContinue) { throw 'Task is still registered' }
-'OK'`;
-
 // Only this deliberately narrow firewall subset can round-trip. Other rules
 // remain in Windows, rather than restoring a broader or weaker policy later.
 const FIREWALL_SNAPSHOT = `
