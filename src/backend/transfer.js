@@ -557,9 +557,11 @@ async function preflightUndo(record, id, dir, lease) {
     if (item.kind === 'key') {
       const key = record.keys.find((key) => key.path.toLowerCase() === item.path.toLowerCase());
       if (key.before) {
-        const text = await readUndoExport(exports.get(key.before).file, key.path);
+        const pin = await sys.pinTransferRegistryExport(lease, key.before);
+        if (!plainRecord(pin) || Object.keys(pin).some((key) => !['id', 'text'].includes(key)) || typeof pin.id !== 'string' || !/^[a-f0-9]{32}$/i.test(pin.id) || typeof pin.text !== 'string' || pin.text.length > 8388608) throw new Error('Native registry export pin was not confirmed');
+        const text = validateRegistryText(pin.text, key.path);
         if (await evidenceHash(text) !== item.evidence) throw new Error('Saved registry export differs from the original undo evidence');
-        exports.set(key.before, text);
+        exports.set(key.before, { id: pin.id, text });
       }
     } else if (item.kind === 'value') {
       const value = record.values.find((value) => value.path.toLowerCase() === item.path.toLowerCase() && value.name === item.name);
@@ -655,10 +657,6 @@ export async function undo(id) {
             }
             item.status = 'done'; await save();
           } else {
-            if (item.kind === 'key' && item.goal.exists) {
-              const key = record.keys.find((key) => key.path.toLowerCase() === item.path.toLowerCase());
-              if (await readUndoExport(path.join(dir, key.before), item.path) !== exports.get(key.before)) throw new Error('Saved registry export changed; undo refused');
-            }
             const before = item.phase === 'import' ? absentState() : item.expected;
             const goal = item.phase === 'clear' ? absentState() : item.goal;
             const current = await observe(target);
@@ -673,7 +671,7 @@ export async function undo(id) {
               if (item.phase === 'clear') result = await reg(['delete', item.path, '/f']);
               else if (item.phase === 'import') {
                 const key = record.keys.find((key) => key.path.toLowerCase() === item.path.toLowerCase());
-                result = await reg(['import', path.join(dir, key.before)]);
+                result = await sys.importTransferRegistryExport(lease, exports.get(key.before).id);
               } else {
                 const value = record.values.find((value) => value.path.toLowerCase() === item.path.toLowerCase() && value.name === item.name);
                 result = value.old

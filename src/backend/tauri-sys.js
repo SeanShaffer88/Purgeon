@@ -18,6 +18,8 @@ export async function createTauriSys() {
     acquireTransferUndo: (id) => invoke('acquire_transfer_undo', { id }),
     reserveTransferRestore: () => invoke('reserve_transfer_restore'),
     releaseTransferUndo: (token) => invoke('release_transfer_undo', { token }),
+    pinTransferRegistryExport: (token, name) => invoke('pin_transfer_registry_export', { token, name }),
+    importTransferRegistryExport: (token, pin) => invoke('import_transfer_registry_export', { token, pin }),
     stageTransferUndo: (token, id, step, target, expected, apply) => invoke('stage_transfer_undo', { token, id, step, target, expected, apply }),
     savedTransferUndoStage: (token, id, step, target, expected) => invoke('saved_transfer_undo_stage', { token, id, step, target, expected }),
     transferOriginalAtTarget: (target, receipt) => invoke('transfer_original_at_target', { target, receipt }),

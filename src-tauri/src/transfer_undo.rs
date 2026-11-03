@@ -285,6 +285,16 @@ struct Lease {
     id: String,
     _file: File,
     parents: files::Parents,
+    directory: PathBuf,
+    exports: HashMap<String, crate::registry_recovery::Pinned>,
+    export_bytes: usize,
+    importing: bool,
+    release_requested: bool,
+    quarantine: Option<QuarantinedImport>,
+}
+struct QuarantinedImport {
+    _pin: crate::registry_recovery::Pinned,
+    child: Box<dyn crate::registry_recovery::Running>,
 }
 static LEASES: OnceLock<Mutex<HashMap<String, Lease>>> = OnceLock::new();
 fn leases() -> &'static Mutex<HashMap<String, Lease>> {
@@ -341,6 +351,7 @@ pub fn reserve(root: &Path) -> Result<Reservation, String> {
     reserve_at(root, u64::try_from(stamp).map_err(|e| e.to_string())?)
 }
 pub fn acquire(root: &Path, id: &str) -> Result<String, String> {
+    reap_finished_imports();
     if !valid_id(id) {
         return Err("Invalid transfer undo id".into());
     }
@@ -373,17 +384,174 @@ pub fn acquire(root: &Path, id: &str) -> Result<String, String> {
                 id: id.to_owned(),
                 _file: file,
                 parents,
+                directory: path.parent().ok_or("Missing undo directory")?.to_path_buf(),
+                exports: HashMap::new(),
+                export_bytes: 0,
+                importing: false,
+                release_requested: false,
+                quarantine: None,
             },
         );
     Ok(token)
 }
 pub fn release(token: &str) -> Result<(), String> {
-    leases()
+    reap_import(token);
+    let mut held = leases()
         .lock()
-        .map_err(|_| "Undo lease state unavailable")?
-        .remove(token)
-        .ok_or("Unknown undo lease")?;
+        .map_err(|_| "Undo lease state unavailable")?;
+    let lease = held.get_mut(token).ok_or("Unknown undo lease")?;
+    if lease.importing {
+        lease.release_requested = true;
+        return Err(
+            "Registry importer termination is unconfirmed; its pins and journal lock remain held"
+                .into(),
+        );
+    }
+    held.remove(token);
     Ok(())
+}
+
+#[derive(Serialize)]
+pub struct PinnedExport {
+    id: String,
+    text: String,
+}
+pub fn pin_export(token: &str, name: &str) -> Result<PinnedExport, String> {
+    let mut held = leases()
+        .lock()
+        .map_err(|_| "Undo lease state unavailable")?;
+    let lease = held.get_mut(token).ok_or("Unknown undo lease")?;
+    lease.parents.verify()?;
+    if lease.importing || lease.exports.len() >= crate::registry_recovery::MAX_PINS {
+        return Err("Pinned registry recovery resource limit reached".into());
+    }
+    let pin = crate::registry_recovery::Pinned::prepare(
+        &lease.directory,
+        name,
+        crate::registry_recovery::MAX_TOTAL.saturating_sub(lease.export_bytes),
+    )?;
+    let id = crate::broker::random_id()?;
+    let text = pin.text.clone();
+    lease.export_bytes += pin.bytes;
+    lease.exports.insert(id.clone(), pin);
+    Ok(PinnedExport { id, text })
+}
+#[derive(Serialize)]
+pub struct ImportedExport {
+    ok: bool,
+}
+pub fn import_export(token: &str, id: &str) -> Result<ImportedExport, String> {
+    import_export_with(token, id, |pin| pin.import())
+}
+fn import_export_with(
+    token: &str,
+    id: &str,
+    importer: impl FnOnce(&mut crate::registry_recovery::Pinned) -> crate::registry_recovery::RunOutcome,
+) -> Result<ImportedExport, String> {
+    import_export_using(token, id, importer, start_reaper)
+}
+fn import_export_using(
+    token: &str,
+    id: &str,
+    importer: impl FnOnce(&mut crate::registry_recovery::Pinned) -> crate::registry_recovery::RunOutcome,
+    reaper: impl FnOnce(&str),
+) -> Result<ImportedExport, String> {
+    let mut pin = {
+        let mut held = leases()
+            .lock()
+            .map_err(|_| "Undo lease state unavailable")?;
+        let lease = held.get_mut(token).ok_or("Unknown undo lease")?;
+        lease.parents.verify()?;
+        if lease.importing {
+            return Err("Registry recovery import is already active".into());
+        }
+        let pin = lease
+            .exports
+            .remove(id)
+            .ok_or("Unknown, foreign or already consumed registry export pin")?;
+        lease.importing = true;
+        pin
+    };
+    let outcome = match pin.verify() {
+        Ok(()) => importer(&mut pin),
+        Err(error) => crate::registry_recovery::RunOutcome::Known(Err(error)),
+    };
+    match outcome {
+        crate::registry_recovery::RunOutcome::Known(result) => {
+            finish_import(token, pin.bytes);
+            result.map(|()| ImportedExport { ok: true })
+        }
+        crate::registry_recovery::RunOutcome::Unknown(mut child) => {
+            let _ = child.kill();
+            // Commit sole ownership before attempting thread creation. A failed
+            // spawn must never drop the only pins for an unconfirmed child.
+            let mut held = leases()
+                .lock()
+                .map_err(|_| "Undo lease state unavailable")?;
+            let lease = held
+                .get_mut(token)
+                .ok_or("Undo lease vanished during import")?;
+            lease.quarantine = Some(QuarantinedImport { _pin: pin, child });
+            drop(held);
+            reaper(token);
+            Err("Registry importer termination is unconfirmed; pins and journal lock retained until exit is known".into())
+        }
+    }
+}
+fn reap_import(token: &str) -> bool {
+    let Ok(mut held) = leases().lock() else {
+        return false;
+    };
+    let Some(lease) = held.get_mut(token) else {
+        return true;
+    };
+    let Some(quarantine) = lease.quarantine.as_mut() else {
+        return !lease.importing;
+    };
+    if !matches!(quarantine.child.poll(), Ok(Some(_))) {
+        let _ = quarantine.child.kill();
+        return false;
+    }
+    let quarantine = lease.quarantine.take().expect("Observed quarantine");
+    lease.export_bytes = lease.export_bytes.saturating_sub(quarantine._pin.bytes);
+    lease.importing = false;
+    drop(quarantine);
+    if lease.release_requested {
+        held.remove(token);
+    }
+    true
+}
+fn reap_finished_imports() {
+    let tokens = leases()
+        .lock()
+        .map(|held| held.keys().cloned().collect::<Vec<_>>())
+        .unwrap_or_default();
+    for token in tokens {
+        reap_import(&token);
+    }
+}
+fn start_reaper(token: &str) {
+    let token = token.to_owned();
+    // If spawning fails, owners stay in the lease and later acquire/release
+    // calls can reap opportunistically. The closure captures no resources.
+    let _ = std::thread::Builder::new()
+        .name("registry-import-reaper".into())
+        .spawn(move || {
+            while !reap_import(&token) {
+                std::thread::sleep(Duration::from_millis(250));
+            }
+        });
+}
+fn finish_import(token: &str, bytes: usize) {
+    if let Ok(mut held) = leases().lock() {
+        if let Some(lease) = held.get_mut(token) {
+            lease.importing = false;
+            lease.export_bytes = lease.export_bytes.saturating_sub(bytes);
+            if lease.release_requested {
+                held.remove(token);
+            }
+        }
+    }
 }
 fn require(token: &str, id: &str) -> Result<(), String> {
     let leases = leases()
@@ -392,6 +560,9 @@ fn require(token: &str, id: &str) -> Result<(), String> {
     let held = leases.get(token).ok_or("Unknown undo lease")?;
     if held.id != id {
         return Err("Undo lease belongs to another journal".into());
+    }
+    if held.importing {
+        return Err("Registry import is active or requires termination review".into());
     }
     held.parents.verify()
 }
@@ -642,6 +813,120 @@ mod tests {
         );
         let token = acquire(&root, "123").unwrap();
         release(&token).unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
+    fn pin_fixture() -> PathBuf {
+        let root = std::env::temp_dir().join(format!(
+            "purgeon-pin-lease-{}",
+            crate::broker::random_id().unwrap()
+        ));
+        fs::create_dir_all(root.join("123")).unwrap();
+        fs::create_dir_all(root.join("124")).unwrap();
+        fs::write(root.join("123/before-1.reg"),b"Windows Registry Editor Version 5.00\r\n\r\n[HKEY_CURRENT_USER\\Software\\Pinned]\r\n").unwrap();
+        root
+    }
+    #[test]
+    fn export_pins_are_lease_owned_one_use_and_released_on_known_import_failure() {
+        let root = pin_fixture();
+        let token = acquire(&root, "123").unwrap();
+        let foreign = acquire(&root, "124").unwrap();
+        let prepared = pin_export(&token, "before-1.reg").unwrap();
+        assert!(
+            import_export_with(&foreign, &prepared.id, |_| panic!("Foreign import invoked"))
+                .is_err()
+        );
+        let error = import_export_with(&token, &prepared.id, |pin| {
+            pin.verify().unwrap();
+            assert!(fs::write(root.join("123/before-1.reg"), b"changed").is_err());
+            crate::registry_recovery::RunOutcome::Known(Err("injected failure".into()))
+        })
+        .err()
+        .unwrap();
+        assert!(error.contains("injected"));
+        assert!(
+            import_export_with(&token, &prepared.id, |_| panic!("Replayed import invoked"))
+                .is_err()
+        );
+        fs::write(root.join("123/before-1.reg"), b"released").unwrap();
+        release(&foreign).unwrap();
+        release(&token).unwrap();
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn per_lease_pin_count_and_expanded_image_bytes_are_bounded() {
+        let root = pin_fixture();
+        let token = acquire(&root, "123").unwrap();
+        for _ in 0..crate::registry_recovery::MAX_PINS {
+            pin_export(&token, "before-1.reg").unwrap();
+        }
+        assert!(pin_export(&token, "before-1.reg").is_err());
+        release(&token).unwrap();
+        fs::write(
+            root.join("123/before-1.reg"),
+            vec![b'a'; crate::registry_recovery::MAX_SOURCE],
+        )
+        .unwrap();
+        let token = acquire(&root, "123").unwrap();
+        pin_export(&token, "before-1.reg").unwrap();
+        pin_export(&token, "before-1.reg").unwrap();
+        assert!(pin_export(&token, "before-1.reg").is_err());
+        release(&token).unwrap();
+        assert_eq!(fs::read_dir(root.join("123")).unwrap().count(), 2);
+        fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
+    fn failed_reaper_start_retains_pins_child_and_journal_until_known_exit() {
+        use std::sync::{
+            atomic::{AtomicBool, Ordering},
+            Arc,
+        };
+        struct Uncertain {
+            finished: Arc<AtomicBool>,
+            dropped: Arc<AtomicBool>,
+        }
+        impl crate::registry_recovery::Running for Uncertain {
+            fn poll(&mut self) -> Result<Option<crate::registry_recovery::ProcessExit>, String> {
+                Ok(self.finished.load(Ordering::SeqCst).then_some(
+                    crate::registry_recovery::ProcessExit {
+                        success: false,
+                        code: Some(1),
+                    },
+                ))
+            }
+            fn kill(&mut self) -> Result<(), String> {
+                Err("termination unconfirmed".into())
+            }
+        }
+        impl Drop for Uncertain {
+            fn drop(&mut self) {
+                self.dropped.store(true, Ordering::SeqCst);
+            }
+        }
+        let root = pin_fixture();
+        let token = acquire(&root, "123").unwrap();
+        let pin = pin_export(&token, "before-1.reg").unwrap();
+        let finished = Arc::new(AtomicBool::new(false));
+        let dropped = Arc::new(AtomicBool::new(false));
+        let child = Uncertain {
+            finished: finished.clone(),
+            dropped: dropped.clone(),
+        };
+        assert!(import_export_using(
+            &token,
+            &pin.id,
+            |_| crate::registry_recovery::RunOutcome::Unknown(Box::new(child)),
+            |_| {}
+        )
+        .is_err());
+        assert!(!dropped.load(Ordering::SeqCst));
+        assert!(release(&token).is_err());
+        assert!(acquire(&root, "123").is_err());
+        assert!(fs::write(root.join("123/before-1.reg"), b"changed").is_err());
+        finished.store(true, Ordering::SeqCst);
+        let next = acquire(&root, "123").unwrap();
+        assert!(dropped.load(Ordering::SeqCst));
+        fs::write(root.join("123/before-1.reg"), b"released").unwrap();
+        release(&next).unwrap();
         fs::remove_dir_all(root).unwrap();
     }
 }

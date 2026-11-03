@@ -1,9 +1,5 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
-import os from 'node:os';
-import nodePath from 'node:path';
-import { spawnSync } from 'node:child_process';
 import { setSys } from '../src/backend/sys.js';
 import * as transfer from '../src/backend/transfer.js';
 import { addPlan, absent, identityKey } from './transfer-fixture.js';
@@ -15,16 +11,19 @@ const journal=()=>({id,complete:true,pending:[],dirs:[],files:[],keys:[],values:
 const replacementReceipt=()=>({version:1,target,sid:'S-1-5-21-1',machine:'fixture',infoName:'$Ioriginal.ini',infoSha256:'a'.repeat(64),identity:{volume:1,high:2,low:3},directory:false,digest:'b'.repeat(64)});
 async function fixture(record=journal(),options={}){
   record=addPlan(record,regText);const states=new Map(record.undoPlan.items.map(i=>[identityKey(i),i.expected])), staged=new Set();
+  const pins=new Map();
   const calls=[], reads=[], files=new Map([[`${root}\\${id}\\restore.json`,JSON.stringify(record)]]), present=new Set([...(Array.isArray(record?.dirs)?record.dirs:[]),...(Array.isArray(record?.files)?record.files:[])]);
   for(const entry of Array.isArray(record?.keys)?record.keys:[])if(typeof entry?.before==='string')files.set(`${root}\\${id}\\${entry.before}`,regText(entry.path));
   const original=files.get(`${root}\\${id}\\restore.json`);
   setSys({info:{dataDir:root,home:'C:\\Users\\UndoTester',env:{LOCALAPPDATA:'C:\\Users\\UndoTester\\AppData\\Local',SystemRoot:'C:\\Windows'}},makeDir:async()=>{},
     readText:async(path)=>{reads.push(path);if(!files.has(path))throw Error('Missing fixture');return files.get(path);},
     exists:async(path)=>present.has(path),trash:async(path)=>{calls.push(['trash',path]);if(options.trashFailure)throw Error('Recycle denied');if(!options.trashStillPresent)present.delete(path);},
-    acquireTransferUndo:async()=> 'lease',releaseTransferUndo:async()=>{},observeTransferTarget:async(t)=>states.get(identityKey(t))??absent(),
+    acquireTransferUndo:async()=> 'lease',releaseTransferUndo:async()=>{pins.clear();},
+    pinTransferRegistryExport:async(_lease,name)=>{const path=`${root}\\${id}\\${name}`;reads.push(path);if(!files.has(path))throw Error('Missing export');const text=options.exportChanged?regText(key).replace('saved','changed'):files.get(path);const pin={id:name.replace(/\D/g,'').padStart(32,'0'),text,name};pins.set(pin.id,pin);return {id:pin.id,text};},
+    importTransferRegistryExport:async(_lease,pin)=>{const held=pins.get(pin);if(!held)throw Error('Missing pin');pins.delete(pin);const args=['import',`${root}\\${id}\\${held.name}`];calls.push(['exec','native-pinned-import',args]);const result=options.exec?options.exec(args):{ok:true,stdout:'',stderr:''};if(result.ok){if(args[0]==='delete'&&options.afterDelete)options.afterDelete(files);const i=record.undoPlan.items.find(i=>i.kind==='key');states.set(identityKey(i),i.goal);}return result;},observeTransferTarget:async(t)=>states.get(identityKey(t))??absent(),
     stageTransferUndo:async(_token,_id,step,t,_expected,apply)=>{if(staged.has(step))return true;if(!apply)return false;calls.push(['trash',t.path]);if(options.trashFailure)throw Error('Recycle denied');if(options.trashStillPresent)throw Error('Restored copy is still present');staged.add(step);states.set(identityKey(t),absent());return true;},
     savedTransferUndoStage:async(_t,_i,step)=>staged.has(step),validateTransferReplacement:async()=>{},transferOriginalAtTarget:async(path)=>{const i=record.undoPlan.items.find(i=>i.path===path);return states.get(identityKey(i))===i.goal;},restoreTransferReplacement:async(path)=>{calls.push(['exact',path]);const i=record.undoPlan.items.find(i=>i.path===path);states.set(identityKey(i),i.goal);return {restored:true};},
-    exec:async(file,args)=>{calls.push(['exec',file,args]);const result=options.exec?options.exec(args):{ok:true,stdout:'',stderr:''};if(result.ok){const i=record.undoPlan.items.find(i=>i.path===args[1]&&(i.kind==='key'||i.name===(args.includes('/ve')?'':args[args.indexOf('/v')+1])))??record.undoPlan.items.find(i=>i.kind==='key');states.set(identityKey(i),args[0]==='delete'&&i.kind==='key'?absent():i.goal);}return result;},
+    exec:async(file,args)=>{calls.push(['exec',file,args]);const result=options.exec?options.exec(args):{ok:true,stdout:'',stderr:''};if(result.ok){if(args[0]==='delete'&&options.afterDelete)options.afterDelete(files);const i=record.undoPlan.items.find(i=>i.path===args[1]&&(i.kind==='key'||i.name===(args.includes('/ve')?'':args[args.indexOf('/v')+1])))??record.undoPlan.items.find(i=>i.kind==='key');states.set(identityKey(i),args[0]==='delete'&&i.kind==='key'?absent():i.goal);}return result;},
     runPS:async(script,input)=>{
       if(script.includes('$inputPath')){const path=JSON.parse(input);reads.push(path);if(options.reader)return options.reader(script,input,path);if(options.exportChanged&&reads.filter(p=>p===path).length>1)return JSON.stringify({text:regText(key).replace('saved','changed')});if(!files.has(path))throw Error('Missing export');return JSON.stringify({text:files.get(path)});}
       calls.push(['recycle',JSON.parse(input)]);return JSON.stringify(Object.fromEntries(JSON.parse(input).map(p=>[p,'OK'])));
@@ -72,15 +71,12 @@ test('value failures report actual error even with misleading missing text and t
 });
 
 test('export content changes after preflight refuse deletion and retain saved evidence',async()=>{
-  const f=await fixture({...journal(),keys:[{path:key,before:'before-1.reg'}]},{exportChanged:true});const [result]=await transfer.undo(id);assert.equal(result.ok,false);assert.match(result.detail,/changed/);assert.deepEqual(f.calls,[]);assert.equal(f.files.size,2);
+  const f=await fixture({...journal(),keys:[{path:key,before:'before-1.reg'}]},{exportChanged:true});await assert.rejects(transfer.undo(id),/differs/);assert.deepEqual(f.calls,[]);assert.equal(f.files.size,2);
 });
 
-test('export changes after key deletion stop import and accurately retain failure evidence',async()=>{
-  for(const malformed of [false,true]){
-    let reads=0;
-    const f=await fixture({...journal(),keys:[{path:key,before:'before-1.reg'}]},{reader:()=>{reads++;return reads<3?JSON.stringify({text:regText()}):JSON.stringify(malformed?{}:{text:regText().replace('saved','changed')});}});
-    const [result]=await transfer.undo(id);assert.equal(result.ok,false);assert.doesNotMatch(result.detail,/nothing was changed/);assert.equal(f.calls.length,1);assert.equal(f.calls[0][2][0],'delete');assert.equal(f.files.size,2);
-  }
+test('the pinned export stays bound when the original filename changes after key deletion',async()=>{
+  const f=await fixture({...journal(),keys:[{path:key,before:'before-1.reg'}]},{afterDelete:files=>files.set(`${root}\\${id}\\before-1.reg`,regText().replace('saved','changed'))});
+  const [result]=await transfer.undo(id);assert.equal(result.ok,true);assert.equal(f.reads.filter(path=>path.endsWith('before-1.reg')).length,1);assert.match(f.files.get(`${root}\\${id}\\before-1.reg`),/changed/);assert.equal(f.calls.at(-1)[1],'native-pinned-import');
 });
 
 test('replacement restore only runs after the current copy is verified absent',async()=>{
@@ -88,14 +84,6 @@ test('replacement restore only runs after the current copy is verified absent',a
   const f=await fixture({...journal(),files:[target],replaced:[target],replacementReceipts:[replacementReceipt()]});assert.ok((await transfer.undo(id)).every(r=>r.ok));assert.deepEqual(f.calls.at(-1),['exact',target]);
 });
 
-test('the fixed export reader supports actual UTF-16LE BOM and UTF-8 scratch exports without registry access',async()=>{
-  const scratch=fs.mkdtempSync(nodePath.join(os.tmpdir(),'purgeon-undo-export-'));
-  try { for(const utf16 of [true,false]){
-    const file=nodePath.join(scratch,utf16?'utf16.reg':'utf8.reg'),text=regText();fs.writeFileSync(file,utf16?Buffer.concat([Buffer.from([255,254]),Buffer.from(text,'utf16le')]):text);
-    await fixture({...journal(),keys:[{path:key,before:'before-1.reg'}]},{reader:(script)=>{assert.doesNotMatch(script,/reg\.exe|Import-|Remove-|New-Item/);const result=spawnSync(nodePath.join(process.env.SystemRoot,'System32','WindowsPowerShell','v1.0','powershell.exe'),['-NoProfile','-NonInteractive','-Command',script],{input:JSON.stringify(file),encoding:'utf8',windowsHide:true});assert.equal(result.status,0,result.stderr);return result.stdout;}});
-    assert.equal((await transfer.undo(id))[0].ok,true);
-  }} finally { fs.rmSync(scratch,{recursive:true,force:true}); }
-});
 test('current valid registry key names may contain colons after the anchored hive',async()=>{
   const path=key+':Profile';await fixture({...journal(),keys:[{path,before:'before-1.reg'}],values:[{path:path+'Values',name:'line\nname',old:{kind:'String',data:'saved\ntext'}}]});assert.ok((await transfer.undo(id)).every(r=>r.ok));
 });
