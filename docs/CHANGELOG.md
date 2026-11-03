@@ -2,12 +2,24 @@
 
 ## Unreleased
 
+## 1.4.1 - 2026-11-03
+
+### Added
+- **The window reopens where you left it**: Purgeon now remembers its size, position and whether it was maximized, and restores them on the next launch. A saved spot that no longer fits a connected screen is ignored and the default size is used instead.
+- A DNS & encrypted lookups section in Debloat: per network adapter, choose automatic DNS or the Cloudflare, Google or Quad9 servers, and on Windows 11 whether lookups are encrypted (DNS over HTTPS) — off, when possible, or only. The same controls are available as `--dns list`, `--dns set` and `--dns reset`.
+- A Storage Sense tweak in Debloat (new Storage & cleanup group): the Settings switch for Windows' automatic low-space cleanup, per user, with the previous value restored when turned off.
+- A Nagle's algorithm choice per network adapter in the DNS & encrypted lookups section: Windows default, or off (small packets sent immediately — can shave delay in some online games; most programs see no difference). Also available as `--dns nagle`.
+
+### Changed
+- **Disk Usage shows a folder's contents at once**: files and folders are listed immediately and each folder's size is filled in as it is measured, instead of the whole view waiting until every folder has been measured. The Cancel button still stops the measuring, keeping whatever sizes have landed.
+
+### Fixed
+- **The Debloat view failed to load** with an "Invalid compiled Debloat resource" message and showed no tweaks: the tweak catalog is checked the same way Windows treats registry paths (letter case does not matter), and the full tweak list loads again.
+- **The close button's remembered choice could be lost**: the choice the close question saves ("Remember my choice") is now also read by Purgeon itself as it starts, so the first close of a launch already follows it, and saving the choice can no longer be blocked by another operation running at the same moment.
+
 ## 1.4.0 - 2026-11-02
 
 ### Added
-- A Storage Sense tweak in Debloat (new Storage & cleanup group): the Settings switch for Windows' automatic low-space cleanup, per user, with the previous value restored when turned off.
-- A Nagle's algorithm choice per network adapter in the DNS & encrypted lookups section: Windows default, or off (small packets sent immediately — can shave delay in some online games; most programs see no difference). Also available as `--dns nagle`.
-- A DNS & encrypted lookups section in Debloat: per network adapter, choose automatic DNS or the Cloudflare, Google or Quad9 servers, and on Windows 11 whether lookups are encrypted (DNS over HTTPS) — off, when possible, or only. The same controls are available as `--dns list`, `--dns set` and `--dns reset`.
 - **Removal backups are sealed and re-checked before they are trusted**: every backup is fingerprinted when it is made, and the fingerprints are verified again before a restore or review. A backup whose contents changed after it was sealed — or whose record is damaged — is refused with a plain explanation instead of being used.
 - **An interrupted removal is recovered or held for review**: if Purgeon stops in the middle of a removal, the next start either rolls the removal back from its backup or keeps the backup clearly marked as needing review. Nothing is silently dropped or half-applied.
 - **One gatekeeper for work that needs administrator rights**: privileged actions are planned and checked in one place before anything runs, and the plan is what the confirmation prompt describes — what will change, in plain words, before you approve it.
