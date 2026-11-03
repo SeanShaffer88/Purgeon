@@ -60,7 +60,8 @@ if ($dohSupported) {
 `;
 
 export async function status() {
-  const raw = await runPSJson(STATUS_SCRIPT).catch(() => null);
+  const result = await runPSJson(STATUS_SCRIPT);
+  const raw = Array.isArray(result) && result.length === 1 ? result[0] : result;
   if (!raw || !Array.isArray(raw.adapters)) throw new Error('Windows did not report any network adapters.');
   const doh = Array.isArray(raw.doh) ? raw.doh : [];
   const adapters = raw.adapters.map((a) => {
@@ -72,7 +73,7 @@ export async function status() {
       up: a.status === 'Up',
       servers,
       provider: providerForServers(servers),
-      doh: dohModeFor(entries),
+      doh: servers.length && servers.every((s) => entries.filter((d) => d.server === s).length === 1) ? dohModeFor(entries) : 'off',
       nagleOff: !!a.nagleOff,
     };
   });
@@ -80,11 +81,11 @@ export async function status() {
 }
 
 const checkIndex = (index) => {
-  if (!Number.isInteger(index) || index <= 0) throw new Error('Name the network adapter by its number (see --dns list).');
+  if (!Number.isSafeInteger(index) || index <= 0 || index > 2147483647) throw new Error('Name the network adapter by its number (see --dns list).');
   return index;
 };
 
-const denied = (msg) => (/access is denied|0x80070005|PermissionDenied|requires elevation|run as administrator/i.test(msg || '') ? 'Changing DNS settings needs administrator rights. Use File › Restart as Administrator, then try again.' : msg);
+const denied = (msg) => (/access is denied|0x80070005|PermissionDenied|requires elevation|run as administrator/i.test(msg || '') ? `Changing network settings needs administrator rights. Use File › Restart as Administrator, then try again. ${msg}` : msg);
 
 // The PowerShell that points one adapter at a provider and registers the
 // provider's DoH template the chosen way. Inputs are a validated adapter
@@ -92,46 +93,112 @@ const denied = (msg) => (/access is denied|0x80070005|PermissionDenied|requires 
 // reaches the script.
 export function buildApplyScript({ index, provider: providerId, doh: dohMode }) {
   checkIndex(index);
-  const p = PROVIDERS[providerId];
-  if (!p) throw new Error(`Unknown DNS provider "${providerId}". Use cloudflare, google or quad9.`);
+  if (typeof providerId !== 'string' || !Object.hasOwn(PROVIDERS, providerId)) throw new Error(`Unknown DNS provider "${providerId}". Use cloudflare, google or quad9.`);
   if (!DOH_MODES.includes(dohMode)) throw new Error('DoH mode must be off, preferred or only.');
-  const servers = p.servers.map((s) => `'${s}'`).join(',');
-  const autoUpgrade = dohMode === 'off' ? '$False' : '$True';
-  const fallback = dohMode === 'preferred' ? '$True' : '$False';
-  const dohLines =
-    dohMode === 'off'
-      ? p.servers
-          .map(
-            (s) => `
-  if (Get-DnsClientDohServerAddress -ServerAddress '${s}' -ErrorAction SilentlyContinue) {
-    Set-DnsClientDohServerAddress -ServerAddress '${s}' -DohTemplate '${p.dohTemplate}' -AutoUpgrade $False -AllowFallbackToUdp $False -ErrorAction Stop
-  }`
-          )
-          .join('')
-      : p.servers
-          .map(
-            (s) => `
-  if (Get-DnsClientDohServerAddress -ServerAddress '${s}' -ErrorAction SilentlyContinue) {
-    Set-DnsClientDohServerAddress -ServerAddress '${s}' -DohTemplate '${p.dohTemplate}' -AutoUpgrade ${autoUpgrade} -AllowFallbackToUdp ${fallback} -ErrorAction Stop
-  } else {
-    Add-DnsClientDohServerAddress -ServerAddress '${s}' -DohTemplate '${p.dohTemplate}' -AutoUpgrade ${autoUpgrade} -AllowFallbackToUdp ${fallback} -ErrorAction Stop
-  }`
-          )
-          .join('');
-  return `
-Set-DnsClientServerAddress -InterfaceIndex ${index} -ServerAddresses @(${servers}) -ErrorAction Stop
-if (Get-Command Add-DnsClientDohServerAddress -ErrorAction SilentlyContinue) {${dohLines}
+  return dnsTransaction(index, PROVIDERS[providerId], dohMode);
 }
-Clear-DnsClientCache
+
+// DNS server registration is machine-wide. Prepare every change before touching
+// it, refuse conflicts with another adapter, and retain the original DHCP mode.
+// These are synchronous best-effort rollbacks, not crash recovery journals.
+function dnsTransaction(index, provider, mode) {
+  const reset = !provider;
+  const servers = provider ? provider.servers.map((s) => `'${s}'`).join(',') : '';
+  return `
+$ErrorActionPreference = 'Stop'
+$index = ${index}
+$desired = @(${servers})
+$reset = ${reset ? '$true' : '$false'}
+$mode = '${mode || 'off'}'
+$template = '${provider?.dohTemplate || ''}'
+function Read-DnsState {
+  $adapter = @(Get-NetAdapter -ErrorAction Stop | Where-Object { $_.ifIndex -eq $index })
+  if ($adapter.Count -ne 1) { throw 'That network adapter could not be found uniquely.' }
+  $key = Get-Item -LiteralPath "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\$($adapter[0].InterfaceGuid)" -ErrorAction Stop
+  try { $explicit = -not [string]::IsNullOrWhiteSpace([string]$key.GetValue('NameServer', '', [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)) } finally { $key.Close() }
+  $rows = @(Get-DnsClientServerAddress -InterfaceIndex $index -AddressFamily IPv4 -ErrorAction Stop)
+  if ($rows.Count -ne 1) { throw 'Windows did not report the adapter DNS configuration uniquely.' }
+  [pscustomobject]@{ Explicit = $explicit; Servers = @($rows[0].ServerAddresses); InputObject = $rows[0] }
+}
+function Same-Servers($a, $b) { (@($a) -join ',') -ceq (@($b) -join ',') }
+function Same-Doh($a, $b) {
+  $null -ne $a -and $null -ne $b -and $a.DohTemplate -ceq $b.DohTemplate -and [bool]$a.AutoUpgrade -eq [bool]$b.AutoUpgrade -and [bool]$a.AllowFallbackToUdp -eq [bool]$b.AllowFallbackToUdp
+}
+function Read-Doh($address) {
+  $found = @(Get-DnsClientDohServerAddress -ErrorAction Stop | Where-Object { $_.ServerAddress -eq $address })
+  if ($found.Count -gt 1) { throw 'Windows reported duplicate DoH registrations.' }
+  if ($found.Count) { $found[0] }
+}
+$original = Read-DnsState
+if ($original.Explicit -and -not $original.Servers.Count) { throw 'The original DNS configuration cannot be restored safely.' }
+$plans = @()
+if (-not $reset) {
+  $supported = [bool](Get-Command Get-DnsClientDohServerAddress -ErrorAction SilentlyContinue)
+  if ($mode -ne 'off' -and -not $supported) { throw 'Encrypted DNS is not supported on this Windows installation. No settings changed.' }
+  if ($supported) {
+    $others = @(Get-DnsClientServerAddress -AddressFamily IPv4 -ErrorAction Stop | Where-Object { $_.InterfaceIndex -ne $index })
+    foreach ($address in $desired) {
+      $before = Read-Doh $address
+      if ($mode -eq 'off' -and $null -eq $before) { continue }
+      $after = [pscustomobject]@{ ServerAddress = $address; DohTemplate = $template; AutoUpgrade = ($mode -ne 'off'); AllowFallbackToUdp = ($mode -eq 'preferred') }
+      if (Same-Doh $before $after) { continue }
+      if (@($others | Where-Object { @($_.ServerAddresses) -contains $address }).Count) { throw 'That DoH registration is shared by another adapter. No settings changed.' }
+      $needed = if ($null -eq $before) { @('Add-DnsClientDohServerAddress', 'Remove-DnsClientDohServerAddress') } else { @('Set-DnsClientDohServerAddress') }
+      foreach ($command in $needed) { if (-not (Get-Command $command -ErrorAction SilentlyContinue)) { throw "Required DoH operation $command is unavailable. No settings changed." } }
+      $plans += [pscustomobject]@{ Address = $address; Before = $before; After = $after }
+    }
+  }
+}
+$touched = @()
+$dnsTouched = $false
+try {
+  foreach ($plan in $plans) {
+    $touched += $plan
+    $entry = $plan.After
+    if ($null -eq $plan.Before) { Add-DnsClientDohServerAddress -ServerAddress $plan.Address -DohTemplate $entry.DohTemplate -AutoUpgrade $entry.AutoUpgrade -AllowFallbackToUdp $entry.AllowFallbackToUdp -ErrorAction Stop }
+    else { Set-DnsClientDohServerAddress -ServerAddress $plan.Address -DohTemplate $entry.DohTemplate -AutoUpgrade $entry.AutoUpgrade -AllowFallbackToUdp $entry.AllowFallbackToUdp -ErrorAction Stop }
+    if (-not (Same-Doh (Read-Doh $plan.Address) $entry)) { throw 'DoH registration verification failed.' }
+  }
+  $dnsTouched = $true
+  if ($reset) { Set-DnsClientServerAddress -InputObject $original.InputObject -ResetServerAddresses -ErrorAction Stop }
+  else { Set-DnsClientServerAddress -InputObject $original.InputObject -ServerAddresses $desired -ErrorAction Stop }
+  $actual = Read-DnsState
+  if ($reset) { if ($actual.Explicit) { throw 'Automatic DNS verification failed.' } }
+  elseif (-not $actual.Explicit -or -not (Same-Servers $actual.Servers $desired)) { throw 'DNS server verification failed.' }
+  Clear-DnsClientCache -ErrorAction Stop
+} catch {
+  $failure = $_.Exception.Message
+  $rollback = @()
+  if ($dnsTouched) {
+    try {
+      if ($original.Explicit) { Set-DnsClientServerAddress -InputObject $original.InputObject -ServerAddresses $original.Servers -ErrorAction Stop }
+      else { Set-DnsClientServerAddress -InputObject $original.InputObject -ResetServerAddresses -ErrorAction Stop }
+      $restored = Read-DnsState
+      if ($restored.Explicit -ne $original.Explicit -or ($original.Explicit -and -not (Same-Servers $restored.Servers $original.Servers))) { throw 'DNS rollback verification failed.' }
+    } catch { $rollback += $_.Exception.Message }
+  }
+  for ($i = $touched.Count - 1; $i -ge 0; $i--) {
+    $plan = $touched[$i]
+    try {
+      if ($null -eq $plan.Before) {
+        if ($null -ne (Read-Doh $plan.Address)) { Remove-DnsClientDohServerAddress -ServerAddress $plan.Address -Confirm:$false -ErrorAction Stop }
+        if ($null -ne (Read-Doh $plan.Address)) { throw 'DoH rollback removal verification failed.' }
+      } else {
+        $entry = $plan.Before
+        Set-DnsClientDohServerAddress -ServerAddress $plan.Address -DohTemplate $entry.DohTemplate -AutoUpgrade $entry.AutoUpgrade -AllowFallbackToUdp $entry.AllowFallbackToUdp -ErrorAction Stop
+        if (-not (Same-Doh (Read-Doh $plan.Address) $entry)) { throw 'DoH rollback verification failed.' }
+      }
+    } catch { $rollback += $_.Exception.Message }
+  }
+  if ($rollback.Count) { throw "$failure Rollback failed; settings may be partially changed: $($rollback -join '; ')" }
+  throw "$failure Previous settings restored."
+}
 `;
 }
 
 export function buildResetScript({ index }) {
   checkIndex(index);
-  return `
-Set-DnsClientServerAddress -InterfaceIndex ${index} -ResetServerAddresses -ErrorAction Stop
-Clear-DnsClientCache
-`;
+  return dnsTransaction(index);
 }
 
 export async function apply(request) {
@@ -152,19 +219,48 @@ export async function apply(request) {
 export function buildNagleScript({ index, off }) {
   checkIndex(index);
   if (typeof off !== 'boolean') throw new Error('Say whether Nagle should be off or back to the Windows default.');
-  const write =
-    off === true
-      ? `
-  New-Item -Path $path -Force | Out-Null
-  New-ItemProperty -Path $path -Name TcpNoDelay -PropertyType DWord -Value 1 -Force | Out-Null
-  New-ItemProperty -Path $path -Name TcpAckFrequency -PropertyType DWord -Value 1 -Force | Out-Null`
-      : `
-  Remove-ItemProperty -Path $path -Name TcpNoDelay -ErrorAction SilentlyContinue
-  Remove-ItemProperty -Path $path -Name TcpAckFrequency -ErrorAction SilentlyContinue`;
   return `
-$adapter = Get-NetAdapter -ErrorAction SilentlyContinue | Where-Object { $_.ifIndex -eq ${index} } | Select-Object -First 1
-if (-not $adapter) { throw 'That network adapter could not be found.' }
-$path = "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\$($adapter.InterfaceGuid)"${write}
+$ErrorActionPreference = 'Stop'
+$adapter = @(Get-NetAdapter -ErrorAction Stop | Where-Object { $_.ifIndex -eq ${index} })
+if ($adapter.Count -ne 1) { throw 'That network adapter could not be found uniquely.' }
+$path = "HKLM:\\SYSTEM\\CurrentControlSet\\Services\\Tcpip\\Parameters\\Interfaces\\$($adapter[0].InterfaceGuid)"
+$names = @('TcpNoDelay', 'TcpAckFrequency')
+function Read-NagleValue($name) {
+  $key = Get-Item -LiteralPath $path -ErrorAction Stop
+  try {
+    $present = @($key.GetValueNames()) -contains $name
+    if ($present) {
+      [pscustomobject]@{ Present = $true; Kind = [string]$key.GetValueKind($name); Value = $key.GetValue($name, $null, [Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames) }
+    } else { [pscustomobject]@{ Present = $false; Kind = ''; Value = $null } }
+  } finally { $key.Close() }
+}
+function Same-NagleValue($a, $b) {
+  $a.Present -eq $b.Present -and (-not $a.Present -or ($a.Kind -ceq $b.Kind -and (ConvertTo-Json -InputObject $a.Value -Compress) -ceq (ConvertTo-Json -InputObject $b.Value -Compress)))
+}
+$original = @{}
+foreach ($name in $names) { $original[$name] = Read-NagleValue $name }
+$touched = @()
+try {
+  foreach ($name in $names) {
+    $touched += $name
+    ${off ? "New-ItemProperty -Path $path -Name $name -PropertyType DWord -Value 1 -Force -ErrorAction Stop | Out-Null" : "if ($original[$name].Present) { Remove-ItemProperty -Path $path -Name $name -ErrorAction Stop }"}
+    $expected = [pscustomobject]@{ Present = ${off ? '$true' : '$false'}; Kind = '${off ? 'DWord' : ''}'; Value = ${off ? '1' : '$null'} }
+    if (-not (Same-NagleValue (Read-NagleValue $name) $expected)) { throw "Nagle setting verification failed for $name." }
+  }
+} catch {
+  $failure = $_.Exception.Message
+  $rollback = @()
+  foreach ($name in $touched) {
+    try {
+      $entry = $original[$name]
+      if ($entry.Present) { New-ItemProperty -Path $path -Name $name -PropertyType $entry.Kind -Value $entry.Value -Force -ErrorAction Stop | Out-Null }
+      elseif ((Read-NagleValue $name).Present) { Remove-ItemProperty -Path $path -Name $name -ErrorAction Stop }
+      if (-not (Same-NagleValue (Read-NagleValue $name) $entry)) { throw "Nagle rollback verification failed for $name." }
+    } catch { $rollback += $_.Exception.Message }
+  }
+  if ($rollback.Count) { throw "$failure Rollback failed; settings may be partially changed: $($rollback -join '; ')" }
+  throw "$failure Previous settings restored."
+}
 `;
 }
 

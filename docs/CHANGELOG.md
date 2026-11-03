@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Fixed
+- DNS adapter status now reads the PowerShell result correctly and reports encrypted mode only when all configured IPv4 servers have matching registrations.
+- DNS changes prepare and verify the selected provider's DoH registrations before switching IPv4 servers. Unsupported encrypted modes and conflicts with other adapters are refused before writes. IPv6 settings are preserved. A synchronous failure attempts to restore the previous DNS mode and affected registrations; incomplete rollback is explicitly reported.
+- Nagle changes require an existing adapter registry key, stop on write/removal errors, and verify the result. A synchronous failure restores each touched value's previous type, raw data or absence and reports any incomplete rollback.
+
 ## 1.4.1 - 2026-11-03
 
 ### Added
