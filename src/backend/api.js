@@ -356,7 +356,12 @@ const handlers = {
   'junk:cleanSystemCancel': () => stopOp('cleanSystem'),
   'drivers:list': () => drivers.listDrivers(),
   'drivers:candidates': () => drivers.oldDriverCandidates(),
-  'drivers:delete': async ({ inf }) => drivers.deleteDriver(inf),
+  'drivers:delete': async ({ driverId, inf }) => {
+    if (inf !== undefined) throw new Error('Raw INF removal is no longer supported. Refresh the driver inventory and review the native package identity.');
+    return drivers.deleteDriver(driverId);
+  },
+  'drivers:recover': ({ journalId }) => drivers.recoverDriver(journalId),
+  'drivers:recovery': ({ journalId }) => drivers.driverRecovery(journalId),
   'programs:insights': async (list) => (await lazyInsights.get()).programInsights(list),
   'programs:recordSizes': async (list) => {
     if ((await readSettings()).recordSizeHistory !== true) return false;

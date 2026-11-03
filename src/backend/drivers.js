@@ -1,48 +1,41 @@
-// Driver store enumeration and clean-up.
-// Lists third-party driver packages in the Windows driver store and offers to
-// remove old versions that Windows no longer needs. Uses pnputil (built into
-// Windows) so no extra tools are required. Everything is backed up first.
+// Driver inventory/removal use closed native grants and protected package backups.
+// Candidate age is a suggestion, never authority to uninstall a device driver.
 import { sys } from './sys.js';
-import { runPS, runPSJson } from './shell.js';
+import { record } from './history.js';
 
 const DRIVER_STORE = '%SystemRoot%\\System32\\DriverStore\\FileRepository';
 
 // Lists third-party driver packages: [{ name, originalName, inf, date, version, provider, oem, class }].
 // Third-party = not Microsoft, not Windows' own in-box drivers.
+const validId = (value) => typeof value === 'string' && /^[a-f0-9]{32}$/i.test(value);
+const invalid = () => new Error('Windows returned an invalid native driver response. Refresh and review again.');
 export async function listDrivers() {
-  const script = `
-$ErrorActionPreference = 'SilentlyContinue'
-$drivers = pnputil /enum-drivers 2>$null | Where-Object { $_ -match '^(Published name|Original file name|Inf file|Date|Driver class|Provider name):' }
-$out = @()
-$cur = {}
-foreach ($line in $drivers) {
-  $line = $line.Trim()
-  if ($line -match '^Published name:\s*(.+)$') {
-    if ($cur.PublishedName) { $out += $cur }
-    $cur = @{ PublishedName = $matches[1] }
-  } elseif ($line -match '^Original file name:\s*(.+)$') { $cur.OriginalName = $matches[1] }
-  elseif ($line -match '^Inf file:\s*(.+)$') { $cur.InfFile = $matches[1] }
-  elseif ($line -match '^Date:\s*(.+)$') { $cur.Date = $matches[1] }
-  elseif ($line -match '^Driver class:\s*(.+)$') { $cur.DriverClass = $matches[1] }
-  elseif ($line -match '^Provider name:\s*(.+)$') { $cur.Provider = $matches[1] }
-}
-if ($cur.PublishedName) { $out += $cur }
-$out | Where-Object { $_.Provider -and $_.Provider -notlike '*Microsoft*' -and $_.Provider -notlike '*Windows*' } | ConvertTo-Json -Compress -Depth 3
-`;
-  const out = await runPS(script).catch(() => '');
-  if (!out.trim()) return [];
-  try {
-    const parsed = JSON.parse(out);
-    return Array.isArray(parsed) ? parsed : [parsed];
-  } catch {
-    return [];
-  }
+  const rows = await sys.driverInventory();
+  if (!Array.isArray(rows) || rows.some((row) => !row || typeof row.PublishedName !== 'string' || !/^oem\d+\.inf$/i.test(row.PublishedName) || typeof row.InfFile !== 'string' || typeof row.Provider !== 'string' || typeof row.Date !== 'string' || typeof row.Version !== 'string' || typeof row.eligible !== 'boolean' || !(row.driverId === null || validId(row.driverId)) || (row.eligible && !validId(row.driverId)))) throw invalid();
+  return rows;
 }
 
 // Removes a driver package from the driver store using pnputil /delete-driver.
-export async function deleteDriver(inf) {
-  const r = await sys.exec('pnputil.exe', ['/delete-driver', inf, '/uninstall', '/force']);
-  return { ok: r.ok, detail: r.ok ? 'Driver package removed.' : `pnputil exited with code ${r.code}: ${String(r.stderr || r.stdout).trim()}` };
+async function change(request) {
+  const plan = await sys.prepareDriver(request);
+  if (!plan || !validId(plan.id) || typeof plan.summary !== 'string' || typeof plan.requiresElevation !== 'boolean') throw invalid();
+  const result = await sys.executeDriver(plan.id);
+  const recovery = request.kind === 'recover';
+  if (!result || result.ok !== true || result.journalId !== plan.id || result.stagedOnly !== recovery || typeof result.detail !== 'string') throw invalid();
+  await record({ type: 'Driver', title: recovery ? 'Verified driver package staged for recovery' : 'Unused driver package removed with verified backup', detail: result.detail, undo: recovery ? null : { channel: 'drivers:recover', arg: { journalId: result.journalId } } }).catch(() => {});
+  return result;
+}
+export async function deleteDriver(driverId) {
+  if (!validId(driverId)) throw new Error('Raw INF removal is no longer supported. Refresh the native driver inventory and select its package identity.');
+  return change({ kind: 'remove', driverId });
+}
+export async function recoverDriver(journalId) {
+  if (!validId(journalId)) throw new Error('Select a valid native driver recovery journal.');
+  return change({ kind: 'recover', journalId });
+}
+export async function driverRecovery(journalId) {
+  if (!validId(journalId)) throw new Error('Select a valid native driver recovery journal.');
+  return sys.driverRecovery(journalId);
 }
 
 // Groups parsed driver packages by inf file name and returns old duplicates
@@ -82,7 +75,7 @@ export function findOldDriverCandidates(drivers) {
 // Old duplicates are candidates for removal.
 export async function oldDriverCandidates() {
   const drivers = await listDrivers();
-  return findOldDriverCandidates(drivers);
+  return findOldDriverCandidates(drivers.filter((row) => row.eligible && validId(row.driverId)));
 }
 
 export { DRIVER_STORE };

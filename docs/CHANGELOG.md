@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+- Driver removal now uses closed native package identities, structured DISM/SetupAPI inventory, active-use guards and complete verified protected backups before plain deletion. Native journals block uncertain outcomes and authorize explicit stage-only recovery. Raw INF deletion, forced/device-uninstall flags and renderer-selected recovery paths are refused. Live driver removal/recovery remains unverified; no new UI or CLI surface was added.
 - Boot Options now use closed native BCD state/change/undo requests instead of renderer-issued `bcdedit` commands and parsed localized output. Native confirmation, exact loader/state checks, protected intent/completion journals and verified readback guard changes; uncertain transactions block further Boot changes. Undo restores an owned native-recorded original, including absence. Specialist/alternate-shell modes and legacy renderer-only undo are refused. Live BCD/UAC/reboot behavior remains unverified.
 - DNS adapter status now reads the PowerShell result correctly and reports encrypted mode only when all configured IPv4 servers have matching registrations.
 - DNS changes prepare and verify the selected provider's DoH registrations before switching IPv4 servers. Unsupported encrypted modes and conflicts with other adapters are refused before writes. IPv6 settings are preserved. A synchronous failure attempts to restore the previous DNS mode and affected registrations; incomplete rollback is explicitly reported.
