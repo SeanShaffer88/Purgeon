@@ -983,7 +983,7 @@ export function SettingsDialog({ initial, onApply, onClose, shellOn, onToggleShe
   useEffect(() => {
     if (page === 'explorer' && ctxEntries === null) api.invoke('ctxmenu:list').then(setCtxEntries).catch((e) => { setCtxEntries([]); setPaneError(e.message); });
     if (page === 'prompts' && publishers === null) api.invoke('trusted:list').then(setPublishers).catch((e) => { setPublishers([]); setPaneError(e.message); });
-  }, [page]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page]);
 
   const apply = async (patch) => {
     const next = await onApply(patch);

@@ -3246,8 +3246,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         <SettingsDialog
           initial={modal.settings}
           shellOn={shellOn}
-          onToggleShell={() => act('toggleShell')}
-          onCheckUpdates={() => act('updateCheck')}
+          onToggleShell={() => dispatch('toggleShell')}
+          onCheckUpdates={() => dispatch('updateCheck')}
           onApply={async (patch) => {
             const s = await api.invoke('settings:set', patch);
             setRestoreOn(s.createRestorePoints);
