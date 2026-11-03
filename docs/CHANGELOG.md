@@ -2,7 +2,12 @@
 
 ## Unreleased
 
+## 1.4.0 - 2026-11-02
+
 ### Added
+- **Removal backups are sealed and re-checked before they are trusted**: every backup is fingerprinted when it is made, and the fingerprints are verified again before a restore or review. A backup whose contents changed after it was sealed — or whose record is damaged — is refused with a plain explanation instead of being used.
+- **An interrupted removal is recovered or held for review**: if Purgeon stops in the middle of a removal, the next start either rolls the removal back from its backup or keeps the backup clearly marked as needing review. Nothing is silently dropped or half-applied.
+- **One gatekeeper for work that needs administrator rights**: privileged actions are planned and checked in one place before anything runs, and the plan is what the confirmation prompt describes — what will change, in plain words, before you approve it.
 - **Standard project documents**: the project's guides now live under `docs/` in the standard set — install, compatibility, troubleshooting, security, architecture, audit notes, support, contributing, credits, maintainers, governance and migration guides alongside the feature list and roadmap. The changelog moved to `docs/CHANGELOG.md`.
 - **Old versions are tagged in the program list**: when a newer copy of the same program is installed beside an older one, the older copy gets an "old version" tag naming the newer version, and pointing at Duplicate Programs (Tools › Advanced Tools), which shows both together.
 - **Duplicate installed entries are tagged in the program list**: when two installed entries share the same name, version and location, both get a "duplicate entry" tag — one is usually a stale leftover from an update or repair. The tag explains the fix: right-click a copy and choose Remove Entry… to delete the stale listing; the program itself is not uninstalled. Matching is exact, and entries without a recorded version or location are never tagged.
@@ -15,6 +20,7 @@
 ### Changed
 - **The Settings window is rebuilt** — a category rail (Uninstalling, Appearance, Window & tray, Active monitoring, Startup & exit, Explorer, Backups, Prompts & trust, Updates, Data & logs) with real switches and a plain-words description for every option. The Tools › Settings submenu is gone: the menu now has the single **Settings…** entry, and everything that lived in the submenu — the Explorer right-click toggle and context-menu items, Backup Settings (including settings export/import), Confirmation Prompts, Trusted Publishers, Open Command Log, Check for Updates — lives inside the window.
 - **All monitoring is off by default.** The setup monitor and the startup monitor now start off for everyone (previously the startup monitor ran unless turned off); each still has its own switch. The installer's last screen offers a separate unticked box for each monitor, alongside Start with Windows (`Purgeon --setup-monitor on|off`, `--startup-monitor on|off`).
+- **A hardier window**: long lists now render in pages as you scroll instead of all at once, dialogs load only when opened, and if a view ever fails, Purgeon shows a readable error screen with a reload button instead of going blank. The command-line help is kept in one place and checked against the commands themselves, so the printed help always matches what the tool accepts.
 
 ## 1.3.0 - 2026-11-01
 
