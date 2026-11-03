@@ -764,16 +764,23 @@ mod tests {
             loop {
                 match listener.accept() {
                     Ok((mut stream, _)) => {
+                        stream.set_nonblocking(false).unwrap();
                         stream
                             .set_read_timeout(Some(Duration::from_secs(3)))
                             .unwrap();
+                        stream
+                            .set_write_timeout(Some(Duration::from_secs(3)))
+                            .unwrap();
                         let mut request = Vec::new();
-                        while !request.ends_with(b"\r\n\r\n") && request.len() < 8192 {
+                        while !request.ends_with(b"\r\n\r\n") {
+                            assert!(request.len() < 8192, "Loopback request exceeds limit");
+                            assert!(Instant::now() < until, "Loopback request timed out");
                             let mut byte = [0u8; 1];
-                            if stream.read(&mut byte).unwrap() == 0 {
-                                break;
+                            match stream.read(&mut byte) {
+                                Ok(1) => request.push(byte[0]),
+                                Ok(_) => panic!("Loopback client disconnected before headers"),
+                                Err(e) => panic!("Loopback request read failed: {e}"),
                             }
-                            request.push(byte[0]);
                         }
                         write!(
                             stream,
@@ -802,9 +809,9 @@ mod tests {
             &mut command,
             Some(serde_json::to_string(&r.path).unwrap()),
             Duration::from_secs(15),
-        )
-        .unwrap();
+        );
         server.join().unwrap();
+        let output = output.unwrap();
         assert!(
             output.status.success(),
             "{}",
