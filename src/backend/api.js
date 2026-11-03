@@ -11,6 +11,7 @@ import * as games from './games.js';
 import * as graph from './graph.js';
 import * as monitor from './monitor.js';
 import * as debloat from './debloat.js';
+import * as dns from './dns.js';
 import * as restore from './restore.js';
 import * as measure from './measure.js';
 import * as startup from './startup.js';
@@ -701,6 +702,18 @@ const handlers = {
   'update:install': () => updatecheck.downloadAndInstall(),
   // Backup removal plan export (Enhancement 7)
   'backups:exportPlan': ({ plan, format, fileName }) => backups.exportPlan({ plan, format, fileName }),
+  'dns:status': () => dns.status(),
+  'dns:apply': async (request) => {
+    const p = dns.PROVIDERS[request?.provider];
+    const rp = await maybeCreateRestorePoint('dns', `Purgeon: before changing DNS to ${p?.name || 'custom'}`);
+    const result = await dns.apply(request);
+    return { ...result, restorePoint: rp };
+  },
+  'dns:reset': async ({ index }) => {
+    const rp = await maybeCreateRestorePoint('dns', 'Purgeon: before resetting DNS to automatic');
+    const result = await dns.reset({ index });
+    return { ...result, restorePoint: rp };
+  },
   'debloat:list': () => debloat.list(),
   'debloat:previousDamaged': () => debloat.previousDamaged(),
   'debloat:recover': (request) => debloat.recover(request),

@@ -19,6 +19,112 @@ const RECOVERY_OUTCOMES = {
   acceptedCurrent: 'Current state acknowledged. No registry values were written.',
 };
 
+const DNS_PROVIDER_OPTIONS = [
+  { id: 'automatic', name: 'Automatic — from your router or network' },
+  { id: 'cloudflare', name: 'Cloudflare' },
+  { id: 'google', name: 'Google' },
+  { id: 'quad9', name: 'Quad9' },
+];
+const DOH_OPTIONS = [
+  { id: 'off', name: 'Off — plain lookups' },
+  { id: 'preferred', name: 'Encrypted when possible — falls back to plain' },
+  { id: 'only', name: 'Encrypted only — never plain' },
+];
+
+// DNS & encrypted lookups: which servers each network adapter asks, and
+// whether those lookups are encrypted (DNS over HTTPS, Windows 11 only).
+// Not a catalog tweak — the servers are per-adapter state, read and written
+// through the dns operations, with a restore point first when that is on.
+function DnsSection({ filter, beforeChange }) {
+  const [state, setState] = useState(null);
+  const [targets, setTargets] = useState({});
+  const [busy, setBusy] = useState(null);
+  const [error, setError] = useState('');
+  const [note, setNote] = useState('');
+
+  useEffect(() => {
+    api.invoke('dns:status').then(setState).catch((e) => setError(e.message));
+  }, []);
+
+  const q = (filter || '').trim().toLowerCase();
+  if (q && !'dns & encrypted lookups'.includes(q)) return null;
+  if (!state && !error) return null;
+
+  const targetFor = (a) => targets[a.index] || { provider: a.provider === 'custom' ? 'cloudflare' : a.provider, doh: a.doh };
+  const setTarget = (a, patch) => setTargets((t) => ({ ...t, [a.index]: { ...targetFor(a), ...patch } }));
+
+  const apply = async (a) => {
+    const t = targetFor(a);
+    if (beforeChange && !(await beforeChange(tx('DNS settings')))) return;
+    setBusy(a.index);
+    setError('');
+    setNote('');
+    try {
+      const r = t.provider === 'automatic' ? await api.invoke('dns:reset', { index: a.index }) : await api.invoke('dns:apply', { index: a.index, provider: t.provider, doh: t.doh });
+      setState(r);
+      setTargets((prev) => {
+        const next = { ...prev };
+        delete next[a.index];
+        return next;
+      });
+      setNote(tx('DNS updated for {p0}.', { p0: a.alias }));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
+  return (
+    <section className="tweak-group">
+      <div className="tweak-group-head">
+        <span>{tx('DNS & encrypted lookups')}</span>
+        <span className="muted">{tx('which servers answer name lookups')}</span>
+      </div>
+      <p className="tweak-detail" style={{ padding: '0 12px 8px' }}>
+        {tx('DNS turns site names into addresses. Automatic uses whatever your router or network assigns. A public provider can answer faster and see less of your traffic; encrypted lookups (DNS over HTTPS) stop people on the local network from reading the names you look up. Changing this needs administrator rights, and a restore point is taken first when that setting is on.')}
+      </p>
+      {error && <div className="debloat-warning" role="alert">{error}</div>}
+      {note && <div className="debloat-warning" role="status">{note}</div>}
+      {state && !state.dohSupported && <div className="debloat-warning" role="note">{tx('Encrypted lookups need Windows 11 — on Windows 10 the provider choice still applies, without encryption.')}</div>}
+      {(state?.adapters || []).map((a) => {
+        const t = targetFor(a);
+        const changed = t.provider !== a.provider || (t.provider !== 'automatic' && t.doh !== a.doh);
+        return (
+          <div key={a.index} className="dns-row" style={{ padding: '8px 12px', display: 'grid', gap: '6px' }}>
+            <div>
+              <strong>{a.alias}</strong>
+              {!a.up && <span className="muted">{tx(' — not connected')}</span>}
+              <span className="muted">
+                {' — '}
+                {a.provider === 'automatic' ? tx('automatic') : a.servers.join(', ')}
+                {a.provider === 'custom' ? tx(' (set outside Purgeon)') : ''}
+                {state.dohSupported && a.provider !== 'automatic' ? ` · ${tx('encrypted lookups')}: ${DOH_OPTIONS.find((o) => o.id === a.doh)?.name || a.doh}` : ''}
+              </span>
+            </div>
+            <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <select value={t.provider} onChange={(e) => setTarget(a, { provider: e.target.value })} title={tx('DNS provider for this adapter')} disabled={busy === a.index}>
+                {DNS_PROVIDER_OPTIONS.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </select>
+              <select value={t.doh} onChange={(e) => setTarget(a, { doh: e.target.value })} title={tx('Encrypted lookups for this adapter')} disabled={busy === a.index || !state.dohSupported || t.provider === 'automatic'}>
+                {DOH_OPTIONS.map((o) => (
+                  <option key={o.id} value={o.id}>{o.name}</option>
+                ))}
+              </select>
+              <button className="debloat-button" onClick={() => apply(a)} disabled={busy === a.index || !changed}>
+                {busy === a.index ? tx('Applying…') : tx('Apply')}
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      {state && !state.adapters.length && <div className="list-empty">{tx('No network adapters found.')}</div>}
+    </section>
+  );
+}
+
 export function DebloatView({ filter, onError, onStatus, beforeChange }) {
   const [tweaks, setTweaks] = useState(null);
   const [working, setWorking] = useState(new Set());
@@ -143,6 +249,7 @@ export function DebloatView({ filter, onError, onStatus, beforeChange }) {
       )}
       <div className="debloat-warning" role="note">{tx('Each change requires native consent; protected settings may prompt for administrator approval. Restore uses captured original values when available, or an explicitly disclosed catalog default fallback. Empty registry keys created by a tweak may remain after its values are restored.')}</div>
       {outcome && <div className="debloat-warning" role="status">{outcome}</div>}
+      <DnsSection filter={filter} beforeChange={beforeChange} />
       {groups.length === 0 && <div className="list-empty">{tx("No tweaks match.")}</div>}
       {groups.map((g) => (
         <section key={g.name} className="tweak-group">

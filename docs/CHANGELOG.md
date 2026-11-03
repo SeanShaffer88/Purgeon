@@ -15,6 +15,7 @@
 ## 1.4.0 - 2026-11-02
 
 ### Added
+- A DNS & encrypted lookups section in Debloat: per network adapter, choose automatic DNS or the Cloudflare, Google or Quad9 servers, and on Windows 11 whether lookups are encrypted (DNS over HTTPS) — off, when possible, or only. The same controls are available as `--dns list`, `--dns set` and `--dns reset`.
 - **Removal backups are sealed and re-checked before they are trusted**: every backup is fingerprinted when it is made, and the fingerprints are verified again before a restore or review. A backup whose contents changed after it was sealed — or whose record is damaged — is refused with a plain explanation instead of being used.
 - **An interrupted removal is recovered or held for review**: if Purgeon stops in the middle of a removal, the next start either rolls the removal back from its backup or keeps the backup clearly marked as needing review. Nothing is silently dropped or half-applied.
 - **One gatekeeper for work that needs administrator rights**: privileged actions are planned and checked in one place before anything runs, and the plan is what the confirmation prompt describes — what will change, in plain words, before you approve it.

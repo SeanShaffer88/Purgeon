@@ -64,6 +64,7 @@ import * as duplicates from './backend/duplicates.js';
 import * as appdupes from './backend/appdupes.js';
 import * as selfhealth from './backend/selfhealth.js';
 import * as browsers from './backend/browsers.js';
+import * as dns from './backend/dns.js';
 import * as policy from './backend/policy.js';
 import * as maintenance from './backend/maintenance.js';
 import * as autostart from './backend/autostart.js';
@@ -273,6 +274,36 @@ async function run(args) {
       return wrap(failed === 0, `Removed ${done} item(s) for ${targets.length} extension(s), with a backup.${failed ? ` ${failed} item(s) could not be removed.` : ''}\r\n`, failed ? EXIT_ERROR : EXIT_OK);
     }
     throw new Error('Use --browsers list, or --browsers remove <browser> <extension-id>...');
+  }
+  if (cmd === '--dns') {
+    const sub = option(args, '--dns');
+    const providerName = (id) => (id === 'automatic' ? 'automatic' : dns.PROVIDERS[id]?.name || 'custom');
+    if (sub === 'list' || !sub) {
+      const data = await dns.status();
+      if (j) return wrap(true, JSON.stringify(data, null, 2));
+      if (!data.adapters.length) return wrap(true, 'No network adapters found.\r\n');
+      const lines = data.adapters.map((a) => `${a.index}  ${a.alias}${a.up ? '' : ' (not connected)'}  DNS: ${a.servers.length ? a.servers.join(', ') : 'automatic'}  (${providerName(a.provider)})  encrypted lookups: ${data.dohSupported ? a.doh : 'needs Windows 11'}`);
+      return wrap(true, lines.join('\r\n') + '\r\n');
+    }
+    if (sub === 'set') {
+      const positional = args.slice(2).filter((a) => a !== '--json' && a !== '--quiet' && a !== '-q' && a !== '--doh' && !['off', 'preferred', 'only'].includes(a));
+      const [indexText, provider] = positional;
+      const index = Number(indexText);
+      const doh = option(args, '--doh') || 'preferred';
+      if (!Number.isInteger(index) || !provider) throw new Error('Use --dns set <adapter-number> <cloudflare|google|quad9> [--doh off|preferred|only] (adapter numbers: --dns list)');
+      const r = await dns.apply({ index, provider, doh });
+      const a = r.adapters.find((x) => x.index === index);
+      return wrap(true, `${a ? `${a.alias} now uses ${providerName(a.provider)} (${a.servers.join(', ')})` : 'DNS updated.'}\r\n`);
+    }
+    if (sub === 'reset') {
+      const positional = args.slice(2).filter((a) => a !== '--json' && a !== '--quiet' && a !== '-q');
+      const index = Number(positional[0]);
+      if (!Number.isInteger(index)) throw new Error('Use --dns reset <adapter-number> (adapter numbers: --dns list)');
+      const r = await dns.reset({ index });
+      const a = r.adapters.find((x) => x.index === index);
+      return wrap(true, `${a ? `${a.alias} is back to automatic DNS.` : 'DNS reset.'}\r\n`);
+    }
+    throw new Error('Use --dns list, --dns set <adapter-number> <provider> [--doh off|preferred|only], or --dns reset <adapter-number>');
   }
   if (cmd === '--monitor') {
     const sub = option(args, '--monitor');
@@ -673,7 +704,7 @@ async function run(args) {
 // parser and keep their existing dispatch below; a disposable test install under
 // --monitor also stays on that path because it takes its own options.
 const PARSER_COMMANDS = new Set(['--snapshot', '--compare', '--list-snapshots', '--monitor', '--maintenance', '--autostart', '--help', '-h', '/?']);
-const LEGACY_COMMANDS = new Set(['--background-scan', '--restore-point', '--associations', '--associations-for', '--schedule', '--startup', '--trusted', '--update', '--sync', '--plugins', '--portableapps', '--export', '--uninstall', '--language', '--settings', '--profiler', '--timeline', '--history', '--archive', '--policy', '--duplicates', '--selfcheck', '--browsers', '--setup-monitor', '--startup-monitor', '--quiet', '-q', '--json']);
+const LEGACY_COMMANDS = new Set(['--background-scan', '--restore-point', '--associations', '--associations-for', '--schedule', '--startup', '--trusted', '--update', '--sync', '--plugins', '--portableapps', '--export', '--uninstall', '--language', '--settings', '--profiler', '--timeline', '--history', '--archive', '--policy', '--duplicates', '--selfcheck', '--browsers', '--dns', '--setup-monitor', '--startup-monitor', '--quiet', '-q', '--json']);
 
 async function dispatch(args, initialize) {
   const first = Array.isArray(args) && typeof args[0] === 'string' ? args[0].toLowerCase() : null;
