@@ -116,6 +116,8 @@ Items are marked as part of the program (install folders, shortcuts, machine-wid
 
 **Settings sync** — `File › Settings Sync` keeps chosen programs' settings the same on your PCs through a shared folder such as OneDrive. **Send My Settings** saves there; **Get Settings** brings in newer ones. Settings being replaced go to the Recycle Bin first and can be undone.
 
+**Undo a program restore** — the complete local journal, every target and saved registry export are validated before any change. Missing identity/completion evidence, unsafe targets or damaged exports require manual review; journals and exports are retained. Registry failures are reported as failures, and earlier settings stay in the Recycle Bin if the restored copy cannot be cleared. Saved exports are checked again before deletion/import. These local records are not authenticated native journals, and validation does not eliminate races with another process changing files.
+
 ## Uninstall Archive
 
 **Uninstall Archive** (`Ctrl+9`) — keeps a record of every program removed: when, how (uninstalled, force removed, Store app) and its removal backups. Right-click an entry to reinstall with winget, open its website, or put back removed leftovers.

@@ -369,48 +369,137 @@ export async function restore(file, numbers, { replace = false } = {}) {
   return { id, name: record.name, results };
 }
 
-// Undoes a restore: restored folders and files go to the Recycle Bin, restored keys are deleted
-// (and earlier contents re-imported), and values are put back or removed.
-export async function undo(id) {
-  if (!/^\d+$/.test(String(id))) throw new Error('Invalid restore id');
-  const dir = path.join(root, String(id));
-  const record = JSON.parse(await sys.readText(path.join(dir, 'restore.json')));
-  if (record.complete === false) throw new Error('This restore was interrupted. Its journal and backups are retained; review the pending items before recovery. Automatic undo is refused for uncertain mutations.');
-  const results = [];
-  for (const p of [...record.dirs, ...record.files]) {
-    if (isProtected(p)) {
-      results.push({ kind: 'dir', path: p, ok: false, detail: 'Protected location, left in place' });
-      continue;
+const plainRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
+const undoError = () => new Error('Invalid or incomplete restore evidence. Undo cannot continue; its files are retained for manual review.');
+const boundedText = (value, max) => typeof value === 'string' && value.length <= max && !/[\x00-\x1f]/.test(value);
+const registryIdentity = (value) => value.replace(/^HKLM\\/i, 'HKEY_LOCAL_MACHINE\\').replace(/^HKCU\\/i, 'HKEY_CURRENT_USER\\').replace(/^HKCR\\/i, 'HKEY_CLASSES_ROOT\\').replace(/^HKU\\/i, 'HKEY_USERS\\').replace(/^HKCC\\/i, 'HKEY_CURRENT_CONFIG\\').toLowerCase();
+function validUndoValue(old) {
+  if (!plainRecord(old) || typeof old.kind !== 'string' || !Object.hasOwn(REG_TYPE, old.kind) || typeof old.data !== 'string' || old.data.length > 1048576 || old.data.includes('\0')) return false;
+  if (old.kind === 'Binary') return /^(?:[0-9a-f]{2})*$/i.test(old.data);
+  if (old.kind === 'DWord' || old.kind === 'QWord') {
+    if (!/^-?[0-9]{1,20}$/.test(old.data)) return false;
+    const number = BigInt(old.data), bits = old.kind === 'DWord' ? 32n : 64n;
+    return number >= -(1n << (bits - 1n)) && number < (1n << bits);
+  }
+  return true;
+}
+function undoTarget(target, kind) {
+  validateTarget(target, kind);
+  if (['key', 'value'].includes(kind) && (!/^(?:HKLM|HKCU|HKCR|HKU|HKCC|HKEY_LOCAL_MACHINE|HKEY_CURRENT_USER|HKEY_CLASSES_ROOT|HKEY_USERS|HKEY_CURRENT_CONFIG)\\[^\\]+(?:\\[^\\]+)*$/i.test(target) || target.split('\\').some((part) => part === '.' || part === '..'))) throw undoError();
+}
+
+// reg.exe exports UTF-16 as well as UTF-8. Read only a bounded file and detect its BOM.
+const READ_UNDO_EXPORT = `
+$ErrorActionPreference = 'Stop'
+$inputPath = [Console]::In.ReadToEnd() | ConvertFrom-Json
+$stream = [IO.File]::Open([string]$inputPath, [IO.FileMode]::Open, [IO.FileAccess]::Read, [IO.FileShare]::Read)
+try {
+  if ($stream.Length -gt 8388608) { throw 'Registry export exceeds safety limits' }
+  $reader = New-Object IO.StreamReader($stream, (New-Object Text.UTF8Encoding($false, $true)), $true)
+  try { [pscustomobject]@{ text = $reader.ReadToEnd() } | ConvertTo-Json -Compress } finally { $reader.Dispose() }
+} finally { $stream.Dispose() }
+`;
+async function readUndoExport(file, target) {
+  const rows = await runPSJson(READ_UNDO_EXPORT, { input: JSON.stringify(file) });
+  if (rows.length !== 1 || typeof rows[0]?.text !== 'string') throw undoError();
+  return validateRegistryText(rows[0].text, target);
+}
+async function preflightUndo(record, id, dir) {
+  if (!plainRecord(record) || record.id !== id || record.complete !== true || Object.hasOwn(record, 'inFlight') || Object.hasOwn(record, 'recovery') || record.pending !== undefined && (!Array.isArray(record.pending) || record.pending.length)) throw undoError();
+  for (const name of ['dirs', 'files', 'keys', 'values']) if (!Array.isArray(record[name])) throw undoError();
+  if (record.replaced !== undefined && !Array.isArray(record.replaced)) throw undoError();
+  for (const name of ['name', 'file', 'created']) if (record[name] !== undefined && !boundedText(record[name], 4096)) throw undoError();
+  const replaced = record.replaced || [];
+  if ([record.dirs, record.files, record.keys, record.values, replaced].reduce((count, rows) => count + rows.length, 0) > 10000) throw undoError();
+  const paths = new Set();
+  for (const kind of ['dir', 'file']) for (const target of record[kind === 'dir' ? 'dirs' : 'files']) {
+    undoTarget(target, kind);
+    if (paths.has(target.toLowerCase())) throw undoError();
+    paths.add(target.toLowerCase());
+  }
+  const replacements = new Set();
+  for (const target of replaced) {
+    undoTarget(target, 'file');
+    if (!paths.has(target.toLowerCase()) || replacements.has(target.toLowerCase()) || !isSettings({ kind: 'file', path: target })) throw undoError();
+    replacements.add(target.toLowerCase());
+  }
+  const keys = new Set(), exports = new Map(), names = new Set();
+  for (const entry of record.keys) {
+    if (!plainRecord(entry) || !Object.hasOwn(entry, 'before')) throw undoError();
+    undoTarget(entry.path, 'key');
+    const identity = registryIdentity(entry.path);
+    if (keys.has(identity)) throw undoError();
+    keys.add(identity);
+    if (entry.before !== null) {
+      if (typeof entry.before !== 'string' || !/^before-[1-9][0-9]*\.reg$/.test(entry.before) || names.has(entry.before.toLowerCase())) throw undoError();
+      names.add(entry.before.toLowerCase());
+      const file = path.join(dir, entry.before);
+      if (path.dirname(file).toLowerCase() !== dir.toLowerCase()) throw undoError();
+      exports.set(entry.before, await readUndoExport(file, entry.path));
     }
+  }
+  const values = new Set();
+  for (const entry of record.values) {
+    if (!plainRecord(entry) || !Object.hasOwn(entry, 'old') || typeof entry.name !== 'string' || entry.name.length > 16383 || entry.name.includes('\0')) throw undoError();
+    undoTarget(entry.path, 'value');
+    const identity = JSON.stringify([registryIdentity(entry.path), entry.name.toLowerCase()]);
+    if (values.has(identity)) throw undoError();
+    values.add(identity);
+    if (entry.old !== null && !validUndoValue(entry.old)) throw undoError();
+  }
+  return { replaced, exports };
+}
+
+// Local journals are not authenticated native authority. Validate the whole journal and
+// every saved export before changing anything; retain all evidence on any failure.
+export async function undo(id) {
+  if (!(typeof id === 'string' && /^[1-9][0-9]*$/.test(id) || Number.isSafeInteger(id) && id > 0)) throw new Error('Invalid restore id');
+  id = String(id);
+  const dir = path.join(root, id);
+  const text = await sys.readText(path.join(dir, 'restore.json'));
+  if (text.length > 1048576) throw undoError();
+  const record = JSON.parse(text);
+  const { replaced, exports } = await preflightUndo(record, id, dir);
+  const results = [];
+  const cleared = new Set();
+  for (const p of [...record.dirs, ...record.files]) {
     try {
-      // A copy that replaced your settings is deleted outright (it is still in the package), so
-      // the Recycle Bin holds only your earlier settings under that path.
-      const replacing = (record.replaced || []).some((r) => r.toLowerCase() === p.toLowerCase());
+      const replacing = replaced.some((r) => r.toLowerCase() === p.toLowerCase());
       if (await sys.exists(p)) await sys.trash(p);
+      if (await sys.exists(p)) throw new Error('The restored copy is still present; earlier settings were not restored');
+      cleared.add(p.toLowerCase());
       results.push({ kind: 'dir', path: p, ok: true, detail: replacing ? 'Restored copy moved to Recycle Bin; earlier settings are restored below' : 'Moved to Recycle Bin' });
     } catch (e) {
       results.push({ kind: 'dir', path: p, ok: false, detail: String(e?.message || e) });
     }
   }
   for (const k of record.keys) {
-    if (isProtectedKey(k.path)) {
-      results.push({ kind: 'key', path: k.path, ok: false, detail: 'Protected Windows key, left in place' });
-      continue;
+    try {
+      if (k.before && await readUndoExport(path.join(dir, k.before), k.path) !== exports.get(k.before)) throw new Error('Saved registry export changed; key was left in place');
+      const removed = await reg(['delete', k.path, '/f']);
+      if (!removed.ok) { results.push({ kind: 'key', path: k.path, ok: false, detail: removed.stderr }); continue; }
+      if (k.before && await readUndoExport(path.join(dir, k.before), k.path) !== exports.get(k.before)) throw new Error('Saved registry export changed after deletion; import refused and evidence retained');
+      const r = k.before ? await reg(['import', path.join(dir, k.before)]) : removed;
+      results.push({ kind: 'key', path: k.path, ok: r.ok, detail: r.ok ? (k.before ? 'Earlier contents put back' : 'Removed') : r.stderr });
+    } catch (error) {
+      results.push({ kind: 'key', path: k.path, ok: false, detail: String(error?.message || error) });
     }
-    await reg(['delete', k.path, '/f']);
-    const r = k.before ? await reg(['import', path.join(dir, k.before)]) : { ok: true };
-    results.push({ kind: 'key', path: k.path, ok: r.ok, detail: r.ok ? (k.before ? 'Earlier contents put back' : 'Removed') : r.stderr });
   }
   for (const v of record.values) {
-    const r = v.old
-      ? await reg(['add', v.path, ...(v.name ? ['/v', v.name] : ['/ve']), '/t', REG_TYPE[v.old.kind] || 'REG_SZ', '/d', v.old.data, '/f'])
+    try {
+      const r = v.old
+      ? await reg(['add', v.path, ...(v.name ? ['/v', v.name] : ['/ve']), '/t', REG_TYPE[v.old.kind], '/d', v.old.data, '/f'])
       : await reg(['delete', v.path, ...(v.name ? ['/v', v.name] : ['/ve']), '/f']);
-    results.push({ kind: 'value', path: v.path, name: v.name, ok: r.ok || /unable to find/i.test(r.stderr), detail: v.old ? 'Earlier value put back' : 'Removed' });
+      results.push({ kind: 'value', path: v.path, name: v.name, ok: r.ok, detail: r.ok ? (v.old ? 'Earlier value put back' : 'Removed') : r.stderr });
+    } catch (error) {
+      results.push({ kind: 'value', path: v.path, name: v.name, ok: false, detail: String(error?.message || error) });
+    }
   }
   // Settings a sync replaced come back out of the Recycle Bin.
-  if (record.replaced?.length) {
-    const back = await restoreManyFromRecycleBin(record.replaced).catch(() => ({}));
-    for (const p of record.replaced) results.push({ kind: 'dir', path: p, ok: back[p] === 'OK', detail: back[p] === 'OK' ? 'Earlier settings put back' : 'Earlier settings are not in the Recycle Bin any more' });
+  if (replaced.length) {
+    const safe = replaced.filter((p) => cleared.has(p.toLowerCase()));
+    const back = await restoreManyFromRecycleBin(safe).catch(() => ({}));
+    for (const p of replaced) results.push({ kind: 'dir', path: p, ok: back[p] === 'OK', detail: !cleared.has(p.toLowerCase()) ? 'Restored copy could not be cleared; earlier settings were left in the Recycle Bin' : back[p] === 'OK' ? 'Earlier settings put back' : 'Earlier settings are not in the Recycle Bin any more' });
   }
   return results;
 }
