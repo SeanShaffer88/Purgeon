@@ -378,7 +378,7 @@ Entries from Microsoft are tagged **Windows** and ask before being turned off.
 
 ![Debloat, privacy and taskbar tweaks](docs/screenshots/debloat-top.png)
 
-- **Tweaks:** **Debloat** (`Ctrl+5`) lists 136 safe, reversible tweaks in nine groups — including Privacy & telemetry, Start/search/taskbar, Ads & suggestions, Explorer & UI, Windows Update, Microsoft Edge, and Performance.
+- **Tweaks:** **Debloat** (`Ctrl+5`) lists 137 safe, reversible tweaks in ten groups — including Privacy & telemetry, Start/search/taskbar, Ads & suggestions, Explorer & UI, Windows Update, Microsoft Edge, and Performance.
 - **On and off:** each is either **ENABLED** (green, applied) or **DISABLED** (red, Windows default). Turning one off puts back exactly the value you had before.
 - **Timing:** each says when it takes effect: **Applies immediately**, **Needs Explorer restart** or **Needs reboot**.
 - **What's left out:** no service removal, no app removal, and no security features turned off. Machine-wide policies are tagged **Admin**.
