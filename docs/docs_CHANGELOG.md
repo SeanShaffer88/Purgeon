@@ -1,0 +1,305 @@
+# Changelog
+
+## Unreleased
+
+## 1.4.1 - 2026-11-03
+
+### Added
+- **The window reopens where you left it**: Purgeon now remembers its size, position and whether it was maximized, and restores them on the next launch. A saved spot that no longer fits a connected screen is ignored and the default size is used instead.
+- A DNS & encrypted lookups section in Debloat: per network adapter, choose automatic DNS or the Cloudflare, Google or Quad9 servers, and on Windows 11 whether lookups are encrypted (DNS over HTTPS) — off, when possible, or only. The same controls are available as `--dns list`, `--dns set` and `--dns reset`.
+- A Storage Sense tweak in Debloat (new Storage & cleanup group): the Settings switch for Windows' automatic low-space cleanup, per user, with the previous value restored when turned off.
+- A Nagle's algorithm choice per network adapter in the DNS & encrypted lookups section: Windows default, or off (small packets sent immediately — can shave delay in some online games; most programs see no difference). Also available as `--dns nagle`.
+
+### Changed
+- **Disk Usage shows a folder's contents at once**: files and folders are listed immediately and each folder's size is filled in as it is measured, instead of the whole view waiting until every folder has been measured. The Cancel button still stops the measuring, keeping whatever sizes have landed.
+
+### Fixed
+- **The Debloat view failed to load** with an "Invalid compiled Debloat resource" message and showed no tweaks: the tweak catalog is checked the same way Windows treats registry paths (letter case does not matter), and the full tweak list loads again.
+- **The close button's remembered choice could be lost**: the choice the close question saves ("Remember my choice") is now also read by Purgeon itself as it starts, so the first close of a launch already follows it, and saving the choice can no longer be blocked by another operation running at the same moment.
+
+## 1.4.0 - 2026-11-02
+
+### Added
+- **Removal backups are sealed and re-checked before they are trusted**: every backup is fingerprinted when it is made, and the fingerprints are verified again before a restore or review. A backup whose contents changed after it was sealed — or whose record is damaged — is refused with a plain explanation instead of being used.
+- **An interrupted removal is recovered or held for review**: if Purgeon stops in the middle of a removal, the next start either rolls the removal back from its backup or keeps the backup clearly marked as needing review. Nothing is silently dropped or half-applied.
+- **One gatekeeper for work that needs administrator rights**: privileged actions are planned and checked in one place before anything runs, and the plan is what the confirmation prompt describes — what will change, in plain words, before you approve it.
+- **Standard project documents**: the project's guides now live under `docs/` in the standard set — install, compatibility, troubleshooting, security, architecture, audit notes, support, contributing, credits, maintainers, governance and migration guides alongside the feature list and roadmap. The changelog moved to `docs/CHANGELOG.md`.
+- **Old versions are tagged in the program list**: when a newer copy of the same program is installed beside an older one, the older copy gets an "old version" tag naming the newer version, and pointing at Duplicate Programs (Tools › Advanced Tools), which shows both together.
+- **Duplicate installed entries are tagged in the program list**: when two installed entries share the same name, version and location, both get a "duplicate entry" tag — one is usually a stale leftover from an update or repair. The tag explains the fix: right-click a copy and choose Remove Entry… to delete the stale listing; the program itself is not uninstalled. Matching is exact, and entries without a recorded version or location are never tagged.
+- **Purgeon Health checks that things work, not just that they can be read**: it now reports the startup and setup monitor states, whether the Background Monitoring and Weekly Maintenance Windows tasks exist and match their settings (and when each last ran and how it ended, with the fix named when one is missing), and — only when update checks are on — whether the update endpoint actually answers, running the real check.
+- **Next steps under failed items**: when a removal or dry-run item fails, the results list now adds a plain next step matched to the failure — close the program using the file, restart Purgeon as administrator, or "already gone, nothing more to do". Failures whose wording matches nothing known get no suggestion rather than a wrong one.
+- **Impact summary in the leftover review**: above the item list, a line follows your ticks — how many files or folders, registry entries and other items are selected, about how much space removing them will free (the removal backup's own size forecast), and a warning when the selection includes a service, scheduled task or driver that may need a restart to finish.
+- **Browser Clean-up on the command line**: `Purgeon --browsers list [--json]` lists the same extensions, search engines and home pages as the Browser Clean-up window, and `Purgeon --browsers remove <browser> <extension-id>...` removes program-added extensions with a backup. Extensions you added yourself or that a policy added are refused (remove those in the browser itself), and removal refuses while that browser is running.
+- **Browser Clean-up shows who made each extension and what it can access**: each extension now carries a second line with its author (from its manifest, when it states one) and a short list of what it can do — its permissions and the sites it can reach, shortened to the site name (`<all_urls>` reads "all websites"). Nothing is guessed: an extension whose manifest names no author shows none.
+
+### Changed
+- **The Settings window is rebuilt** — a category rail (Uninstalling, Appearance, Window & tray, Active monitoring, Startup & exit, Explorer, Backups, Prompts & trust, Updates, Data & logs) with real switches and a plain-words description for every option. The Tools › Settings submenu is gone: the menu now has the single **Settings…** entry, and everything that lived in the submenu — the Explorer right-click toggle and context-menu items, Backup Settings (including settings export/import), Confirmation Prompts, Trusted Publishers, Open Command Log, Check for Updates — lives inside the window.
+- **All monitoring is off by default.** The setup monitor and the startup monitor now start off for everyone (previously the startup monitor ran unless turned off); each still has its own switch. The installer's last screen offers a separate unticked box for each monitor, alongside Start with Windows (`Purgeon --setup-monitor on|off`, `--startup-monitor on|off`).
+- **A hardier window**: long lists now render in pages as you scroll instead of all at once, dialogs load only when opened, and if a view ever fails, Purgeon shows a readable error screen with a reload button instead of going blank. The command-line help is kept in one place and checked against the commands themselves, so the printed help always matches what the tool accepts.
+
+## 1.3.0 - 2026-11-01
+
+### Added
+- **Download and Install for updates**: when the opt-in update check finds a newer release, the Check for Updates dialog now offers **Download and Install** (also `Purgeon --update install`). The release's `Purgeon-Setup-x64.exe` is downloaded to the Temp folder and run only after its size and SHA-256 match the digest GitHub recorded for that exact asset; a mismatch deletes the download and runs nothing. The installer closes the running Purgeon and can relaunch it afterwards. Portable copies are not installed over — they are pointed at GitHub Releases, as before.
+- **Settings window** (Tools › Settings › Settings…, `Ctrl+,`): every Purgeon option in one window — uninstalling, appearance, window and tray, active monitoring, startup and exit, update checks, and backup limits. Each change applies at once, so several options can be changed without reopening menus.
+- **Duplicate Files** (Tools › Advanced Tools): finds files with identical contents under a folder you pick, grouped by SHA-256 after an exact-size pass. Nothing is ticked for you, at least one copy of each file is always kept, and removed copies go to the Recycle Bin. Also `Purgeon --duplicates scan|remove`.
+- **Organization policies**: an administrator can set `DisableBatchUninstall`, `DisableForceRemove`, and `DisableSecureErase` (DWORD 1) under `HKLM\SOFTWARE\Policies\Purgeon`; the matching operations then refuse, with the policy named. Active policies are listed in About and by `Purgeon --policy`.
+- **Startup monitor toggle**: watching for new startup entries (Tools › Startup Monitor, and in Settings) can now be turned off; the setup monitor (installer detection) keeps its own separate toggle beside it.
+- **Monitored-installation records** now keep the installer's source path with its stamped product, company, and version, and carry editable user notes (Properties of a recording, or `Purgeon --monitor notes`) for where the installer came from and the options chosen in it. `Purgeon --monitor list` shows both.
+- **Duplicate Programs** (Tools › Advanced Tools, or `Purgeon --duplicates apps`): the same program installed more than once — different versions side by side, or the same version in two places. Review only; removal stays in the main list.
+- **Purgeon Health** (Tools › System Tools, or `Purgeon --selfcheck`): a health check for Purgeon itself — settings file, data folder, backups, monitoring records, command log, and the update checker, each Pass / Warning / Fail with the evidence. Nothing is repaired.
+
+### Fixed
+- The update checker compared releases against version 0.0.0 because the app never reported its own version, so any release looked newer. The app now reports its real version, and `Purgeon --update check` prints it instead of a stale hard-coded one.
+
+## 1.2.0 - 2026-10-29
+
+### Added
+- **Processes view** (rail, and View › Go to › Processes): live processor, memory and system-disk meters with rolling graphs; a process list with per-process processor and memory use and its priority; End, Suspend and Resume; priority changes (Real-time is never offered) and per-process processor-core choice; Windows' critical processes and Purgeon itself are protected in the backend, not just hidden in the view. Endings, suspensions, priority and core changes are recorded in Change History, with undo where one exists.
+- **Resource alerts**: while Purgeon runs (including from the tray), it warns once per condition — processor or memory staying over the level you set, or the system disk running low — until things calm down. Levels are set in the Processes view (0 turns an alert off).
+- **Scheduled Tasks window** (Tools › System Tools): every scheduled task including Windows' own (badged, never deletable here), with state, author, last/next run and last result; run now, stop, turn off/on; delete with the task's definition saved to Purgeon's task-backups folder first — Change History's undo re-registers it from that copy; and creating simple tasks (a program at sign-in, daily, or weekly).
+- **Cookie rules per site** (in Browser Clean-up): Blocked and Allowed site lists written to Chrome's and Edge's own policy keys, so they hold in every profile and while the browsers run; adding a block warns it signs you out of that site; Firefox is stated plainly as not covered, because it does not read these policies.
+- **Health Check window** (Tools › System Tools): a plain-words once-over — drive health (SMART) and free space, system-file integrity (a quick store check, with an optional full verification that takes a few minutes), a restore point within the last 30 days, waiting Windows updates, program crashes in the last 7 days, startup load, and battery wear. Every line reads Pass, Warning, Fail or Couldn't check with the evidence in plain words; nothing is repaired, each line names the tool that fixes it; the run can be cancelled between checks; the report can be saved; and a tick box adds the check to the existing Weekly Maintenance run.
+- **Event Logs window** (Tools › System Tools): every Windows event log with its record count and size, searchable; save a copy of any log to an .evtx file; clear a log — always after saving a copy into Purgeon's log-backups folder, which is kept and named as the only way back; turn recording off or on. The Security log is view-and-save only, guarded in the backend as well as the window.
+- **Boot Options window** (Tools › System Tools): the next start — Normal, Safe Mode, or Safe Mode with networking — with a restore point offered first and a second confirmation before anything is set; the boot-menu wait (0–60 seconds); and the list of Windows versions on the PC, read-only. If Windows will not start, the window explains the Shift+Restart recovery route. Reading the boot settings needs administrator rights, and without them the window says so plainly instead of failing quietly.
+- **System Restore window** (Tools › System Tools): every fixed drive with its restore storage (used space and the maximum points may take, adjustable, including No limit), protection on/off per drive — turning it off asks first and says plainly that the drive's points are deleted with no undo; the restore points themselves with dates, creating one, and deleting one (only when it can be matched exactly to its stored copy); and an Open System Restore button for Windows' own roll-back wizard. Windows does not expose a per-drive "protection on" reading to programs, so drives are described by their storage rather than a guessed state.
+- **Power Options** (Tools › System Tools, a new menu beside Advanced Tools): the power plans on the PC with the active one marked, switching plans, screen/sleep/hibernate timings for battery and plugged-in, the battery-saver level, timed wake-ups and USB power-down — all through Windows' own powercfg, so they match Settings exactly. Every change is recorded in Change History with an undo.
+- **Performance debloat section**: seven verified performance switches — Game Mode on, game recording and broadcasting off, hardware-accelerated GPU scheduling, power throttling off, Store apps stopped from running in the background, visual effects set for best performance, and menus that open without the hover delay (labelled honestly as feel, not speed). Each mapping was checked against Microsoft documentation or the Group Policy / Policy CSP references before inclusion; nothing touches a security feature, a service, or prefetch.
+
+### Fixed
+- Startup & Services trust warnings never appeared: the check behind them referenced a module that was never loaded, so it failed silently on every use. It now runs, and entries that run from a Temp or Downloads folder, are unsigned, or appeared recently are flagged as intended.
+- Scheduled background monitoring failed at the end of every run when it tried to record the scan in the Change History (it called a history function that does not exist), so the scan's results were lost. Scans now finish and are recorded.
+- Settings sync forgot its folder and on/off choice at every restart — both lived only in memory. They are kept in the settings file now and reloaded when Purgeon starts, so a configured sync keeps working.
+- A backup id of "." was accepted as a backup folder name and resolved to the backups folder itself; deleting it would have removed every backup. It is refused, and restores now check the id the same way deletes always did.
+- Encrypted backup manifests larger than about 125 KB could not be written (a size limit in how the encrypted text was assembled), which would have stopped a large removal partway through. The text is now assembled in pieces.
+
+## 1.1.0 - 2026-10-28
+
+### Added
+
+- **Microsoft Edge debloat section**: 36 toggles for Edge, each one of Microsoft's documented Edge policies — Strict tracking prevention, no personalised ads/search/news, diagnostic data limited to required, no feedback, no payment-method checks by sites, card/address autofill off, address-bar suggestions off, no page preloading, no password saving, shopping assistant and sidebar off, a quiet new tab page, no first-run experience, no automatic sign-in, no default-browser nagging, startup boost off, the AI features (built-in AI APIs, AI themes, Copilot, inline Compose, AI history search) off or hidden, and more. SmartScreen and the typosquatting checker are deliberately not offered: they protect against malicious sites.
+
+### Fixed
+
+- **Two Debloat sections were invisible**: the App Privacy (32 toggles) and Settings sync (6) sections never appeared in the Debloat view — the view's section order did not name their categories, while the header still counted all 93 tweaks. The sections render again, the order now names every category, any future category is appended automatically instead of vanishing, and a test guards it.
+
+- Menu flyouts (such as Tools › Advanced Tools) no longer open behind the menu dropdown: a stylesheet rule that made long menus scroll also turned the dropdown into a clip box, hiding the flyout. Menubar dropdowns no longer clip; long lists live in flyouts, which scroll on their own.
+- The view rail's icons now share one optical size and center. The artwork had been drawn at different sizes inside its frame (the eye wider, the power symbol higher, the clock larger), so the rail looked unevenly spaced even though the buttons are uniform.
+
+### Changed
+
+- Installing over an existing copy now always updates in place. The installer no longer stops to offer an uninstall of the old version first.
+- Every scan and progress task can now be cancelled: the leftover scan of programs removed elsewhere and the orphaned-leftovers scan (both keep what they found so far), the pre-uninstall check (cancelling it stops the uninstall), program analysis, restores and undo, the Cleaner scan, and the Games, Relationship Graph and Recovery Packages windows while they load, verify or restore. Single bounded system calls (creating a restore point, reading the shared-components list) remain the only waits without a cancel, because there is no loop for a cancel to stop.
+
+## 1.0.10 - 2026-10-28
+
+### Added
+
+- **Relationship Graph** (Tools › Advanced Tools): how each program connects to the rest of the system — the services, scheduled tasks and startup entries that run its files, which installed programs depend on it, and how many shared files its folder holds — joined entirely on the PC. Entries pointing at files that no longer exist and belonging to no installed program are listed first; orphaned services and tasks can be removed from there through the standard backed-up removal.
+
+- **Games** (Tools › Advanced Tools): the games Steam, Epic and GOG report on the PC, each with its folder size and total. A "Games" built-in group also appears in the program list's group picker. Uninstalling a game stays with its launcher; for a game whose files are already gone, the window offers to clean up the leftover launcher entry — through the standard removal, so the entry is backed up first and can be restored from the Archive.
+
+- **Secure Erase** (Tools › Advanced Tools): overwrites files (1 pass of zeros, 1 pass of random data, or 3 passes) and then deletes them, so they cannot be undeleted. Folders are expanded into their files first; links and protected Windows locations are refused, and registry items are not offered. There is deliberately no backup and no undo — the file list is reviewed and the erase confirmed every time, and the window states the honest limit that overwriting on modern SSDs lowers the chance of recovery without promising it. The overwrite runs as a cancellable native command.
+
+- **Shared Components** (Tools › Advanced Tools): the shared runtimes, shared install folders and shared files (from the SharedDLLs counts Windows itself keeps) that Purgeon refuses to delete during a removal — with the programs that depend on each folder, and an honest note where Windows records a count but not the names.
+
+- **Recovery Packages** (Tools › Advanced Tools): every removal backup shows whether it was proven restorable — new backups are verified when they are made (seal check, a trial restore of the stored exports, and a Recycle Bin presence check, recorded beside the package) — and single items can be ticked and restored out of a package instead of restoring everything. Older backups can be verified on demand from the same window.
+
+- Snapshots can now be cancelled while being taken or compared (the native walk checks a cancel flag as it goes).
+- Command line: `--timeline`, `--history` and `--archive` print the same records as their windows, with `--json` for scripts.
+- The Apps view shows each app's size, measured from its own package folder; a package whose folder Windows will not let Purgeon read shows no size rather than a guess.
+- `npm run perf` prints a repeatable performance baseline (production bundle size and test-suite wall time).
+
+### Changed
+
+- Every file Purgeon uses to remember things (settings, groups, history, archive, backups, snapshots, Debloat state and more) is now written atomically — written to a temporary file and renamed over the original — so a crash or power cut mid-write cannot leave a damaged file behind.
+
+### Fixed
+
+- A damaged settings, groups or Debloat restore-data file is no longer silently reset and overwritten: the damaged text is kept beside the original with ".damaged" in its name, the app reports what happened, and the Debloat view warns when exact pre-tweak values were lost.
+- Timeline row tooltips now include the event's detail text (for example, who published a program).
+
+## 1.0.9 - 2026-10-28
+
+### Fixed
+
+- Change Timeline event titles lost their first letters behind the row icon: a style rule for the snapshot strip in the Snapshots view shared its name with the Timeline view, stretched the small placeholder icon in every event row to twice its width, and covered the start of the text. The strip has its own class name now, and a regression test keeps any style rule named after a list view from restyling row icons again.
+
+## 1.0.8 - 2026-10-28
+
+### Fixed
+
+- Disk Usage showed "No drives found" and never scanned anything: the drives script forgot to ask PowerShell for JSON, so its answer could not be read and the failure was silent. The view now reads drives through the system's drive information (with the older way as a fallback) and scans the system drive as soon as it opens.
+- The menus are slimmer: related commands now live in flyout groups (for example, the View menu's Zoom, Appearance, Window and Background groups, and the Tools menu's Records, Find & Fix, Lists & Portable and Settings groups) instead of one long list. Nothing was removed — every command is still there, and the command palette still finds them all.
+- A removal interrupted while Purgeon was writing its record down (a crash or power cut at exactly the wrong moment) left a damaged record that was silently ignored: the interrupted removal never reappeared and could never be cleared. The damaged record is now reported, explains itself, and can be cleared.
+- Two settings changes made at the same moment could silently undo each other; settings writes now take turns.
+- A group name typed with hidden control characters could impersonate a built-in group in the filter; leading control characters are stripped from group names.
+- Disk Usage listed drives that report no space at all (such as an empty card reader); they are no longer shown.
+- The `--help` text now lists the `--sync`, `--portableapps` and `--export` commands, which worked but were undocumented.
+
+
+### Under the hood
+
+- Removed leftover code and styles from features that no longer exist (about 19 KB of source), which slightly shrinks the built program. Nothing about how Purgeon works has changed.
+
+## 1.0.7 - 2026-10-28
+
+- Removed the What's This page (it was on the Action menu, the action
+  bar and Ctrl+W). The same "what it hooks into Windows" list still
+  appears inside Analyze Program, which keeps everything in one place.
+- Lighter running: the Debloat, Startup & Services, Cleaner and Disk
+  Usage screens now load only when first opened, so the window paints
+  sooner; and the installer watch checks every 3 seconds while the
+  window is in use but backs off to every 10 seconds while Purgeon is
+  hidden or in the tray.
+- New Disk Usage view (Ctrl+0): what is using the space on each drive,
+  biggest first. Open folders to drill down, with each item's share of
+  its folder; links are listed but never counted, so nothing is
+  double-counted, and a folder whose counting stopped early is marked
+  "at least". The scan can be cancelled and keeps what it measured.
+  Also on the command line as --disk.
+- Safety pass: the long operations that lacked one now have a Cancel —
+  removing items with backup, the Windows clean-ups, and the Disk Map
+  measuring sweep all stop between steps, report anything not yet done
+  as left in place, and keep what was already removed fully undoable.
+  Deleting a backup or a snapshot now sends it to the Recycle Bin
+  instead of erasing it, so it can be brought back. Also fixed: after
+  running Windows clean-ups, the report could fail to appear; it now
+  shows every time.
+- Built-in groups for the program lists, computed live and shown above
+  your own groups in the group picker: Bundled software (possible
+  offers), Installed together, Unsigned, Bad signature, Growing in
+  size, Large programs (1 GB or more), Recently installed (30 days),
+  Microsoft, and No publisher listed. A program can be in several
+  built-in groups at once and still keep its own group.
+- The Apps view now lists everything that is installed, like a full
+  inventory: framework and system components appear with a "system
+  component" tag and are shown locked — never offered for removal —
+  and the header counts them. Known pre-installed apps carry a short
+  plain-words note about what they are. Apps with a provisioned copy
+  (the copy Windows gives to new user accounts) are tagged, and
+  removing one offers to remove the provisioned copy too, in both
+  single and batch removal. Removed Store apps can be brought back
+  from the Uninstall Archive: Purgeon re-registers a copy still on
+  the PC, or opens the app's Microsoft Store page when none remains.
+
+## 1.0.6 - 2026-10-28
+
+- Debloat grows from 26 to 93 tweaks. A new App Privacy section carries
+  the same per-app permission switches as Settings › Privacy (account
+  info, location, camera, microphone, contacts, calendar, email,
+  messages, files, passkeys, Bluetooth, eye tracking, screenshots and
+  more), plus new privacy, suggestions, search, Explorer and
+  settings-sync toggles — every one reversible the usual way, with the
+  previous value restored when switched off.
+- Installing or uninstalling now closes a running Purgeon first: the
+  installer asks the open program to exit cleanly (with a forced close
+  as a fallback if it does not answer), and a silent install relaunches
+  it when finished, so upgrades never fail on locked files and never
+  need a manual close.
+- New premium look: a near-black design with red accents and white text.
+  A gradient header band names the open view with its headline number,
+  the program list sits in a recessed panel with rounded corners, view
+  icons rest in a floating rail, primary actions (Uninstall, dialog
+  confirmations) are red gradient buttons, selection washes red, and the
+  status bar carries the PC specs in a pill. The light and high-contrast
+  themes keep working as before.
+- New System Info window (action bar, Tools menu, or `--sysinfo` on the
+  command line): Windows edition, version and uptime; processor with
+  core, thread and clock details; memory size, type, speed and slots;
+  motherboard; graphics with memory and resolution; every drive with
+  its size, connection and type; optical drives; and audio devices.
+  Temperatures for the processor and drives are shown where Windows
+  reports them.
+
+
+## 1.0.5 - 2026-10-27
+
+- Fixed the action bar breaking after switching views: it measured its
+  width once, from the first view's bar, and after a view change the stale
+  reading left every action squeezed into a single row with cut-off
+  labels. It now measures the bar that is actually on screen, on every
+  view change.
+- Program name tags (insights such as "unsigned" and "possible offer",
+  hidden and group tags) now sit at the far end of the name field instead
+  of crowding next to the program's name, and long names shorten with an
+  ellipsis instead of pushing the tags around.
+- The status bar now shows basic PC specs on its right side — Windows
+  edition, processor and memory — gathered once when Purgeon starts.
+  Hovering shows the full details, including the Windows build number.
+- Removed the Cleaner's "Large orphaned folders" category. It guessed by
+  folder name and flagged folders that belong to programs still
+  installed; the Cleaner now offers only categories that are safe to
+  clean. The cleanup scan also no longer loads the full program list.
+
+## 1.0.4 - 2026-10-27
+
+### Changed
+- Purgeon is now 64-bit only. Releases ship exactly two files: Purgeon-Setup-x64.exe (the native x64 installer) and Purgeon-Portable-x64.zip (the portable build). The 32-bit build, the universal installer and the MSI are discontinued; 64-bit Windows 10 or 11 is required. The installers remain unsigned.
+- Repeat program-list loads are much lighter: signature and processor-architecture results, and extracted program icons, are remembered per program file and only recomputed when that file changes, so refreshing the list no longer re-runs the full signature sweep.
+- Background measuring and insight work now starts after the window has painted, and measured program sizes are applied to the list in small batches, making the first seconds after launch smoother.
+- Settings are no longer re-read from disk on every operation; the saved settings are kept in step with the settings file's modified time, so outside edits are still picked up.
+- The command log is now flushed before the app exits, and the window shows a brief loading note instead of a blank page while Purgeon starts.
+
+## 1.0.3 - 2026-10-27
+
+### Fixed
+- The first-run tips could never be closed: the tip box kept its own dismissed list that nothing updated, while the rest of the app kept a second list the tip never read — and the dismiss-all update packed the tip ids into the set as one nested list, so Dismiss, the X button and Escape all dismissed nothing and the box stayed over the window. The tips also appeared at the same time as the Welcome dialog instead of after it. The tips are now controlled by the app's dismissed set, appear one at a time after the Welcome dialog finishes, and close properly by button, X and Escape.
+- Stacked dialogs no longer all answer Escape at once: only the topmost layer closes, one at a time (the command palette counts as a layer, and consumes its own Escape). Dialogs also keep keyboard focus where it belongs instead of taking it back on every redraw.
+- The first tip's "Try it now" button pointed at a window that does not exist and opened nothing; it now opens the command palette. The tip's text also showed the literal characters of a key tag instead of the styled key.
+
+## 1.0.2 - 2026-10-27
+
+### Fixed
+- The window no longer opens empty and black on machines where a dialog is the first thing drawn: the shared dialog component used a standard building block it never imported, and the first dialog (such as the first-run Welcome box) emptied the whole window. The build could not see this mistake, so a permanent test now fails the suite if any window file ever uses one of those building blocks without importing it.
+- If drawing the window ever fails again, a readable error screen appears instead of an empty window, and the window can always be closed: the program no longer intercepts the close button until the page has loaded and confirmed it is ready.
+- Starting the program no longer creates a Windows restore point when there is nothing to prune; a restore point is now made only when an old backup is really about to be removed under the backup limits.
+
+## 1.0.1 - 2026-10-27
+
+- Restore the main window to the layout in the README screenshot: menu bar,
+  command bar, selection bar, action bar, program list and status bar only.
+  The breadcrumb bar, the recent-programs rail, the Safe Mode button in the
+  command bar and the quick-filter chips no longer sit on the window; every
+  feature remains available — Back/Forward, the quick list filters and the
+  recent programs moved to the View menu, and Safe Mode stays in the Tools
+  menu. The Uninstall button is plain dark like the other action buttons,
+  and the action bar now lays its buttons out in balanced rows of equal
+  width (13 actions lay out 7 + 6, never 10 + 3) at any window width.
+- Fix a build-breaking typo in the About dialog (`width=560` for
+  `width={560}`) that stopped the front end from building at all.
+
+- Repair the native build gate: format the Rust sources, share UTF-16 registry
+  decoding, name snapshot entry types, and run development/test binaries without
+  requesting elevation. Production manifests retain their existing privileges.
+- Correct stale npm package metadata to Purgeon; preserve legacy data and upgrade
+  identities so existing settings and backups remain accessible.
+- Build x86 and x64 applications. Package one architecture-selecting Setup EXE,
+  one x86 MSI compatible with both Windows architectures, and one portable ZIP
+  containing both builds, LICENSE and portable instructions. Add installer and
+  downloaded-artifact checks to CI.
+- Keep the x86 application's Windows helpers, registry reads and Program Files
+  roots in the native OS view, so its MSI installation can inspect 64-bit programs
+  on 64-bit Windows. Preserve explicit user-supplied executable paths.
+- Validate the entire command line before initializing the backend or running an
+  operation. Reject unknown or repeated options, conflicting commands, unexpected
+  arguments, and missing values instead of ignoring them.
+- Route command-line typos to an error and exit code 1 instead of opening the main
+  window. Keep tray, sign-in, queue-resume, and Explorer launches available.
+- Show help without initializing the application's backend stores and command log.
+  The native application and WebView2 still start and may create their runtime data.
+
+- Restore command-line validation on the startup path the app actually uses,
+  including the restored `--list-snapshots` command: invalid requests are
+  rejected before the backend initializes instead of reaching it.
+- Treat the Windows folder on any drive as protected, instead of relying only
+  on the SystemRoot environment variable.
+- Add the missing tooltips for the User Guide, Keyboard Shortcuts and Welcome
+  commands.
+- Regenerate the Rust lock file, which still recorded the app at 0.7.0 and
+  blocked every locked build.
+- Run the release pipeline's tests on windows-latest and windows-2022, and
+  build the release files with the packaging script, which assembles and
+  verifies the universal installer, the MSI and the portable ZIP.
+
+Earlier feature history is in [the roadmap](docs/ROADMAP.md).
