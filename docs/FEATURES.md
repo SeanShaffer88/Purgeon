@@ -1,6 +1,6 @@
 # Purgeon — Features
 
-Purgeon is a Windows uninstaller that removes a program and then finds the files, folders, registry keys, startup entries and services it left behind. Supported cleanup changes retain recovery records where possible. Undo depends on the operation, an intact backup, and (for recycled files) continued Recycle Bin availability; irreversible actions and uncertain outcomes need separate review.
+Purgeon is a Windows uninstaller that removes a program and then finds the files, folders, registry keys, startup entries and services it left behind. Supported cleanup changes retain recovery records where possible. Cleanup stops if recovery information cannot be saved; its pending backup and uncertain operation are retained for review before more items are removed. Undo depends on the operation, an intact backup, and (for recycled files) continued Recycle Bin availability; irreversible actions and uncertain outcomes need separate review.
 
 It runs on Windows 10 and 11 (64-bit). The full app is a **4.0 MB** executable in a **1.5 MB** installer, built with Tauri and React on Windows' built-in WebView2.
 

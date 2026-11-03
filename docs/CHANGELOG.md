@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+### Fixed
+- Cleanup halts when recovery checkpoint persistence fails, retains the pending backup and uncertain operation, and never removes another item or seals the backup after an unconfirmed checkpoint. Failed writes are not retried with a different recovery state, including native task checkpoints.
+
 ## 1.4.2 - 2026-11-03
 
 ### Fixed

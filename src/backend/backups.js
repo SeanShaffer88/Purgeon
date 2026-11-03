@@ -289,12 +289,21 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
     results.push({ ...item, ok, detail });
   };
   let stopped = false;
+  let checkpointFailed = false;
   const stopNow = () => {
     if (manifest.inFlight) stopped = true;
     if (!stopped && shouldStop && shouldStop()) stopped = true;
     return stopped;
   };
-  const save = async () => await writeEncryptedText(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2));
+  const save = async () => {
+    try { await writeEncryptedText(path.join(dir, 'manifest.json'), JSON.stringify(manifest, null, 2)); }
+    catch (error) {
+      // A rejected write may have committed. Never continue cleanup or retry a
+      // different journal state after losing confirmation of its durable state.
+      checkpointFailed = true; stopped = true;
+      throw new Error(`Recovery checkpoint could not be saved; cleanup stopped and retained evidence needs review: ${error?.message || error}`);
+    }
+  };
   const intent = async (entry) => {
     if (manifest.inFlight) throw new Error('An earlier mutation is uncertain; its recovery journal must be reviewed first');
     manifest.inFlight = { ...entry, intentId: manifest.intents.length, recorded: new Date().toISOString() };
@@ -303,15 +312,26 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
   };
   // Each removal is in the manifest before the next one starts.
   const record = async (entry) => {
+    const pending = manifest.inFlight, length = manifest.entries.length;
     manifest.entries.push({ ...entry, intentId: manifest.inFlight?.intentId });
     if (manifest.inFlight) manifest.intents[manifest.inFlight.intentId] = { ...manifest.inFlight, status: 'completed' };
     delete manifest.inFlight;
-    await save();
+    try { await save(); }
+    catch (error) {
+      manifest.entries.length = length;
+      if (pending) { manifest.inFlight = pending; manifest.intents[pending.intentId] = pending; }
+      throw error;
+    }
   };
   const unchanged = async () => {
+    const pending = manifest.inFlight;
     if (manifest.inFlight) manifest.intents[manifest.inFlight.intentId] = { ...manifest.inFlight, status: 'not-present' };
     delete manifest.inFlight;
-    await save();
+    try { await save(); }
+    catch (error) {
+      if (pending) { manifest.inFlight = pending; manifest.intents[pending.intentId] = pending; }
+      throw error;
+    }
   };
   await save();
   await sys.writeTextAtomic(pendingFile(), JSON.stringify({ id, title, owners, items, started: manifest.created }));
@@ -366,7 +386,8 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
       if (nativeIntent) {
         manifest.inFlight = nativeIntent; manifest.intents[nativeIntent.intentId] = nativeIntent;
         manifest.entries = manifest.entries.filter((entry) => entry.intentId !== nativeIntent.intentId);
-        stopped = true; await save().catch(() => {});
+        stopped = true;
+        if (!checkpointFailed) await save().catch(() => {});
       }
       log(item, false, `${error.message}${nativeIntent?.nativeTaskJournalId ? ` Native task journal ${nativeIntent.nativeTaskJournalId} is retained for review.` : ''}`);
     }
@@ -480,7 +501,7 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
       await record({ kind: item.kind, path: item.path, recycled: true });
       log(item, true, 'Moved to Recycle Bin');
     } catch (e) {
-      log(item, false, `Could not move to Recycle Bin: ${e?.message || e}`);
+      log(item, false, checkpointFailed ? String(e?.message || e) : `Could not move to Recycle Bin: ${e?.message || e}`);
     }
   }
 
@@ -508,8 +529,8 @@ async function removeItems({ title, items, owners = [], state, trashItem = (p) =
     catch (e) { log(item, false, String(e?.message || e)); }
   }
 
-  if (stopped) for (const item of items) if (!seen.has(item)) log(item, false, 'Left in place — the removal was cancelled');
-  if (manifest.inFlight) {
+  if (stopped) for (const item of items) if (!seen.has(item)) log(item, false, checkpointFailed ? 'Left in place — cleanup stopped because recovery information could not be saved' : 'Left in place — the removal was cancelled');
+  if (checkpointFailed || manifest.inFlight) {
     return { backupId: id, results, cancelled: stopped, interrupted: true, recoveryRequired: true };
   }
   // Keep a backup only when something was actually removed.
