@@ -28,6 +28,9 @@ export interface SystemAdapter {
   prepareProcess(request: { pid: number; creationTime: string; action: { kind: string; level?: string; mask?: string } }): Promise<{ id: string; summary: string; image: string; requiresElevation: boolean }>;
   executeProcess(planId: string): Promise<{ ok: boolean; previousPriority: string | null; error: string | null }>;
   elevateHandoff(): Promise<void>;
+  reserveUpdateDownload(expected: {sha256:string;size:number}): Promise<{id:string;path:string}>;
+  cancelUpdateDownload(id:string): Promise<{removed:boolean;detail:string}>;
+  launchVerifiedUpdate(id:string): Promise<void>;
   bootState(): Promise<{timeout: number | null; safeboot: 'none' | 'minimal' | 'network' | 'other'; entries: Array<{id: string; name: string; isCurrent: boolean; isDefault: boolean}>}>;
   taskInventory(cursor?:string|null):Promise<{rows:Array<{name:string;path:string;state:string;taskId:string|null;enabled:boolean|null;[key:string]:unknown}>;nextCursor:string|null}>;
   taskOwnedStatus(role:'signin'|'maintenance'|'background'):Promise<{registered:boolean;enabled:boolean;owned:boolean;nextRun:string;lastRun:string;lastResult:number|null}>;

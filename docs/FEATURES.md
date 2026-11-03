@@ -240,6 +240,8 @@ DNS changes affect the selected adapter's IPv4 configuration and preserve IPv6 s
 
 **Tray icon** — left click shows the window; right click opens Show Purgeon, Monitor an Installation, Cleaner, Startup & Services, Program Updates and Exit. Reports finished maintenance runs, available updates, new startup entries and interrupted removals.
 
+**Purgeon updates** — optional checks and portable-copy behavior are unchanged. Installing an update reserves a fresh native temporary file, then native code verifies that same file's SHA-256 and size while holding its identity and ancestor paths through synchronous installer process creation. The launch uses the checked machine executable elevation class, not a per-user association. Expected release metadata still comes from the application's GitHub response; this does not isolate a compromised renderer. Pins end after process creation, so installer lifetime and later extracted payloads are not certified. Failed verification or unconfirmed cleanup may retain the native download for review. Tests use neutral scratch files and fake launches; live installer/UAC behavior remains unverified.
+
 **Monthly Report** (`File › Monthly Report`) — saves an HTML page for a month: programs installed and removed, space freed, startup changes, updates, clean-ups, and programs flagged by the insights.
 
 ## Settings window and organization policies

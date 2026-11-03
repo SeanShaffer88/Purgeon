@@ -50,6 +50,9 @@ export function createNodeSys(dataDir = path.join(os.tmpdir(), 'purgeon-test-dat
     info: { env: { ...process.env }, home: os.homedir(), dataDir, exe: process.execPath },
     // Scheduler APIs are always fake here; tests must never enumerate/mutate
     // the host scheduler. Dedicated task tests supply explicit fixture behavior.
+    reserveUpdateDownload: async () => { throw new Error('Native update reservation is not mocked'); },
+    cancelUpdateDownload: async () => { throw new Error('Native update cancellation is not mocked'); },
+    launchVerifiedUpdate: async () => { throw new Error('Native verified update launch is not mocked'); },
     taskInventory: async () => ({ rows: [], nextCursor: null }),
     taskOwnedStatus: async () => ({ registered: false, enabled: false, owned: true, nextRun: '', lastRun: '', lastResult: null }),
     selectTaskProgram: async () => null,

@@ -8,10 +8,9 @@
 // then launches it. The installer itself closes the running Purgeon (see updateexit.js)
 // and offers to relaunch it afterwards. Portable copies are never installed over: their
 // whole point is that the user controls the folder, so they get the release link instead.
-import { sys, env } from './sys.js';
+import { sys } from './sys.js';
 import { runPS, runPSJson, psq } from './shell.js';
 import { readSettings, writeSettings } from './settings.js';
-import * as path from './winpath.js';
 
 const REPO = 'SeanShaffer88/Purgeon';
 const API = `https://api.github.com/repos/${REPO}/releases/latest`;
@@ -131,21 +130,21 @@ export const downloadAndInstall = async () => {
   const plan = planInstall(update, { portable: sys.info?.portable === true });
   if (!plan.ok) return { ok: false, current, update, error: plan.error };
   const { asset, version } = plan;
-  const dir = env('TEMP') || sys.info?.dataDir || '';
-  if (!dir) return { ok: false, current, update, error: 'No temporary folder is available for the download.' };
-  const file = path.join(dir, `Purgeon-Setup-${version}.exe`);
+  let reservation = null, launching = false;
   try {
+    reservation = await sys.reserveUpdateDownload({ sha256: asset.sha256, size: asset.size });
+    if (!reservation || !/^[a-f0-9]{32}$/i.test(reservation.id) || typeof reservation.path !== 'string' || !reservation.path) throw new Error('Invalid native update reservation');
+    const file = reservation.path;
     await runPS(`Invoke-WebRequest -Uri ${psq(asset.url)} -OutFile ${psq(file)} -UseBasicParsing -TimeoutSec 600 -ErrorAction Stop`);
-    const stat = await sys.stat(file).catch(() => null);
-    const hashes = stat ? await sys.sha256Files([file]).catch(() => []) : [];
-    const problem = verifyDownload({ size: stat?.size ?? -1, sha256: hashes?.[0] ?? '' }, asset);
-    if (problem) {
-      await sys.removePath(file).catch(() => {});
-      return { ok: false, current, update, error: problem };
-    }
-    await sys.launch(file, []);
+    launching = true;
+    await sys.launchVerifiedUpdate(reservation.id);
     return { ok: true, current, update, file, version };
   } catch (e) {
-    return { ok: false, current, update, error: `Download failed: ${String(e?.message ?? e)}` };
+    let cleanup = '';
+    if (reservation && !launching) {
+      try { const result = await sys.cancelUpdateDownload(reservation.id); if (result?.removed !== true) cleanup = ` ${result?.detail || 'Native download cleanup was not confirmed.'}`; }
+      catch { cleanup = ' Native download cleanup was not confirmed; its files may be retained.'; }
+    }
+    return { ok: false, current, update, error: `Download or verified launch failed: ${String(e?.message ?? e)}${cleanup}` };
   }
 };
