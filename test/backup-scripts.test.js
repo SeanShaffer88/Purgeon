@@ -5,28 +5,13 @@ import { promisify } from 'node:util';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import { taskRemovalScript, firewallRemovalScript, firewallRestoreScript } from '../src/backend/backup-scripts.js';
+import { firewallRemovalScript, firewallRestoreScript } from '../src/backend/backup-scripts.js';
 const exec = promisify(execFile);
 async function probe(script, prelude) {
   const body = `${prelude}\ntry { & { ${script} }; 'SUCCEEDED' } catch { 'REFUSED ' + $_.Exception.Message }; 'MUTATIONS ' + $script:mutations`;
   const { stdout } = await exec('powershell.exe', ['-NoProfile', '-NonInteractive', '-EncodedCommand', Buffer.from(body, 'utf16le').toString('base64')], { windowsHide: true });
   return stdout;
 }
-
-test('task export/readback failures never dispatch unregister', async (t) => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'purgeon-task-script-'));
-  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
-  for (const mode of ['export-fail', 'empty', 'invalid-xml', 'write-fail', 'ok']) {
-    const target = mode === 'write-fail' ? path.join(dir, 'absent', 'task.xml') : path.join(dir, `${mode}.xml`);
-    const prelude = `$script:mutations=0; $script:removed=$false
-function Get-ScheduledTask { param($TaskName,$TaskPath); if (-not $script:removed) { [pscustomobject]@{TaskName='Fixture';TaskPath='\\'} } }
-function Export-ScheduledTask { param($TaskName,$TaskPath); ${mode === 'export-fail' ? "throw 'export failed'" : mode === 'empty' ? "''" : mode === 'invalid-xml' ? "'<Other />'" : "'<Task />'"} }
-function Unregister-ScheduledTask { param($TaskName,$TaskPath,$Confirm); $script:mutations++; $script:removed=$true }`;
-    const out = await probe(taskRemovalScript('\\Fixture', target), prelude);
-    assert.match(out, mode === 'ok' ? /MUTATIONS 1/ : /MUTATIONS 0/, out);
-    assert.match(out, mode === 'ok' ? /SUCCEEDED/ : /REFUSED/, out);
-  }
-});
 
 const firewallFixture = (mode) => `$script:mutations=0; $script:removed=$false
 $script:rule=[pscustomobject]@{ Name='Fixture';DisplayName='Fixture';Direction='Inbound';Action='Allow';Profile='Any';Enabled='True';EdgeTraversalPolicy='${mode === 'edge' ? 'Allow' : 'Block'}' }

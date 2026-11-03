@@ -1,12 +1,6 @@
-// Scheduled Tasks (Tools › System Tools): everything Windows runs on a
-// schedule — Purgeon's own maintenance task and all the rest. Windows'
-// own tasks (under \Microsoft\) are badged and can be enabled, disabled
-// and run, but never deleted from here; deleting anything else first
-// saves its definition to Purgeon's task-backups folder, and that saved
-// definition is what Change History's undo re-registers.
-import * as path from './winpath.js';
+// Runtime scheduled-task operations use closed native grants and protected
+// journals. Unsupported principals/actions are read-only; recovery stays disabled.
 import { sys } from './sys.js';
-import { runPS, runPSJson } from './shell.js';
 import { record } from './history.js';
 
 const note = (entry) => record(entry).catch(() => {});
@@ -43,8 +37,7 @@ export function shapeTasks(rows, infos) {
 
 const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
-// A minimal task definition for Register-ScheduledTask: run a program on
-// sign-in, daily, or weekly. Built as XML so the trigger shape is exact.
+// Legacy display/format helper only. Its text is never registration authority.
 export function taskXml({ name, program, trigger, time, day }) {
   const start = time || '09:00';
   const today = new Date();
@@ -69,96 +62,50 @@ export function taskXml({ name, program, trigger, time, day }) {
 </Task>`;
 }
 
-const NAME_RE = /^[\w\- .']+$/;
-
-function checkedTask(task) {
-  const name = String(task?.name || '');
-  const taskPath = String(task?.path || '\\');
-  if (!name || !NAME_RE.test(name) || name.includes('..')) throw new Error('That task name does not look right.');
-  if (!/^\\[\w\\\- .]*$/.test(taskPath)) throw new Error('That task folder does not look right.');
-  return { name, path: taskPath };
-}
-
+const id = (value) => typeof value === 'string' && /^[a-f0-9]{32}$/i.test(value);
+const invalid = () => new Error('Windows returned an invalid native scheduled-task response. Refresh and review again.');
 export async function list() {
-  const [result] = await runPSJson(`$tasks = @(Get-ScheduledTask -ErrorAction SilentlyContinue)
-$rows = @($tasks | Select-Object TaskName, TaskPath, State, Author)
-$infos = @(foreach ($t in $tasks) {
-  $i = $t | Get-ScheduledTaskInfo -ErrorAction SilentlyContinue
-  [pscustomobject]@{ TaskName = $t.TaskName; TaskPath = $t.TaskPath; LastRunTime = if ($i) { $i.LastRunTime.ToString('o') } else { '' }; NextRunTime = if ($i -and $i.NextRunTime) { $i.NextRunTime.ToString('o') } else { '' }; LastTaskResult = if ($i) { $i.LastTaskResult } else { $null } }
-})
-[pscustomobject]@{ rows = $rows; infos = $infos } | ConvertTo-Json -Compress -Depth 4`).catch(() => []);
-  return shapeTasks(result?.rows || [], result?.infos || []);
+  const rows = []; let cursor = null; const seen = new Set();
+  do {
+    const page = await sys.taskInventory(cursor);
+    if (!page || !Array.isArray(page.rows) || page.rows.length > 64 || !(page.nextCursor === null || typeof page.nextCursor === 'string')) throw invalid();
+    for (const row of page.rows) {
+      if (!row || typeof row.name !== 'string' || typeof row.path !== 'string' || !(row.taskId === null || id(row.taskId)) || !(row.enabled === null || typeof row.enabled === 'boolean')) throw invalid();
+      rows.push(row);
+    }
+    if (rows.length > 4096 || (page.nextCursor !== null && seen.has(page.nextCursor))) throw invalid();
+    cursor = page.nextCursor; if (cursor !== null) seen.add(cursor);
+  } while (cursor !== null);
+  return rows;
 }
-
-const psQuote = (s) => `'${String(s).replace(/'/g, "''")}'`;
-
-async function backupXml(task) {
-  const dir = path.join(sys.info.dataDir, 'task-backups');
-  await sys.makeDir(dir);
-  const stamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const file = path.join(dir, `${task.name.replace(/[\\/:*?"<>|]/g, '_')}-${stamp}.xml`);
-  const xml = await runPS(`Export-ScheduledTask -TaskName ${psQuote(task.name)} -TaskPath ${psQuote(task.path)} -ErrorAction Stop`);
-  await sys.writeText(file, xml);
-  return file;
+function taskId(task) { if (!id(task?.taskId)) throw new Error('This task has no current native identity or is read-only. Refresh the task inventory; legacy name/path actions are refused.'); return task.taskId; }
+async function change(request, title, onPrepared) {
+  const plan = await sys.prepareTask(request);
+  if (!plan || !id(plan.id) || typeof plan.summary !== 'string' || typeof plan.requiresElevation !== 'boolean') throw invalid();
+  if (onPrepared) await onPrepared(plan.id);
+  let result;
+  try { result = await sys.executeTask(plan.id); } catch (error) { const failure = error instanceof Error ? error : new Error(String(error)); failure.nativeTaskJournalId = plan.id; throw failure; }
+  if (!result || result.ok !== true || result.journalId !== plan.id || typeof result.changed !== 'boolean' || typeof result.settled !== 'boolean' || typeof result.recoverable !== 'boolean') throw invalid();
+  if (result.changed) await note({ type: 'Scheduled task', title, detail: result.detail || '', undo: result.recoverable ? { channel: 'tasks:restore', arg: { journalId: result.journalId } } : null });
+  return result;
 }
-
-export async function setEnabled(task, on) {
-  const t = checkedTask(task);
-  await runPS(`${on ? 'Enable' : 'Disable'}-ScheduledTask -TaskName ${psQuote(t.name)} -TaskPath ${psQuote(t.path)} -ErrorAction Stop | Out-Null`);
-  note({
-    type: 'Scheduled task', title: `${t.path}${t.name} turned ${on ? 'on' : 'off'}`,
-    detail: on ? 'The task will run on its schedule again.' : 'The task stays listed but will not run until it is turned back on.',
-    undo: { channel: 'tasks:setEnabled', arg: { task: t, on: !on } },
-  });
-  return { ok: true };
+export async function setEnabled(task, on) { if (typeof on !== 'boolean') throw new Error('Choose whether the task is enabled.'); return change({ kind: 'setEnabled', taskId: taskId(task), enabled: on }, `Task turned ${on ? 'on' : 'off'} after native review`); }
+export const runNow = async (task) => change({ kind: 'run', taskId: taskId(task) }, 'Task start request acknowledged; completion not assumed');
+export const stop = async (task) => change({ kind: 'stop', taskId: taskId(task) }, 'Captured task instances stopped');
+export async function remove(task, { onPrepared } = {}) { const guard = taskGuard(task); if (guard) throw new Error(guard); return change({ kind: 'remove', taskId: taskId(task) }, 'Disabled task deleted with native definition backup', onPrepared); }
+export async function restoreFromBackup(journalId, legacyName) { if (!id(journalId) || legacyName !== undefined) throw new Error('Legacy task XML/name backups require manual review. Select a completed native task journal instead.'); return change({ kind: 'recover', journalId }, 'Task native original restored; registration stays disabled'); }
+export async function restoreDeleted(journalId) { if (!id(journalId)) throw new Error('Select a native task deletion journal.'); return change({ kind: 'recoverDeleted', journalId }, 'Deleted task recreated disabled from its private native journal'); }
+export async function create({ name, programGrant, program, trigger, time, day }) {
+  if (program !== undefined || !id(programGrant)) throw new Error('Choose the native EXE with the program picker; raw program paths are refused.');
+  if (!['logon', 'daily', 'weekly'].includes(trigger)) throw new Error('Pick a supported task trigger.');
+  const specification = trigger === 'logon' ? { kind: 'logon' } : trigger === 'daily' ? { kind: 'daily', time } : { kind: 'weekly', day, time };
+  return change({ kind: 'create', name, programGrant, trigger: specification }, 'Native selected EXE task created disabled; enable separately');
 }
-
-export async function runNow(task) {
-  const t = checkedTask(task);
-  await runPS(`Start-ScheduledTask -TaskName ${psQuote(t.name)} -TaskPath ${psQuote(t.path)} -ErrorAction Stop`);
-  note({ type: 'Scheduled task', title: `Ran ${t.path}${t.name} now`, detail: '', undo: null });
-  return { ok: true };
+export async function pickProgram() { const selected = await sys.selectTaskProgram(); if (selected !== null && (!id(selected?.id) || typeof selected.displayPath !== 'string')) throw invalid(); return selected; }
+export async function ownedStatus(role) { const result = await sys.taskOwnedStatus(role); if (!result || typeof result.registered !== 'boolean' || typeof result.enabled !== 'boolean' || result.owned !== true) throw invalid(); return { ...result, exists: result.registered, registered: result.registered && result.enabled }; }
+export async function configureOwned(role, enabled, { day = 'Sunday', time = '10:00', checkStartup = true } = {}) {
+  if (!['signin', 'maintenance', 'background'].includes(role) || typeof enabled !== 'boolean' || typeof checkStartup !== 'boolean') throw new Error('Invalid owned task setting.');
+  for (let step = 0; step < 5; step++) { const result = await change({ kind: 'configureOwned', role, enabled, day, time, checkStartup }, `Purgeon ${role} task changed through the native catalog`); if (result.settled) return ownedStatus(role); }
+  throw new Error('Owned task changes did not settle. Review the retained native journals before retrying.');
 }
-
-export async function stop(task) {
-  const t = checkedTask(task);
-  await runPS(`Stop-ScheduledTask -TaskName ${psQuote(t.name)} -TaskPath ${psQuote(t.path)} -ErrorAction Stop`);
-  note({ type: 'Scheduled task', title: `Stopped ${t.path}${t.name}`, detail: '', undo: null });
-  return { ok: true };
-}
-
-export async function remove(task) {
-  const t = checkedTask(task);
-  const guard = taskGuard(t);
-  if (guard) throw new Error(guard);
-  const backup = await backupXml(t);
-  await runPS(`Unregister-ScheduledTask -TaskName ${psQuote(t.name)} -TaskPath ${psQuote(t.path)} -Confirm:$false -ErrorAction Stop`);
-  note({
-    type: 'Scheduled task', title: `Deleted the task ${t.path}${t.name}`,
-    detail: `Its definition was saved first: ${backup}. Undo re-registers it from that copy.`,
-    undo: { channel: 'tasks:restore', arg: { file: backup, name: t.name } },
-  });
-  return { ok: true, backup };
-}
-
-export async function restoreFromBackup(file, name) {
-  if (!file || !/task-backups/.test(file) || !/\.xml$/i.test(file)) throw new Error('That task backup cannot be used.');
-  const xml = await sys.readText(file);
-  await runPS(`Register-ScheduledTask -TaskName ${psQuote(name)} -Xml ${psQuote(xml)} -Force -ErrorAction Stop | Out-Null`);
-  return { ok: true };
-}
-
-export async function create({ name, program, trigger, time, day }) {
-  const clean = String(name || '').trim();
-  if (!clean || !NAME_RE.test(clean)) throw new Error('Give the task a name (letters, numbers, spaces, dashes).');
-  if (!program || typeof program !== 'string') throw new Error('Choose the program the task runs.');
-  if (!['logon', 'daily', 'weekly'].includes(trigger)) throw new Error('Pick when the task runs.');
-  const xml = taskXml({ name: clean, program, trigger, time, day });
-  await runPS(`Register-ScheduledTask -TaskName ${psQuote(clean)} -Xml ${psQuote(xml)} -ErrorAction Stop | Out-Null`);
-  note({
-    type: 'Scheduled task', title: `Created the task ${clean}`,
-    detail: `Runs ${program} ${trigger === 'logon' ? 'at sign-in' : trigger === 'daily' ? `daily at ${time || '09:00'}` : `weekly on ${day || 'Monday'} at ${time || '09:00'}`}.`,
-    undo: { channel: 'tasks:remove', arg: { task: { name: clean, path: '\\' } } },
-  });
-  return { ok: true };
-}
+export async function recoveryStatus(journalId) { if (!id(journalId)) throw new Error('Invalid native task journal.'); return sys.taskRecovery(journalId); }

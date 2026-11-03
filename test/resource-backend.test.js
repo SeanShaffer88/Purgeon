@@ -29,11 +29,11 @@ test('time window preserves reference output and mate order over adversarial det
     assert.deepEqual(installedTogether(ps,times),old(ps,times),`n=${n}`);
   }
 });
-test('task inventory uses one invocation and preserves unknown per-task fields and errors',async()=>{
+test('task inventory uses one native invocation and preserves unknown per-task fields and errors',async()=>{
   let calls=0;
-  setSys({runPS:async()=>{calls++;return JSON.stringify({rows:[{TaskName:'B',TaskPath:'\\',State:'Ready'},{TaskName:'A',TaskPath:'\\'}],infos:[{TaskName:'B',TaskPath:'\\',LastTaskResult:0}]});}});
+  setSys({taskInventory:async()=>{calls++;return {rows:[{name:'A',path:'\\A',taskId:null,enabled:null,lastResult:null},{name:'B',path:'\\B',taskId:null,enabled:true,lastResult:0}],nextCursor:null};}});
   const rows=await tasks.list();assert.equal(calls,1);assert.deepEqual(rows.map(r=>[r.name,r.lastResult]),[['A',null],['B',0]]);
-  setSys({runPS:async()=>{throw Error('Denied');}});assert.deepEqual(await tasks.list(),[]);
+  setSys({taskInventory:async()=>{throw Error('Denied');}});await assert.rejects(tasks.list(),/Denied/);
 });
 test('executable memo coalesces pending reads and does not retain negative results',async()=>{
   let reads=0, present=false;

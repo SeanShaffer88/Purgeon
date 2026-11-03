@@ -29,11 +29,52 @@ mod restore_native;
 mod security;
 mod snapshot;
 mod state_store;
+mod task_native;
+mod task_platform;
 mod tracker;
 mod windows_tools;
 static DATA_LOCK: std::sync::OnceLock<fs::File> = std::sync::OnceLock::new();
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+#[tauri::command]
+async fn task_inventory(cursor: Option<String>) -> Result<task_native::Page, String> {
+    tauri::async_runtime::spawn_blocking(move || task_native::query(cursor))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+fn task_recovery(journal_id: String) -> Result<serde_json::Value, String> {
+    task_native::recovery_status(&journal_id)
+}
+#[tauri::command]
+async fn task_owned_status(role: task_platform::OwnedRole) -> Result<serde_json::Value, String> {
+    tauri::async_runtime::spawn_blocking(move || task_native::owned_status(role))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn select_task_program(
+    app: tauri::AppHandle,
+) -> Result<Option<task_native::ProgramView>, String> {
+    tauri::async_runtime::spawn_blocking(move || task_native::select_program(&app))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn prepare_task_operation(
+    request: task_native::Request,
+) -> Result<task_native::PlanView, String> {
+    tauri::async_runtime::spawn_blocking(move || task_native::prepare(request))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn execute_task_operation(plan_id: String) -> Result<task_native::ResultView, String> {
+    tauri::async_runtime::spawn_blocking(move || task_native::execute(&plan_id))
+        .await
+        .map_err(|e| e.to_string())?
+}
 
 #[tauri::command]
 async fn driver_inventory() -> Result<Vec<driver_native::DriverView>, String> {
@@ -2023,6 +2064,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
+            task_inventory,
+            task_recovery,
+            task_owned_status,
+            select_task_program,
+            prepare_task_operation,
+            execute_task_operation,
             driver_inventory,
             prepare_driver_operation,
             execute_driver_operation,

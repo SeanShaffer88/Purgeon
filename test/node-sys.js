@@ -48,6 +48,14 @@ function folderSize(dir, maxEntries, maxMs) {
 export function createNodeSys(dataDir = path.join(os.tmpdir(), 'purgeon-test-data')) {
   return {
     info: { env: { ...process.env }, home: os.homedir(), dataDir, exe: process.execPath },
+    // Scheduler APIs are always fake here; tests must never enumerate/mutate
+    // the host scheduler. Dedicated task tests supply explicit fixture behavior.
+    taskInventory: async () => ({ rows: [], nextCursor: null }),
+    taskOwnedStatus: async () => ({ registered: false, enabled: false, owned: true, nextRun: '', lastRun: '', lastResult: null }),
+    selectTaskProgram: async () => null,
+    prepareTask: async () => { throw new Error('Native scheduled-task fixture was not configured'); },
+    executeTask: async () => { throw new Error('Native scheduled-task fixture was not configured'); },
+    taskRecovery: async () => { throw new Error('Native task recovery fixture was not configured'); },
     async runPS(script, input) {
       const wrapped = `$ProgressPreference='SilentlyContinue';[Console]::OutputEncoding=[Text.Encoding]::UTF8;${script}`;
       const r = await run('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', Buffer.from(wrapped, 'utf16le').toString('base64')], input ?? '');

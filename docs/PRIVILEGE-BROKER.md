@@ -1,5 +1,65 @@
 # Privilege boundary migration — native slices implemented, unvalidated
 
+## Scheduled-task runtime migration
+
+Runtime task operations now use native inventory pages, opaque task/program grants,
+immutable prepare/execute plans and caller-bound recovery journals. All task-family
+JavaScript routes—including startup toggles, deeper scans, backup preview/removal/
+recovery and Purgeon's owned sign-in/maintenance/background tasks—use this boundary.
+No runtime scheduler cmdlet, `schtasks` command or generic Scheduler COM remains in
+the JavaScript backend. Queue continuation uses HKCU RunOnce, a separate registry
+family. Static installer/uninstaller task cleanup is unchanged and is outside
+this runtime migration; generic IPC remains for other operation families.
+
+The fixed OS-absolute PowerShell provider activates only the local Task Scheduler
+CLSID with in-process context. It validates the system DLL/registration, rejects
+current and authenticated-caller per-user COM overrides, and pins that child
+process's HKCR view to machine classes. Profiles/module autoload are disabled;
+XML parsing prohibits DTDs and external resolution. No renderer chooses a COM
+server, task XML/SDDL, credentials, action parameters or privileged target path.
+
+Only supported caller-owned InteractiveToken/least-privilege tasks with one
+captured native EXE action are mutable. Password/S4U/service/foreign/elevated,
+known interpreter executable, COM-handler, unknown or oversized definitions are read-only with a
+reason. Windows tasks are never deleted. Definition, enabled state, owner/group/
+DACL, principal, EXE content and captured instance identity are rechecked around
+consent and immediately before the action. Start passes null parameter overrides
+and acknowledges only a native instance GUID; work completion is not assumed.
+Stop addresses only the captured instance GUIDs. Deletion requires disabled,
+nonrunning state and protected original definition/security evidence.
+
+Every mutation, including start/stop/registration, has durable intent before action
+and verified readback/durable completion before success. Full XML, action arguments
+and security snapshots are stored under the authenticated original caller's SID
+ACL, never a shared Users-readable journal. The shared cross-caller gate contains
+only version, opaque ID and completion status. Uncertain outcomes retain evidence
+and block further task changes; no blind retry is performed. Parent connection,
+liveness and absolute expiry are checked after heavy preparation and at dispatch.
+
+Native EXE selection issues a grant; editing its displayed path invalidates it.
+New tasks and deletion recovery use create-only disabled registration with ignored
+registration triggers; existing names are never overwritten. A later enable is a
+separate reviewed operation. Recovery uses native originals and exact protected
+poststate proofs; old caller XML/name backups are refused. Backup deletion recovery
+uses a distinct native delete-only request, so a toggle/update journal cannot be
+substituted. Outer backup intent saves the durable native journal ID before execute;
+failed outer completion stops subsequent items. Explicit rollback may reconcile
+that link only when private native evidence proves completed deletion. Uncertain
+native records remain blocked. Run/stop side effects have no undo.
+
+Owned tasks use the native executable/current caller and fixed role definitions.
+Name collisions or unproven legacy tasks require manual review. Turning a role off disables future scheduling; an already-running instance is retained, and idle tasks may be removed. Status reports effective off separately from definition existence. Schedule changes
+are separately journaled/confirmed disable, native disabled update and enable steps;
+no silent forced replacement or name-only cleanup occurs. Runtime status uses
+native metadata; errors are not reported as missing/off.
+
+Budgets remain bounded: 64 compact rows/page, 4,096 tasks, depth 32, XML 16 KiB,
+SDDL 4 KiB, full journal 28 KiB and framed data 192 KiB. Conservative journal
+preflight can leave smaller complex definitions read-only. Isolated fake provider/
+transaction tests and backend fixtures exercise the source without querying or
+changing the host scheduler, UAC or rebooting. Live task/UAC/locale/recovery behavior
+and whole-application renderer isolation remain unverified.
+
 ## Driver package migration
 
 Driver inventory/removal now uses dedicated native inventory/prepare/execute

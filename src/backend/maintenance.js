@@ -4,18 +4,12 @@
 // uninstalls anything, and its cleanups are undoable from Change History like any other.
 import { sys } from './sys.js';
 import * as path from './winpath.js';
-import { runPS, runPSJson, psq } from './shell.js';
+import * as tasks from './tasks.js';
 import * as junk from './junk.js';
 import * as snapshots from './snapshots.js';
 import * as backups from './backups.js';
 import * as history from './history.js';
 
-const TASK_PATH = '\\Purgeon\\';
-const TASK_NAME = 'Weekly Maintenance';
-// Where versions from before the rename put the task. It would start the old program, so it is
-// removed whenever this setting is saved.
-const OLD_TASK_PATH = '\\SweepUninstall\\';
-const removeOld = () => runPS(`Unregister-ScheduledTask -TaskPath ${psq(OLD_TASK_PATH)} -TaskName ${psq(TASK_NAME)} -Confirm:$false -ErrorAction SilentlyContinue`).catch(() => {});
 export const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 export const DEFAULTS = { enabled: false, day: 'Sunday', time: '10:00', snapshot: true, junk: ['usertemp', 'dumps', 'wer', 'thumbs', 'shaders'], health: false };
 
@@ -27,32 +21,14 @@ export const setRoot = async (d) => {
 
 // The task as Windows has it: { registered, nextRun, lastRun, lastResult }.
 export async function status() {
-  const [s] = await runPSJson(
-    `$t = Get-ScheduledTask -TaskPath ${psq(TASK_PATH)} -TaskName ${psq(TASK_NAME)} -ErrorAction SilentlyContinue
-     if (-not $t) { '{"registered":false}'; return }
-     $i = $t | Get-ScheduledTaskInfo
-     [pscustomobject]@{ registered = $true; nextRun = if ($i.NextRunTime) { $i.NextRunTime.ToUniversalTime().ToString('o') } else { '' }; lastRun = if ($i.LastRunTime -and $i.LastRunTime.Year -gt 2000) { $i.LastRunTime.ToUniversalTime().ToString('o') } else { '' }; lastResult = $i.LastTaskResult } | ConvertTo-Json -Compress`
-  ).catch(() => [{ registered: false }]);
-  return s || { registered: false };
+  return tasks.ownedStatus('maintenance');
 }
 
 // Creates or removes the weekly task to match the settings.
 export async function apply(settings) {
   const m = { ...DEFAULTS, ...settings };
-  await removeOld();
-  if (!m.enabled) {
-    await runPS(`Unregister-ScheduledTask -TaskPath ${psq(TASK_PATH)} -TaskName ${psq(TASK_NAME)} -Confirm:$false -ErrorAction SilentlyContinue`).catch(() => {});
-    return status();
-  }
   if (!DAYS.includes(m.day) || !/^([01]\d|2[0-3]):[0-5]\d$/.test(m.time)) throw new Error('Choose a day and a time like 10:00.');
-  await runPS(`
-    $ErrorActionPreference = 'Stop'
-    $action = New-ScheduledTaskAction -Execute ${psq(sys.info.exe)} -Argument '--maintenance'
-    $trigger = New-ScheduledTaskTrigger -Weekly -DaysOfWeek ${m.day} -At ${psq(m.time)}
-    $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType Interactive -RunLevel Limited
-    $settings = New-ScheduledTaskSettingsSet -StartWhenAvailable -DontStopOnIdleEnd -ExecutionTimeLimit (New-TimeSpan -Hours 2)
-    Register-ScheduledTask -TaskPath ${psq(TASK_PATH)} -TaskName ${psq(TASK_NAME)} -Action $action -Trigger $trigger -Principal $principal -Settings $settings -Description 'Purgeon: weekly snapshot, junk clean-up and backup limits. Nothing is uninstalled.' -Force | Out-Null`);
-  return status();
+  return tasks.configureOwned('maintenance', m.enabled, { day: m.day, time: m.time });
 }
 
 const fmt = (b) => (b < 1048576 ? `${(b / 1024).toFixed(0)} KB` : b < 1073741824 ? `${(b / 1048576).toFixed(1)} MB` : `${(b / 1073741824).toFixed(2)} GB`);
