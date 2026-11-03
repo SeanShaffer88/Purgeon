@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+- Settings, uninstall queues and trial records now stop on read failures and preserve damaged settings before recovery; invalid queue/trial records require recovery, and trial completion saves the updated list before snapshot cleanup.
 - Purgeon update installation now reserves an opaque native download and hashes the held file immediately before a fixed machine-class launch, pinning file/path identity through process creation; installer lifetime and extracted payloads remain outside this guarantee.
 - Program-restore undo validates the complete journal, all targets and saved registry exports before changing anything, reports registry failures accurately, and retains ambiguous or incomplete recovery evidence for manual review.
 - Scheduled-task runtime operations now use caller-bound native grants, exact principal/action/EXE/ACL checks, private protected journals and a minimal shared uncertainty gate. Startup, deeper scans, backups and owned sign-in/maintenance/background tasks use the same typed boundary. Creation/recovery stays disabled and never overwrites another task; legacy XML/path recovery is refused. Backup task recovery is deletion-journal-only and retains its native journal link before execute. Unsupported tasks are read-only. Live Scheduler/UAC/recovery behavior remains unverified.

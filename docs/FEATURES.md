@@ -314,6 +314,8 @@ Long operations (batch uninstall, leftover scanning, snapshot comparison) show a
 
 ## Documentation and help
 
+**Local state recovery** — missing settings, queue and trial files still support first use; other read errors stop changes and preserve the existing files. Damaged settings are replaced with defaults only after a saved copy is read back and verified. Invalid queue/trial data requires recovery instead of being reset. Settings writes reread current data, and ending a trial saves the updated list before attempting snapshot cleanup. These checks preserve local evidence; they do not authenticate it or lock out other processes.
+
 - **Welcome dialog** — 3-step welcome on first launch explaining what Purgeon does, safety guarantees (backups, undo), and guided starting paths; reopen with Help › Welcome Back.
 - **First-run tips** — dismissible contextual tips (Ctrl+K, right-click, backups) with action buttons.
 - **User Guide** (`Help › User Guide`) — common workflows: uninstall, monitor installation, clean junk, turn off startup entries.

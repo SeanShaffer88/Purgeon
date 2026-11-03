@@ -31,7 +31,7 @@ function clock() {
 
 test('missing monitoring preferences default off without external operations', async () => {
   let calls = 0;
-  setSys({ stat: async () => null, info: { dataDir: 'C:\\MonitoringFixture' }, runPS: async () => { calls++; throw Error('Forbidden'); } });
+  setSys({ stat: async () => null, readOptionalText: async () => null, info: { dataDir: 'C:\\MonitoringFixture' }, runPS: async () => { calls++; throw Error('Forbidden'); } });
   const settings = await readSettings();
   for (const key of ['detectInstallers', 'startupMonitoring', 'resourceAlerts', 'recordSizeHistory']) {
     assert.equal(DEFAULT_SETTINGS[key], false);
@@ -42,7 +42,7 @@ test('missing monitoring preferences default off without external operations', a
 
 test('saved monitoring opt-ins remain explicit true', async () => {
   const saved = Object.fromEntries(['detectInstallers', 'startupMonitoring', 'resourceAlerts', 'recordSizeHistory'].map((key) => [key, true]));
-  setSys({ info: { dataDir: 'C:\\SavedMonitoringFixture' }, stat: async () => ({ modified: 12345 }), readText: async () => JSON.stringify(saved) });
+  setSys({ info: { dataDir: 'C:\\SavedMonitoringFixture' }, stat: async () => ({ modified: 12345 }), readOptionalText: async () => JSON.stringify(saved), readText: async () => JSON.stringify(saved) });
   const settings = await readSettings();
   for (const key of Object.keys(saved)) assert.equal(settings[key], true);
 });
@@ -58,6 +58,7 @@ test('actual insights preserve existing growth while history writes require opt-
   const sys = {
     info: { dataDir: root }, makeDir: async () => {}, stat: async (file) => file === settingsFile ? { modified: revision } : null,
     readDir: async () => [],
+    readOptionalText: async (file) => file === settingsFile ? JSON.stringify({ recordSizeHistory: enabled }) : files.get(file) ?? null,
     readText: async (file) => {
       if (file === settingsFile) return JSON.stringify({ recordSizeHistory: enabled });
       if (file === historyFile && blockHistory) { blockHistory = false; await new Promise((resolve) => { release = resolve; }); }
