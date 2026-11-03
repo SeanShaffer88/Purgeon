@@ -1,5 +1,59 @@
 # Privilege boundary migration — native slices implemented, unvalidated
 
+## Driver package migration
+
+Driver inventory/removal now uses dedicated native inventory/prepare/execute
+requests. Structured DISM metadata uses the SDK's packed driver layout with
+unaligned-safe reads; SetupAPI resolves the actual source under the native
+DriverStore. Opaque caller-bound grants contain metadata and a content fingerprint.
+The selected package is freshly inspected through the authenticated read-only
+helper before preparation. Raw INF deletion is refused. Missing or ambiguous
+provider/active-use information fails closed, rather than becoming empty success.
+
+Only supported non-inbox, non-boot-critical, unused packages receive removal
+authority. Any device association or matching running system-driver basename
+blocks removal. Explicit unsigned packages are refused; offline WinVerifyTrust
+checks the actual held native catalog, including when DISM signature status is
+unknown. This is not a claim of independent catalog-member verification. Candidate
+age is a suggestion and never authorizes a change.
+
+A separate protected driver-package directory retains the complete INF, actual
+catalog and nested payload. Exact sets, sizes and SHA256 hashes must match the
+source. Held ancestry/child handles and ACL checks reject reparse points,
+hardlinks, traversal, case collisions and file/directory alternate streams.
+Limits include 4,096 entries, 1 GiB, depth 32, deadlines, conservative names/ACLs
+and a 32 KiB journal budget. Worst-case export-wrapper preflight marks oversized
+manifests nonremovable before consent/export. Inventory sends compact fingerprints
+and explicitly fails if its bounded response budget is exceeded.
+
+The native helper invokes OS-absolute PnPUtil with fixed `/export-driver` and
+plain `/delete-driver` arguments. No `/force`, `/uninstall` or reboot flag is
+used. Complete verified backup precedes durable intent; exit zero, fresh absence
+and durable completion are all required. Uncertain tool results, timeouts,
+restart-required codes or unverifiable completion retain the backup/journal and
+block every caller. Parent connection/liveness and the absolute deadline are
+checked after heavy preparation and immediately before tool launch. Bounded
+progress replies do not extend that deadline. Source pins are released just
+before OS deletion; external administrator races are not atomically eliminated.
+
+Explicit recovery requires an owned completed removal journal, reverified native
+backup and fresh confirmation. `/add-driver` receives only its exact retained INF,
+without `/install`, wildcards, unsigned overrides or reboot. Recovery stages the
+package only; it does not reinstall devices or restore their bindings. Exact
+package content must be verified afterward; an already staged exact package is a
+reviewed no-op. A reused old OEM name is never deleted. Recovery consumes the
+original authority; uncertain transactions are not automatically retried/restored.
+
+Fake native engine/ABI/guard tests and scratch filesystem fixtures exercise these
+paths without opening DISM, installing/removing drivers, invoking UAC or rebooting.
+Live driver-store/export/removal/recovery behavior remains unverified. Generic IPC
+still exists for other families; full renderer-compromise isolation is incomplete.
+No new driver UI or command-line surface was added.
+
+Interfaces follow [DISM metadata](https://learn.microsoft.com/en-us/windows-hardware/manufacture/desktop/dism/dismdriverpackage-structure?view=windows-11),
+[SetupAPI source resolution](https://learn.microsoft.com/en-us/windows/win32/api/setupapi/nf-setupapi-setupgetinfdriverstorelocationw)
+and [PnPUtil syntax](https://learn.microsoft.com/en-us/windows-hardware/drivers/devtest/pnputil-command-syntax).
+
 ## Boot family migration
 
 Boot callers now use a dedicated native state/prepare/execute interface. The

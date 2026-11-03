@@ -27,6 +27,7 @@ pub enum Domain {
     Restore,
     EventLogs,
     Boot,
+    Drivers,
 }
 impl Domain {
     fn directory(self) -> &'static str {
@@ -35,6 +36,7 @@ impl Domain {
             Self::Restore => "restore",
             Self::EventLogs => "EventLogs",
             Self::Boot => "Boot",
+            Self::Drivers => "Drivers",
         }
     }
 }
@@ -859,6 +861,287 @@ impl Store {
         }
         Ok(())
     }
+}
+
+/// Driver package directories are separate from the EVTX-only artifact slot.
+/// Every returned handle pins its verified name without delete sharing.
+pub(crate) struct DriverPackageRoot {
+    path: PathBuf,
+    sid: String,
+    directories: Vec<(PathBuf, File)>,
+}
+impl DriverPackageRoot {
+    pub(crate) fn open(sid: &str, id: &str, create: bool) -> Result<Self, String> {
+        if id.len() != 32 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err("Invalid native driver backup identity".into());
+        }
+        validate_identity(Authority::Machine, sid, &"0".repeat(64), id, create)?;
+        let mut path = known_folder(Authority::Machine)?;
+        let mut directories = Vec::new();
+        for ancestor in path
+            .ancestors()
+            .map(Path::to_path_buf)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+        {
+            let file = open(&ancestor, true, false)?.ok_or("KnownFolder ancestor missing")?;
+            directories.push((ancestor, file));
+        }
+        for (index, segment) in ["Purgeon", "Broker", "Drivers", sid, "payload", id]
+            .into_iter()
+            .enumerate()
+        {
+            path.push(segment);
+            let descriptor = if index < 3 {
+                Descriptor::shared_machine()?
+            } else {
+                Descriptor::artifact_directory(sid)?
+            };
+            if create && index == 5 {
+                let sa = descriptor.attributes();
+                checked(unsafe { CreateDirectoryW(wide(&path).as_ptr(), &sa) })?;
+            } else if open(&path, true, false)?.is_none() && create {
+                let sa = descriptor.attributes();
+                if unsafe { CreateDirectoryW(wide(&path).as_ptr(), &sa) } == 0
+                    && std::io::Error::last_os_error().raw_os_error() != Some(183)
+                {
+                    return Err(os_error());
+                }
+            }
+            let file =
+                open(&path, true, false)?.ok_or("Protected driver package directory missing")?;
+            if index < 3 {
+                Descriptor::validate_container(&file, Authority::Machine, sid)?;
+            } else {
+                descriptor.validate(&file)?;
+            }
+            directories.push((path.clone(), file));
+        }
+        Ok(Self {
+            path,
+            sid: sid.into(),
+            directories,
+        })
+    }
+    pub(crate) fn path(&self) -> &Path {
+        &self.path
+    }
+    pub(crate) fn recheck(&self) -> Result<(), String> {
+        let scoped = self.directories.len().saturating_sub(6);
+        for (index, (path, file)) in self.directories.iter().enumerate() {
+            verify(file, path, true)?;
+            if index >= scoped {
+                if index - scoped < 3 {
+                    Descriptor::validate_container(file, Authority::Machine, &self.sid)?;
+                } else {
+                    Descriptor::artifact_directory(&self.sid)?.validate(file)?;
+                }
+            }
+        }
+        Ok(())
+    }
+    pub(crate) fn child(
+        &self,
+        relative: &Path,
+        directory: bool,
+        seal: bool,
+    ) -> Result<File, String> {
+        if relative
+            .components()
+            .any(|c| !matches!(c, std::path::Component::Normal(_)))
+        {
+            return Err("Invalid driver package relative path".into());
+        }
+        crate::protected_driver_package::relative(
+            &relative
+                .to_str()
+                .ok_or("Invalid driver package path")?
+                .replace('\\', "/"),
+        )?;
+        self.recheck()?;
+        let path = self.path.join(relative);
+        let handle = unsafe {
+            CreateFileW(
+                wide(&path).as_ptr(),
+                READ_CONTROL
+                    | 0x80
+                    | if directory { 0 } else { 0x80000000 }
+                    | if seal { 0x40000 } else { 0 },
+                1,
+                null_mut(),
+                3,
+                OPEN_REPARSE | if directory { BACKUP_SEMANTICS } else { 0 },
+                null_mut(),
+            )
+        };
+        if handle == -1isize as Handle {
+            return Err(os_error());
+        }
+        let file = unsafe { File::from_raw_handle(handle) };
+        verify(&file, &path, directory)?;
+        let descriptor = if directory {
+            Descriptor::artifact_directory(&self.sid)?
+        } else {
+            Descriptor::new(Authority::Machine, &self.sid)?
+        };
+        validate_driver_acl(&file, &descriptor, !seal)?;
+        if seal {
+            let mut acl = null_mut();
+            let mut present = 0;
+            let mut defaulted = 0;
+            checked(unsafe {
+                GetSecurityDescriptorDacl(descriptor.0 .0, &mut present, &mut acl, &mut defaulted)
+            })?;
+            let error = unsafe {
+                SetSecurityInfo(
+                    file.as_raw_handle(),
+                    1,
+                    4 | 0x80000000,
+                    null_mut(),
+                    null_mut(),
+                    acl,
+                    null_mut(),
+                )
+            };
+            if error != 0 {
+                return Err(std::io::Error::from_raw_os_error(error as i32).to_string());
+            }
+            validate_driver_acl(&file, &descriptor, true)?;
+        }
+        verify(&file, &path, directory)?;
+        self.recheck()?;
+        Ok(file)
+    }
+}
+fn validate_driver_acl(file: &File, expected: &Descriptor, protected: bool) -> Result<(), String> {
+    let mut owner = null_mut();
+    let mut acl = null_mut();
+    let mut sd = null_mut();
+    let error = unsafe {
+        GetSecurityInfo(
+            file.as_raw_handle(),
+            1,
+            5,
+            &mut owner,
+            null_mut(),
+            &mut acl,
+            null_mut(),
+            &mut sd,
+        )
+    };
+    if error != 0 {
+        return Err(std::io::Error::from_raw_os_error(error as i32).to_string());
+    }
+    let _allocation = LocalMemory(sd);
+    let mut trusted = false;
+    if owner.is_null() || acl.is_null() {
+        return Err("Driver artifact lacks trusted security metadata".into());
+    }
+    for sid in ["S-1-5-18", "S-1-5-32-544"] {
+        let mut pointer = null_mut();
+        checked(unsafe { ConvertStringSidToSidW(text_wide(sid).as_ptr(), &mut pointer) })?;
+        let pointer = LocalMemory(pointer);
+        trusted |= unsafe { EqualSid(owner, pointer.0) } != 0;
+    }
+    let mut control = 0;
+    let mut revision = 0;
+    checked(unsafe { GetSecurityDescriptorControl(sd, &mut control, &mut revision) })?;
+    if !trusted || (protected && control & 0x1000 == 0) {
+        return Err("Driver artifact has untrusted ownership or unprotected ACL".into());
+    }
+    let mut wanted = null_mut();
+    let mut present = 0;
+    let mut defaulted = 0;
+    checked(unsafe {
+        GetSecurityDescriptorDacl(expected.0 .0, &mut present, &mut wanted, &mut defaulted)
+    })?;
+    let count = unsafe { *((acl as *const u16).add(2)) };
+    if count != unsafe { *((wanted as *const u16).add(2)) } {
+        return Err("Driver artifact has unexpected access rules".into());
+    }
+    for index in 0..count {
+        let mut a = null_mut();
+        let mut b = null_mut();
+        checked(unsafe { GetAce(acl, index as u32, &mut a) })?;
+        checked(unsafe { GetAce(wanted, index as u32, &mut b) })?;
+        let len = unsafe { *((a as *const u16).add(1)) } as usize;
+        let other = unsafe { *((b as *const u16).add(1)) } as usize;
+        if len < 16 || len != other {
+            return Err("Invalid driver artifact access rule".into());
+        }
+        let mut bytes = unsafe { std::slice::from_raw_parts(a as *const u8, len) }.to_vec();
+        bytes[1] &= !0x10;
+        if bytes != unsafe { std::slice::from_raw_parts(b as *const u8, len) } {
+            return Err("Driver artifact grants unexpected access".into());
+        }
+    }
+    Ok(())
+}
+/// Source-package names are native-derived. TrustedInstaller ownership and
+/// inherited read-only ACLs are permitted; untrusted mutation grants are not.
+pub(crate) fn pin_driver_source(path: &Path, directory: bool) -> Result<File, String> {
+    let file = open(path, directory, !directory)?.ok_or("Driver package source missing")?;
+    let mut owner = null_mut();
+    let mut acl = null_mut();
+    let mut sd = null_mut();
+    let error = unsafe {
+        GetSecurityInfo(
+            file.as_raw_handle(),
+            1,
+            5,
+            &mut owner,
+            null_mut(),
+            &mut acl,
+            null_mut(),
+            &mut sd,
+        )
+    };
+    if error != 0 {
+        return Err(std::io::Error::from_raw_os_error(error as i32).to_string());
+    }
+    let _allocation = LocalMemory(sd);
+    if owner.is_null() || acl.is_null() {
+        return Err("Driver source security metadata missing".into());
+    }
+    let mut trusted = Vec::new();
+    for identity in [
+        "S-1-5-18",
+        "S-1-5-32-544",
+        "S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464",
+    ] {
+        let mut pointer = null_mut();
+        checked(unsafe { ConvertStringSidToSidW(text_wide(identity).as_ptr(), &mut pointer) })?;
+        trusted.push(LocalMemory(pointer));
+    }
+    let is_trusted = |sid| trusted.iter().any(|p| unsafe { EqualSid(sid, p.0) } != 0);
+    if !is_trusted(owner) {
+        return Err("Driver source has untrusted owner".into());
+    }
+    let count = unsafe { *((acl as *const u16).add(2)) };
+    for index in 0..count {
+        let mut ace = null_mut();
+        checked(unsafe { GetAce(acl, index as u32, &mut ace) })?;
+        let header = unsafe { std::slice::from_raw_parts(ace as *const u8, 4) };
+        if header[0] != 0 || u16::from_ne_bytes([header[2], header[3]]) < 16 {
+            return Err("Unsupported driver source ACL rule".into());
+        }
+        if header[1] & 8 != 0 {
+            continue;
+        }
+        let mask = unsafe { *((ace as *const u32).add(1)) };
+        let principal = unsafe { (ace as *mut u8).add(8).cast() };
+        if mask & (2 | 4 | 16 | 64 | 256 | 0x10000 | 0x40000 | 0x80000 | 0x10000000 | 0x40000000)
+            != 0
+            && !is_trusted(principal)
+        {
+            return Err("Driver source grants mutation to untrusted principal".into());
+        }
+    }
+    Ok(file)
+}
+pub(crate) fn pin_driver_ancestor(path: &Path) -> Result<File, String> {
+    open(path, true, false)?.ok_or("Driver package ancestor missing".into())
 }
 
 pub fn read(

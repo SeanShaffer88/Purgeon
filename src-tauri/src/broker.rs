@@ -834,6 +834,31 @@ pub(crate) fn send_until<T: Serialize>(
 pub(crate) fn receive<T: for<'de> Deserialize<'de>>(pipe: Handle) -> Result<T, String> {
     receive_until(pipe, Instant::now() + Duration::from_millis(TIMEOUT as u64))
 }
+/// Driver helpers recheck that the authenticated parent still owns its endpoint
+/// after costly preparation, immediately before launching an OS mutation tool.
+pub(crate) fn require_connected(pipe: Handle) -> Result<(), String> {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn PeekNamedPipe(
+            pipe: Handle,
+            buffer: Handle,
+            size: u32,
+            read: *mut u32,
+            total: *mut u32,
+            left: *mut u32,
+        ) -> i32;
+    }
+    bool_result(unsafe {
+        PeekNamedPipe(
+            pipe,
+            std::ptr::null_mut(),
+            0,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    })
+}
 pub(crate) fn receive_until<T: for<'de> Deserialize<'de>>(
     pipe: Handle,
     deadline: Instant,
@@ -883,6 +908,7 @@ pub(crate) enum HelperKind {
     Restore,
     EventLogs,
     Boot,
+    Drivers,
 }
 pub(crate) fn launch_domain_helper(kind: HelperKind, pipe_name: &str) -> Result<Owned, String> {
     let mode = match kind {
@@ -890,6 +916,7 @@ pub(crate) fn launch_domain_helper(kind: HelperKind, pipe_name: &str) -> Result<
         HelperKind::Restore => "--restore-broker",
         HelperKind::EventLogs => "--operation-broker",
         HelperKind::Boot => "--boot-broker",
+        HelperKind::Drivers => "--driver-broker",
     };
     launch_elevated(&format!("{mode} {pipe_name}"))
 }
@@ -1133,6 +1160,13 @@ pub fn private_mode() -> Result<bool, String> {
                 return Err("Invalid restore broker arguments".into());
             }
             crate::restore_native::helper(&args[1])?;
+            Ok(true)
+        }
+        Some("--driver-broker") => {
+            if args.len() != 2 {
+                return Err("Invalid driver broker arguments".into());
+            }
+            crate::driver_native::helper(&args[1])?;
             Ok(true)
         }
         Some("--boot-broker") => {

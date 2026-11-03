@@ -16,11 +16,14 @@ mod atomic_file;
 mod boot_native;
 mod broker;
 mod debloat_native;
+mod driver_inventory;
+mod driver_native;
 mod eventlogs_native;
 mod launch_args;
 mod native_operations;
 mod process_io;
 mod protected_artifacts;
+mod protected_driver_package;
 mod registry_native;
 mod restore_native;
 mod security;
@@ -31,6 +34,31 @@ mod windows_tools;
 static DATA_LOCK: std::sync::OnceLock<fs::File> = std::sync::OnceLock::new();
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+#[tauri::command]
+async fn driver_inventory() -> Result<Vec<driver_native::DriverView>, String> {
+    tauri::async_runtime::spawn_blocking(driver_native::list)
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn prepare_driver_operation(
+    request: driver_native::Request,
+) -> Result<driver_native::PlanView, String> {
+    tauri::async_runtime::spawn_blocking(move || driver_native::prepare(request))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn execute_driver_operation(plan_id: String) -> Result<driver_native::ResultView, String> {
+    tauri::async_runtime::spawn_blocking(move || driver_native::execute(&plan_id))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+fn driver_recovery(journal_id: String) -> Result<serde_json::Value, String> {
+    driver_native::query_recovery(&journal_id)
+}
 
 #[tauri::command]
 async fn boot_state() -> Result<boot_native::State, String> {
@@ -1995,6 +2023,10 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
+            driver_inventory,
+            prepare_driver_operation,
+            execute_driver_operation,
+            driver_recovery,
             boot_state,
             prepare_boot_operation,
             execute_boot_operation,
