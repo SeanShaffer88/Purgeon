@@ -32,74 +32,59 @@ export const settingsFile = () => path.join(sys.info.dataDir, 'settings.json');
 // still picked up, and the app's own writes refresh the cache directly.
 let cachedValue = null;
 let cachedMtime = null;
-
-const statMtime = async () => {
-  try {
-    const s = await sys.stat(settingsFile());
-    return s ? s.modified : null;
-  } catch {
-    return null;
-  }
+let cachedFile = null;
+const invalidateCache = () => { cachedValue = null; cachedMtime = null; cachedFile = null; };
+const plainSettings = (value) => value !== null && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
+const statMtime = async (file) => {
+  try { const stamp = (await sys.stat(file))?.modified; return typeof stamp === 'number' && Number.isFinite(stamp) ? stamp : null; }
+  catch { return null; } // Metadata is only a cache hint; the strict read decides absence.
 };
-
-export async function readSettings() {
-  const mtime = await statMtime();
-  // No settings file: the defaults, deliberately not cached (the file may appear).
-  if (mtime === null) return { ...DEFAULT_SETTINGS };
-  if (cachedValue && cachedMtime === mtime) return { ...cachedValue };
-  let value;
-  let text;
+async function refreshCache(next, file = settingsFile()) {
+  const mtime = await statMtime(file);
+  if (mtime === null) { invalidateCache(); return; }
+  cachedValue = { ...DEFAULT_SETTINGS, ...next }; cachedMtime = mtime; cachedFile = file;
+}
+async function readSettingsInternal({ fresh = false, serialized = false } = {}) {
+  const file = settingsFile(), mtime = await statMtime(file);
+  if (!fresh && mtime !== null && cachedValue && cachedFile === file && cachedMtime === mtime) return { ...cachedValue };
   try {
-    text = await sys.readText(settingsFile());
-  } catch {
-    value = { ...DEFAULT_SETTINGS };
-  }
-  if (text !== undefined) {
-    try {
-      value = { ...DEFAULT_SETTINGS, ...JSON.parse(text), language: 'en' };
-    } catch {
-      // The file is damaged (a crash mid-write used to do this; writes are
-      // atomic now, but older damage can still be on disk). Keep a copy of the
-      // damaged text, record it so the user is told, and start from defaults
-      // written back cleanly — never silently throw the user's settings away.
-      await datadamage.quarantine(settingsFile(), text).catch(() => {});
-      value = { ...DEFAULT_SETTINGS };
-      await sys.writeTextAtomic(settingsFile(), JSON.stringify(value, null, 2)).catch(() => {});
-      cachedValue = value;
-      cachedMtime = await statMtime();
+    const text = await sys.readOptionalText(file);
+    if (text === null) { invalidateCache(); return { ...DEFAULT_SETTINGS }; }
+    if (typeof text !== 'string') throw new Error('Invalid optional settings read response');
+    let parsed;
+    try { parsed = JSON.parse(text); if (!plainSettings(parsed)) throw new Error('Settings must be an object'); }
+    catch {
+      // Preserve and verify damaged bytes before replacing the original with defaults.
+      invalidateCache();
+      if (!serialized) return await serializeWrite(() => readSettingsInternal({ fresh: true, serialized: true }));
+      const copy = await datadamage.quarantine(file, text);
+      if (await sys.readOptionalText(copy) !== text) throw new Error('Damaged settings copy could not be verified; original settings were retained');
+      const value = { ...DEFAULT_SETTINGS };
+      await sys.writeTextAtomic(file, JSON.stringify(value, null, 2));
+      await refreshCache(value, file);
       return { ...value };
     }
-  }
-  // Migrate legacy plaintext once, before returning/exporting any settings.
-  if (typeof value?.encryptionKey === 'string' && value.encryptionKey) {
-    if (!sys.secretSet) throw new Error('Secure secret storage is unavailable; settings migration stopped');
-    await sys.secretSet(value.encryptionKey);
-    delete value.encryptionKey;
-    await sys.writeTextAtomic(settingsFile(), JSON.stringify(value, null, 2));
-  }
-  cachedValue = value;
-  cachedMtime = mtime;
-  return { ...value };
+    const value = { ...DEFAULT_SETTINGS, ...parsed, language: 'en' };
+    // Migrate legacy plaintext only after a successful, valid data read.
+    if (typeof value.encryptionKey === 'string' && value.encryptionKey) {
+      if (!serialized) return await serializeWrite(() => readSettingsInternal({ fresh: true, serialized: true }));
+      if (!sys.secretSet) throw new Error('Secure secret storage is unavailable; settings migration stopped');
+      await sys.secretSet(value.encryptionKey); delete value.encryptionKey;
+      await sys.writeTextAtomic(file, JSON.stringify(value, null, 2));
+      await refreshCache(value, file);
+    } else if (mtime !== null) { cachedValue = value; cachedMtime = mtime; cachedFile = file; }
+    else invalidateCache();
+    return { ...value };
+  } catch (error) { invalidateCache(); throw new Error(`Settings could not be read or preserved: ${error.message}. Restore access or review the retained settings before changing them.`); }
 }
-
-// After one of the app's own writes, point the cache at what was written, keyed
-// to the file's new modified time; if the file cannot be stat'ed, drop the cache.
-async function refreshCache(next) {
-  const mtime = await statMtime();
-  if (mtime === null) {
-    cachedValue = null;
-    cachedMtime = null;
-  } else {
-    cachedValue = { ...DEFAULT_SETTINGS, ...next };
-    cachedMtime = mtime;
-  }
-}
+export const readSettings = () => readSettingsInternal();
 
 // Writes are serialized: two writes at the same time would otherwise each
 // read the old file and the second would silently undo the first's change.
 let writeChain = Promise.resolve();
 const serializeWrite = (fn) => {
-  const run = writeChain.then(fn, fn);
+  const execute = async () => { try { return await fn(); } catch (error) { invalidateCache(); throw error; } };
+  const run = writeChain.then(execute, execute);
   writeChain = run.catch(() => {});
   return run;
 };
@@ -108,7 +93,7 @@ export function writeSettings(patch) {
   return serializeWrite(async () => {
     // Migrate an older plaintext secret before applying a replacement secret.
     // Doing this after secretSet would silently restore the old password.
-    const current = await readSettings();
+    const current = await readSettingsInternal({ fresh: true, serialized: true });
     patch = { ...patch };
     if (Object.hasOwn(patch, 'language')) patch.language = 'en';
     if (Object.hasOwn(patch, 'encryptionKey')) {
@@ -125,6 +110,7 @@ export function writeSettings(patch) {
 
 export function replaceSettings(next) {
   return serializeWrite(async () => {
+    await readSettingsInternal({ fresh: true, serialized: true });
     next = { ...next };
     next.language = 'en';
     delete next.encryptionKey; // imports never replace this machine's secret
