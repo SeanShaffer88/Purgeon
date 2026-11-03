@@ -32,10 +32,32 @@ mod state_store;
 mod task_native;
 mod task_platform;
 mod tracker;
+mod updater_native;
 mod windows_tools;
 static DATA_LOCK: std::sync::OnceLock<fs::File> = std::sync::OnceLock::new();
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+#[tauri::command]
+async fn reserve_update_download(
+    expected: updater_native::Expected,
+) -> Result<updater_native::Download, String> {
+    tauri::async_runtime::spawn_blocking(move || updater_native::reserve(expected))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn cancel_update_download(id: String) -> Result<updater_native::Cancelled, String> {
+    tauri::async_runtime::spawn_blocking(move || updater_native::cancel(&id))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn launch_verified_update(id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || updater_native::launch(&id))
+        .await
+        .map_err(|e| e.to_string())?
+}
 
 #[tauri::command]
 async fn task_inventory(cursor: Option<String>) -> Result<task_native::Page, String> {
@@ -2098,6 +2120,9 @@ pub fn run() {
             exec,
             run_command_line,
             launch,
+            reserve_update_download,
+            cancel_update_download,
+            launch_verified_update,
             read_dir,
             stat,
             exists,
