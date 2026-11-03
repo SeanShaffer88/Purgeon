@@ -214,6 +214,10 @@ try {
   foreach ($i in $in.items) {
     $prefix = "files/$($i.n)/"
     $base = [IO.Path]::GetFullPath($i.target).TrimEnd('\')
+    # Match the native undo snapshot's per-item 512 MiB / 10,000 nodes / depth 64.
+    # Include the selected root and implicit directories, not just ZIP entries.
+    $nodes = @{}; $nodes[$base.ToLowerInvariant()] = ($i.kind -eq 'dir')
+    $itemBytes = [long]0
     $matches = @($zip.Entries | Where-Object { $_.FullName.StartsWith($prefix, [StringComparison]::Ordinal) })
     if ($i.kind -eq 'file' -and @($matches | Where-Object { -not $_.FullName.EndsWith('/') }).Count -ne 1) { throw 'File item must contain exactly one file' }
     foreach ($entry in $matches) {
@@ -224,10 +228,25 @@ try {
         if (-not $segment -or $segment -in '.', '..' -or $segment -match '[. ]$|[<>:"|?*]' -or $segment -match '^(?i:con|prn|aux|nul|com[0-9]|lpt[0-9])(?:\.|$)') { throw 'Archive contains a Windows path alias' }
       }
       $dest = if ($i.kind -eq 'file') { $base } else { [IO.Path]::GetFullPath((Join-Path $base $rel)) }
+      $depth = if ($i.kind -eq 'file') { 0 } else { $segments.Count }
+      $itemBytes += $entry.Length
+      if ($depth -gt 64 -or $itemBytes -gt 536870912) { throw 'Selected item exceeds resumable undo depth or byte limits' }
       if ($dest -ne $base -and -not $dest.StartsWith($base + '\', [StringComparison]::OrdinalIgnoreCase)) { throw 'Archive path escapes approved folder' }
       $key = $dest.ToLowerInvariant()
       if ($destinations.ContainsKey($key)) { throw 'Archive contains duplicate destinations' }
       $destinations[$key] = $true
+      $node = $dest; $nodeDirectory = $entry.FullName.EndsWith('/')
+      while ($true) {
+        $nodeKey = $node.ToLowerInvariant()
+        if ($nodes.ContainsKey($nodeKey)) {
+          if ($nodes[$nodeKey] -ne $nodeDirectory) { throw 'Archive file conflicts with an implicit directory' }
+        } else {
+          if ($nodes.Count -ge 10000) { throw 'Selected item exceeds resumable undo node limit' }
+          $nodes[$nodeKey] = $nodeDirectory
+        }
+        if ($node -eq $base) { break }
+        $node = Split-Path -Parent $node; $nodeDirectory = $true
+      }
       $parent = $dest
       while ($parent) {
         if (Test-Path -LiteralPath $parent) { if ((Get-Item -LiteralPath $parent -Force).Attributes -band [IO.FileAttributes]::ReparsePoint) { throw 'Reparse point in destination' } }
@@ -272,18 +291,21 @@ const REG_TYPE = { String: 'REG_SZ', ExpandString: 'REG_EXPAND_SZ', DWord: 'REG_
 export async function restore(file, numbers, { replace = false } = {}) {
   const backup = await read(file, { replace });
   const chosen = backup.items.filter((i) => numbers.includes(i.n) && !i.blocked && !i.skip);
+  independentTargets(chosen.map((i) => ({ kind: i.kind, path: i.target, ...(i.kind === 'value' ? { name: i.name } : {}) })));
   const chosenPaths = chosen.filter((i) => ['file', 'dir'].includes(i.kind)).map((i) => i.target.toLowerCase());
   if (replace && chosenPaths.some((target, index) => chosenPaths.some((other, j) => index !== j && (target === other || target.startsWith(other + '\\'))))) throw new Error('Overlapping replacement targets require separate reviewed restores');
   // Validate all registry contents before any file replacement or registry write.
   const registryOut = (await runPSJson(EXTRACT, { input: JSON.stringify({ file, preflight: true, items: chosen.filter((i) => ['file', 'dir'].includes(i.kind)).map(({ n, kind, target }) => ({ n, kind, target })), keys: chosen.filter((i) => i.kind === 'key').map(({ n }) => ({ n })) }) }))[0] || {};
   for (const i of chosen.filter((i) => i.kind === 'key')) validateRegistryText(rewriteReg(registryOut[`reg${i.n}`] || '', backup.source), i.target);
-  const id = String(Date.now());
+  const reservation = await sys.reserveTransferRestore();
+  if (!plainRecord(reservation) || typeof reservation.id !== 'string' || !/^[1-9][0-9]{0,31}$/.test(reservation.id) || typeof reservation.token !== 'string' || !reservation.token.length) throw new Error('Native restore reservation was not confirmed');
+  const id = reservation.id;
   const dir = path.join(root, id);
-  await sys.makeDir(dir);
-  const record = { id, name: backup.program.name, file, created: new Date().toISOString(), dirs: [], files: [], keys: [], values: [], replaced: [], replacementReceipts: [] };
+  try {
+  const record = { id, name: backup.program.name, file, created: new Date().toISOString(), dirs: [], files: [], keys: [], values: [], replaced: [], replacementReceipts: [], undoPlan: { version: 1, items: [] } };
   record.complete = false;
   record.pending = chosen.map((i) => ({ kind: i.kind, target: i.target, n: i.n }));
-  const checkpoint = () => sys.writeTextAtomic(path.join(dir, 'restore.json'), JSON.stringify(record, null, 2));
+  const checkpoint = () => saveRestoreRecord(dir, record);
   await checkpoint();
   const results = backup.items.filter((i) => numbers.includes(i.n) && i.blocked).map((i) => ({ kind: i.kind, path: i.target, name: i.name, ok: false, detail: i.blocked }));
 
@@ -312,7 +334,13 @@ export async function restore(file, numbers, { replace = false } = {}) {
     const r = String(out[i.n] || 'Not restored');
     const ok = r.startsWith('OK');
     if (!ok && record.replaced.some((target) => target.toLowerCase() === i.target.toLowerCase())) throw new Error('Replacement extraction did not complete; its exact original and recovery journal are retained for review');
-    if (ok) record[i.kind === 'dir' ? 'dirs' : 'files'].push(i.target);
+    if (ok) {
+      const expected = await observe({ kind: i.kind, path: i.target });
+      if (!expected.exists) throw new Error('Restored item disappeared before its undo state could be recorded');
+      record[i.kind === 'dir' ? 'dirs' : 'files'].push(i.target);
+      const receipt = record.replacementReceipts.find((entry) => entry.target.toLowerCase() === i.target.toLowerCase());
+      record.undoPlan.items.push({ ordinal: record.undoPlan.items.length, kind: i.kind, path: i.target, expected, goal: receipt ? { version: 1, exists: true, digest: receipt.digest, identity: receipt.identity } : absentState(), evidence: null, phase: 'stage', status: 'pending' });
+    }
     results.push({ kind: i.kind, path: i.target, ok, detail: ok ? (i.kind === 'dir' ? `Restored ${r.slice(3)} files` : 'Restored') : r === 'EXISTS' ? 'Already exists here, left as it is' : r });
   }
   delete record.inFlight;
@@ -327,10 +355,13 @@ export async function restore(file, numbers, { replace = false } = {}) {
     }
     // An existing key is exported first, so undo can put it back exactly.
     const before = path.join(dir, `before-${++k}.reg`);
+    const original = await observe({ kind: 'key', path: i.target });
     const queried = await reg(['query', i.target]);
     const existed = queried.ok;
     if (!existed && !/unable to find|cannot find|not found/i.test(queried.stderr)) throw new Error(`Cannot determine whether ${i.target} exists; restore stopped before mutation`);
     if (existed && !(await reg(['export', i.target, before, '/y'])).ok) throw new Error(`Could not back up ${i.target}; restore stopped before mutation`);
+    const evidence = existed ? await evidenceHash(await readUndoExport(before, i.target)) : null;
+    if (existed !== original.exists || !sameState(await observe({ kind: 'key', path: i.target }), original)) throw new Error('Registry key changed while its original undo evidence was captured');
     const regFile = path.join(dir, `restore-${k}.reg`);
     const approvedText = validateRegistryText(rewriteReg(text.replace(/^\uFEFF/, ''), backup.source), i.target);
     record.inFlight = { kind: 'key', path: i.target, before: existed ? path.basename(before) : null };
@@ -339,13 +370,17 @@ export async function restore(file, numbers, { replace = false } = {}) {
     await runPS(`[IO.File]::WriteAllText(${psq(regFile)}, [Console]::In.ReadToEnd(), [Text.Encoding]::Unicode)`, { input: approvedText });
     const r = await reg(['import', regFile]);
     if (!r.ok) throw new Error(`Registry import did not complete. Its recovery journal is retained: ${r.stderr}`);
+    const expected = await observe({ kind: 'key', path: i.target });
+    if (!expected.exists) throw new Error('Restored registry key could not be verified');
     record.keys.push({ path: i.target, before: existed ? path.basename(before) : null });
+    record.undoPlan.items.push({ ordinal: record.undoPlan.items.length, kind: 'key', path: i.target, expected, goal: original, evidence, phase: 'clear', status: 'pending' });
     delete record.inFlight;
     await checkpoint();
     results.push({ kind: 'key', path: i.target, ok: r.ok, detail: r.ok ? (existed ? 'Merged into the existing key (its earlier contents were saved)' : 'Restored') : r.stderr });
   }
 
   for (const i of chosen.filter((x) => x.kind === 'value')) {
+    const original = await observe({ kind: 'value', path: i.target, name: i.name });
     const old = await runPSJson(
       `$ErrorActionPreference = 'Stop'
        $k = if (Test-Path -LiteralPath ${psq(`Registry::${i.target}`)} -ErrorAction Stop) { Get-Item -LiteralPath ${psq(`Registry::${i.target}`)} -ErrorAction Stop } else { $null }
@@ -356,12 +391,17 @@ export async function restore(file, numbers, { replace = false } = {}) {
        }`
     );
     const data = rewriteReg(String(i.data), backup.source);
+    if (old.length > 1 || original.exists !== !!old[0] || old[0] && !validUndoValue(old[0])) throw new Error('Original registry value cannot be represented by this undo format');
+    if (!sameState(await observe({ kind: 'value', path: i.target, name: i.name }), original)) throw new Error('Registry value changed while its original undo evidence was captured');
     validateTarget(i.target, 'value');
     record.inFlight = { kind: 'value', path: i.target, name: i.name, old: old[0] || null };
     await checkpoint();
     const r = await reg(['add', i.target, ...(i.name ? ['/v', i.name] : ['/ve']), '/t', REG_TYPE[i.valueKind] || 'REG_SZ', '/d', data, '/f']);
     if (!r.ok) throw new Error(`Registry write did not complete. Its recovery journal is retained: ${r.stderr}`);
+    const expected = await observe({ kind: 'value', path: i.target, name: i.name });
+    if (!expected.exists) throw new Error('Restored registry value could not be verified');
     record.values.push({ path: i.target, name: i.name, old: old[0] || null });
+    record.undoPlan.items.push({ ordinal: record.undoPlan.items.length, kind: 'value', path: i.target, name: i.name, expected, goal: original, evidence: await evidenceHash(valueEvidence(old[0] || null)), phase: 'value', status: 'pending' });
     delete record.inFlight;
     await checkpoint();
     results.push({ kind: 'value', path: i.target, name: i.name, ok: r.ok, detail: r.ok ? 'Restored' : r.stderr });
@@ -371,11 +411,50 @@ export async function restore(file, numbers, { replace = false } = {}) {
   record.pending = [];
   await checkpoint();
   return { id, name: record.name, results };
+  } finally { await sys.releaseTransferUndo(reservation.token); }
 }
 
 const plainRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
 const undoError = () => new Error('Invalid or incomplete restore evidence. Undo cannot continue; its files are retained for manual review.');
 const boundedText = (value, max) => typeof value === 'string' && value.length <= max && !/[\x00-\x1f]/.test(value);
+const absentState = () => ({ version: 1, exists: false, digest: null, identity: null });
+const valueEvidence = (old) => JSON.stringify(old === null ? null : { kind: old.kind, data: old.data });
+async function evidenceHash(text) {
+  const bytes = await globalThis.crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(bytes)].map((byte) => byte.toString(16).padStart(2, '0')).join('');
+}
+const sameState = (a, b) => a.version === b.version && a.exists === b.exists && a.digest === b.digest && (a.identity === null && b.identity === null || a.identity && b.identity && ['volume', 'high', 'low'].every((key) => a.identity[key] === b.identity[key]));
+function validState(value, kind) {
+  if (!plainRecord(value) || Object.keys(value).some((key) => !['version', 'exists', 'digest', 'identity'].includes(key)) || value.version !== 1 || typeof value.exists !== 'boolean') return false;
+  if (!value.exists) return value.digest === null && value.identity === null;
+  if (typeof value.digest !== 'string' || !/^[a-f0-9]{64}$/.test(value.digest)) return false;
+  if (!['file', 'dir'].includes(kind)) return value.identity === null;
+  return plainRecord(value.identity) && Object.keys(value.identity).length === 3 && ['volume', 'high', 'low'].every((key) => Number.isInteger(value.identity[key]) && value.identity[key] >= 0 && value.identity[key] <= 0xffffffff);
+}
+async function observe(target) {
+  const state = await sys.observeTransferTarget(target);
+  if (!validState(state, target.kind)) throw new Error('Native undo observation returned invalid evidence');
+  return { version: 1, exists: state.exists, digest: state.digest, identity: state.identity };
+}
+async function saveRestoreRecord(dir, record) {
+  const text = JSON.stringify(record, null, 2);
+  if (text.length > 1048576) throw new Error('Restore journal exceeds the recovery size limit');
+  await sys.writeTextAtomic(path.join(dir, 'restore.json'), text);
+}
+function independentTargets(items) {
+  const fs = items.filter((item) => ['file', 'dir'].includes(item.kind));
+  for (let i = 0; i < fs.length; i++) for (let j = i + 1; j < fs.length; j++) {
+    const a = fs[i].path.toLowerCase(), b = fs[j].path.toLowerCase();
+    if (a === b || a.startsWith(b + '\\') || b.startsWith(a + '\\')) throw new Error('Overlapping file undo targets require separate restores');
+  }
+  const registry = items.filter((item) => ['key', 'value'].includes(item.kind));
+  for (let i = 0; i < registry.length; i++) for (let j = i + 1; j < registry.length; j++) {
+    const a = registryIdentity(registry[i].path), b = registryIdentity(registry[j].path);
+    if (registry[i].kind === 'value' && registry[j].kind === 'value') {
+      if (a === b && registry[i].name.toLowerCase() === registry[j].name.toLowerCase()) throw new Error('Duplicate undo value target');
+    } else if (a === b || a.startsWith(b + '\\') || b.startsWith(a + '\\')) throw new Error('Overlapping registry undo targets require separate restores');
+  }
+}
 function validReplacementReceipt(receipt, target, kind) {
   return plainRecord(receipt) && receipt.version === 1 && boundedText(receipt.target, 4096) && receipt.target.toLowerCase() === target.toLowerCase()
     && Object.keys(receipt).every((key) => ['version', 'target', 'sid', 'machine', 'infoName', 'infoSha256', 'identity', 'directory', 'digest'].includes(key))
@@ -417,7 +496,7 @@ async function readUndoExport(file, target) {
   if (rows.length !== 1 || typeof rows[0]?.text !== 'string') throw undoError();
   return validateRegistryText(rows[0].text, target);
 }
-async function preflightUndo(record, id, dir) {
+async function preflightUndo(record, id, dir, lease) {
   if (!plainRecord(record) || record.id !== id || record.complete !== true || Object.hasOwn(record, 'inFlight') || Object.hasOwn(record, 'recovery') || record.pending !== undefined && (!Array.isArray(record.pending) || record.pending.length)) throw undoError();
   for (const name of ['dirs', 'files', 'keys', 'values']) if (!Array.isArray(record[name])) throw undoError();
   if (record.replaced !== undefined && !Array.isArray(record.replaced)) throw undoError();
@@ -460,7 +539,7 @@ async function preflightUndo(record, id, dir) {
       names.add(entry.before.toLowerCase());
       const file = path.join(dir, entry.before);
       if (path.dirname(file).toLowerCase() !== dir.toLowerCase()) throw undoError();
-      exports.set(entry.before, await readUndoExport(file, entry.path));
+      exports.set(entry.before, { file, target: entry.path });
     }
   }
   const values = new Set();
@@ -472,68 +551,154 @@ async function preflightUndo(record, id, dir) {
     values.add(identity);
     if (entry.old !== null && !validUndoValue(entry.old)) throw undoError();
   }
-  // Validate every exact original before trashing even the first imported copy.
-  for (const target of replaced) await sys.validateTransferReplacement(target, receiptMap.get(target.toLowerCase()));
-  return { replaced, exports, receiptMap };
+  const items = validateUndoPlan(record, receiptMap);
+  for (const item of items.filter((item) => item.status !== 'done')) {
+    if (item.phase === 'original' && await sys.savedTransferUndoStage(lease, id, item.ordinal, { kind: item.kind, path: item.path }, item.expected) !== true) throw new Error('Retained staging evidence does not prove this original-restore phase');
+    if (item.kind === 'key') {
+      const key = record.keys.find((key) => key.path.toLowerCase() === item.path.toLowerCase());
+      if (key.before) {
+        const text = await readUndoExport(exports.get(key.before).file, key.path);
+        if (await evidenceHash(text) !== item.evidence) throw new Error('Saved registry export differs from the original undo evidence');
+        exports.set(key.before, text);
+      }
+    } else if (item.kind === 'value') {
+      const value = record.values.find((value) => value.path.toLowerCase() === item.path.toLowerCase() && value.name === item.name);
+      if (await evidenceHash(valueEvidence(value.old)) !== item.evidence) throw new Error('Saved registry value differs from the original undo evidence');
+    }
+    const receipt = receiptMap.get(item.path.toLowerCase());
+    if (receipt && !(item.phase === 'original' && await sys.transferOriginalAtTarget(item.path, receipt))) await sys.validateTransferReplacement(item.path, receipt);
+  }
+  return { exports, receiptMap, items };
+}
+
+function validateUndoPlan(record, receiptMap) {
+  const plan = record.undoPlan;
+  if (!plainRecord(plan) || plan.version !== 1 || Object.keys(plan).some((key) => !['version', 'items'].includes(key)) || !Array.isArray(plan.items)) throw new Error('This restore lacks trustworthy per-item undo state; its evidence requires manual review');
+  const targets = [...record.dirs.map((path) => ({ kind: 'dir', path })), ...record.files.map((path) => ({ kind: 'file', path })), ...record.keys.map(({ path }) => ({ kind: 'key', path })), ...record.values.map(({ path, name }) => ({ kind: 'value', path, name }))];
+  independentTargets(targets);
+  if (plan.items.length !== targets.length) throw undoError();
+  const used = new Set(), fileIds = new Set(); let unfinished = false;
+  for (const [ordinal, item] of plan.items.entries()) {
+    if (!plainRecord(item) || item.ordinal !== ordinal || Object.keys(item).some((key) => !['ordinal', 'kind', 'path', 'name', 'expected', 'goal', 'evidence', 'phase', 'status'].includes(key)) || typeof item.path !== 'string' || !['pending', 'intent', 'done'].includes(item.status)) throw undoError();
+    const index = targets.findIndex((target) => target.kind === item.kind && target.path.toLowerCase() === item.path.toLowerCase() && (target.kind !== 'value' ? item.name === undefined : target.name === item.name));
+    if (index < 0 || used.has(index) || !validState(item.expected, item.kind) || !item.expected.exists || !validState(item.goal, item.kind)) throw undoError();
+    used.add(index);
+    let phases;
+    if (['file', 'dir'].includes(item.kind)) {
+      const key = ['volume', 'high', 'low'].map((name) => item.expected.identity[name]).join(':');
+      if (fileIds.has(key)) throw undoError(); fileIds.add(key);
+      const receipt = receiptMap.get(item.path.toLowerCase());
+      phases = receipt ? ['stage', 'original'] : ['stage'];
+      if (item.evidence !== null || (receipt ? !sameState(item.goal, { version: 1, exists: true, digest: receipt.digest, identity: receipt.identity }) : item.goal.exists)) throw undoError();
+    } else if (item.kind === 'key') {
+      const key = record.keys.find((key) => key.path.toLowerCase() === item.path.toLowerCase());
+      if (!!key.before !== item.goal.exists || (key.before ? typeof item.evidence !== 'string' || !/^[a-f0-9]{64}$/.test(item.evidence) : item.evidence !== null)) throw undoError(); phases = key.before ? ['clear', 'import'] : ['clear'];
+    } else {
+      const value = record.values.find((value) => value.path.toLowerCase() === item.path.toLowerCase() && value.name === item.name);
+      if ((value.old !== null) !== item.goal.exists || typeof item.evidence !== 'string' || !/^[a-f0-9]{64}$/.test(item.evidence)) throw undoError(); phases = ['value'];
+    }
+    if (!phases.includes(item.phase) || item.status === 'done' && item.phase !== phases.at(-1) || unfinished && item.status !== 'pending' || unfinished && item.phase !== phases[0]) throw undoError();
+    if (item.status !== 'done') unfinished = true;
+  }
+  return plan.items;
 }
 
 // Local journals are not authenticated native authority. Validate the whole journal and
 // every saved export before changing anything; retain all evidence on any failure.
+const undoCalls = new Set();
 export async function undo(id) {
   if (!(typeof id === 'string' && /^[1-9][0-9]*$/.test(id) || Number.isSafeInteger(id) && id > 0)) throw new Error('Invalid restore id');
   id = String(id);
-  const dir = path.join(root, id);
-  const text = await sys.readText(path.join(dir, 'restore.json'));
-  if (text.length > 1048576) throw undoError();
-  const record = JSON.parse(text);
-  const { replaced, exports, receiptMap } = await preflightUndo(record, id, dir);
-  const results = [];
-  const cleared = new Set();
-  for (const p of [...record.dirs, ...record.files]) {
-    try {
-      const replacing = replaced.some((r) => r.toLowerCase() === p.toLowerCase());
-      if (await sys.exists(p)) await sys.trash(p);
-      if (await sys.exists(p)) throw new Error('The restored copy is still present; earlier settings were not restored');
-      cleared.add(p.toLowerCase());
-      results.push({ kind: 'dir', path: p, ok: true, detail: replacing ? 'Restored copy moved to Recycle Bin; earlier settings are restored below' : 'Moved to Recycle Bin' });
-    } catch (e) {
-      results.push({ kind: 'dir', path: p, ok: false, detail: String(e?.message || e) });
-    }
-  }
-  for (const k of record.keys) {
-    try {
-      if (k.before && await readUndoExport(path.join(dir, k.before), k.path) !== exports.get(k.before)) throw new Error('Saved registry export changed; key was left in place');
-      const removed = await reg(['delete', k.path, '/f']);
-      if (!removed.ok) { results.push({ kind: 'key', path: k.path, ok: false, detail: removed.stderr }); continue; }
-      if (k.before && await readUndoExport(path.join(dir, k.before), k.path) !== exports.get(k.before)) throw new Error('Saved registry export changed after deletion; import refused and evidence retained');
-      const r = k.before ? await reg(['import', path.join(dir, k.before)]) : removed;
-      results.push({ kind: 'key', path: k.path, ok: r.ok, detail: r.ok ? (k.before ? 'Earlier contents put back' : 'Removed') : r.stderr });
-    } catch (error) {
-      results.push({ kind: 'key', path: k.path, ok: false, detail: String(error?.message || error) });
-    }
-  }
-  for (const v of record.values) {
-    try {
-      const r = v.old
-      ? await reg(['add', v.path, ...(v.name ? ['/v', v.name] : ['/ve']), '/t', REG_TYPE[v.old.kind], '/d', v.old.data, '/f'])
-      : await reg(['delete', v.path, ...(v.name ? ['/v', v.name] : ['/ve']), '/f']);
-      results.push({ kind: 'value', path: v.path, name: v.name, ok: r.ok, detail: r.ok ? (v.old ? 'Earlier value put back' : 'Removed') : r.stderr });
-    } catch (error) {
-      results.push({ kind: 'value', path: v.path, name: v.name, ok: false, detail: String(error?.message || error) });
-    }
-  }
-  // Restore only the saved original receipt; never choose a deletion by path/time.
-  if (replaced.length) {
-    for (const p of replaced) {
+  const dir = path.join(root, id), operation = dir.toLowerCase();
+  if (undoCalls.has(operation)) throw new Error('This undo journal is already in use');
+  undoCalls.add(operation);
+  let lease;
+  try {
+    lease = await sys.acquireTransferUndo(id);
+    if (typeof lease !== 'string' || !lease.length) throw new Error('Native undo lock was not confirmed');
+    const text = await sys.readText(path.join(dir, 'restore.json'));
+    if (typeof text !== 'string' || text.length > 1048576) throw undoError();
+    const record = JSON.parse(text);
+    const { exports, receiptMap, items } = await preflightUndo(record, id, dir, lease);
+    const results = [];
+    let halted = false;
+    const save = () => saveRestoreRecord(dir, record);
+    for (const [step, item] of items.entries()) {
+      const row = { kind: item.kind, path: item.path, ...(item.kind === 'value' ? { name: item.name } : {}) };
+      if (item.status === 'done') { results.push({ ...row, ok: true, undoComplete: true, detail: 'Undo already confirmed; left untouched' }); continue; }
+      if (halted) { results.push({ ...row, ok: false, undoComplete: false, detail: 'Left untouched because an earlier undo item needs review' }); continue; }
       try {
-        if (!cleared.has(p.toLowerCase())) throw new Error('Restored copy could not be cleared; exact original retained in the Recycle Bin');
-        const result = await sys.restoreTransferReplacement(p, receiptMap.get(p.toLowerCase()));
-        if (result?.restored !== true) throw new Error('Exact original restoration was not confirmed; recovery evidence needs review');
-        results.push({ kind: 'dir', path: p, ok: true, detail: 'Exact original settings put back' });
-      } catch (error) { results.push({ kind: 'dir', path: p, ok: false, detail: String(error?.message || error) }); }
+        const target = { kind: item.kind, path: item.path, ...(item.kind === 'value' ? { name: item.name } : {}) };
+        const receipt = receiptMap.get(item.path.toLowerCase());
+        while (item.status !== 'done') {
+          let completed = false;
+          if (item.phase === 'stage') {
+            completed = await sys.stageTransferUndo(lease, id, step, target, item.expected, false);
+            if (typeof completed !== 'boolean') throw new Error('Undo staging observation was not confirmed');
+            if (completed && item.status !== 'intent') throw new Error('Undo conflict: an unrecorded staging outcome needs review');
+            if (!completed) {
+              item.status = 'intent'; await save();
+              if (await sys.stageTransferUndo(lease, id, step, target, item.expected, true) !== true) throw new Error('Undo staging was not confirmed');
+            }
+            item.phase = receipt ? 'original' : 'stage'; item.status = receipt ? 'pending' : 'done'; await save();
+          } else if (item.phase === 'original') {
+            if (await sys.savedTransferUndoStage(lease, id, step, target, item.expected) !== true) throw new Error('Retained imported copy does not prove the prior undo stage');
+            completed = await sys.transferOriginalAtTarget(item.path, receipt);
+            if (typeof completed !== 'boolean') throw new Error('Original identity observation was not confirmed');
+            if (completed && item.status !== 'intent') throw new Error('Undo conflict: original appeared before its recorded restore intent');
+            if (!completed) {
+              if ((await observe(target)).exists) throw new Error('Undo conflict: destination changed before restoring the original');
+              await sys.validateTransferReplacement(item.path, receipt);
+              item.status = 'intent'; await save();
+              const result = await sys.restoreTransferReplacement(item.path, receipt);
+              if (result?.restored !== true || await sys.transferOriginalAtTarget(item.path, receipt) !== true) throw new Error('Exact original restoration was not verified');
+            }
+            item.status = 'done'; await save();
+          } else {
+            if (item.kind === 'key' && item.goal.exists) {
+              const key = record.keys.find((key) => key.path.toLowerCase() === item.path.toLowerCase());
+              if (await readUndoExport(path.join(dir, key.before), item.path) !== exports.get(key.before)) throw new Error('Saved registry export changed; undo refused');
+            }
+            const before = item.phase === 'import' ? absentState() : item.expected;
+            const goal = item.phase === 'clear' ? absentState() : item.goal;
+            const current = await observe(target);
+            completed = sameState(current, goal);
+            if (completed && item.status !== 'intent' && !sameState(before, goal)) throw new Error('Undo conflict: target changed before its recorded intent');
+            if (!completed) {
+              if (!sameState(current, before)) throw new Error('Undo conflict: registry contents differ from the recorded state');
+              item.status = 'intent'; await save();
+              // This guard narrows external-writer races; registry commands are not a CAS.
+              if (!sameState(await observe(target), before)) throw new Error('Undo conflict: registry changed before mutation');
+              let result;
+              if (item.phase === 'clear') result = await reg(['delete', item.path, '/f']);
+              else if (item.phase === 'import') {
+                const key = record.keys.find((key) => key.path.toLowerCase() === item.path.toLowerCase());
+                result = await reg(['import', path.join(dir, key.before)]);
+              } else {
+                const value = record.values.find((value) => value.path.toLowerCase() === item.path.toLowerCase() && value.name === item.name);
+                result = value.old
+                  ? await reg(['add', item.path, ...(item.name ? ['/v', item.name] : ['/ve']), '/t', REG_TYPE[value.old.kind], '/d', value.old.data, '/f'])
+                  : await reg(['delete', item.path, ...(item.name ? ['/v', item.name] : ['/ve']), '/f']);
+              }
+              if (!result.ok) throw new Error(result.stderr || 'Registry undo did not complete');
+              if (!sameState(await observe(target), goal)) throw new Error('Registry undo outcome differs from the recorded goal; manual review is required');
+            }
+            if (item.phase === 'clear' && item.goal.exists) { item.phase = 'import'; item.status = 'pending'; }
+            else item.status = 'done';
+            await save();
+          }
+        }
+        results.push({ ...row, ok: true, undoComplete: true, detail: receipt ? 'Exact original settings put back' : 'Undo confirmed; recovery evidence retained' });
+      } catch (error) {
+        halted = true;
+        results.push({ ...row, ok: false, undoComplete: false, detail: `${error?.message || error}. Undo stopped; retained evidence needs review before retrying.` });
+      }
     }
+    return results;
+  } finally {
+    undoCalls.delete(operation);
+    if (lease) await sys.releaseTransferUndo(lease);
   }
-  return results;
 }
 
 // Items a program backup offers by default: what the leftover scan is sure about, minus things

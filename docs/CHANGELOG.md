@@ -3,6 +3,7 @@
 ## Unreleased
 
 ### Fixed
+- Program-restore undo now persists per-item intent/completion, checks recorded imported state and original evidence, stops on conflicts or persistence failures, and retries only unfinished proven phases. Native exclusive journal leases prevent concurrent writers; atomic restore ID reservation preserves older journals. Imported files are retained in same-volume recovery staging. Legacy journals lacking expected state require manual review; registry external-writer and directory-child race limits remain documented.
 - Settings replacement undo now records and validates an exact native Recycle Bin receipt (original file identity, machine/user, metadata and bounded content fingerprint), so newer same-path deletions cannot select the imported copy. Missing, changed or legacy ambiguous replacement evidence is refused before undo changes anything. Restoration uses the held original handle without overwriting another occupant; live Recycle Bin integration remains unverified.
 - Cleanup halts when recovery checkpoint persistence fails, retains the pending backup and uncertain operation, and never removes another item or seals the backup after an unconfirmed checkpoint. Failed writes are not retried with a different recovery state, including native task checkpoints.
 

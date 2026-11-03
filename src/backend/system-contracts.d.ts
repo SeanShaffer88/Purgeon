@@ -10,6 +10,8 @@ export interface TransferReplacementReceipt {
   version: 1; target: string; sid: string; machine: string; infoName: string; infoSha256: string;
   identity: {volume: number; high: number; low: number}; directory: boolean; digest: string;
 }
+export interface TransferTarget { kind: 'file' | 'dir' | 'key' | 'value'; path: string; name?: string }
+export interface TransferState { version: 1; exists: boolean; digest: string | null; identity: {volume: number; high: number; low: number} | null }
 export interface SystemAdapter {
   info: { version: string; env: Record<string, string>; home: string; dataDir: string; exe: string; portable: boolean; args: string[]; launch: string[]; [key: string]: unknown };
   queryOperation(request: { kind: 'eventLogChannels' } | { kind: 'eventLogConfig'; channelId: string } | { kind: 'eventLogRecovery'; journalId: string }): Promise<unknown>;
@@ -20,6 +22,13 @@ export interface SystemAdapter {
   cancelOperation(planId: string): Promise<{ cancelled: boolean; phase: string }>;
   runPS(script: string, input?: string, timeoutMs?: number): Promise<string>;
   copyFile(source: string, target: string): Promise<number>;
+  observeTransferTarget(target: TransferTarget): Promise<TransferState>;
+  acquireTransferUndo(id: string): Promise<string>;
+  reserveTransferRestore(): Promise<{id: string; token: string}>;
+  releaseTransferUndo(token: string): Promise<void>;
+  stageTransferUndo(token: string, id: string, step: number, target: TransferTarget, expected: TransferState, apply: boolean): Promise<boolean>;
+  savedTransferUndoStage(token: string, id: string, step: number, target: TransferTarget, expected: TransferState): Promise<boolean>;
+  transferOriginalAtTarget(target: string, receipt: TransferReplacementReceipt): Promise<boolean>;
   captureTransferReplacement(target: string, directory: boolean): Promise<TransferReplacementReceipt>;
   validateTransferReplacement(target: string, receipt: TransferReplacementReceipt): Promise<void>;
   restoreTransferReplacement(target: string, receipt: TransferReplacementReceipt): Promise<{restored: boolean}>;

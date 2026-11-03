@@ -864,6 +864,7 @@ handlers['history:undo'] = async (id) => {
   if (entry.undone) throw new Error('This change was already undone.');
   if (!entry.undo) throw new Error(entry.type === 'Uninstall' ? 'An uninstall cannot be undone here. Reinstall the program, or use the restore point made before it.' : 'This change cannot be undone here.');
   const result = await handlers[entry.undo.channel](entry.undo.arg);
+  if (entry.undo.channel === 'transfer:undo' && (!Array.isArray(result) || result.some((row) => row.ok !== true || row.undoComplete !== true))) return result;
   await history.markUndone(id);
   return result;
 };

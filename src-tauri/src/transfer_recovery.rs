@@ -93,7 +93,7 @@ fn same(a: &Path, b: &Path) -> bool {
 }
 // Ancestor pins are observations, not mutation targets: drive/profile roots must
 // be pin-able while still rejecting redirects and changed handle paths.
-fn verify_path(file: &File, expected: &Path) -> Result<(), String> {
+pub(crate) fn verify_path(file: &File, expected: &Path) -> Result<(), String> {
     let mut buffer = vec![0u16; 32768];
     let count = unsafe {
         GetFinalPathNameByHandleW(
@@ -112,7 +112,7 @@ fn verify_path(file: &File, expected: &Path) -> Result<(), String> {
     }
     Ok(())
 }
-fn identity(file: &File, directory: bool) -> Result<Identity, String> {
+pub(crate) fn identity(file: &File, directory: bool) -> Result<Identity, String> {
     let mut info: Information = unsafe { std::mem::zeroed() };
     if unsafe { GetFileInformationByHandle(file.as_raw_handle(), &mut info) } == 0 {
         return Err(error());
@@ -131,7 +131,12 @@ fn identity(file: &File, directory: bool) -> Result<Identity, String> {
         low: info.low,
     })
 }
-fn open(path: &Path, directory: bool, access: u32, sharing: u32) -> Result<File, String> {
+pub(crate) fn open(
+    path: &Path,
+    directory: bool,
+    access: u32,
+    sharing: u32,
+) -> Result<File, String> {
     let file = OpenOptions::new()
         .access_mode(access)
         .share_mode(sharing)
@@ -142,9 +147,9 @@ fn open(path: &Path, directory: bool, access: u32, sharing: u32) -> Result<File,
     verify_path(&file, path)?;
     Ok(file)
 }
-struct Parents(Vec<(PathBuf, File)>);
+pub(crate) struct Parents(Vec<(PathBuf, File)>);
 impl Parents {
-    fn open(path: &Path) -> Result<Self, String> {
+    pub(crate) fn open(path: &Path) -> Result<Self, String> {
         let mut pins = Vec::new();
         for parent in path
             .parent()
@@ -155,7 +160,7 @@ impl Parents {
         }
         Ok(Self(pins))
     }
-    fn verify(&self) -> Result<(), String> {
+    pub(crate) fn verify(&self) -> Result<(), String> {
         for (path, file) in &self.0 {
             identity(file, true)?;
             verify_path(file, path)?;
@@ -172,14 +177,14 @@ fn sha(bytes: &[u8]) -> String {
 fn valid_hash(value: &str) -> bool {
     value.len() == 64 && value.bytes().all(|b| b.is_ascii_hexdigit())
 }
-fn missing(path: &Path) -> Result<bool, String> {
+pub(crate) fn missing(path: &Path) -> Result<bool, String> {
     match fs::symlink_metadata(path) {
         Ok(_) => Ok(false),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(true),
         Err(e) => Err(e.to_string()),
     }
 }
-fn canonical(path: &str) -> Result<PathBuf, String> {
+pub(crate) fn canonical(path: &str) -> Result<PathBuf, String> {
     crate::security::checked_path(path)?;
     let requested = Path::new(path);
     let parent = requested.parent().ok_or("Replacement has no parent")?;
@@ -300,7 +305,15 @@ fn metadata(path: &Path, target: &Path, deletable: bool) -> Result<(File, String
     }
     Ok((file, sha(&bytes)))
 }
-fn snapshot(root: &Path, directory: bool) -> Result<(Identity, String), String> {
+pub(crate) fn snapshot(root: &Path, directory: bool) -> Result<(Identity, String), String> {
+    let (id, digest, _) = snapshot_pinned(root, directory, false)?;
+    Ok((id, digest))
+}
+pub(crate) fn snapshot_pinned(
+    root: &Path,
+    directory: bool,
+    pin_children: bool,
+) -> Result<(Identity, String, Vec<File>), String> {
     let started = Instant::now();
     let root_file = open(root, directory, ATTR, 7)?;
     let id = identity(&root_file, directory)?;
@@ -309,6 +322,7 @@ fn snapshot(root: &Path, directory: bool) -> Result<(Identity, String), String> 
     let mut discovered = 1usize;
     let mut bytes = 0u64;
     let mut stack = vec![(root.to_path_buf(), 0usize)];
+    let mut pins = Vec::new();
     while let Some((path, depth)) = stack.pop() {
         count += 1;
         if count > MAX_ENTRIES || depth > 64 || started.elapsed() > Duration::from_secs(30) {
@@ -319,7 +333,14 @@ fn snapshot(root: &Path, directory: bool) -> Result<(Identity, String), String> 
             return Err("Replacement backup contains a reparse point".into());
         }
         let dir = m.is_dir();
-        let mut file = open(&path, dir, if dir { ATTR } else { READ }, 7)?;
+        // Child delete sharing is required for Windows to rename the held root.
+        // Deny data writers; membership changes are checked again after staging.
+        let mut file = open(
+            &path,
+            dir,
+            if dir { ATTR } else { READ },
+            if pin_children && path != root { 5 } else { 7 },
+        )?;
         let node = identity(&file, dir)?;
         let relative = text(path.strip_prefix(root).map_err(|e| e.to_string())?)?;
         hash.update((relative.len() as u64).to_le_bytes());
@@ -381,6 +402,9 @@ fn snapshot(root: &Path, directory: bool) -> Result<(Identity, String), String> 
             }
         }
         verify_path(&file, &path)?;
+        if pin_children {
+            pins.push(file);
+        }
     }
     Ok((
         id,
@@ -388,6 +412,7 @@ fn snapshot(root: &Path, directory: bool) -> Result<(Identity, String), String> 
             .iter()
             .map(|byte| format!("{byte:02x}"))
             .collect(),
+        pins,
     ))
 }
 fn info_names(bin: &Path) -> Result<HashSet<String>, String> {
@@ -569,6 +594,36 @@ fn restore_in(
 }
 pub fn restore(target: &str, receipt: &Receipt) -> Result<Restored, String> {
     restore_in(&Context::production(target)?, receipt, cleanup_info)
+}
+// Reconcile a crash after the exact original moved but before its completion
+// checkpoint. Its identity remains proof even after the bin metadata was cleaned.
+pub fn original_at_target(target: &str, receipt: &Receipt) -> Result<bool, String> {
+    let context = Context::production(target)?;
+    context.paths(receipt)?;
+    if missing(&context.target)? {
+        return Ok(false);
+    }
+    let (id, digest) = snapshot(&context.target, receipt.directory)?;
+    Ok(id == receipt.identity && digest == receipt.digest)
+}
+pub(crate) fn rename_no_replace(file: &File, destination: &Path) -> Result<(), String> {
+    let name: Vec<u16> = destination.as_os_str().encode_wide().collect();
+    let offset = std::mem::offset_of!(RenameInformation, name);
+    let bytes = offset
+        .checked_add(name.len() * 2 + 2)
+        .ok_or("Undo path is too long")?;
+    let mut buffer = vec![0u64; bytes.div_ceil(8)];
+    let pointer = buffer.as_mut_ptr().cast::<RenameInformation>();
+    unsafe {
+        (*pointer).replace = 0;
+        (*pointer).root = std::ptr::null_mut();
+        (*pointer).length = (name.len() * 2) as u32;
+        std::ptr::copy_nonoverlapping(name.as_ptr(), (*pointer).name.as_mut_ptr(), name.len());
+        if SetFileInformationByHandle(file.as_raw_handle(), 3, pointer.cast(), bytes as u32) == 0 {
+            return Err(error());
+        }
+    }
+    Ok(())
 }
 fn cleanup_info(file: &File) -> Result<(), String> {
     let information = DispositionInformation { delete: 1 };

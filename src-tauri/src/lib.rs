@@ -33,6 +33,7 @@ mod task_native;
 mod task_platform;
 mod tracker;
 mod transfer_recovery;
+mod transfer_undo;
 mod updater_native;
 mod windows_tools;
 static DATA_LOCK: std::sync::OnceLock<fs::File> = std::sync::OnceLock::new();
@@ -679,6 +680,81 @@ async fn restore_transfer_replacement(
     tauri::async_runtime::spawn_blocking(move || transfer_recovery::restore(&target, &receipt))
         .await
         .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn observe_transfer_target(
+    target: transfer_undo::Target,
+) -> Result<transfer_undo::State, String> {
+    tauri::async_runtime::spawn_blocking(move || transfer_undo::observe(&target))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn acquire_transfer_undo(app: tauri::AppHandle, id: String) -> Result<String, String> {
+    let root = portable_dir()
+        .or_else(|| app.path().app_data_dir().ok())
+        .ok_or("No application data directory")?
+        .join("transfers");
+    tauri::async_runtime::spawn_blocking(move || transfer_undo::acquire(&root, &id))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn reserve_transfer_restore(
+    app: tauri::AppHandle,
+) -> Result<transfer_undo::Reservation, String> {
+    let root = portable_dir()
+        .or_else(|| app.path().app_data_dir().ok())
+        .ok_or("No application data directory")?
+        .join("transfers");
+    tauri::async_runtime::spawn_blocking(move || transfer_undo::reserve(&root))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+fn release_transfer_undo(token: String) -> Result<(), String> {
+    transfer_undo::release(&token)
+}
+#[tauri::command]
+async fn stage_transfer_undo(
+    token: String,
+    id: String,
+    step: u32,
+    target: transfer_undo::Target,
+    expected: transfer_undo::State,
+    apply: bool,
+) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        transfer_undo::stage(&token, &id, step, &target, &expected, apply)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn saved_transfer_undo_stage(
+    token: String,
+    id: String,
+    step: u32,
+    target: transfer_undo::Target,
+    expected: transfer_undo::State,
+) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        transfer_undo::staged(&token, &id, step, &target, &expected)
+    })
+    .await
+    .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn transfer_original_at_target(
+    target: String,
+    receipt: transfer_recovery::Receipt,
+) -> Result<bool, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        transfer_recovery::original_at_target(&target, &receipt)
+    })
+    .await
+    .map_err(|e| e.to_string())?
 }
 
 /// Lists folders to `max_dir_depth` and files to `max_file_depth` under each root, as
@@ -2171,6 +2247,13 @@ pub fn run() {
             capture_transfer_replacement,
             validate_transfer_replacement,
             restore_transfer_replacement,
+            observe_transfer_target,
+            acquire_transfer_undo,
+            reserve_transfer_restore,
+            release_transfer_undo,
+            stage_transfer_undo,
+            saved_transfer_undo_stage,
+            transfer_original_at_target,
             move_many_to_trash,
             list_junk,
             walk,
