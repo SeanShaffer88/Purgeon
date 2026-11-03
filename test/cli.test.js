@@ -81,6 +81,7 @@ test('parses every documented operation and preserves names and paths', () => {
 });
 
 test('help aliases print help without initializing the backend', async () => {
+  const { default: sharedHelp } = await import('../src/cli-help.json', { with: { type: 'json' } });
   for (const args of [[], ['--help'], ['--HELP'], ['-h'], ['-H'], ['/?']]) {
     let output = '';
     let exitCode;
@@ -89,6 +90,7 @@ test('help aliases print help without initializing the backend', async () => {
     assert.equal(exitCode, 0);
     assert.match(output, /Purgeon command line/);
     assert.match(output, /Use one command at a time/);
+    assert.equal(output, `\r\n${sharedHelp.replace(/\n/g, '\r\n')}`);
   }
 });
 
@@ -183,7 +185,7 @@ test('--help and the dispatched commands cannot drift apart', async () => {
   const dispatched = new Set([...cli.matchAll(/cmd === '(--[a-z-]+)'/g)].map((m) => m[1]));
   for (const m of cliArgs.matchAll(/^ {2}'(--[a-z-]+)':/gm)) dispatched.add(m[1]);
   assert.ok(dispatched.size > 20, 'the dispatch set was actually found');
-  const help = cli.slice(cli.indexOf('const HELP = `') + 'const HELP = `'.length, cli.indexOf('`;', cli.indexOf('const HELP = `')));
+  const help = JSON.parse(fs.readFileSync(new URL('../src/cli-help.json', import.meta.url), 'utf8'));
   const helpCommands = new Set([...help.matchAll(/^ {2}(--[a-z-]+)/gm)].map((m) => m[1]));
   assert.ok(helpCommands.size > 20, 'the help command list was actually found');
   for (const cmd of dispatched) assert.ok(helpCommands.has(cmd), `${cmd} is dispatched but missing from --help`);

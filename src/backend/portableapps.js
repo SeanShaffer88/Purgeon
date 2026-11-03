@@ -209,6 +209,10 @@ function installRootOf(rec) {
     .filter((i) => (i.kind === 'dir' || i.kind === 'file') && !isProtectedPath(i.path))
     .map((i) => i.path);
   if (!paths.length) return '';
+  if (paths.length === 1) {
+    const item = rec.items.find((i) => i.path === paths[0]);
+    return item.kind === 'dir' ? paths[0].replace(/\\+$/, '') : path.dirname(paths[0]);
+  }
   const sorted = paths.map((p) => p.toLowerCase()).sort();
   const first = sorted[0];
   const last = sorted[sorted.length - 1];
@@ -248,16 +252,14 @@ async function writeBytes(target, bytes) {
 }
 
 async function copyFile(source, target, copied) {
-  try {
+  if (typeof sys.copyFile === 'function') {
+    const size = await sys.copyFile(source, target);
+    copied.push({ path: target, size });
+    return;
+  }
     const bytes = await readBytes(source);
     await writeBytes(target, bytes);
     copied.push({ path: target, size: bytes.byteLength || bytes.length || 0 });
-  } catch {
-    // If the file can't be read at all, record a zero-byte placeholder so the
-    // package structure still exists but the missing file is obvious.
-    await sys.writeText(target, `## BINARY: ${source}\n`);
-    copied.push({ path: target, size: 0 });
-  }
 }
 
 async function copyDirRecursive(source, target, seenDirs, copied) {
@@ -305,6 +307,7 @@ export async function generate({
   }
 
   const name = appName || (rec ? rec.name : 'Program');
+  rec = rec || { name, items };
 
   // Classify whether this program is suitable for portable packaging.
   // Programs that add services, drivers, scheduled tasks, licensing data, or dependencies
@@ -345,6 +348,7 @@ export async function generate({
   const dataDir = path.join(packageDir, 'Data');
   const launcherExe = `${id}Portable.exe`;
   const installRoot = installRootOf(rec);
+  if (!installRoot) throw new Error('Recorded files do not share a safe application root. Select the application files before packaging.');
 
   await sys.makeDir(appInfoDir);
   await sys.makeDir(programDir);
@@ -355,7 +359,8 @@ export async function generate({
   const seenDirs = new Set();
   for (const item of rec.items) {
     if ((item.kind === 'dir' || item.kind === 'file') && !isProtectedPath(item.path)) {
-      const rel = installRoot ? path.relative(installRoot, item.path) : item.path;
+      const rel = path.relative(installRoot, item.path);
+      if (/^[a-z]:|^\\\\|(^|[\\/])\.\.([\\/]|$)|:/.test(rel)) throw new Error('Recorded file escapes the portable application root');
       const target = path.join(programDir, rel);
       if (item.kind === 'dir') {
         await copyDirRecursive(item.path, target, seenDirs, copied);

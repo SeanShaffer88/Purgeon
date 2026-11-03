@@ -65,15 +65,15 @@ test('Performance tweaks use only their documented keys and never touch protecti
   const perf = TWEAKS.filter((t) => t.category === 'Performance');
   assert.equal(perf.length, 7, `expected the 7 verified performance tweaks, got ${perf.length}`);
   const allowedKeys = new Set([
-    'HKCU\\\\Software\\\\Microsoft\\\\GameBar',
-    'HKLM\\\\SOFTWARE\\\\Policies\\\\Microsoft\\\\Windows\\\\GameDVR',
-    'HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\GameDVR',
-    'HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\GraphicsDrivers',
-    'HKLM\\\\SYSTEM\\\\CurrentControlSet\\\\Control\\\\Power\\\\PowerThrottling',
-    'HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\BackgroundAccessApplications',
-    'HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Search',
-    'HKCU\\\\Software\\\\Microsoft\\\\Windows\\\\CurrentVersion\\\\Explorer\\\\VisualEffects',
-    'HKCU\\\\Control Panel\\\\Desktop',
+    'HKCU\\Software\\Microsoft\\GameBar',
+    'HKLM\\SOFTWARE\\Policies\\Microsoft\\Windows\\GameDVR',
+    'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR',
+    'HKLM\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers',
+    'HKLM\\SYSTEM\\CurrentControlSet\\Control\\Power\\PowerThrottling',
+    'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\BackgroundAccessApplications',
+    'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Search',
+    'HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects',
+    'HKCU\\Control Panel\\Desktop',
   ]);
   for (const t of perf) {
     for (const v of t.values) assert.ok(allowedKeys.has(v.key), `${t.id} writes to an unverified key: ${v.key}`);

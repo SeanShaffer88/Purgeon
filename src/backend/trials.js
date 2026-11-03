@@ -33,7 +33,7 @@ export async function tryOver(id) {
     ...cmp.changed.filter((c) => c.kind === 'value').map((c) => ({ ...c, group: 'changed' })),
     ...cmp.removed.filter((c) => c.kind === 'value' || c.kind === 'key').map((c) => ({ ...c, group: 'removed' })),
   ];
-  const items = await snapshots.cleanupItems(t.snapshotId, selected);
+  const items = (await snapshots.cleanupItems(t.snapshotId, selected)).map((item) => ({ ...item, source: 'snapshot', evidence: 'Unattributed snapshot difference', score: 35, confidence: 'low', reason: 'Changed during the trial window; may belong to another application. Review before selecting.' }));
   return { trial: t, items, added: cmp.added.length, changed: cmp.changed.length, removed: cmp.removed.length, truncated: cmp.truncated };
 }
 
