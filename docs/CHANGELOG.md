@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 1.4.2 - 2026-11-03
+
 ### Fixed
 - Settings, uninstall queues and trial records now stop on read failures and preserve damaged settings before recovery; invalid queue/trial records require recovery, and trial completion saves the updated list before snapshot cleanup.
 - Purgeon update installation now reserves an opaque native download and hashes the held file immediately before a fixed machine-class launch, pinning file/path identity through process creation; installer lifetime and extracted payloads remain outside this guarantee.
