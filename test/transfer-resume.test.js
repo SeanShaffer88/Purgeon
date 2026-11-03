@@ -14,13 +14,16 @@ const journal = (extra = {}) => addPlan({ id, complete: true, pending: [], dirs:
 const equal = (a,b) => JSON.stringify(a) === JSON.stringify(b);
 async function fixture(saved = journal(), options = {}) {
   let disk = JSON.stringify(saved), leased = false, writes = 0;
+  const pins = new Map();
   const calls = [], current = new Map(saved.undoPlan?.items.map((i) => [identityKey(i), structuredClone(i.expected)]) || []), staged = new Map();
   const exports = new Map((saved.keys || []).filter(k => k.before).map(k => [`${root}\\${id}\\${k.before}`, text(k.path)]));
   const items = saved.undoPlan?.items || [];
   const lookup = path => items.find(i => i.path === path);
   const sys = { info: { dataDir: root, home: 'C:\\Users\\ResumeTester', env: {} }, makeDir: async () => {},
     acquireTransferUndo: async () => { if (leased || options.leaseFail) throw Error('busy'); leased = true; calls.push(['lock']); return 'lease'; },
-    releaseTransferUndo: async () => { leased = false; calls.push(['release']); },
+    releaseTransferUndo: async () => { leased = false; pins.clear(); calls.push(['release']); },
+    pinTransferRegistryExport: async (_lease,name) => { const path=`${root}\\${id}\\${name}`; const pin={id:(pins.size+1).toString(16).padStart(32,'0'),text:exports.get(path)}; pins.set(pin.id,path); return pin; },
+    importTransferRegistryExport: async (_lease,pin) => { const path=pins.get(pin); if(!path)throw Error('Missing pin');pins.delete(pin);return sys.exec('reg.exe',['import',path]); },
     readText: async () => { calls.push(['read']); return disk; },
     writeTextAtomic: async (_path, value) => { writes++; const result = options.failWrite?.(JSON.parse(value), writes); if (result === 'commit') disk = value; if (result) throw Error('checkpoint denied'); disk = value; calls.push(['save', JSON.parse(value)]); },
     observeTransferTarget: async target => structuredClone(current.get(identityKey(target)) || absent()),

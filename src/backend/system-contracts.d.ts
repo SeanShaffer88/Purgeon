@@ -26,6 +26,8 @@ export interface SystemAdapter {
   acquireTransferUndo(id: string): Promise<string>;
   reserveTransferRestore(): Promise<{id: string; token: string}>;
   releaseTransferUndo(token: string): Promise<void>;
+  pinTransferRegistryExport(token: string, name: string): Promise<{id: string; text: string}>;
+  importTransferRegistryExport(token: string, pin: string): Promise<{ok: boolean}>;
   stageTransferUndo(token: string, id: string, step: number, target: TransferTarget, expected: TransferState, apply: boolean): Promise<boolean>;
   savedTransferUndoStage(token: string, id: string, step: number, target: TransferTarget, expected: TransferState): Promise<boolean>;
   transferOriginalAtTarget(target: string, receipt: TransferReplacementReceipt): Promise<boolean>;

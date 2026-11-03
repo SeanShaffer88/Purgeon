@@ -25,6 +25,7 @@ mod process_io;
 mod protected_artifacts;
 mod protected_driver_package;
 mod registry_native;
+mod registry_recovery;
 mod restore_native;
 mod security;
 mod snapshot;
@@ -715,6 +716,24 @@ async fn reserve_transfer_restore(
 #[tauri::command]
 fn release_transfer_undo(token: String) -> Result<(), String> {
     transfer_undo::release(&token)
+}
+#[tauri::command]
+async fn pin_transfer_registry_export(
+    token: String,
+    name: String,
+) -> Result<transfer_undo::PinnedExport, String> {
+    tauri::async_runtime::spawn_blocking(move || transfer_undo::pin_export(&token, &name))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn import_transfer_registry_export(
+    token: String,
+    pin: String,
+) -> Result<transfer_undo::ImportedExport, String> {
+    tauri::async_runtime::spawn_blocking(move || transfer_undo::import_export(&token, &pin))
+        .await
+        .map_err(|e| e.to_string())?
 }
 #[tauri::command]
 async fn stage_transfer_undo(
@@ -2251,6 +2270,8 @@ pub fn run() {
             acquire_transfer_undo,
             reserve_transfer_restore,
             release_transfer_undo,
+            pin_transfer_registry_export,
+            import_transfer_registry_export,
             stage_transfer_undo,
             saved_transfer_undo_stage,
             transfer_original_at_target,

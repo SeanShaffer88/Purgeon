@@ -626,6 +626,9 @@ pub(crate) fn rename_no_replace(file: &File, destination: &Path) -> Result<(), S
     Ok(())
 }
 fn cleanup_info(file: &File) -> Result<(), String> {
+    cleanup_held(file)
+}
+pub(crate) fn cleanup_held(file: &File) -> Result<(), String> {
     let information = DispositionInformation { delete: 1 };
     if unsafe {
         SetFileInformationByHandle(
