@@ -882,12 +882,14 @@ pub(crate) enum HelperKind {
     Debloat,
     Restore,
     EventLogs,
+    Boot,
 }
 pub(crate) fn launch_domain_helper(kind: HelperKind, pipe_name: &str) -> Result<Owned, String> {
     let mode = match kind {
         HelperKind::Debloat => "--debloat-broker",
         HelperKind::Restore => "--restore-broker",
         HelperKind::EventLogs => "--operation-broker",
+        HelperKind::Boot => "--boot-broker",
     };
     launch_elevated(&format!("{mode} {pipe_name}"))
 }
@@ -1131,6 +1133,13 @@ pub fn private_mode() -> Result<bool, String> {
                 return Err("Invalid restore broker arguments".into());
             }
             crate::restore_native::helper(&args[1])?;
+            Ok(true)
+        }
+        Some("--boot-broker") => {
+            if args.len() != 2 {
+                return Err("Invalid Boot broker arguments".into());
+            }
+            crate::boot_native::helper(&args[1])?;
             Ok(true)
         }
         Some("--operation-broker") => {

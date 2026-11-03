@@ -26,6 +26,7 @@ pub enum Domain {
     Debloat,
     Restore,
     EventLogs,
+    Boot,
 }
 impl Domain {
     fn directory(self) -> &'static str {
@@ -33,6 +34,7 @@ impl Domain {
             Self::Debloat => "debloat",
             Self::Restore => "restore",
             Self::EventLogs => "EventLogs",
+            Self::Boot => "Boot",
         }
     }
 }

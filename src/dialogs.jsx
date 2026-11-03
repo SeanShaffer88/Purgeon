@@ -1414,7 +1414,7 @@ export function BootDialog({ onClose }) {
                 {state.safeboot === m.id && <span className="pkg-badge ok">{tx("Set")}</span>}
               </button>
             ))}
-            {state.safeboot === 'other' && <p className="muted">{tx("Windows is set to a specialist start mode Purgeon does not change. Choosing Normal start above clears it.")}</p>}
+            {state.safeboot === 'other' && <p className="muted">{tx("Windows is set to a specialist or alternate-shell start mode Purgeon does not change. Review the correct loader in Windows Recovery before changing it.")}</p>}
           </div>
           <label className="power-cell power-check" style={{ marginBottom: 12 }}>
             <input type="checkbox" checked={withPoint} disabled={busy} onChange={(e) => setWithPoint(e.target.checked)} title={tx("Make a restore point before changing the start mode, so the change sits behind a safety net")} />{tx("Create a restore point first (recommended)")}</label>
