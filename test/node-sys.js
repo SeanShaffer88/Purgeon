@@ -52,6 +52,13 @@ export function createNodeSys(dataDir = path.join(os.tmpdir(), 'purgeon-test-dat
     // the host scheduler. Dedicated task tests supply explicit fixture behavior.
     reserveUpdateDownload: async () => { throw new Error('Native update reservation is not mocked'); },
     captureTransferReplacement: async () => { throw new Error('Native replacement capture is not mocked'); },
+    observeTransferTarget: async () => { throw new Error('Native undo observation is not mocked'); },
+    acquireTransferUndo: async () => { throw new Error('Native undo lease is not mocked'); },
+    reserveTransferRestore: async () => { throw new Error('Native transfer reservation is not mocked'); },
+    releaseTransferUndo: async () => { throw new Error('Native undo lease is not mocked'); },
+    stageTransferUndo: async () => { throw new Error('Native undo staging is not mocked'); },
+    savedTransferUndoStage: async () => { throw new Error('Native undo staging proof is not mocked'); },
+    transferOriginalAtTarget: async () => { throw new Error('Native original identity is not mocked'); },
     validateTransferReplacement: async () => { throw new Error('Native replacement validation is not mocked'); },
     restoreTransferReplacement: async () => { throw new Error('Native exact replacement restore is not mocked'); },
     cancelUpdateDownload: async () => { throw new Error('Native update cancellation is not mocked'); },

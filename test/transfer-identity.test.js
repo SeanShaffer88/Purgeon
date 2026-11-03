@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { setSys } from '../src/backend/sys.js';
 import * as transfer from '../src/backend/transfer.js';
+import { addPlan, state, absent } from './transfer-fixture.js';
 
 const root = 'C:\\IdentityRestore', id = '456';
 const target = 'C:\\Users\\IdentityTester\\AppData\\Roaming\\Fixture\\settings.ini';
@@ -10,9 +11,9 @@ const journal = () => ({ id, complete: true, pending: [], dirs: [], files: [targ
 
 test('replacement undo restores original A despite newer same-path imported B in the Recycle Bin', async () => {
   let current = 'imported B';
-  const bin = ['original A'], saved = journal();
+  const bin = ['original A']; let saved = addPlan(journal()); let staged = false;
   setSys({ info: { dataDir: root, home: 'C:\\Users\\IdentityTester', env: { LOCALAPPDATA: 'C:\\Users\\IdentityTester\\AppData\\Local' } },
-    makeDir: async () => {}, readText: async () => JSON.stringify(saved), exists: async () => current !== null,
+    makeDir: async () => {}, readText: async () => JSON.stringify(saved), writeTextAtomic:async(_p,text)=>{saved=JSON.parse(text);}, acquireTransferUndo:async()=> 'lease',releaseTransferUndo:async()=>{}, observeTransferTarget:async()=>current===null?absent():current==='original A'?saved.undoPlan.items[0].goal:saved.undoPlan.items[0].expected, stageTransferUndo:async(_l,_i,_s,_t,_e,apply)=>{if(staged)return true;if(!apply)return false;bin.push(current);current=null;staged=true;return true;},savedTransferUndoStage:async()=>staged,transferOriginalAtTarget:async()=>current==='original A', exists: async () => current !== null,
     trash: async () => { bin.push(current); current = null; },
     validateTransferReplacement: async () => {},
     restoreTransferReplacement: async () => { assert.equal(current, null); current = bin[0]; return { restored: true }; },
@@ -25,15 +26,16 @@ test('replacement undo restores original A despite newer same-path imported B in
 });
 
 async function undoFixture(saved = journal(), options = {}) {
+  saved=addPlan(saved);let staged=!!options.absent;if(options.absent)saved.undoPlan.items[0].status='intent';
   const calls = [], files = new Map([[`${root}\\${id}\\restore.json`, JSON.stringify(saved)]]);
   let current = options.absent ? null : 'imported B';
   setSys({ info: { dataDir: root, home: 'C:\\Users\\IdentityTester', env: { LOCALAPPDATA: 'C:\\Users\\IdentityTester\\AppData\\Local' } },
-    makeDir: async () => {}, readText: async (path) => files.get(path), exists: async () => current !== null,
+    makeDir: async () => {}, readText: async (path) => files.get(path), acquireTransferUndo:async()=> 'lease',releaseTransferUndo:async()=>{}, observeTransferTarget:async()=>current===null?absent():current==='original A'?saved.undoPlan.items[0].goal:saved.undoPlan.items[0].expected, stageTransferUndo:async(_l,_i,_s,t,_e,apply)=>{if(staged)return true;if(!apply)return false;calls.push(['trash',t.path]);if(options.trashFail)throw Error('trash denied');if(options.stillPresent)throw Error('still present');current=null;staged=true;return true;},savedTransferUndoStage:async()=>staged,transferOriginalAtTarget:async()=>current==='original A', exists: async () => current !== null,
     trash: async (path) => { calls.push(['trash', path]); if (options.trashFail) throw Error('trash denied'); if (!options.stillPresent) current = null; },
     validateTransferReplacement: async (path, value) => { calls.push(['validate', path, value]); if (options.validateFail === path) throw Error('exact original missing or changed'); },
     restoreTransferReplacement: async (path, value) => { calls.push(['restore', path, value]); if (options.restoreFail) throw Error('destination conflict'); assert.equal(current, null); current = 'original A'; return options.unconfirmed ? {} : { restored: true }; },
     runPS: async () => { throw Error('Newest-path Recycle Bin fallback is forbidden'); },
-    writeTextAtomic: async () => { throw Error('Undo must retain evidence'); }, removePath: async () => { throw Error('Undo must retain evidence'); },
+    writeTextAtomic: async (path,text) => { files.set(path,text); }, removePath: async () => { throw Error('Undo must retain evidence'); },
   });
   await transfer.setRoot(root);
   return { calls, files, current: () => current };
@@ -59,13 +61,13 @@ test('every exact receipt is checked before even the first imported copy is tras
   assert.deepEqual(f.calls.map(([kind]) => kind), ['validate', 'validate']); assert.equal(f.current(), 'imported B');
 });
 
-test('missing current copy restores exact original without trash and directory receipts keep their kind', async () => {
+test('interrupted staged copy restores exact original without restaging and directory receipts keep their kind', async () => {
   for (const directory of [false, true]) {
     const saved = journal(); saved.replacementReceipts[0].directory = directory;
     if (directory) { saved.dirs = saved.files; saved.files = []; }
     const f = await undoFixture(saved, { absent: true });
     const result = await transfer.undo(id); assert.ok(result.every((entry) => entry.ok)); assert.equal(f.current(), 'original A');
-    assert.deepEqual(f.calls.map(([kind]) => kind), ['validate', 'restore']);
+    assert.deepEqual(f.calls.map(([kind]) => kind), ['validate', 'validate', 'restore']);
   }
 });
 
@@ -87,7 +89,7 @@ async function restoreFixture(options = {}) {
   const calls = [], files = new Map(); let current = 'original A';
   const manifest = { format: 'purgeon-program-backup', version: 1, source: { profile: 'C:\\Users\\IdentityTester' }, program: { name: 'Fixture' }, items: [{ n: 0, kind: options.directory ? 'dir' : 'file', path: target, ...(options.skip ? { skip: true } : {}) }] };
   setSys({ info: { dataDir: root, home: 'C:\\Users\\IdentityTester', env: { LOCALAPPDATA: 'C:\\Users\\IdentityTester\\AppData\\Local' } },
-    makeDir: async () => {}, exists: async (path) => path === 'C:\\' || path === target && current !== null,
+    makeDir: async () => {}, reserveTransferRestore:async()=>({id:String(Date.now()),token:'lease'}), acquireTransferUndo:async()=> 'lease',releaseTransferUndo:async()=>{}, observeTransferTarget:async(t)=>current===null?absent():current==='original A'?{version:1,exists:true,digest:receipt().digest,identity:receipt().identity}:state(t.kind,88),stageTransferUndo:async(_l,_i,_s,_t,_e,apply)=>{if(current===null)return true;if(!apply)return false;current=null;return true;},savedTransferUndoStage:async()=>true,transferOriginalAtTarget:async()=>current==='original A', exists: async (path) => path === 'C:\\' || path === target && current !== null,
     readText: async (path) => files.get(path),
     writeTextAtomic: async (path, text) => { const record = JSON.parse(text); calls.push(['checkpoint', structuredClone(record)]); if (options.persistFail && record.replacementReceipts.length && !record.inFlight) throw Error('receipt checkpoint denied'); files.set(path, text); },
     captureTransferReplacement: async (path, directory) => { calls.push(['capture', path, directory]); if (options.captureFail) throw Error('capture denied'); current = null; return { ...receipt(), directory }; },
