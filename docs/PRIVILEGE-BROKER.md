@@ -1,5 +1,37 @@
 # Privilege boundary migration — native slices implemented, unvalidated
 
+## Boot family migration
+
+Boot callers now use a dedicated native state/prepare/execute interface. The
+renderer sends only a SafeBoot mode, a timeout from 0 to 999, or a journal ID for
+undo. Native code resolves the default system store, actual current-loader GUID
+and boot-manager identity through the structured local `root\\WMI` BCD provider.
+No localized `bcdedit` text, renderer path, loader ID, script or previous value
+authorizes a write. Fixed PowerShell provider code uses the OS-absolute executable,
+trusted module import, disabled autoload, bounded subprocess execution, strict
+boolean method results and validated default-store object rebinding.
+
+Caller-bound one-use plans expire after two minutes. An authenticated elevated
+helper has no renderer, performs fresh identity/state checks around native consent
+and parent Ready/Commit, and records protected intent before mutation. Exact
+readback and durable completion precede success. Journals retain absence as well
+as raw numeric values; unsupported SafeBoot and alternate-shell states are not
+modified. A missing timeout means indefinite waiting. The shared machine Boot
+store uses a fixed read-only Users SID solely as storage scope; authenticated
+caller SIDs remain separately bound in plans and journals. A retained uncertain
+head blocks every caller. Undo requires a completed, unconsumed, same-caller
+journal and its exact current poststate; undo-of-undo and old renderer-only history
+are refused. There is no automatic uncertain-operation resolution or rollback.
+
+Isolated fake executor/storage/consent tests cover the transaction engine and
+failure paths. Pure provider-result tests and AST parsing never open BCD. Live
+provider, UAC, recovery/reboot and locale runtime checks remain unverified. This
+migrates Boot callers only: generic IPC and the elevated renderer handoff still
+exist for other families. Full renderer-compromise isolation is incomplete.
+
+Provider interfaces follow [Microsoft's BCD sample](https://github.com/microsoft/Windows-classic-samples/tree/main/Samples/Win7Samples/winbase/bootconfigurationdata/bcdsamplelib)
+and [BCD boot-manager element semantics](https://learn.microsoft.com/en-us/previous-versions/windows/desktop/bcd/bcdbootmgrelementtypes).
+
 ## Current Event Logs migration
 
 The shared native operation dispatcher now contains concrete Event Logs query,

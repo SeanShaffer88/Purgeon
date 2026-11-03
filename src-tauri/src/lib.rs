@@ -13,6 +13,7 @@ use std::time::{Duration, Instant, UNIX_EPOCH};
 use tauri::{Emitter, Manager};
 
 mod atomic_file;
+mod boot_native;
 mod broker;
 mod debloat_native;
 mod eventlogs_native;
@@ -30,6 +31,27 @@ mod windows_tools;
 static DATA_LOCK: std::sync::OnceLock<fs::File> = std::sync::OnceLock::new();
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+#[tauri::command]
+async fn boot_state() -> Result<boot_native::State, String> {
+    tauri::async_runtime::spawn_blocking(boot_native::state)
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn prepare_boot_operation(
+    request: boot_native::Request,
+) -> Result<boot_native::PlanView, String> {
+    tauri::async_runtime::spawn_blocking(move || boot_native::prepare(request))
+        .await
+        .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn execute_boot_operation(plan_id: String) -> Result<boot_native::ResultView, String> {
+    tauri::async_runtime::spawn_blocking(move || boot_native::execute(&plan_id))
+        .await
+        .map_err(|e| e.to_string())?
+}
 
 #[tauri::command]
 fn prepare_process_operation(
@@ -1973,6 +1995,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
+            boot_state,
+            prepare_boot_operation,
+            execute_boot_operation,
             query_operation,
             select_resource,
             prepare_operation,

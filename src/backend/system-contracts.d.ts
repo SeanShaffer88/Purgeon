@@ -28,6 +28,9 @@ export interface SystemAdapter {
   prepareProcess(request: { pid: number; creationTime: string; action: { kind: string; level?: string; mask?: string } }): Promise<{ id: string; summary: string; image: string; requiresElevation: boolean }>;
   executeProcess(planId: string): Promise<{ ok: boolean; previousPriority: string | null; error: string | null }>;
   elevateHandoff(): Promise<void>;
+  bootState(): Promise<{timeout: number | null; safeboot: 'none' | 'minimal' | 'network' | 'other'; entries: Array<{id: string; name: string; isCurrent: boolean; isDefault: boolean}>}>;
+  prepareBoot(request: {kind: 'safeBoot'; mode: 'none' | 'minimal' | 'network'} | {kind: 'timeout'; seconds: number} | {kind: 'undo'; journalId: string}): Promise<{id: string; summary: string; requiresElevation: boolean}>;
+  executeBoot(planId: string): Promise<{ok: boolean; journalId: string}>;
   debloatStatus(): Promise<Array<{ id: string; enabled: boolean; partial: boolean; unknown: boolean; error: string | null }>>;
   prepareDebloat(request: { tweakId: string; enabled: boolean }): Promise<{ id: string; summary: string; effect: string; requiresElevation: boolean }>;
   prepareDebloatRecovery(request: { tweakId: string; transactionId: string; decision: 'reconcile' | 'rollbackOwned' | 'acceptCurrent' }): Promise<{ id: string; summary: string; effect: string; requiresElevation: boolean }>;

@@ -514,6 +514,7 @@ const handlers = {
   'boot:state': () => boot.state(),
   'boot:setSafeBoot': ({ mode, previous, withRestorePoint }) => boot.setSafeBoot(mode, previous, withRestorePoint),
   'boot:setTimeout': ({ seconds, previous }) => boot.setTimeout(seconds, previous),
+  'boot:undo': (request) => boot.undo(request),
   // Event Logs (Tools > System Tools).
   'logs:channels': () => eventlogs.channels(),
   'logs:exportPick': ({ channelId }) => eventlogs.exportLog(channelId),
