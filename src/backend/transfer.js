@@ -13,7 +13,6 @@ import * as path from './winpath.js';
 import { runPS, runPSJson, reg, psq } from './shell.js';
 import { isProtected, isProtectedKey } from './paths.js';
 import { detect } from './installers.js';
-import { restoreManyFromRecycleBin } from './backups.js';
 import { validateTarget, validateRegistryText } from './import-policy.js';
 
 let root = '';
@@ -272,14 +271,16 @@ const REG_TYPE = { String: 'REG_SZ', ExpandString: 'REG_EXPAND_SZ', DWord: 'REG_
 // Restores the chosen items (by number) of a backup read with read(). Returns { id, results }.
 export async function restore(file, numbers, { replace = false } = {}) {
   const backup = await read(file, { replace });
-  const chosen = backup.items.filter((i) => numbers.includes(i.n) && !i.blocked);
+  const chosen = backup.items.filter((i) => numbers.includes(i.n) && !i.blocked && !i.skip);
+  const chosenPaths = chosen.filter((i) => ['file', 'dir'].includes(i.kind)).map((i) => i.target.toLowerCase());
+  if (replace && chosenPaths.some((target, index) => chosenPaths.some((other, j) => index !== j && (target === other || target.startsWith(other + '\\'))))) throw new Error('Overlapping replacement targets require separate reviewed restores');
   // Validate all registry contents before any file replacement or registry write.
   const registryOut = (await runPSJson(EXTRACT, { input: JSON.stringify({ file, preflight: true, items: chosen.filter((i) => ['file', 'dir'].includes(i.kind)).map(({ n, kind, target }) => ({ n, kind, target })), keys: chosen.filter((i) => i.kind === 'key').map(({ n }) => ({ n })) }) }))[0] || {};
   for (const i of chosen.filter((i) => i.kind === 'key')) validateRegistryText(rewriteReg(registryOut[`reg${i.n}`] || '', backup.source), i.target);
   const id = String(Date.now());
   const dir = path.join(root, id);
   await sys.makeDir(dir);
-  const record = { id, name: backup.program.name, file, created: new Date().toISOString(), dirs: [], files: [], keys: [], values: [], replaced: [] };
+  const record = { id, name: backup.program.name, file, created: new Date().toISOString(), dirs: [], files: [], keys: [], values: [], replaced: [], replacementReceipts: [] };
   record.complete = false;
   record.pending = chosen.map((i) => ({ kind: i.kind, target: i.target, n: i.n }));
   const checkpoint = () => sys.writeTextAtomic(path.join(dir, 'restore.json'), JSON.stringify(record, null, 2));
@@ -287,13 +288,15 @@ export async function restore(file, numbers, { replace = false } = {}) {
   const results = backup.items.filter((i) => numbers.includes(i.n) && i.blocked).map((i) => ({ kind: i.kind, path: i.target, name: i.name, ok: false, detail: i.blocked }));
 
   const fileItems = chosen.filter((i) => i.kind === 'dir' || i.kind === 'file');
-  // Settings being replaced go to the Recycle Bin first, so undo can bring them back.
+  // Bind every displaced original to its exact native Recycle Bin identity.
   for (const i of fileItems.filter((x) => replace && isSettings({ kind: x.kind, path: x.target }))) {
     if (!(await sys.exists(i.target))) continue;
     try {
       record.inFlight = { kind: 'replace', target: i.target };
       await checkpoint();
-      await sys.trash(i.target);
+      const receipt = await sys.captureTransferReplacement(i.target, i.kind === 'dir');
+      if (!validReplacementReceipt(receipt, i.target, i.kind)) throw new Error('Native replacement capture returned invalid recovery evidence');
+      record.replacementReceipts.push(receipt);
       record.replaced.push(i.target);
       delete record.inFlight;
       await checkpoint();
@@ -308,6 +311,7 @@ export async function restore(file, numbers, { replace = false } = {}) {
   for (const i of fileItems.filter((x) => !x.skip)) {
     const r = String(out[i.n] || 'Not restored');
     const ok = r.startsWith('OK');
+    if (!ok && record.replaced.some((target) => target.toLowerCase() === i.target.toLowerCase())) throw new Error('Replacement extraction did not complete; its exact original and recovery journal are retained for review');
     if (ok) record[i.kind === 'dir' ? 'dirs' : 'files'].push(i.target);
     results.push({ kind: i.kind, path: i.target, ok, detail: ok ? (i.kind === 'dir' ? `Restored ${r.slice(3)} files` : 'Restored') : r === 'EXISTS' ? 'Already exists here, left as it is' : r });
   }
@@ -372,6 +376,15 @@ export async function restore(file, numbers, { replace = false } = {}) {
 const plainRecord = (value) => value !== null && typeof value === 'object' && !Array.isArray(value) && Object.getPrototypeOf(value) === Object.prototype;
 const undoError = () => new Error('Invalid or incomplete restore evidence. Undo cannot continue; its files are retained for manual review.');
 const boundedText = (value, max) => typeof value === 'string' && value.length <= max && !/[\x00-\x1f]/.test(value);
+function validReplacementReceipt(receipt, target, kind) {
+  return plainRecord(receipt) && receipt.version === 1 && boundedText(receipt.target, 4096) && receipt.target.toLowerCase() === target.toLowerCase()
+    && Object.keys(receipt).every((key) => ['version', 'target', 'sid', 'machine', 'infoName', 'infoSha256', 'identity', 'directory', 'digest'].includes(key))
+    && boundedText(receipt.sid, 184) && /^S-1-(?:\d+-)*\d+$/.test(receipt.sid) && boundedText(receipt.machine, 256) && receipt.machine.length > 0
+    && typeof receipt.infoName === 'string' && receipt.infoName.length <= 255 && /^\$I[^\\/:*?"<>|\x00-\x1f]+$/.test(receipt.infoName) && !/[. ]$/.test(receipt.infoName)
+    && ['infoSha256', 'digest'].every((key) => typeof receipt[key] === 'string' && /^[a-f0-9]{64}$/i.test(receipt[key]))
+    && plainRecord(receipt.identity) && Object.keys(receipt.identity).every((key) => ['volume', 'high', 'low'].includes(key)) && ['volume', 'high', 'low'].every((key) => Number.isInteger(receipt.identity[key]) && receipt.identity[key] >= 0 && receipt.identity[key] <= 0xffffffff)
+    && typeof receipt.directory === 'boolean' && receipt.directory === (kind === 'dir');
+}
 const registryIdentity = (value) => value.replace(/^HKLM\\/i, 'HKEY_LOCAL_MACHINE\\').replace(/^HKCU\\/i, 'HKEY_CURRENT_USER\\').replace(/^HKCR\\/i, 'HKEY_CLASSES_ROOT\\').replace(/^HKU\\/i, 'HKEY_USERS\\').replace(/^HKCC\\/i, 'HKEY_CURRENT_CONFIG\\').toLowerCase();
 function validUndoValue(old) {
   if (!plainRecord(old) || typeof old.kind !== 'string' || !Object.hasOwn(REG_TYPE, old.kind) || typeof old.data !== 'string' || old.data.length > 1048576 || old.data.includes('\0')) return false;
@@ -410,6 +423,8 @@ async function preflightUndo(record, id, dir) {
   if (record.replaced !== undefined && !Array.isArray(record.replaced)) throw undoError();
   for (const name of ['name', 'file', 'created']) if (record[name] !== undefined && !boundedText(record[name], 4096)) throw undoError();
   const replaced = record.replaced || [];
+  const receipts = record.replacementReceipts;
+  if (receipts !== undefined && !Array.isArray(receipts) || replaced.length && (!Array.isArray(receipts) || receipts.length !== replaced.length) || !replaced.length && receipts?.length) throw undoError();
   if ([record.dirs, record.files, record.keys, record.values, replaced].reduce((count, rows) => count + rows.length, 0) > 10000) throw undoError();
   const paths = new Set();
   for (const kind of ['dir', 'file']) for (const target of record[kind === 'dir' ? 'dirs' : 'files']) {
@@ -418,11 +433,21 @@ async function preflightUndo(record, id, dir) {
     paths.add(target.toLowerCase());
   }
   const replacements = new Set();
+  const receiptMap = new Map(), receiptIds = new Set();
   for (const target of replaced) {
     undoTarget(target, 'file');
     if (!paths.has(target.toLowerCase()) || replacements.has(target.toLowerCase()) || !isSettings({ kind: 'file', path: target })) throw undoError();
     replacements.add(target.toLowerCase());
+    const candidates = receipts.filter((receipt) => plainRecord(receipt) && typeof receipt.target === 'string' && receipt.target.toLowerCase() === target.toLowerCase());
+    const kind = record.dirs.some((path) => path.toLowerCase() === target.toLowerCase()) ? 'dir' : 'file';
+    if (candidates.length !== 1 || !validReplacementReceipt(candidates[0], target, kind)) throw undoError();
+    const receipt = candidates[0], identity = `${receipt.identity.volume}:${receipt.infoName.toLowerCase()}`;
+    if (receiptIds.has(identity)) throw undoError();
+    receiptIds.add(identity); receiptMap.set(target.toLowerCase(), receipt);
   }
+  // An ancestor removal could destroy another receipt's destination or payload context.
+  const filePaths = [...paths];
+  if (replaced.length && filePaths.some((target, index) => filePaths.some((other, j) => index !== j && target.startsWith(other + '\\')))) throw undoError();
   const keys = new Set(), exports = new Map(), names = new Set();
   for (const entry of record.keys) {
     if (!plainRecord(entry) || !Object.hasOwn(entry, 'before')) throw undoError();
@@ -447,7 +472,9 @@ async function preflightUndo(record, id, dir) {
     values.add(identity);
     if (entry.old !== null && !validUndoValue(entry.old)) throw undoError();
   }
-  return { replaced, exports };
+  // Validate every exact original before trashing even the first imported copy.
+  for (const target of replaced) await sys.validateTransferReplacement(target, receiptMap.get(target.toLowerCase()));
+  return { replaced, exports, receiptMap };
 }
 
 // Local journals are not authenticated native authority. Validate the whole journal and
@@ -459,7 +486,7 @@ export async function undo(id) {
   const text = await sys.readText(path.join(dir, 'restore.json'));
   if (text.length > 1048576) throw undoError();
   const record = JSON.parse(text);
-  const { replaced, exports } = await preflightUndo(record, id, dir);
+  const { replaced, exports, receiptMap } = await preflightUndo(record, id, dir);
   const results = [];
   const cleared = new Set();
   for (const p of [...record.dirs, ...record.files]) {
@@ -495,11 +522,16 @@ export async function undo(id) {
       results.push({ kind: 'value', path: v.path, name: v.name, ok: false, detail: String(error?.message || error) });
     }
   }
-  // Settings a sync replaced come back out of the Recycle Bin.
+  // Restore only the saved original receipt; never choose a deletion by path/time.
   if (replaced.length) {
-    const safe = replaced.filter((p) => cleared.has(p.toLowerCase()));
-    const back = await restoreManyFromRecycleBin(safe).catch(() => ({}));
-    for (const p of replaced) results.push({ kind: 'dir', path: p, ok: back[p] === 'OK', detail: !cleared.has(p.toLowerCase()) ? 'Restored copy could not be cleared; earlier settings were left in the Recycle Bin' : back[p] === 'OK' ? 'Earlier settings put back' : 'Earlier settings are not in the Recycle Bin any more' });
+    for (const p of replaced) {
+      try {
+        if (!cleared.has(p.toLowerCase())) throw new Error('Restored copy could not be cleared; exact original retained in the Recycle Bin');
+        const result = await sys.restoreTransferReplacement(p, receiptMap.get(p.toLowerCase()));
+        if (result?.restored !== true) throw new Error('Exact original restoration was not confirmed; recovery evidence needs review');
+        results.push({ kind: 'dir', path: p, ok: true, detail: 'Exact original settings put back' });
+      } catch (error) { results.push({ kind: 'dir', path: p, ok: false, detail: String(error?.message || error) }); }
+    }
   }
   return results;
 }

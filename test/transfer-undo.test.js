@@ -11,6 +11,7 @@ const key='HKEY_CURRENT_USER\\Software\\UndoFixture';
 const target='C:\\Users\\UndoTester\\AppData\\Roaming\\UndoFixture\\settings.ini';
 const regText=(path=key)=>`Windows Registry Editor Version 5.00\r\n\r\n[${path}]\r\n"Earlier"="saved"\r\n`;
 const journal=()=>({id,complete:true,pending:[],dirs:[],files:[],keys:[],values:[],replaced:[]});
+const replacementReceipt=()=>({version:1,target,sid:'S-1-5-21-1',machine:'fixture',infoName:'$Ioriginal.ini',infoSha256:'a'.repeat(64),identity:{volume:1,high:2,low:3},directory:false,digest:'b'.repeat(64)});
 async function fixture(record=journal(),options={}){
   const calls=[], reads=[], files=new Map([[`${root}\\${id}\\restore.json`,JSON.stringify(record)]]), present=new Set([...(Array.isArray(record?.dirs)?record.dirs:[]),...(Array.isArray(record?.files)?record.files:[])]);
   for(const entry of Array.isArray(record?.keys)?record.keys:[])if(typeof entry?.before==='string')files.set(`${root}\\${id}\\${entry.before}`,regText(entry.path));
@@ -18,6 +19,7 @@ async function fixture(record=journal(),options={}){
   setSys({info:{dataDir:root,home:'C:\\Users\\UndoTester',env:{LOCALAPPDATA:'C:\\Users\\UndoTester\\AppData\\Local',SystemRoot:'C:\\Windows'}},makeDir:async()=>{},
     readText:async(path)=>{reads.push(path);if(!files.has(path))throw Error('Missing fixture');return files.get(path);},
     exists:async(path)=>present.has(path),trash:async(path)=>{calls.push(['trash',path]);if(options.trashFailure)throw Error('Recycle denied');if(!options.trashStillPresent)present.delete(path);},
+    validateTransferReplacement:async()=>{},restoreTransferReplacement:async(path)=>{calls.push(['exact',path]);return {restored:true};},
     exec:async(file,args)=>{calls.push(['exec',file,args]);return options.exec?options.exec(args):{ok:true,stdout:'',stderr:''};},
     runPS:async(script,input)=>{
       if(script.includes('$inputPath')){const path=JSON.parse(input);reads.push(path);if(options.reader)return options.reader(script,input,path);if(options.exportChanged&&reads.filter(p=>p===path).length>1)return JSON.stringify({text:regText(key).replace('saved','changed')});if(!files.has(path))throw Error('Missing export');return JSON.stringify({text:files.get(path)});}
@@ -78,8 +80,8 @@ test('export changes after key deletion stop import and accurately retain failur
 });
 
 test('replacement restore only runs after the current copy is verified absent',async()=>{
-  for(const options of [{trashFailure:true},{trashStillPresent:true}]){const f=await fixture({...journal(),files:[target],replaced:[target]},options);const results=await transfer.undo(id);assert.ok(results.every(r=>!r.ok));assert.equal(f.calls.filter(c=>c[0]==='recycle').length,0);}
-  const f=await fixture({...journal(),files:[target],replaced:[target]});assert.ok((await transfer.undo(id)).every(r=>r.ok));assert.deepEqual(f.calls.at(-1),['recycle',[target]]);
+  for(const options of [{trashFailure:true},{trashStillPresent:true}]){const f=await fixture({...journal(),files:[target],replaced:[target],replacementReceipts:[replacementReceipt()]},options);const results=await transfer.undo(id);assert.ok(results.every(r=>!r.ok));assert.equal(f.calls.filter(c=>c[0]==='exact').length,0);}
+  const f=await fixture({...journal(),files:[target],replaced:[target],replacementReceipts:[replacementReceipt()]});assert.ok((await transfer.undo(id)).every(r=>r.ok));assert.deepEqual(f.calls.at(-1),['exact',target]);
 });
 
 test('the fixed export reader supports actual UTF-16LE BOM and UTF-8 scratch exports without registry access',async()=>{

@@ -6,6 +6,10 @@ export interface NativeSystemInfo {
   ram_bytes?: number; os_name?: string; os_version?: string; os_build?: number;
 }
 export interface ProcessIdentity { pid: number; name: string; creationTime: string }
+export interface TransferReplacementReceipt {
+  version: 1; target: string; sid: string; machine: string; infoName: string; infoSha256: string;
+  identity: {volume: number; high: number; low: number}; directory: boolean; digest: string;
+}
 export interface SystemAdapter {
   info: { version: string; env: Record<string, string>; home: string; dataDir: string; exe: string; portable: boolean; args: string[]; launch: string[]; [key: string]: unknown };
   queryOperation(request: { kind: 'eventLogChannels' } | { kind: 'eventLogConfig'; channelId: string } | { kind: 'eventLogRecovery'; journalId: string }): Promise<unknown>;
@@ -16,6 +20,9 @@ export interface SystemAdapter {
   cancelOperation(planId: string): Promise<{ cancelled: boolean; phase: string }>;
   runPS(script: string, input?: string, timeoutMs?: number): Promise<string>;
   copyFile(source: string, target: string): Promise<number>;
+  captureTransferReplacement(target: string, directory: boolean): Promise<TransferReplacementReceipt>;
+  validateTransferReplacement(target: string, receipt: TransferReplacementReceipt): Promise<void>;
+  restoreTransferReplacement(target: string, receipt: TransferReplacementReceipt): Promise<{restored: boolean}>;
   commitStagedFile(source: string, target: string): Promise<void>;
   readOptionalText(path: string): Promise<string | null>;
   restorePoints(): Promise<Array<{ sequence: number; created: string; description: string }>>;
