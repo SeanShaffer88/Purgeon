@@ -32,6 +32,7 @@ mod state_store;
 mod task_native;
 mod task_platform;
 mod tracker;
+mod transfer_recovery;
 mod updater_native;
 mod windows_tools;
 static DATA_LOCK: std::sync::OnceLock<fs::File> = std::sync::OnceLock::new();
@@ -646,6 +647,36 @@ fn remove_path(app: tauri::AppHandle, path: String) -> Result<(), String> {
 async fn move_to_trash(path: String) -> Result<(), String> {
     security::checked_path(&path)?;
     tauri::async_runtime::spawn_blocking(move || trash::delete(&path).map_err(|e| e.to_string()))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn capture_transfer_replacement(
+    target: String,
+    directory: bool,
+) -> Result<transfer_recovery::Receipt, String> {
+    tauri::async_runtime::spawn_blocking(move || transfer_recovery::capture(&target, directory))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn validate_transfer_replacement(
+    target: String,
+    receipt: transfer_recovery::Receipt,
+) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || transfer_recovery::validate(&target, &receipt))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn restore_transfer_replacement(
+    target: String,
+    receipt: transfer_recovery::Receipt,
+) -> Result<transfer_recovery::Restored, String> {
+    tauri::async_runtime::spawn_blocking(move || transfer_recovery::restore(&target, &receipt))
         .await
         .map_err(|e| e.to_string())?
 }
@@ -2137,6 +2168,9 @@ pub fn run() {
             make_dir,
             remove_path,
             move_to_trash,
+            capture_transfer_replacement,
+            validate_transfer_replacement,
+            restore_transfer_replacement,
             move_many_to_trash,
             list_junk,
             walk,
