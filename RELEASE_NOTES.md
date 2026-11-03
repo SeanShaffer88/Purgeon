@@ -1,16 +1,24 @@
-# Purgeon 1.4.1
+# Purgeon 1.4.2
 
-## Fixed
+## Recovery and Update Fixes
 
-- **The window reopens where you left it** — Purgeon now remembers its size, position and whether it was maximized, and restores them on the next launch. A saved spot that no longer fits a connected screen is ignored and the default size is used instead.
-- **The Debloat view loads again** — it failed with an "Invalid compiled Debloat resource" message and showed no tweaks. The tweak catalog is now checked the same way Windows treats registry paths (letter case does not matter), and the full tweak list loads.
-- **The close button's remembered choice sticks** — the choice the close question saves ("Remember my choice") is now also read by Purgeon itself as it starts, so the first close of a launch already follows it, and saving the choice can no longer be blocked by another operation running at the same moment.
-- **Disk Usage shows a folder's contents at once** — files and folders are listed immediately and each folder's size is filled in as it is measured, instead of the whole view waiting until every folder has been measured. The Cancel button still stops the measuring, keeping whatever sizes have landed.
+- Program-restore undo validates the complete journal, every target and saved registry export before changing anything. Registry failures stay failures; ambiguous or incomplete recovery records are retained for manual review.
+- Purgeon updates use a fresh native download reservation. Native code hashes the held installer file and pins its identity and ancestor paths through synchronous process creation, using the checked machine executable elevation class. This guarantee ends at process creation; it does not certify installer lifetime or later extracted payloads. Expected release metadata still comes from the application's GitHub response.
+- Settings, uninstall queues and trial records distinguish missing files from read failures. Damaged settings are replaced only after a saved copy is verified. Invalid queue/trial records require recovery. Ending a trial saves the updated list before snapshot cleanup.
 
-## New
+## Native Operation Boundaries
 
-- **DNS & encrypted lookups** (in Debloat) — per network adapter, choose automatic DNS or the Cloudflare, Google or Quad9 servers, and on Windows 11 whether lookups are encrypted (DNS over HTTPS): off, encrypted when possible, or encrypted only. Changes take a restore point first when that setting is on, and the same controls are on the command line: `--dns list`, `--dns set`, `--dns reset`.
-- **A Nagle's algorithm choice per adapter**, in the same section — Windows default, or off (small packets sent immediately; can shave delay in some online games, most programs see no difference). Also `--dns nagle`.
-- **Storage Sense tweak** — a new Storage & cleanup group in Debloat starts with the Settings switch for Windows' automatic low-space cleanup, per user, with the previous value restored when turned off.
+- DNS status handles singleton responses and reports encrypted lookup mode only when all configured IPv4 servers match. Changes check encryption capabilities and shared global registrations before switching DNS, verify readback, and report incomplete synchronous rollback. Nagle changes verify writes and restore prior value types or absence on failure.
+- Boot changes use closed native requests, exact loader identity checks and protected journal-bound undo, including restoration of an originally absent setting.
+- Driver removal checks native package identity and active use, keeps a complete verified protected backup, and uses plain removal without forced device uninstall. Explicit recovery stages the verified package only; it does not reinstall devices or bind drivers.
+- Supported scheduled-task actions use caller-bound native identities and private recovery records. Unsupported tasks remain read-only. Creation and deletion recovery register tasks disabled without overwriting a replacement; legacy caller XML recovery is refused. Startup, deeper scans, backups and Purgeon's owned schedules use this boundary.
 
-Windows 10/11, x64. Unsigned, as always — no code-signing certificate.
+## Scope and Validation Limits
+
+Known audit findings remain open: non-task backup checkpoint failures can permit later operations; legacy text writes/appends do not reject hardlinks; Boot's final probe can outlive its plan deadline; secure erase can use a stale pre-open length; command logs can contain sensitive arguments; cookie-policy paths can resolve outside the registry; and a power-timeout request can apply its AC value before rejecting an invalid DC value. This release does not fix those deferred items.
+
+Windows 10/11, x64. Both the built application and Setup program are unsigned (Authenticode: NotSigned); no signing credentials were configured.
+
+Automated checks use fake system adapters and neutral scratch fixtures. No live installer, UAC, Boot, driver, Task Scheduler or DNS mutation was used for local validation, and no disposable-VM installation or runtime OS-matrix qualification was performed. Live compatibility and recovery behavior remain unverified. Other operation families still use generic IPC, so full renderer isolation and a whole-product security certification are not claimed.
+
+Download either **Purgeon-Setup-x64.exe** or **Purgeon-Portable-x64.zip**. The portable ZIP contains **Purgeon-Portable-x64.exe**, **LICENSE** and **PORTABLE.txt**.
