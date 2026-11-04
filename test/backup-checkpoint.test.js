@@ -7,14 +7,14 @@ import * as history from '../src/backend/history.js';
 let sequence = 0;
 const noState = { programs: [], shared: [] };
 const item = (name, kind = 'file') => ({ kind, path: `C:\\CheckpointTemp\\${name}` });
-async function fixture({ failAt, persistent = false, committed = false, pendingFailure = false, firewall = 'GONE' } = {}) {
+async function fixture({ failAt, persistent = false, committed = false, pendingFailure = false, pendingReadDenied = false, firewall = 'GONE' } = {}) {
   const root = `C:\\CheckpointFixture${++sequence}`, files = new Map(), calls = [];
   let manifestWrites = 0;
   setSys({
     info: { dataDir: root, env: { TEMP: 'C:\\CheckpointTemp' } },
-    makeDir: async () => {}, stat: async () => null,
-    readOptionalText: async (path) => files.get(path) ?? null,
-    readText: async (path) => { if (!files.has(path)) throw Error('Missing fixture file'); return files.get(path); },
+    makeDir: async (path) => { calls.push(['mkdir', path]); }, stat: async (path) => { calls.push(['stat', path]); return null; },
+    readOptionalText: async (path) => { if (pendingReadDenied && path.endsWith('pending.json')) throw Error('Pending read denied'); return files.get(path) ?? null; },
+    readText: async (path) => { calls.push(['read', path]); if (!files.has(path)) throw Error('Missing fixture file'); return files.get(path); },
     secretGet: async () => '', secretKeys: async () => [],
     writeTextAtomic: async (path, text) => {
       calls.push(['write', path, text]);
@@ -28,7 +28,7 @@ async function fixture({ failAt, persistent = false, committed = false, pendingF
       }
       files.set(path, text);
     },
-    writeText: async (path, text) => { files.set(path, text); },
+    writeText: async (path, text) => { calls.push(['write', path, text]); files.set(path, text); },
     removePath: async (path) => { calls.push(['remove', path]); files.delete(path); },
     exists: async () => true, readDir: async () => [], sha256Files: async () => [],
     runPS: async (script) => { calls.push(['ps', script]); return firewall; },
@@ -66,6 +66,41 @@ test('failed file completion checkpoint stops before the next item and retains u
   assert.equal(stored.inFlight.path, item('first').path);
   assert.equal(stored.intents[0].status, undefined);
   assertRetained(f);
+});
+
+test('completion checkpoint failure blocks empty and nonempty cleanups without changing evidence or performing side effects', async () => {
+  const f = await fixture({ failAt: 3 });
+  assert.equal((await f.run([item('first')])).recoveryRequired, true);
+  const files = [...f.files], calls = [...f.calls];
+  for (const items of [[], [item('second')]]) {
+    await assert.rejects(f.run(items), /Recovery needs review.*interrupted removal/i);
+    assert.deepEqual([...f.files], files, 'all retained evidence stays byte-identical');
+    assert.deepEqual(f.calls, calls, 'no settings reads, writes, directories, deletions, or mutations');
+  }
+});
+
+test('corrupt, unreadable, and valid pending records with missing manifests block new cleanups', async () => {
+  for (const state of ['badJSON', 'readDenied', 'missingManifest']) {
+    const f = await fixture({ pendingReadDenied: state === 'readDenied' });
+    const pending = `C:\\CheckpointFixture${sequence}\\backups\\pending.json`;
+    f.files.set(pending, state === 'badJSON' ? '{broken' : JSON.stringify({ id: 'missing', title: 'Interrupted', started: new Date().toISOString(), items: [] }));
+    const files = [...f.files], calls = [...f.calls];
+    for (const items of [[], [item('second')]]) {
+      await assert.rejects(f.run(items), state === 'readDenied' ? /Recovery needs review.*Pending read denied/ : /Recovery needs review/);
+      assert.deepEqual([...f.files], files);
+      assert.deepEqual(f.calls, calls);
+    }
+  }
+});
+
+test('new cleanup succeeds after explicit recovery resolution', async () => {
+  const f = await fixture({ failAt: 4 });
+  await assert.rejects(f.run([item('first')]), /Checkpoint save denied/);
+  await assert.rejects(f.run([item('second')]), /Recovery needs review/);
+  await backups.resolveInterrupted('keep');
+  assert.equal(await backups.interrupted(), null);
+  assert.equal((await f.run([item('second')])).results[0].ok, true);
+  assert.equal(await backups.interrupted(), null);
 });
 
 test('failed junk completion checkpoint halts later junk even when every subsequent write would fail', async () => {

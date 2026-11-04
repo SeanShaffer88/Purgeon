@@ -2,10 +2,13 @@
 
 ## Unreleased
 
+## 1.4.3 - 2026-11-03
+
 ### Removed
 - Remove PortableApps.com/PAF generation and its UI, API and CLI entry points. Preserve generic portable discovery/registration, Purgeon’s portable ZIP, disposable capture/recovery and heuristic assessment; existing user packages are untouched.
 
 ### Fixed
+- Preserve unresolved cleanup recovery evidence by refusing a new cleanup, including an empty request, until you review or resolve the pending removal. Corrupt or unreadable pending records also block admission. Current-tree validation is pending during release preparation.
 - Validate both power timeout values before changes; isolate nested settings values across callers and queued writes.
 - Redact command payloads from diagnostics and guard unclassified application operations against overlapping mutations while preserving cancellation and reviewed queries.
 - Correct cookie registry provider paths, propagate access failures and verify both browser results; partial failures require refreshing the displayed union before retrying.
@@ -330,4 +333,4 @@
   build the release files with the packaging script, which assembles and
   verifies the universal installer, the MSI and the portable ZIP.
 
-Earlier feature history is in [the roadmap](docs/ROADMAP.md).
+Earlier feature history is in [the roadmap](ROADMAP.md).

@@ -1,5 +1,32 @@
 # Quality and release gate
 
+## 2026-11-03: v1.4.3 scoped maintenance preparation
+
+PR #89 passed GitHub CI and was merged. Its scoped audit and PortableApps.com/PAF
+removal evidence remains recorded below; historical pending CI/merge statements
+describe the earlier snapshot and are superseded for PR #89.
+
+Preparation includes cleanup checkpoint retention, exact replacement identity,
+resumable program-restore undo, pinned transfer registry undo and merged audit
+fixes. A newly reproduced cleanup-admission defect can discard an unresolved
+pending recovery reference even for an empty cleanup. Its bounded admission guard
+passed independent review `20261104T004218Z-32efd002e461` and all 13 focused
+tests (zero failures). See the
+[audit addendum](docs/PROJECT_AUDIT.md#v143-cleanup-admission-addendum--2026-11-03).
+
+This is scoped maintenance, not full runtime qualification. Mock/scratch evidence
+does not qualify live UAC, ETW, privileged recovery, installer lifecycle, the OS
+matrix or screen readers. Coverage floors and the native denominator discrepancy
+remain unresolved. Generic IPC remains; no security certification is claimed.
+Packages are unsigned when signing credentials are not configured. Actual artifact
+contents, signatures and downloaded hashes still need verification.
+
+All seven current-tree local gates in `../analysis-logs/next-reliability-checks.json`
+succeeded: 565 JavaScript tests; 143 native tests (141 unit plus two manifest,
+two ignored); lint; typecheck; production build; formatting; and strict locked
+all-target x64 MSVC Clippy. Every process and DevTools runner exited 0.
+GitHub CI and release artifact verification remain pending at preparation time.
+
 ## 2026-11-03: project audit, final local gates passed
 
 Final local gates passed: 562 JavaScript tests (zero failures or skips), 141

@@ -268,6 +268,9 @@ async function planRemoval({ items, owners = [], state }) {
 // `owners`: uninstall keys of the programs being removed (see safety.js). `state` replaces the
 // live system state in tests.
 async function removeItems({ title, items, owners = [], state, trashItem = (p) => sys.trash(p), shouldStop }) {
+  const pending = await readPending();
+  if (pending?.corrupt) throw new Error(pending.detail);
+  if (pending) throw recoveryError('the interrupted removal requires review or resolution before another cleanup');
   const settings = await readSettings();
   const refused = [];
   if (settings.safeMode) items = items.filter((item) => {

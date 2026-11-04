@@ -1,8 +1,12 @@
 # Project audit — 2026-11-03
 
 This ledger records a bounded source review and local checks. Test locations do
-not establish whole-feature runtime coverage. Final local gates passed; GitHub CI,
-artifact verification and merge remain pending. This is not release qualification.
+not establish whole-feature runtime coverage. The latest v1.4.3 local gates passed:
+565 JavaScript tests, 143 native tests (141 unit plus two manifest, two ignored),
+lint, typecheck, production build, formatting and strict locked all-target x64
+MSVC Clippy. Every process and runner exited 0. See the cleanup-admission addendum
+for independent review. Current-tree GitHub CI and artifact verification remain
+pending at preparation time. This is not release qualification.
 
 ## JavaScript repairs
 
@@ -156,3 +160,48 @@ privileged cancellation, packaged UI/CLI, accessibility and installer lifecycle
 need separate evidence. No host cleanup, VM, tag, release, commit, push or merge
 was performed by this worker. Final local gates passed; GitHub CI, artifact
 verification and merge remain pending. No release qualification is claimed.
+
+## v1.4.3 cleanup-admission addendum — 2026-11-03
+
+PR #89's audit fixes and PortableApps.com/PAF removal passed GitHub CI and were
+merged, as verified by the release controller. Earlier pending CI/merge statements
+describe the pre-merge snapshot. New cleanup-admission local checks passed as
+recorded below; current-tree GitHub CI and v1.4.3 artifact verification remain
+pending at preparation time and are not covered by that earlier evidence.
+
+At clean HEAD `6bea8b2`, an in-memory reproduction exited 0: an interrupted
+removal reported `reviewRequired === true`; calling
+`removeItems({ title: 'Later empty cleanup', items: [] })` returned
+`{ backupId: null, results: [], cancelled: false }`, after which `interrupted()`
+returned `null`. The adapter observed `pending.json` overwritten and deleted.
+The old manifest remained, but its recovery reference disappeared. No disk,
+registry, Recycle Bin or native mutations occurred in this reproduction.
+
+The approved repair is limited to admission in
+[removeItems](../src/backend/backups.js): read pending recovery before settings,
+directory creation or writes. Proceed only when no pending record exists. Reuse
+the existing diagnostic for corrupt or unreadable records; reject every valid
+pending record until explicit recovery review or resolution, regardless of an
+empty, sealed, missing, encrypted or uncertain referenced manifest. Preserve
+recovery resolution, preview, cancellation, encryption and API interfaces.
+This covers sequential calls under the existing API mutation guard, not
+cross-process exclusion.
+
+Required regressions in [backup checkpoint tests](../test/backup-checkpoint.test.js)
+cover a fixture checkpoint failure followed by another cleanup, including an
+empty request; byte-identical retained evidence and no additional writes,
+directory creation, deletion or mutation commands; malformed JSON, read denial
+and a missing manifest; and successful cleanup after explicit resolution.
+Normal success and cancellation regressions remain. Independent review
+`20261104T004218Z-32efd002e461` accepted the repair, and all 13 focused tests
+passed with zero failures. All seven full current-tree local gates succeeded in
+`../analysis-logs/next-reliability-checks.json` (relative to the repository root):
+565 JavaScript tests; 143 native tests (141 unit plus two manifest, two ignored);
+lint; typecheck; production build; formatting; and strict locked all-target x64
+MSVC Clippy. Every process and DevTools runner exited 0.
+
+Static findings about rollback clearing pending before its final seal and restore
+batch cancellation ordering are outside this repair. Neither is claimed fixed.
+Mock/scratch checks do not qualify live recovery, UAC, ETW, installer lifecycle,
+OS-matrix behavior or screen readers. Coverage floors remain unproven, generic
+IPC remains, and no whole-product security certification is claimed.
