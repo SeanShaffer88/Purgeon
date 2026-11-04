@@ -10,6 +10,11 @@ Source failures remain visible, and stale WMI evidence does not prove installati
 or active protection. Unsupported and enterprise products remain visible; Defender
 has no removal action and ESET remains instructions only.
 
+Every native inventory refresh invalidates cached preparation eligibility before
+processing helper results. A rejected snapshot or recovery-discovery failure leaves
+no products eligible for new plans; existing operations and retained reviews remain.
+Successful refreshes preserve stable product IDs and partial-source behavior.
+
 The native policy uses fixed official AVG Clear, standard Avast Clear, Norton 360
 Remover and McAfee MCPR consumer downloads. Generic Avast One is unsupported.
 Publisher policy was observed from official downloaded payloads on 2026-11-04 by
@@ -416,3 +421,7 @@ included in the change.
 - [Tauri CLI](https://v2.tauri.app/reference/cli/): native build tooling.
 - [Windows application launching](https://learn.microsoft.com/en-us/windows/win32/shell/launch):
   context for preserving Explorer launch requests; no new Shell API is introduced.
+
+### Security software inventory refresh qualification
+
+`coverage/reviews/security-software-inventory-refresh.json` records candidate evidence at source commit `521208baeba281dc639804c41660ee2bfc4dd34b`, compared with the LAST reviewed security-software-removal baseline. Manual replacement coverage passes (Rust changed-critical 11/11); historical blanket-floor reporting remains exit 1 below floor. The record preserves the earlier instrumented containment failure, three passing targeted reruns and the fresh full passing run, plus seven synthetic refresh tests and isolated public-entry child confinement. Read-only host CIM/registry discovery does not qualify vendor GUI, UAC, Safe Mode, removal, live downloads or utilities outliving Purgeon. This candidate activates only after independent qualification review, passing final-head PR checks and merge; until those conditions are met it does not replace the reviewed baseline. Original baseline, policy and collectors remain unchanged. Beta testing is canceled; no release or tag is qualified by this record.
