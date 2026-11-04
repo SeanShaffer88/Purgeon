@@ -12,8 +12,28 @@ export interface TransferReplacementReceipt {
 }
 export interface TransferTarget { kind: 'file' | 'dir' | 'key' | 'value'; path: string; name?: string }
 export interface TransferState { version: 1; exists: boolean; digest: string | null; identity: {volume: number; high: number; low: number} | null }
+export type AvToolId = 'avg' | 'avast' | 'norton' | 'mcafee';
+export interface AvReview { reviewId: string; toolId: AvToolId | null; planId: string | null; state: 'reviewRequired' | 'unreadable'; detail: string; canAcknowledge: boolean }
+export interface AvAcknowledgeRequest { reviewId: string; acknowledgment: 'reviewedUtilityClosed' }
+export interface AvAcknowledgeResult { reviewId: string; outcome: 'acknowledged' }
+export interface AvInventory {
+  reviews: AvReview[];
+  products: Array<{id: string; name: string; publisher: string; version: string; sources: string[]; category: string; toolId: AvToolId | null; unsupportedReason: string | null; builtIn: boolean; helpUrl: string | null}>;
+  sources: Array<{id: string; status: 'ok' | 'unavailable' | 'error'; detail: string}>;
+  complete: boolean; observedAt: string;
+}
+export interface AvPlan { id: string; productId: string; toolId: AvToolId; productName: string; toolName: string; recoveryLimits: string; expiresAt: string }
+export interface AvStatus { id: string; phase: 'prepared' | 'downloading' | 'verifying' | 'launching' | 'launched' | 'cancelled' | 'failed' | 'reviewRequired' | 'acknowledged'; bytesReceived: number; cancellationRequested: boolean; cleanup: 'none' | 'pending' | 'removed' | 'retained'; detail: string }
+export interface AvLaunchResult { id: string; outcome: 'launched' | 'cancelled' | 'failed' | 'reviewRequired'; detail: string }
+export interface AvCancelResult { accepted: boolean; status: AvStatus }
 export interface SystemAdapter {
   info: { version: string; env: Record<string, string>; home: string; dataDir: string; exe: string; portable: boolean; args: string[]; launch: string[]; [key: string]: unknown };
+  acknowledgeSecuritySoftwareRemoval(request: AvAcknowledgeRequest): Promise<AvAcknowledgeResult>;
+  securitySoftwareInventory(): Promise<AvInventory>;
+  prepareSecuritySoftwareRemoval(request: {productId: string}): Promise<AvPlan>;
+  launchSecuritySoftwareRemoval(planId: string): Promise<AvLaunchResult>;
+  cancelSecuritySoftwareRemoval(planId: string): Promise<AvCancelResult>;
+  securitySoftwareRemovalStatus(planId: string): Promise<AvStatus>;
   queryOperation(request: { kind: 'eventLogChannels' } | { kind: 'eventLogConfig'; channelId: string } | { kind: 'eventLogRecovery'; journalId: string }): Promise<unknown>;
   selectResource(selection: { kind: 'eventLogExportDestination'; channelId: string }): Promise<{ id: string; displayPath: string } | null>;
   prepareOperation(request: { kind: 'eventLogClear'; channelId: string } | { kind: 'eventLogSetEnabled'; channelId: string; enabled: boolean } | { kind: 'eventLogExport'; channelId: string; destinationGrant: string }): Promise<{ id: string; summary: string; requiresElevation: boolean; recoveryLimits: string }>;

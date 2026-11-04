@@ -30,6 +30,7 @@ It has a compact single-list window with a dark terminal theme. It is built with
 - [Program list](#program-list)
 - [Uninstall and leftover scan](#uninstall-and-leftover-scan)
 - [Batch uninstall and the uninstall queue](#batch-uninstall-and-the-uninstall-queue)
+- [Remove AV](#remove-av)
 - [Installation monitor](#installation-monitor)
 - [Trial installs](#trial-installs)
 - [Snapshots](#snapshots)
@@ -141,6 +142,30 @@ The menu bar is also the window’s title bar: drag its empty middle to move the
 - At the end, every program's leftovers are shown together for you to review.
 
 ![Uninstall queue, two done and two waiting](docs/screenshots/queue.png)
+
+## Remove AV
+
+Use **Remove AV** to inspect registered security products and, for supported consumer products, run the official vendor removal utility. Try the product's normal uninstaller first.
+
+Inventory combines Windows `SecurityCenter2` antivirus, antispyware and firewall registrations with HKLM and HKCU uninstall entries in both 64-bit and 32-bit registry views. You can inspect each source's status; failed or unavailable sources produce an incomplete inventory. Security Center/WMI registrations can remain after uninstalling a product. An entry does not prove that the product remains installed or actively protects your PC.
+
+Single-click a product to select it. Double-click it, press Enter on its name, or choose **Run vendor removal utility** to review a supported utility. Every launch requires a confirmation that you cannot suppress. Purgeon downloads the utility on demand from a fixed official vendor endpoint and checks Windows Authenticode, the exact reviewed publisher identity and product metadata. It keeps the verified payload pinned through launch and refuses mismatches.
+
+Supported tools and official procedures:
+
+- [AVG Clear](https://www.avg.com/en-us/avg-remover).
+- [Avast Clear](https://support.avast.com/avast/en/us/home/current/solutions/uninstall-antivirus-utility) for matched standard Avast consumer products. Generic Avast One entries are unsupported.
+- [Norton 360 Remover](https://support.norton.com/sp/en/us/home/current/solutions/v20240301142500636).
+- [McAfee Consumer Product Removal (MCPR)](https://www.mcafee.com/support/s/article/000001616?language=en_US).
+- [ESET's manual uninstall procedure](https://support.eset.com/en/kb2289-uninstall-eset-manually-using-the-eset-uninstaller-tool) is instructions only; follow the vendor's Safe Mode procedure yourself.
+
+Unsupported, enterprise and unknown products stay visible with their availability reason. Microsoft Defender is built into Windows and cannot be removed here. This view does not bundle a third-party removal tool or claim support for every vendor.
+
+Purgeon allows one vendor utility at a time. You can cancel before launch. It must save an exclusive recovery checkpoint before launching; a persistence failure stops the operation. After an attempt, review the vendor windows and elevation prompt, ensure the utility has closed, then explicitly acknowledge the previous attempt before preparing another launch. An uncertain launch never triggers an automatic retry. A launch result reports only whether the utility started: it does not establish successful removal, and Purgeon cannot undo the utility's changes.
+
+Follow the vendor's interactive instructions. Purgeon supplies no silent or forced-removal switches, changes no boot settings and initiates no reboot. Downloaded payloads may remain after review until a future explicit cleanup of owned files; acknowledgment does not silently delete them.
+
+**Validation limits:** no antivirus remover has been executed for this feature's qualification. Live UAC prompts, vendor interfaces, Safe Mode and utilities that outlive Purgeon remain unverified. These flows require manual vendor-procedure testing in a disposable Windows VM; source checks and unit fixtures do not establish runtime qualification.
 
 ## Installation monitor
 

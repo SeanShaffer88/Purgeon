@@ -136,13 +136,18 @@ fn same_path(a: &Path, b: &Path) -> bool {
         .to_string_lossy()
         .eq_ignore_ascii_case(&b.as_os_str().to_string_lossy())
 }
-struct Pin {
+pub(crate) struct Pin {
     path: PathBuf,
     file: File,
     identity: Identity,
 }
 impl Pin {
-    fn open(path: &Path, directory: bool, access: u32, sharing: u32) -> Result<Self, String> {
+    pub(crate) fn open(
+        path: &Path,
+        directory: bool,
+        access: u32,
+        sharing: u32,
+    ) -> Result<Self, String> {
         let file = OpenOptions::new()
             .access_mode(access)
             .share_mode(sharing)
@@ -160,7 +165,7 @@ impl Pin {
             identity,
         })
     }
-    fn verify(&self, directory: bool) -> Result<(), String> {
+    pub(crate) fn verify(&self, directory: bool) -> Result<(), String> {
         if info(&self.file, directory)? != self.identity
             || !same_path(&handle_path(&self.file)?, &self.path)
         {
@@ -168,8 +173,69 @@ impl Pin {
         }
         Ok(())
     }
+
+    // Read and retire the exact retained checkpoint handle; never reopen a pathname.
+    pub(crate) fn read_bounded(&self, limit: u64) -> Result<Vec<u8>, String> {
+        self.verify(false)?;
+        if self.file.metadata().map_err(|e| e.to_string())?.len() > limit {
+            return Err("Checkpoint exceeds bounds".into());
+        }
+        let mut file = self.file.try_clone().map_err(|e| e.to_string())?;
+        file.seek(SeekFrom::Start(0)).map_err(|e| e.to_string())?;
+        let mut bytes = Vec::new();
+        file.take(limit + 1)
+            .read_to_end(&mut bytes)
+            .map_err(|e| e.to_string())?;
+        if bytes.len() as u64 > limit {
+            return Err("Checkpoint exceeds bounds".into());
+        }
+        self.verify(false)?;
+        Ok(bytes)
+    }
+    pub(crate) fn retire_checkpoint(&self, expected: &[u8]) -> Result<(), String> {
+        if self.read_bounded(4096)? != expected {
+            return Err("Checkpoint changed since review".into());
+        }
+        mark_delete(&self.file)
+    }
+
+    pub(crate) fn same_identity(&self, other: &Self) -> bool {
+        self.identity == other.identity && same_path(&self.path, &other.path)
+    }
+
+    pub(crate) fn create_placeholder(path: &Path) -> Result<Self, String> {
+        let file = OpenOptions::new()
+            .write(true)
+            // Attribute-only handles do not enforce delete sharing. The fixed
+            // writer shares read while this original read handle stays alive.
+            .access_mode(0x80000000)
+            .create_new(true)
+            .share_mode(3)
+            .custom_flags(OPEN_REPARSE)
+            .open(path)
+            .map_err(|e| e.to_string())?;
+        Ok(Self {
+            identity: info(&file, false)?,
+            path: path.to_path_buf(),
+            file,
+        })
+    }
+
+    pub(crate) fn remove_matching(self, directory: bool) -> Result<(), String> {
+        self.verify(directory)?;
+        let identity = self.identity;
+        let path = self.path.clone();
+        drop(self);
+        // Keep real read access while deleting so sharing rules also prevent
+        // pathname replacement; attribute-only handles do not provide that pin.
+        let current = Self::open(&path, directory, 0x80000000 | DELETE, 3)?;
+        if current.identity != identity {
+            return Err("Cleanup identity changed; retained".into());
+        }
+        mark_delete(&current.file)
+    }
 }
-fn canonical_temp(root: &Path) -> Result<PathBuf, String> {
+pub(crate) fn canonical_temp(root: &Path) -> Result<PathBuf, String> {
     // Inspect the supplied spelling first: canonicalization must not hide a junction.
     for p in root.ancestors() {
         let m = fs::symlink_metadata(p).map_err(|e| e.to_string())?;
@@ -553,7 +619,7 @@ fn machine_executable_class() -> Result<winreg::RegKey, String> {
     direct_command(&template, isolated.as_deref())?;
     Ok(class)
 }
-fn shell_launch(path: &Path) -> Result<(), String> {
+pub(crate) fn shell_launch(path: &Path) -> Result<(), String> {
     let class = machine_executable_class()?;
     let file = wide(path.as_os_str());
     let verb = wide(std::ffi::OsStr::new("runas"));

@@ -84,6 +84,26 @@ pub(crate) fn execute_in_job(
     existing_job: Option<&crate::security::ProcessJob>,
     authorize: impl FnOnce(&std::process::Child) -> Result<(), String>,
 ) -> Result<Output, String> {
+    execute_in_job_cancellable(
+        command,
+        input,
+        timeout,
+        cap,
+        existing_job,
+        authorize,
+        || false,
+    )
+}
+
+pub(crate) fn execute_in_job_cancellable(
+    command: &mut Command,
+    input: Option<String>,
+    timeout: Duration,
+    cap: usize,
+    existing_job: Option<&crate::security::ProcessJob>,
+    authorize: impl FnOnce(&std::process::Child) -> Result<(), String>,
+    cancelled: impl Fn() -> bool,
+) -> Result<Output, String> {
     validate_input(input.as_deref())?;
     let mut child = match command
         .stdin(Stdio::piped())
@@ -165,6 +185,9 @@ pub(crate) fn execute_in_job(
                 .map_err(|e| e.to_string())?,
         );
         loop {
+            if cancelled() {
+                return Err("Command cancelled".into());
+            }
             match child.try_wait() {
                 Ok(Some(status)) => return Ok(status),
                 Err(error) => return Err(error.to_string()),
@@ -258,6 +281,22 @@ mod tests {
             .args(["-NoProfile", "-NonInteractive", "-Command", script])
             .creation_flags(0x08000000);
         command
+    }
+    #[test]
+    fn owned_downloader_cancellation_terminates_and_drains_before_return() {
+        let mut command = child("$null=[Console]::In.ReadToEnd();Start-Sleep -Seconds 30");
+        let started = Instant::now();
+        let result = execute_in_job_cancellable(
+            &mut command,
+            Some("{}".into()),
+            Duration::from_secs(20),
+            1024,
+            None,
+            |_| Ok(()),
+            || started.elapsed() >= Duration::from_millis(100),
+        );
+        assert_eq!(result.unwrap_err(), "Command cancelled");
+        assert!(started.elapsed() < Duration::from_secs(10));
     }
     #[test]
     fn ordinary_spawn_boundary_contains_early_descendant() {

@@ -61,4 +61,4 @@ function snapshotArgument(value) {
   return structuredClone(value);
 }
 // Queries can migrate settings, persist caches or invoke host controls. Default to approval.
-const approvalFree = new Set('i18n:languages i18n:current profiler:report app:dataDamage programs:measureCancel items:removeCancel backups:restoreCancel backups:verifyCancel erase:runCancel duplicates:scanCancel games:listCancel graph:graphCancel snapshots:cancel junk:scanCancel junk:cleanSystemCancel orphans:scanCancel explore:diskMapCancel disk:scanCancel disk:measureCancel health:cancel'.split(' '));
+const approvalFree = new Set('securitySoftware:list securitySoftware:prepare securitySoftware:status securitySoftware:cancel i18n:languages i18n:current profiler:report app:dataDamage programs:measureCancel items:removeCancel backups:restoreCancel backups:verifyCancel erase:runCancel duplicates:scanCancel games:listCancel graph:graphCancel snapshots:cancel junk:scanCancel junk:cleanSystemCancel orphans:scanCancel explore:diskMapCancel disk:scanCancel disk:measureCancel health:cancel'.split(' '));

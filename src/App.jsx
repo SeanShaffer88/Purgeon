@@ -25,6 +25,7 @@ const DebloatView = lazy(() => import('./debloat.jsx').then((m) => ({ default: m
 const DiskUsageView = lazy(() => import('./disk.jsx').then((m) => ({ default: m.DiskUsageView })));
 const ProcessesView = lazy(() => import('./processes.jsx').then((m) => ({ default: m.ProcessesView })));
 const StartupView = lazy(() => import('./startup.jsx').then((m) => ({ default: m.StartupView })));
+const SecuritySoftwareView = lazy(() => import('./security-software.jsx').then((m) => ({ default: m.SecuritySoftwareView })));
 const JunkView = lazy(() => import('./junk.jsx').then((m) => ({ default: m.JunkView })));
 
 
@@ -101,6 +102,7 @@ const VIEWS = {
   backups: { label: 'Backups', noun: 'backups', cols: [['name', 'Removed'], ['size', 'Entries'], ['date', 'Backed Up On']], button: true },
   snapshots: { label: 'Snapshots', noun: 'snapshots', cols: [['name', 'Snapshot'], ['size', 'Entries'], ['date', 'Taken On']], button: true },
   history: { label: 'Change History', noun: 'changes', cols: [['name', 'Change'], ['size', 'Type'], ['date', 'When']], button: true },
+  securitySoftware: { label: 'Remove AV', noun: 'security products', cols: [], custom: true, button: true },
   startup: { label: 'Startup', noun: 'entries', cols: [], custom: true, button: true },
   services: { label: 'Services', noun: 'services', cols: [], custom: true, button: true },
   debloat: { label: 'Debloat', noun: 'tweaks', cols: [], button: true, custom: true },
@@ -117,6 +119,7 @@ const VIEW_CHIPS = [
   ['store', 'Apps', 'Windows Store apps from the Microsoft Store (Ctrl+2)'],
   ['monitored', 'Monitored', 'Monitored programs: programs recorded with Tools › Monitor an Installation (Ctrl+3)'],
   ['processes', 'Processes', 'Processes: what is running now, how much of the PC it uses, and controls to end, pause or prioritise it'],
+  ['securitySoftware', 'Remove AV', 'Inspect installed security software and review vendor removal utilities'],
   ['startup', 'Startup', 'Startup programs and scheduled tasks that start with Windows (Ctrl+6)'],
   ['services', 'Services', 'Windows and application services: inspect automatic start and delayed start'],
   ['debloat', 'Debloat', 'Debloat Windows: safe, reversible tweaks that remove Windows ads, telemetry and clutter (Ctrl+5)'],
@@ -132,6 +135,7 @@ const VIEW_ICON_PATHS = {
   desktop: 'M3 4h14v10H3zM7 17h6M10 14v3',
   store: 'M4 7h12l-1 10H5zM7 7a3 3 0 0 1 6 0',
   monitored: 'M1.5 10s3-5.5 8.5-5.5S18.5 10 18.5 10 15.5 15.5 10 15.5 1.5 10 1.5 10zM10 7.5a2.5 2.5 0 1 0 0 5 2.5 2.5 0 0 0 0-5z',
+  securitySoftware: 'M10 2l7 3v5c0 4-3 6-7 8-4-2-7-4-7-8V5zM7 10h6',
   startup: 'M10 2.5v7M6.2 5.2a6 6 0 1 0 7.6 0',
   services: 'M3 5h14M3 10h14M3 15h14M6 3v4M13 8v4M8 13v4',
   debloat: 'M4 3v14M10 3v14M16 3v14M2 7h4M8 13h4M14 9h4',
@@ -174,6 +178,7 @@ const ViewIcon = ({ id }) => (
 
 // What the action bar says in views that have their own buttons.
 const VIEW_NOTES = {
+  securitySoftware: 'Remove AV · vendor utilities may remove protection and require a restart',
   startup: 'Startup · turn entries off and on; nothing is deleted',
   services: 'Services · turn services off and on; nothing is deleted',
   debloat: 'Debloat · every tweak can be undone',
@@ -2776,6 +2781,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               tx("Only safe categories — caches, dumps and temporary files Windows rebuilds.")
             ) : view === 'disk' ? (
               tx("What is using the space on each drive, biggest first. Open a folder to look inside it.")
+            ) : view === 'securitySoftware' ? (
+              tx("Inspect installed security software and review its matched vendor removal utility.")
             ) : view === 'processes' ? (
               tx("What is running right now, and what it is costing. Windows critical processes are protected.")
             ) : (
@@ -2894,7 +2901,11 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         <SnapshotTimeline snapshots={rows.filter((r) => r.stats && r.created)} marked={marked} onSelect={(key, ctrl) => selectRow(key, { ctrl })} onCompare={(a, b) => runCompare(a, b)} onCompareNow={(s) => runCompare(s, null)} />
       )}
 
-      {view === 'debloat' ? (
+      {view === 'securitySoftware' ? (
+        <Suspense fallback={<div className="list-empty">Loading…</div>}>
+          <SecuritySoftwareView key={customKey} filter={filter} onError={setError} onStatus={setCustomStatus} />
+        </Suspense>
+      ) : view === 'debloat' ? (
         <Suspense fallback={<div className="list-empty">{tx("Loading…")}</div>}>
           <DebloatView key={customKey} filter={filter} admin={admin} onError={setError} onStatus={setCustomStatus} beforeChange={beforeDebloatChange} />
         </Suspense>

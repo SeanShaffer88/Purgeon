@@ -26,9 +26,21 @@ Initialization explicitly creates data/feature roots, installs logging wrappers,
 
 `confirm(request)` must return literal `true`. Missing callbacks, denial and callback errors fail closed. Operation requests contain `{ kind: 'operation', channel, argument }`; existing inner confirmations use `{ kind: 'confirmation', options }`. Arguments accept plain cloneable data, copied before admission and copied separately for approval. Approval and the handler run inside the canonical mutation admission region. Overlapping admitted operations reject; mutations never retry. Existing inner confirmations, restore points, inventory freshness, native preparation, backups and recovery checks still apply.
 
-Approval is conservative: queries may persist caches or migrate damaged/legacy settings, so all operations require approval except static language/profile/damage reads and explicit cancellation controls. Even host dialogs/opening operations require approval. Approval does not authorize bypassing an inner confirmation.
+Approval is conservative: queries may persist caches or migrate damaged/legacy settings, so all operations require approval except static language/profile/damage reads, reviewed security-software inventory/preparation/status, and explicit cancellation controls. Even host dialogs/opening operations require approval. Approval does not authorize bypassing an inner confirmation.
 
 ## Verification and limits
+
+`purgeon-core/securitySoftware` exposes `list()`, `acknowledge({ reviewId, acknowledgment: 'reviewedUtilityClosed' })`, `prepare({ productId })`,
+`launch({ planId })`, `cancel({ planId })`, and `status({ planId })` using the
+five dedicated SystemAdapter methods. List, inert preparation, status and cancel
+need no approval and remain available while launch awaits approval or executes.
+Preparation neither downloads nor launches. Launch requires one explicit approval;
+the consumer's confirmation must use the prepared product/tool names and explain
+security removal, possible restart, and no Purgeon rollback. Launch never retries.
+`reviewRequired` means the utility may have started: review status and vendor
+windows. A launched utility does not establish removal completion or provide undo.
+Native policy owns matching, downloads, verification, cancellation and replay
+prevention; renderer URLs, paths, signer data and approval booleans are rejected.
 
 `purgeon-core/measure` exports `onMeasured(listener)` after runtime initialization. It returns an unsubscribe function and rejects non-function listeners. Subscribe before calling `measure` or `measureStore`: these operations deliver individual result snapshots (including `key`, `folder` and `sizeKB` when measured) through listeners rather than their return values. Subscription itself needs no approval; measurement operations retain their approval policy.
 
