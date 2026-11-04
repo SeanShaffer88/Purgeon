@@ -455,9 +455,12 @@ mod tests {
         .unwrap();
         assert_eq!(output.status.code(), Some(7));
         assert_eq!(output.stderr, b"failure");
+        let stdout = String::from_utf8(output.stdout).unwrap();
+        let actual_directory = stdout.strip_prefix("input é\nquoted \"value\" é").unwrap();
         assert_eq!(
-            String::from_utf8(output.stdout).unwrap(),
-            format!("input é\nquoted \"value\" é{}", directory.display())
+            std::fs::canonicalize(actual_directory).unwrap(),
+            std::fs::canonicalize(&directory).unwrap(),
+            "{stdout}"
         );
         std::fs::remove_dir(directory).unwrap();
         let mut missing = Command::new("purgeon-synthetic-nonexistent-target.exe");
