@@ -6,6 +6,7 @@ out/
 Thumbs.db
 release/
 release-manifest.json
+release-evidence/
 src-tauri/target/
 src-tauri/gen/
 

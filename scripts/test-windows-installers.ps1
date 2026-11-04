@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory)][string] $Directory,
     [Parameter(Mandatory)][string] $Manifest,
+    [string] $EvidenceDirectory,
     [Parameter(Mandatory)][string] $PriorInstaller,
     [Parameter(Mandatory)][ValidatePattern('^[0-9a-fA-F]{64}$')][string] $PriorSha256,
     [Parameter(Mandatory)][version] $PriorVersion,
@@ -20,7 +21,7 @@ if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hoste
     throw 'Installer lifecycle tests are restricted to disposable GitHub-hosted runners.'
 }
 if ((Get-FileHash -LiteralPath $PriorInstaller -Algorithm SHA256).Hash -ne $PriorSha256) { throw 'Prior installer SHA256 mismatch; no installer executed.' }
-& "$PSScriptRoot/verify-windows-package.ps1" -Directory $Directory -Manifest $Manifest
+& "$PSScriptRoot/verify-windows-package.ps1" -Directory $Directory -Manifest $Manifest -EvidenceDirectory $EvidenceDirectory
 $package = Get-Content -LiteralPath $Manifest -Raw | ConvertFrom-Json
 if ((Get-InstallerBaseVersion $package.version) -le $PriorVersion) { throw 'Candidate must be newer than prior installer.' }
 if (Test-Path -LiteralPath $OutputDirectory) { throw 'Installer evidence destination must be new.' }
@@ -68,7 +69,7 @@ function Assert-Installed([string] $Version, [string] $Hash) {
     $reg = Get-ItemProperty -LiteralPath $found[0]
     Assert-InstallerVersion $reg.DisplayVersion $Version
     if ($reg.InstallLocation.Trim('"').TrimEnd('\') -ine $install.TrimEnd('\')) { throw 'Uninstall registration differs from expected version/path.' }
-    if ($Hash -and $actualHash -ne $Hash) { throw 'Installed candidate differs from portable executable hash.' }
+    if ($Hash -and $actualHash -ne $Hash) { throw 'Installed candidate differs from captured installer payload hash.' }
     $row.status = 'passed'
 }
 $sentinels = [ordered]@{}
@@ -102,15 +103,15 @@ try {
     $evidence.sentinels = $sentinels
     $candidate = (Resolve-Path -LiteralPath (Join-Path $Directory 'Purgeon-Setup-x64.exe')).Path
     Invoke-Installer $candidate "/S /D=$install" 'upgrade-candidate'
-    Assert-Installed $package.version $package.portable.'Purgeon-Portable-x64.exe'
+    Assert-Installed $package.version $package.installed.'purgeon.exe'.sha256
     Assert-Preserved
     if ($Reinstall) {
         Invoke-Installer $candidate "/S /D=$install" 'reinstall-candidate'
-        Assert-Installed $package.version $package.portable.'Purgeon-Portable-x64.exe'
+        Assert-Installed $package.version $package.installed.'purgeon.exe'.sha256
         Assert-Preserved
     }
     foreach ($repeat in 1..10) {
-        & "$PSScriptRoot/test-packaged-cli.ps1" -Directory $Directory -Manifest $Manifest -Executable $exe -OutputDirectory (Join-Path $out "installed-cli-$repeat")
+        & "$PSScriptRoot/test-packaged-cli.ps1" -Directory $Directory -Manifest $Manifest -EvidenceDirectory $EvidenceDirectory -Executable $exe -OutputDirectory (Join-Path $out "installed-cli-$repeat")
     }
     Assert-Preserved
     # These inert tasks never run: a future one-shot trigger plus a no-op action.
@@ -145,6 +146,9 @@ try {
             'release-manifest.json' = $Manifest
             'installer.nsi' = (Join-Path $PSScriptRoot '../src-tauri/target/x86_64-pc-windows-msvc/release/nsis/x64/installer.nsi')
         }
+        $internalEvidence = if ($EvidenceDirectory) { $EvidenceDirectory } else { "$((Resolve-Path -LiteralPath $Directory).Path)-evidence" }
+        $inputs['captured-installer-payload.exe'] = Join-Path $internalEvidence 'purgeon.exe'
+        $inputs['package-receipt.json'] = Join-Path $internalEvidence 'receipt.json'
         if ($stages | Where-Object { $_.stage -in @('upgrade-candidate', 'reinstall-candidate') }) { $inputs['installed-candidate.exe'] = $exe }
         foreach ($name in $inputs.Keys) {
             try {

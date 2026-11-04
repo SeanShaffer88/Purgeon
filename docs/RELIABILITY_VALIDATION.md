@@ -1,5 +1,71 @@
 # Reliability validation
 
+## 2026-11-03: NSIS payload capture correction (current)
+
+The integrated product remains `1.5.0-alpha.1`, with PR92's canonical package.
+CI run `41776785387` failed the installed-versus-portable hash comparison.
+Downloaded evidence shows the installed executable exactly matches the statically
+extracted NSIS payload; the portable executable has a different full-file hash.
+The cause is Tauri's intentional three-byte `NSS` / `UNK` marker change, not a
+corrupt installation. The pinned [Tauri CLI v2.12.4 bundler source](https://github.com/tauri-apps/tauri/blob/tauri-cli-v2.12.4/crates/tauri-bundler/src/bundle.rs#L142-L201)
+places the hook after the NSIS marker change and signing, before NSIS packaging,
+and then restores the main executable.
+
+The correction captures the actual signed or unsigned NSIS main executable at
+that hook into a path-bound, create-new location unique to each build. Manifest
+v2 records separate full-file hashes for installed and portable executables;
+internal `release-evidence/purgeon.exe` and `receipt.json` retain payload evidence.
+When signing credentials are provided, packaging re-signs the restored portable
+executable. Credential-backed signing remains untested. `SkipBuild` rejects stale
+inputs, artifacts and signing mode; freshness includes `app.manifest` and
+`build_support.rs`. Public assets remain exactly `Purgeon-Setup-x64.exe` and
+`Purgeon-Portable-x64.zip`; internal payload evidence is not published.
+
+Fresh root checks passed: 601 JavaScript tests, lint, incremental typecheck,
+frontend build and eight packed-consumer modes (all process/runner exits 0).
+The first capture build, nine safe portable CLI cases and negative package-verifier
+checks passed (all process/runner exits 0). Independent static NSIS extraction
+matched the captured installed hash and confirmed a distinct portable hash.
+After the freshness fix, the final package rebuild, nine safe portable CLI cases
+and negative-verifier reruns all passed (process/runner exits 0). These are local
+unsigned checks, not final CI qualification.
+
+Independent review `fdca8b6ad5e2` identified the freshness omission; final review
+`d515d38edcf2` accepted its correction with no remaining findings. Earlier CI
+passed 168 native tests (two ignored) on unchanged application/native source,
+before these build-script-only edits, and the 210-child benchmark on both operating
+systems. Final CI must rerun after commit. The old comparison failure remains
+historical evidence and does not establish a failed installation.
+
+Last measured merged coverage remains JavaScript core/overall 62.36% / 34.51%
+and Rust 34.89% / 34.93%; production source is unchanged. The 85% core / 70%
+overall floors remain unmet and are not waived. Earlier actual Narrator and
+keyboard checks retain their frontend scope. Live UAC/provider recovery,
+production WebView coverage and full accessibility remain unqualified.
+Merge and release remain blocked; do not tag or release this alpha.
+
+Local evidence (outside the repository):
+
+- [Downloaded CI payload proof](../../analysis-logs/ten-ci-hash-diagnostics/payload-proof.json).
+- [Fresh JavaScript gates](../../analysis-logs/ten-capture-final-js-checks.json).
+- [First capture package/CLI/verifier checks](../../analysis-logs/ten-capture-package-checks.json).
+- [Independent static payload proof](../../analysis-logs/ten-capture-static-proof.json).
+- [Post-fix package checks](../../analysis-logs/ten-capture-final-package-checks.json).
+- [Extractor provenance](../../analysis-logs/ten-nsis-extractor/static-extraction-result.json).
+
+Static inspection used the official [7-Zip 26.05 x64 MSI](https://github.com/ip7z/7zip/releases/tag/26.05),
+corroborated by the [official download page](https://7-zip.org/download.html).
+Its SHA256 is `3FE4AB99FA15629C652944309A2B2BC6E41FC933FC6B63F5DF1EBCF3AEA68263`.
+Read-only Windows Installer/CAB extraction occurred outside the project; no host
+installation or MSI execution occurred. Only the extracted 7z CLI was used for
+static NSIS inspection; this adds no application or build dependency.
+XERJ's stale-index guard blocked reuse, so inspection used local files. The local
+reference catalog was reviewed without executing reference code.
+
+This documentation task read the supplied records and logs; it ran no product,
+installer or signing workloads and performed no Git operation. Earlier entries
+below preserve their original scope and are superseded only where stated above.
+
 ## 2026-11-03: final local integration record before merge commit
 
 The resolved normal merge combines reliability work at `3011ffd` with

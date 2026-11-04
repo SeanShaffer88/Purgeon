@@ -152,13 +152,14 @@ jobs:
           path: |
             release/
             release-manifest.json
+            release-evidence/
       - name: Re-download build artifacts
         uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: Purgeon-windows
           path: verified
       - name: Verify downloaded contents and hashes
-        run: ./scripts/verify-windows-package.ps1 -Directory verified/release -Manifest release-manifest.json
+        run: ./scripts/verify-windows-package.ps1 -Directory verified/release -Manifest verified/release-manifest.json -EvidenceDirectory verified/release-evidence
 
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
@@ -173,7 +174,7 @@ jobs:
           name: Purgeon-windows
           path: verified
       - name: Verify publication inputs
-        run: ./scripts/verify-windows-package.ps1 -Directory verified/release -Manifest verified/release-manifest.json
+        run: ./scripts/verify-windows-package.ps1 -Directory verified/release -Manifest verified/release-manifest.json -EvidenceDirectory verified/release-evidence
       - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           # Release notes are written manually in the repo (RELEASE_NOTES.md) and copied here,

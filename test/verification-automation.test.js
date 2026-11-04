@@ -208,7 +208,7 @@ try {
   $rejected = $false
   try { Assert-Installed '1.5.0-alpha.1' $expected }
   catch {
-    if ($_.Exception.Message -ne 'Installed candidate differs from portable executable hash.') { throw }
+    if ($_.Exception.Message -ne 'Installed candidate differs from captured installer payload hash.') { throw }
     $rejected = $true
   }
   $saved = Get-Content -LiteralPath (Join-Path $out 'result.json') -Raw | ConvertFrom-Json

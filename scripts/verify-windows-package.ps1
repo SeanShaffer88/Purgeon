@@ -1,10 +1,13 @@
 param(
     [Parameter(Mandatory)][string] $Directory,
-    [Parameter(Mandatory)][string] $Manifest
+    [Parameter(Mandatory)][string] $Manifest,
+    [string] $EvidenceDirectory
 )
 . "$PSScriptRoot/windows-package-tools.ps1"
 $directoryPath = (Resolve-Path -LiteralPath $Directory).Path
 $evidence = Get-Content -LiteralPath $Manifest -Raw | ConvertFrom-Json
+if (!$EvidenceDirectory) { $EvidenceDirectory = "$directoryPath-evidence" }
+$receipt = Assert-InstalledPackageEvidence $evidence $EvidenceDirectory
 $expected = @('Purgeon-Portable-x64.zip', 'Purgeon-Setup-x64.exe')
 $actual = @(Get-ChildItem -LiteralPath $directoryPath -Force | Select-Object -ExpandProperty Name)
 if (Compare-Object $expected $actual) { throw 'Release must contain exactly the two specified assets.' }
@@ -13,6 +16,7 @@ foreach ($name in $expected) {
         throw "Asset hash mismatch: $name"
     }
 }
+Assert-PackageFileIdentity "$directoryPath/Purgeon-Setup-x64.exe" $receipt.installer
 # The setup program is an NSIS installer: its own stub is a 32-bit PE (0x14C) even
 # though the application it installs is native x64. The x64 guarantee is enforced on
 # the application binary itself: package-windows.ps1 asserts it before copying, the
@@ -37,6 +41,7 @@ try {
     }
     # The portable executable itself must be a native x64 build.
     $portableEntry = $zip.GetEntry('Purgeon-Portable-x64.exe')
+    if ($portableEntry.Length -ne $receipt.portable.byteLength) { throw 'Portable payload length differs from receipt.' }
     $tempExe = Join-Path ([IO.Path]::GetTempPath()) ('purgeon-portable-' + [Guid]::NewGuid().ToString('N') + '.exe')
     try {
         $in = $portableEntry.Open()

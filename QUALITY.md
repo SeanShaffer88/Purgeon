@@ -1,5 +1,38 @@
 # Quality and release gate
 
+## 2026-11-03: NSIS capture correction, final CI pending
+
+Current product: `1.5.0-alpha.1`, retaining PR92's canonical package. CI run
+`41776785387` exposed an incorrect installed-versus-portable hash comparison:
+the downloaded installed executable matches the extracted NSIS payload exactly.
+Tauri intentionally changes the three-byte `NSS` / `UNK` marker for NSIS and
+restores the portable main executable. This is not installation corruption.
+
+The correction captures the actual NSIS main executable at the packaging hook.
+Manifest v2 and internal payload/receipt evidence preserve separate full-file
+installed and portable hashes. Freshness checks include `app.manifest` and
+`build_support.rs`; stale `SkipBuild` inputs, artifacts and signing mode fail.
+Public assets remain the existing two files. Signing with credentials is untested.
+
+Fresh local gates passed: 601 JavaScript tests, lint, incremental typecheck,
+frontend build and eight packed-consumer modes (process/runner exits 0).
+The first capture build, nine portable CLI cases and negative verifier checks
+passed; independent static extraction matched the captured NSIS hash. The final
+post-fix package rebuild, nine safe portable CLI cases and negative-verifier
+reruns passed (process/runner exits 0). Independent audit accepted the freshness fix with
+no remaining findings. Earlier CI passed 168 native tests (two ignored) before
+build-script edits and the 210-child benchmark on both operating systems.
+Final CI for the correction remains pending; the previous hash gate is not a pass.
+
+Last measured merged coverage remains JavaScript core/overall 62.36% / 34.51%
+and Rust 34.89% / 34.93%, below the unchanged 85% / 70% floors. Live UAC/provider
+recovery, production WebView coverage and full accessibility remain unqualified.
+Earlier Narrator/keyboard checks retain their frontend scope. Merge remains
+blocked by the full gate. Do not tag or release this alpha.
+
+See [the capture correction record](docs/RELIABILITY_VALIDATION.md#2026-11-03-nsis-payload-capture-correction-current)
+for evidence, source/provenance and check limitations. Historical entries follow.
+
 ## 2026-11-03: PR91/PR92 final local integration, merge blocked
 
 The resolved integration of `3011ffd` and `origin/main` `e06ff02` retains both

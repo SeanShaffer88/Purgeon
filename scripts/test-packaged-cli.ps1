@@ -1,6 +1,7 @@
 param(
     [Parameter(Mandatory)][string] $Directory,
     [Parameter(Mandatory)][string] $Manifest,
+    [string] $EvidenceDirectory,
     [string] $Executable,
     [string] $OutputDirectory = (Join-Path $PWD 'verification/packaged-cli'),
     [ValidateRange(1,120)][int] $TimeoutSeconds = 45
@@ -78,7 +79,7 @@ public static class PurgeonCliCapture {
 }
 '@
 }
-& "$PSScriptRoot/verify-windows-package.ps1" -Directory $Directory -Manifest $Manifest
+& "$PSScriptRoot/verify-windows-package.ps1" -Directory $Directory -Manifest $Manifest -EvidenceDirectory $EvidenceDirectory
 if (Test-Path -LiteralPath $OutputDirectory) { throw 'CLI evidence destination must be new.' }
 $out = (New-Item -ItemType Directory -Path $OutputDirectory).FullName
 $cases = [Collections.Generic.List[object]]::new()
@@ -88,7 +89,7 @@ try {
         if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') { throw 'Installed EXE tests require a disposable GitHub-hosted runner.' }
         $exe = (Resolve-Path -LiteralPath $Executable).Path
         $expected = Get-Content -LiteralPath $Manifest -Raw | ConvertFrom-Json
-        if ((Get-FileHash -LiteralPath $exe).Hash -ne $expected.portable.'Purgeon-Portable-x64.exe') { throw 'Installed executable differs from package.' }
+        if ((Get-FileHash -LiteralPath $exe).Hash -ne $expected.installed.'purgeon.exe'.sha256) { throw 'Installed executable differs from captured installer payload.' }
         $data = Join-Path $env:APPDATA 'com.seanshaffer.sweepuninstall'
     } else {
         $extract = Join-Path $out 'portable with spaces'
