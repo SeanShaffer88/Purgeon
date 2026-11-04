@@ -1,0 +1,10 @@
+import { dispatchFeature } from '../runtime.js';
+export const sample = (arg) => dispatchFeature('processes:sample', arg);
+export const end = (arg) => dispatchFeature('processes:end', arg);
+export const suspend = (arg) => dispatchFeature('processes:suspend', arg);
+export const resume = (arg) => dispatchFeature('processes:resume', arg);
+export const setPriority = (arg) => dispatchFeature('processes:setPriority', arg);
+export const setAffinity = (arg) => dispatchFeature('processes:setAffinity', arg);
+export const alertThresholds = (arg) => dispatchFeature('processes:alertThresholds', arg);
+export const setAlertThresholds = (arg) => dispatchFeature('processes:setAlertThresholds', arg);
+export const openFolder = (arg) => dispatchFeature('processes:openFolder', arg);

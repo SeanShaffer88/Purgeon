@@ -58,7 +58,7 @@ test('startup and deeper scans merge native task IDs without scheduler shell fal
   const deeper=await scanDeep({},{nameKey:'fixture',location:'C:\\Fixture'});assert.equal(deeper.find((entry)=>entry.kind==='task').taskId,taskId);assert.ok(calls.some(([kind])=>kind==='inventory'));
 });
 test('every runtime backend file is free of generic scheduler commands and COM',async()=>{
-  const root=new URL('../src/backend/',import.meta.url);for(const entry of await fs.readdir(root)){if(!entry.endsWith('.js'))continue;const text=await fs.readFile(new URL(entry,root),'utf8');assert.doesNotMatch(text,/(?:Get|Set|New|Register|Unregister|Enable|Disable|Start|Stop|Export)-ScheduledTask|schtasks(?:\.exe)?|Schedule\.Service|TaskScheduler\.TaskScheduler/i,entry);}
+  const root=new URL('../packages/purgeon-core/src/internal/', import.meta.url);for(const entry of await fs.readdir(root)){if(!entry.endsWith('.js'))continue;const text=await fs.readFile(new URL(entry,root),'utf8');assert.doesNotMatch(text,/(?:Get|Set|New|Register|Unregister|Enable|Disable|Start|Stop|Export)-ScheduledTask|schtasks(?:\.exe)?|Schedule\.Service|TaskScheduler\.TaskScheduler/i,entry);}
 });
 test('backup native task intent retains durable journal link, halts later tasks and reconciles only proven completion',async()=>{
   for(const mode of ['uncertain','outer-record','mismatched-toggle']){

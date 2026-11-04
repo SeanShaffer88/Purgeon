@@ -8,7 +8,7 @@ $root = Split-Path $PSScriptRoot -Parent
 Push-Location $root
 try {
     $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-    if ($version -notmatch '^\d+\.\d+\.\d+$') { throw 'Packaging requires a three-part release version.' }
+    $setupName = Get-NsisSetupName $version
     if (-not $SkipBuild) {
         # Generate an absolute signing command; Tauri's working directory is irrelevant.
         $signConfig = Join-Path ([IO.Path]::GetTempPath()) ('purgeon-sign-config-' + [guid]::NewGuid() + '.json')
@@ -20,7 +20,7 @@ try {
         } finally { Remove-Item -LiteralPath $signConfig -Force -ErrorAction SilentlyContinue }
     }
     $x64 = Join-Path $root 'src-tauri/target/x86_64-pc-windows-msvc/release'
-    $setup64 = Join-Path $x64 "bundle/nsis/Purgeon_${version}_x64-setup.exe"
+    $setup64 = Join-Path $x64 "bundle/nsis/$setupName"
     foreach ($path in @($setup64)) {
         if (-not (Test-Path -LiteralPath $path -PathType Leaf)) { throw "Missing package input: $path" }
     }

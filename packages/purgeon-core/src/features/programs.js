@@ -1,0 +1,14 @@
+import { dispatchFeature } from '../runtime.js';
+export const list = (arg) => dispatchFeature('programs:list', arg);
+export const removeProvisioned = (arg) => dispatchFeature('programs:removeProvisioned', arg);
+export const restoreStore = (arg) => dispatchFeature('programs:restoreStore', arg);
+export const get = (arg) => dispatchFeature('icons:get', arg);
+export const runUninstaller = (arg) => dispatchFeature('program:runUninstaller', arg);
+export const prepare = (arg) => dispatchFeature('program:prepare', arg);
+export const processes = (arg) => dispatchFeature('program:processes', arg);
+export const killProcesses = (arg) => dispatchFeature('program:killProcesses', arg);
+export const openFolder = (arg) => dispatchFeature('program:openFolder', arg);
+export const openRegistry = (arg) => dispatchFeature('program:openRegistry', arg);
+export const search = (arg) => dispatchFeature('program:search', arg);
+export const outside = (arg) => dispatchFeature('programs:outside', arg);
+export const analyze = (arg) => dispatchFeature('program:analyze', arg);

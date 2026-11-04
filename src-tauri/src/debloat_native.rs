@@ -9,7 +9,7 @@ use std::sync::{Mutex, OnceLock};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use winreg::enums::{KEY_READ, KEY_SET_VALUE};
 
-const CATALOG: &str = include_str!("../../src/backend/debloat-catalog.json");
+const CATALOG: &str = include_str!("../../packages/purgeon-core/src/internal/debloat-catalog.json");
 const PIPE_PREFIX: &str = "\\\\.\\pipe\\Purgeon-Debloat-";
 const STATE_LIMIT: usize = 32768;
 

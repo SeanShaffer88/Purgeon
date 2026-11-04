@@ -1,0 +1,10 @@
+import { dispatchFeature } from '../runtime.js';
+export const get = (arg) => dispatchFeature('queue:get', arg);
+export const add = (arg) => dispatchFeature('queue:add', arg);
+export const remove = (arg) => dispatchFeature('queue:remove', arg);
+export const save = (arg) => dispatchFeature('queue:save', arg);
+export const clear = (arg) => dispatchFeature('queue:clear', arg);
+export const arm = (arg) => dispatchFeature('queue:arm', arg);
+export const disarm = (arg) => dispatchFeature('queue:disarm', arg);
+export const restartPending = (arg) => dispatchFeature('queue:restartPending', arg);
+export const restartNow = (arg) => dispatchFeature('queue:restartNow', arg);

@@ -1,6 +1,13 @@
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Get-NsisSetupName([string] $Version) {
+    if ($Version -cnotmatch '^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(-(alpha|beta|rc)\.(0|[1-9]\d*))?$') {
+        throw 'Packaging requires a three-part version with an optional alpha.N, beta.N or rc.N prerelease.'
+    }
+    return "Purgeon_${Version}_x64-setup.exe"
+}
+
 function Get-PeMachine([string] $Path) {
     $stream = [IO.File]::OpenRead($Path)
     $reader = [IO.BinaryReader]::new($stream)

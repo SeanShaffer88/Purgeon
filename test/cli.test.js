@@ -186,7 +186,7 @@ test('--help and the dispatched commands cannot drift apart', async () => {
   // command set are compared mechanically, in both directions.
   const fs = await import('node:fs');
   const cli = fs.readFileSync(new URL('../src/cli.js', import.meta.url), 'utf8');
-  const cliArgs = fs.readFileSync(new URL('../src/cli-args.js', import.meta.url), 'utf8');
+  const cliArgs = fs.readFileSync(new URL('../packages/purgeon-core/src/internal/cli-args.js', import.meta.url), 'utf8');
   const dispatched = new Set([...cli.matchAll(/cmd === '(--[a-z-]+)'/g)].map((m) => m[1]));
   for (const m of cliArgs.matchAll(/^ {2}'(--[a-z-]+)':/gm)) dispatched.add(m[1]);
   assert.ok(dispatched.size > 20, 'the dispatch set was actually found');

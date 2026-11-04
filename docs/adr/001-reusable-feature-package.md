@@ -1,0 +1,13 @@
+# ADR 001: one canonical reusable feature package
+
+Accepted for this extraction: one dependency-free ESM package, `packages/purgeon-core`, owns the canonical backend closure. Existing application paths become compatibility wrappers; the app retains Tauri, CLI dispatch, DOM application and update-exit watching. Explicit feature exports call literal canonical channels, preserving dispatch and native safety protocols. Host methods inject platform access and dialogs.
+
+The supported ownership model is one runtime/host per JS realm using one canonical loaded package instance. Registration claims ownership without host effects; initialization is explicit, shared and terminal on failure. App initialization claims app ownership. Existing app fake-host replacement tests work before public ownership; the app bridge cannot replace a publicly claimed host. Duplicate installations, alternate URLs and mixed versions cannot be advertised as sharing the singleton.
+
+A factory conversion would require rewriting all mutable backend state and dependency boundaries. No simultaneous independent hosts are required, so that larger change is deferred. Each feature receives a facade rather than a package of its own. Infrastructure and broker primitives stay private. The export map defines supported APIs, not a sandbox against private file access.
+
+Public approval occurs inside canonical serialization, using copied plain arguments and literal approval. Default approval includes queries because existing queries can persist caches or migrate settings; only reviewed static reads and cancellation controls skip outer approval. Native preparation, identity checks, journals, pre-delete validation, backup/recovery and inner confirmation remain canonical. There are no mutation retries.
+
+Application source assertions now inspect canonical package files. Coverage inventory includes package JavaScript in the core denominator. Lint covers package implementation and facades; TypeScript covers the new runtime/facades through declared private adapter/dispatcher boundaries plus the existing incremental contract checks. This does not claim whole-backend typing, coverage floors, live Windows qualification or native standalone reuse.
+
+Application and core versions are aligned at `1.5.0-alpha.1`. Windows packaging accepts numeric stable versions and explicit alpha.N, beta.N or rc.N prereleases, preserving the full version in the expected NSIS filename (`Purgeon_1.5.0-alpha.1_x64-setup.exe`). Actual native build and generated NSIS filename verification remain controller work. The required Windows assets are unchanged; the core tarball is a separate documented deliverable. No alpha release is authorized by this extraction.

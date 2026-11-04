@@ -18,7 +18,7 @@ test('closeAction survives a settings write and a fresh-module read', async () =
   assert.equal(next.closeAction, 'tray');
   const raw = JSON.parse(await fs.readFile(settings.settingsFile(), 'utf8'));
   assert.equal(raw.closeAction, 'tray', 'settings file on disk holds the choice');
-  const fresh = await import('../src/backend/settings.js?restart=close');
+  const fresh = await import('../packages/purgeon-core/src/internal/settings.js?restart=close');
   const again = await fresh.readSettings();
   assert.equal(again.closeAction, 'tray', 'a restarted app reads the remembered choice');
   assert.equal(again.tray, true);

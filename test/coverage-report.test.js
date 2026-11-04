@@ -14,7 +14,7 @@ function setup(t, sources = { 'src/backend/a.js': 'export const a = 1;\n' }) {
   const files = Object.entries(sources).map(([name,source]) => {
     fs.mkdirSync(path.dirname(path.join(root,name)),{recursive:true});
     fs.writeFileSync(path.join(root,name),source);
-    return { path:name,sha256:hash(source),language:'javascript',core:name.startsWith('src/backend/') || ['src/cli.js','src/cli-args.js'].includes(name) };
+    return { path:name,sha256:hash(source),language:'javascript',core:name.startsWith('src/backend/') || name.startsWith('packages/purgeon-core/src/') || ['src/cli.js','src/cli-args.js'].includes(name) };
   });
   const instrumentation = { metricVersion,nodeVersion:process.version,webviewVersion:'fixture',viteVersion:'8.3.5',jsFlags:{precise:true,detailed:true,sourceMaps:true,productionMode:true},rustVersion:null,llvmVersion:null,target:'x86_64-pc-windows-msvc',nativeFlags:[] };
   const manifest = { schemaVersion:1,sourceRoot:root,sourceTreeHash:sourceTreeHash(files),instrumentationId:hash(JSON.stringify(canonical(instrumentation))),files };
@@ -71,6 +71,17 @@ test('unloaded production files stay zero and missing manifest membership cannot
   assert.deepEqual(report.files.find((file) => file.path === 'src/Lazy.jsx').coveredLines,[]);
   const missing = {...fixture.manifest,files:fixture.manifest.files.slice(0,1)};
   assert.throws(() => reportCoverage(missing,fixture.evidence),/every production/);
+});
+
+test('canonical package sources remain in the core denominator and cannot be omitted', (t) => {
+  const relative = 'packages/purgeon-core/src/internal/feature.js';
+  const fixture = setup(t, { 'src/backend/a.js': 'export const a = 1;\n', [relative]: 'export const feature = 1;\n' });
+  fixture.rawRun('node', 'src/backend/a.js');
+  const report = reportCoverage(fixture.manifest, fixture.evidence);
+  assert.equal(report.languages.javascript.core.percent, 50);
+  assert.deepEqual(report.files.find(file => file.path === relative).coveredLines, []);
+  const missing = { ...fixture.manifest, files: fixture.manifest.files.filter(file => file.path !== relative) };
+  assert.throws(() => reportCoverage(missing, fixture.evidence), /every production/);
 });
 
 test('mixed Node and mapped WebView evidence merge unique source lines, never double-count them', (t) => {

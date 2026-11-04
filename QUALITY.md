@@ -1,5 +1,51 @@
 # Quality and release gate
 
+## 2026-11-03: modular feature alpha extraction
+
+The isolated modular extraction retains the existing Rust/Tauri/React stack and data identity. `packages/purgeon-core` owns canonical backend code; app paths are compatibility wrappers. Public feature imports use explicit host registration, initialization and guarded dispatch. One host per loaded package instance is intentional.
+
+Local gates passed: 567 JavaScript tests, lint, incremental typecheck, frontend build, eight independent packed-consumer modes covering 269 named operations, native formatting, strict locked x64 Clippy and 143 native tests (two probes ignored). Independent review found and then verified fixes for the relocated catalog include and measurement result subscription. Actual prerelease NSIS output, two Windows assets, portable contents, package-verifier negative tests and native CLI help were verified. Local binaries are unsigned.
+
+Coverage inventory includes canonical package sources. Coverage floors, native accounting and live privileged/runtime/installer/accessibility gaps remain unresolved; this alpha does not claim full release qualification. GitHub checks and artifact verification are recorded separately from these local results. The other active recovery worktree was not changed or included in this extraction.
+## Reusable core extraction (local implementation)
+
+`packages/purgeon-core` owns the canonical backend implementation; app compatibility
+wrappers retain the existing API. The packed offline consumer verifies all 71
+supported subpaths and 269 named feature operations before initialization, then
+fake-host settings/groups/dialog workflows, denied/missing/nonliteral/throwing
+approval, ownership conflicts, shared initialization, terminal failure, argument
+snapshots, serialization and no mutation retries. Imports start no timers; package
+source closure checks reject app, Node, React, Tauri and DOM dependencies.
+
+The first extraction run passed 564/565 app tests; a retained update-watcher
+import caused the failure and was removed from the canonical package. The next
+run passed all 565. Lint, incremental TypeScript and frontend build passed locally.
+Completion rerun passed all 567 current app tests, lint, incremental TypeScript,
+frontend build and packed consumer checks (all exit 0). The first completion run
+failed on a JavaScript interpolation error in the new filename regression test;
+that test was corrected and passed both focused and full reruns. Gate logs are
+retained locally under `out/completion`.
+TypeScript includes new runtime/facades through private dispatcher/host declarations
+and canonical contracts; it does not establish whole-backend typing. The coverage
+source inventory now includes package JavaScript in the core denominator; no new
+coverage percentage or performance claim is made.
+
+Native implementation source is unchanged; crate metadata is aligned. Final native gates and independent audit remain
+controller work. The DevTools build runner could not create its external run-log
+directory (access denied); direct `npm run build` passed. Default npm cache writes
+were also denied; packed checks now use an owned temporary cache and independent
+consumer outside the worktree, with bounded cleanup. The shipped example passes
+against the installed artifact using a mock host.
+
+Core, app and native metadata are aligned at `1.5.0-alpha.1`. Packaging preserves
+numeric stable versions and alpha.N/beta.N/rc.N prereleases in NSIS filenames;
+focused regression checks pass. Real generated filename verification remains
+controller work. CI marks prerelease tags as prereleases and excludes them from
+latest status, retaining exactly two Windows assets. Do not merge/tag/release with
+remaining full-gate blockers. No commit, push, tag, release, npm publication or
+installer execution occurred in this implementation task. Windows release assets
+remain the existing two files; the core tarball is a separate local deliverable.
+
 ## 2026-11-03: v1.4.3 scoped maintenance preparation
 
 PR #89 passed GitHub CI and was merged. Its scoped audit and PortableApps.com/PAF
