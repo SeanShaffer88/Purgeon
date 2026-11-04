@@ -10,6 +10,11 @@ Source failures remain visible, and stale WMI evidence does not prove installati
 or active protection. Unsupported and enterprise products remain visible; Defender
 has no removal action and ESET remains instructions only.
 
+Every native inventory refresh invalidates cached preparation eligibility before
+processing helper results. A rejected snapshot or recovery-discovery failure leaves
+no products eligible for new plans; existing operations and retained reviews remain.
+Successful refreshes preserve stable product IDs and partial-source behavior.
+
 The native policy uses fixed official AVG Clear, standard Avast Clear, Norton 360
 Remover and McAfee MCPR consumer downloads. Generic Avast One is unsupported.
 Publisher policy was observed from official downloaded payloads on 2026-11-04 by

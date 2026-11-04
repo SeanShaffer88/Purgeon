@@ -555,11 +555,19 @@ pub fn inventory() -> Result<Inventory, String> {
         Duration::from_secs(40),
         &AtomicBool::new(false),
     );
-    let mut m = manager().lock().map_err(|_| "Inventory unavailable")?;
+    finalize_inventory(manager(), raw, |m| discover_reviews(&native_root()?, m))
+}
+fn finalize_inventory(
+    manager: &Mutex<Manager>,
+    raw: Result<Vec<u8>, String>,
+    discover: impl FnOnce(&mut Manager) -> Result<Vec<RemovalReview>, String>,
+) -> Result<Inventory, String> {
+    let mut m = manager.lock().map_err(|_| "Inventory unavailable")?;
+    let previous = std::mem::take(&mut m.products);
     let mut result = match raw {
         Ok(bytes) => normalize(
             serde_json::from_slice(&bytes).map_err(|_| "Invalid inventory helper response")?,
-            &m.products,
+            &previous,
         )?,
         Err(_) => Inventory {
             products: vec![],
@@ -576,7 +584,7 @@ pub fn inventory() -> Result<Inventory, String> {
             reviews: vec![],
         },
     };
-    result.reviews = discover_reviews(&native_root()?, &mut m)?;
+    result.reviews = discover(&mut m)?;
     m.products = result.products.clone();
     Ok(result)
 }
@@ -1728,6 +1736,386 @@ public sealed class FixtureHandler : HttpMessageHandler {
         let id = m.products[0].id.clone();
         let plan = prepare_cached(m, PrepareRequest { product_id: id }).unwrap();
         m.operations.get(&plan.id).unwrap().clone()
+    }
+    #[test]
+    fn inventory_refresh_public_entry() {
+        let job = crate::security::ProcessJob::create(None).unwrap();
+        let temp = crate::updater_native::canonical_temp(&std::env::temp_dir()).unwrap();
+        let root = temp.join(format!(
+            "purgeon-inventory-entry-{}",
+            crate::broker::random_id().unwrap()
+        ));
+        fs::create_dir(&root).unwrap();
+        let owned = crate::updater_native::canonical_temp(&root).unwrap();
+        let result = std::panic::catch_unwind(|| {
+            let mut command = Command::new(std::env::current_exe().unwrap());
+            command
+                .args([
+                    "--exact",
+                    "security_software_native::tests::inventory_refresh_public_entry_child",
+                    "--test-threads=1",
+                ])
+                .env("APPDATA", &owned)
+                .env("PURGEON_INVENTORY_ENTRY_ROOT", &owned)
+                .creation_flags(0x08000000);
+            let output = crate::process_io::execute_in_job(
+                &mut command,
+                None,
+                Duration::from_secs(90),
+                64 * 1024,
+                Some(&job),
+                |_| Ok(()),
+            );
+            assert!(output.is_ok(), "public inventory child execution failed");
+            assert!(
+                output.unwrap().status.success(),
+                "public inventory child assertions failed"
+            );
+        });
+        // Never remove a fixture while its child may still be using it, even after a panic.
+        assert!(
+            job.terminate_and_confirm(Instant::now() + Duration::from_secs(5))
+                .is_ok(),
+            "child containment unconfirmed; owned fixture retained"
+        );
+        use std::os::windows::fs::MetadataExt;
+        // Check the exact exclusively created root and every descendant before deletion.
+        assert_eq!(root.parent(), Some(temp.as_path()));
+        assert_eq!(crate::updater_native::canonical_temp(&root).unwrap(), owned);
+        let mut pending = vec![root.clone()];
+        while let Some(path) = pending.pop() {
+            let metadata = fs::symlink_metadata(&path).unwrap();
+            assert_eq!(metadata.file_attributes() & 0x400, 0);
+            if metadata.is_dir() {
+                for entry in fs::read_dir(path).unwrap() {
+                    pending.push(entry.unwrap().path());
+                }
+            }
+        }
+        fs::remove_dir_all(&root).unwrap();
+        if let Err(panic) = result {
+            std::panic::resume_unwind(panic);
+        }
+    }
+
+    #[test]
+    fn inventory_refresh_public_entry_child() {
+        let Some(root) = std::env::var_os("PURGEON_INVENTORY_ENTRY_ROOT") else {
+            return;
+        };
+        use std::os::windows::fs::MetadataExt;
+        let root = PathBuf::from(root);
+        assert!(root.is_absolute());
+        let metadata = fs::symlink_metadata(&root).unwrap();
+        assert!(metadata.is_dir());
+        assert_eq!(metadata.file_attributes() & 0x400, 0);
+        let root = crate::updater_native::canonical_temp(&root).unwrap();
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 0);
+        assert_eq!(std::env::var_os("APPDATA").unwrap(), root.as_os_str());
+        let exe = std::env::current_exe().unwrap();
+        assert!(!exe
+            .file_stem()
+            .unwrap()
+            .to_string_lossy()
+            .to_lowercase()
+            .contains("portable"));
+        assert!(matches!(
+            fs::symlink_metadata(exe.parent().unwrap().join("portable")),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound
+        ));
+        let before = now().unwrap();
+        let result = inventory();
+        assert!(result.is_ok(), "public inventory failed");
+        let view = result.unwrap();
+        assert_eq!(view.sources.len(), SOURCE_IDS.len());
+        for id in SOURCE_IDS {
+            assert_eq!(
+                view.sources.iter().filter(|source| source.id == id).count(),
+                1
+            );
+        }
+        assert!(view
+            .sources
+            .iter()
+            .all(|source| matches!(source.status.as_str(), "ok" | "error" | "unavailable")));
+        assert_eq!(
+            view.complete,
+            view.sources.iter().all(|source| source.status == "ok")
+        );
+        assert!(
+            (before..=now().unwrap()).any(|second| timestamp(second).unwrap() == view.observed_at)
+        );
+        assert!(view.reviews.is_empty());
+        let manager = manager().lock().unwrap();
+        assert!(manager
+            .products
+            .iter()
+            .map(|p| &p.id)
+            .eq(view.products.iter().map(|p| &p.id)));
+        drop(manager);
+        let app = root.join("com.seanshaffer.sweepuninstall");
+        let native = app.join("SecuritySoftware");
+        assert_eq!(
+            crate::updater_native::canonical_temp(&native).unwrap(),
+            native
+        );
+        assert_eq!(
+            native_root().unwrap(),
+            crate::updater_native::canonical_temp(&native).unwrap()
+        );
+        assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+        assert_eq!(fs::read_dir(&app).unwrap().count(), 1);
+        assert_eq!(fs::read_dir(&native).unwrap().count(), 0);
+        for path in [&app, &native] {
+            assert_eq!(
+                fs::symlink_metadata(path).unwrap().file_attributes() & 0x400,
+                0
+            );
+        }
+    }
+
+    #[test]
+    fn inventory_refresh_poisoned_manager_rejects_before_discovery() {
+        let mutex = Mutex::new(cached());
+        let _ = std::panic::catch_unwind(|| {
+            let _guard = mutex.lock().unwrap();
+            panic!("poison fixture");
+        });
+        assert_eq!(
+            finalize_inventory(&mutex, Ok(inventory_bytes(vec![], "ok")), |_| {
+                panic!("poisoned manager reached discovery")
+            })
+            .unwrap_err(),
+            "Inventory unavailable"
+        );
+        assert!(mutex.is_poisoned());
+        assert!(matches!(
+            mutex.try_lock(),
+            Err(std::sync::TryLockError::Poisoned(_))
+        ));
+    }
+    #[test]
+    fn inventory_refresh_rejects_stale_preparation_after_invalid_json() {
+        let mutex = Mutex::new(cached());
+        let m = mutex.lock().unwrap();
+        let product_id = m.products[0].id.clone();
+        drop(m);
+        assert_eq!(
+            finalize_inventory(&mutex, Ok(b"invalid".to_vec()), |_| panic!(
+                "invalid JSON reached discovery"
+            ))
+            .unwrap_err(),
+            "Invalid inventory helper response"
+        );
+        let mut m = mutex.try_lock().unwrap();
+        assert!(m.products.is_empty());
+        assert_eq!(
+            prepare_cached(&mut m, PrepareRequest { product_id }).unwrap_err(),
+            "Product is absent from native inventory"
+        );
+    }
+    fn inventory_bytes(records: Vec<Record>, source_status: &str) -> Vec<u8> {
+        serde_json::to_vec(&serde_json::json!({
+            "records": records.into_iter().map(|r| serde_json::json!({
+                "name": r.name, "publisher": r.publisher, "version": r.version,
+                "source": r.source, "state": r.state
+            })).collect::<Vec<_>>(),
+            "sources": SOURCE_IDS.iter().map(|id| serde_json::json!({
+                "id": id, "status": source_status, "detail": ""
+            })).collect::<Vec<_>>()
+        }))
+        .unwrap()
+    }
+    #[test]
+    fn inventory_refresh_invalid_snapshots_clear_eligibility() {
+        let mut duplicate_source: serde_json::Value =
+            serde_json::from_slice(&inventory_bytes(vec![], "ok")).unwrap();
+        duplicate_source["sources"][0]["id"] = SOURCE_IDS[1].into();
+        for (raw, expected) in [
+            (
+                serde_json::to_vec(&duplicate_source).unwrap(),
+                "Inventory source identity invalid",
+            ),
+            (inventory_bytes(vec![], "invalid"), "Invalid source outcome"),
+            (
+                inventory_bytes(vec![record(&"x".repeat(513), "", SOURCE_IDS[0])], "ok"),
+                "Invalid inventory record",
+            ),
+            (
+                br#"{"records":[],"sources":[]}"#.to_vec(),
+                "Inventory exceeds bounds or misses sources",
+            ),
+        ] {
+            let mutex = Mutex::new(cached());
+            let m = mutex.lock().unwrap();
+            let product_id = m.products[0].id.clone();
+            drop(m);
+            assert_eq!(
+                finalize_inventory(&mutex, Ok(raw), |_| panic!(
+                    "invalid snapshot reached recovery"
+                ))
+                .unwrap_err(),
+                expected
+            );
+            let mut m = mutex.try_lock().unwrap();
+            assert!(m.products.is_empty());
+            assert_eq!(
+                prepare_cached(&mut m, PrepareRequest { product_id }).unwrap_err(),
+                "Product is absent from native inventory"
+            );
+        }
+    }
+    #[test]
+    fn inventory_refresh_recovery_failure_publishes_no_replacement() {
+        let mutex = Mutex::new(cached());
+        let m = mutex.lock().unwrap();
+        let product_id = m.products[0].id.clone();
+        let raw = inventory_bytes(
+            vec![record(
+                "Avast Free Antivirus",
+                "Avast Software",
+                SOURCE_IDS[3],
+            )],
+            "ok",
+        );
+        drop(m);
+        assert_eq!(
+            finalize_inventory(&mutex, Ok(raw), |m| {
+                assert!(m.products.is_empty());
+                assert!(matches!(
+                    mutex.try_lock(),
+                    Err(std::sync::TryLockError::WouldBlock)
+                ));
+                Err("recovery fixture failure".into())
+            })
+            .unwrap_err(),
+            "recovery fixture failure"
+        );
+        let mut m = mutex.try_lock().unwrap();
+        assert!(m.products.is_empty());
+        assert_eq!(
+            prepare_cached(&mut m, PrepareRequest { product_id }).unwrap_err(),
+            "Product is absent from native inventory"
+        );
+    }
+    #[test]
+    fn inventory_refresh_helper_failure_retains_incomplete_sources() {
+        let mutex = Mutex::new(cached());
+        let m = mutex.lock().unwrap();
+        let product_id = m.products[0].id.clone();
+        drop(m);
+        let view = finalize_inventory(&mutex, Err("helper fixture failure".into()), |_| Ok(vec![]))
+            .unwrap();
+        assert!(!view.complete);
+        assert_eq!(view.sources.len(), 7);
+        for (source, expected) in view.sources.iter().zip(SOURCE_IDS) {
+            assert_eq!(source.id, expected);
+            assert_eq!(source.status, "error");
+            assert_eq!(source.detail, "Native inventory helper did not complete");
+        }
+        assert!(view.products.is_empty());
+        let mut m = mutex.try_lock().unwrap();
+        assert!(m.products.is_empty());
+        assert_eq!(
+            prepare_cached(&mut m, PrepareRequest { product_id }).unwrap_err(),
+            "Product is absent from native inventory"
+        );
+    }
+    #[test]
+    fn inventory_refresh_success_preserves_ids_partial_and_empty_transitions() {
+        for status in ["ok", "error", "unavailable"] {
+            let mutex = Mutex::new(cached());
+            let m = mutex.lock().unwrap();
+            let product_id = m.products[0].id.clone();
+            let raw = inventory_bytes(
+                vec![record(
+                    "AVG AntiVirus FREE",
+                    "AVG Technologies",
+                    SOURCE_IDS[3],
+                )],
+                status,
+            );
+            drop(m);
+            let view = finalize_inventory(&mutex, Ok(raw), |m| {
+                assert!(m.products.is_empty());
+                assert!(matches!(
+                    mutex.try_lock(),
+                    Err(std::sync::TryLockError::WouldBlock)
+                ));
+                Ok(vec![])
+            })
+            .unwrap();
+            let mut m = mutex.try_lock().unwrap();
+            assert_eq!(
+                serde_json::to_value(&m.products).unwrap(),
+                serde_json::to_value(&view.products).unwrap()
+            );
+            assert_eq!(view.complete, status == "ok");
+            assert_eq!(view.products[0].id, product_id);
+            let plan = prepare_cached(
+                &mut m,
+                PrepareRequest {
+                    product_id: product_id.clone(),
+                },
+            )
+            .unwrap();
+            m.operations[&plan.id].state.lock().unwrap().cancel();
+            drop(m);
+            let view =
+                finalize_inventory(&mutex, Ok(inventory_bytes(vec![], "ok")), |_| Ok(vec![]))
+                    .unwrap();
+            assert!(view.complete);
+            assert!(view.products.is_empty());
+            let mut m = mutex.try_lock().unwrap();
+            assert!(m.products.is_empty());
+            assert_eq!(
+                prepare_cached(&mut m, PrepareRequest { product_id }).unwrap_err(),
+                "Product is absent from native inventory"
+            );
+        }
+    }
+    #[test]
+    fn inventory_refresh_failure_preserves_prepared_operation_and_review_pin() {
+        let fixture = AdapterFixture::new();
+        let path = fixture.effects.root.join("retained-review");
+        fs::write(&path, b"retained checkpoint").unwrap();
+        let mutex = Mutex::new(cached());
+        let mut m = mutex.lock().unwrap();
+        let op = planned(&mut m);
+        let review_id = crate::broker::random_id().unwrap();
+        m.reviews.insert(
+            review_id.clone(),
+            HeldReview {
+                dto: RemovalReview {
+                    review_id: review_id.clone(),
+                    tool_id: Some("avg".into()),
+                    plan_id: Some(op.plan.id.clone()),
+                    state: "reviewRequired".into(),
+                    detail: RECOVERY.into(),
+                    can_acknowledge: true,
+                },
+                pin: Pin::open(&path, false, 0x80010000, 1).unwrap(),
+                bytes: b"retained checkpoint".to_vec(),
+                _parents: vec![],
+            },
+        );
+        drop(m);
+        assert_eq!(
+            finalize_inventory(&mutex, Ok(b"invalid".to_vec()), |_| panic!(
+                "invalid JSON reached discovery"
+            ))
+            .unwrap_err(),
+            "Invalid inventory helper response"
+        );
+        let mut m = mutex.try_lock().unwrap();
+        assert_eq!(m.operations.len(), 1);
+        assert!(Arc::ptr_eq(&m.operations[&op.plan.id], &op));
+        assert_eq!(op.snapshot().unwrap().phase, "prepared");
+        assert_eq!(m.reviews.len(), 1);
+        let held = m.reviews.get_mut(&review_id).unwrap();
+        assert_eq!(held.bytes, b"retained checkpoint");
+        assert_eq!(held.pin.read_bounded(4096).unwrap(), b"retained checkpoint");
+        assert!(fs::remove_file(&path).is_err());
     }
     #[derive(Default)]
     struct Fake {
