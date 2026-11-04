@@ -123,7 +123,6 @@ export const ACTION_TIPS = {
   relationshipGraph: 'Shows how each program connects to the rest of the system — its services, tasks and startup entries, what depends on it — and lists entries that point at files no longer on the PC.',
   confirmationPrompts: 'Manage which confirmation prompts are skipped. Prompts you disabled with "Don\'t show again" are listed here and can be restored.',
   openLog: 'Opens the log of every command Purgeon ran in the last 14 days, with its result.',
-  portableapps: 'Creates a PortableApps.com installer (.paf.exe) from a program you monitored with Tools › Monitor an Installation. Purgeon copies the recorded program files into a PortableApps.com folder structure and writes an NSIS installer script you compile with makensis.',
   startupDelayed: 'Automatic (Delayed Start) lets the service begin a short while after boot instead of at boot, speeding up sign-in. Only for services set to Automatic.',
   trustedPublishers: 'Manage the trusted publisher allowlist. Programs digitally signed by a listed publisher are never blocked by Safe Mode and are excluded from unsigned-program warnings. Add the certificate subject name as shown in the program’s digital signature.',
   updateCheck: 'Purgeon can optionally ask GitHub whether a newer release exists. Off by default; turn it on in Settings. It sends only a standard HTTPS request to api.github.com and never nags after a dismissal. When an update is found, Download and Install fetches the Setup program and runs it only after its SHA-256 matches the digest GitHub recorded for it.',

@@ -153,6 +153,7 @@ export const SHORTCUTS = [
     ['Ctrl+7', 'Snapshots'],
     ['Ctrl+8', 'Cleaner (junk files)'],
     ['Ctrl+9', 'Uninstall Archive'],
+    ['Ctrl+Shift+0', 'Disk Usage'],
     ['Ctrl+T', 'Change Timeline'],
     ['Ctrl+H', 'Change History'],
   ]},

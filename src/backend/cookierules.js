@@ -12,7 +12,7 @@ import { runPS, runPSJson } from './shell.js';
 import { record } from './history.js';
 
 const note = (entry) => record(entry).catch(() => {});
-const BROWSERS = ['HKLM\\SOFTWARE\\Policies\\Google\\Chrome', 'HKLM\\SOFTWARE\\Policies\\Microsoft\\Edge'];
+const BROWSERS = ['Registry::HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Google\\Chrome', 'Registry::HKEY_LOCAL_MACHINE\\SOFTWARE\\Policies\\Microsoft\\Edge'];
 const KINDS = { blocked: 'CookiesBlockedForUrls', allowed: 'CookiesAllowedForUrls' };
 
 export function nextIndex(names) {
@@ -30,7 +30,8 @@ export function cleanPattern(input) {
 }
 
 async function readKind(subkey) {
-  const rows = await runPSJson(`$out = @()
+  const rows = await runPSJson(`$ErrorActionPreference = 'Stop'
+$out = @()
 foreach ($root in @('${BROWSERS[0]}', '${BROWSERS[1]}')) {
   $k = Join-Path $root '${subkey}'
   if (Test-Path $k) {
@@ -40,13 +41,12 @@ foreach ($root in @('${BROWSERS[0]}', '${BROWSERS[1]}')) {
     }
   }
 }
-$out | ConvertTo-Json -Compress`).catch(() => []);
+$out | ConvertTo-Json -Compress`);
   return Array.isArray(rows) ? rows : [rows];
 }
 
-// One list per kind: the union of both browsers' patterns (they are kept
-// mirrored, so the union is the list; a pattern missing from one browser
-// is re-mirrored on the next change).
+// Display the union, including pre-existing differences. Each requested change
+// is applied to both browsers; unrelated rules are preserved.
 export async function rules() {
   const out = {};
   for (const [kind, subkey] of Object.entries(KINDS)) {
@@ -64,11 +64,22 @@ export async function addRule(kind, rawPattern) {
   const pattern = cleanPattern(rawPattern);
   if (!pattern) throw new Error('That does not look like a site address. Use a form like example.com or [*.]example.com for a site and everything under it.');
   for (const root of BROWSERS) {
-    const rows = (await readKind(subkey)).filter((r) => r && r.root === root);
+    const rows = (await readKind(subkey).catch((error) => {
+      throw new Error(`Cookie rule preparation failed: ${error.message}. Changes may be partial; refresh before retrying.`);
+    })).filter((r) => r && r.root === root);
     if (rows.some((r) => r.pattern === pattern)) continue;
     const n = nextIndex(rows.map((r) => r.n));
-    await runPS(`New-Item -Path ${psQuote(`${root}\\${subkey}`)} -Force | Out-Null
-New-ItemProperty -Path ${psQuote(`${root}\\${subkey}`)} -Name '${n}' -Value ${psQuote(pattern)} -PropertyType String -Force | Out-Null`);
+    await runPS(`$ErrorActionPreference = 'Stop'
+New-Item -Path ${psQuote(`${root}\\${subkey}`)} -Force | Out-Null
+New-ItemProperty -Path ${psQuote(`${root}\\${subkey}`)} -Name '${n}' -Value ${psQuote(pattern)} -PropertyType String -Force | Out-Null`).catch((error) => {
+      throw new Error(`Cookie rule write failed: ${error.message}. Chrome and Edge may have different rules; refresh before retrying.`);
+    });
+  }
+  const verified = await readKind(subkey).catch((error) => {
+    throw new Error(`Cookie rule readback failed: ${error.message}. Changes may be partial; refresh before retrying.`);
+  });
+  if (!BROWSERS.every((root) => verified.some((row) => row?.root === root && row.pattern === pattern))) {
+    throw new Error('Cookie rule verification failed. Chrome and Edge may have different rules; refresh the list before retrying.');
   }
   note({
     type: 'Cookie rule', title: `${kind === 'blocked' ? 'Blocked' : 'Allowed'} cookies for ${pattern}`,
@@ -82,13 +93,22 @@ export async function removeRule(kind, pattern) {
   const subkey = KINDS[kind];
   if (!subkey) throw new Error('Unknown rule kind.');
   for (const root of BROWSERS) {
-    await runPS(`$k = ${psQuote(`${root}\\${subkey}`)}
+    await runPS(`$ErrorActionPreference = 'Stop'
+$k = ${psQuote(`${root}\\${subkey}`)}
 if (Test-Path $k) {
   $props = Get-ItemProperty $k
   foreach ($p in $props.PSObject.Properties) {
     if ($p.Name -match '^\\d+$' -and [string]$p.Value -eq ${psQuote(pattern)}) { Remove-ItemProperty -Path $k -Name $p.Name }
   }
-}`);
+}`).catch((error) => {
+      throw new Error(`Cookie rule removal failed: ${error.message}. Chrome and Edge may have different rules; refresh before retrying.`);
+    });
+  }
+  const remaining = await readKind(subkey).catch((error) => {
+    throw new Error(`Cookie rule removal readback failed: ${error.message}. Changes may be partial; refresh before retrying.`);
+  });
+  if (remaining.some((row) => row?.pattern === pattern)) {
+    throw new Error('Cookie rule removal verification failed. Chrome and Edge may have different rules; refresh the list before retrying.');
   }
   note({
     type: 'Cookie rule', title: `Removed the ${kind} cookie rule for ${pattern}`,

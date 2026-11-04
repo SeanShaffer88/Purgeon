@@ -60,20 +60,29 @@ export function lastCopies(groups, selected) {
 }
 
 let lastScan = null;
-export const lastGroups = () => lastScan?.groups || [];
+let pending = Promise.resolve();
+const serialize = (run) => {
+  const result = pending.then(run);
+  pending = result.catch(() => {});
+  return result;
+};
+export const lastGroups = () => (lastScan?.groups || []).map((g) => ({ ...g, files: [...g.files] }));
 
-export async function scan(roots, shouldStop) {
+export const scan = (roots, shouldStop) => serialize(() => scanFiles(roots, shouldStop));
+async function scanFiles(roots, shouldStop) {
   const cleanRoots = [...new Set((roots || []).filter((r) => r && !isProtected(r)))];
   if (!cleanRoots.length) return { groups: [], scanned: 0, truncated: false, error: 'Choose a folder to scan. Protected locations (Windows, Program Files, your profile folders) are not scanned.' };
   await sys.beginScans?.().catch(() => {});
   const entries = await sys.walk(cleanRoots, 40, 40);
   const files = [];
+  const seen = new Set();
   let truncated = false;
   for (const e of entries) {
     if (shouldStop?.()) { truncated = true; break; }
     if (!e.startsWith('F')) continue;
     if (files.length >= MAX_FILES) { truncated = true; break; }
-    files.push(e.slice(1));
+    const p = e.slice(1);
+    if (!seen.has(p.toLowerCase())) { files.push(p); seen.add(p.toLowerCase()); }
   }
   const sized = [];
   for (const p of files) {
@@ -90,15 +99,17 @@ export async function scan(roots, shouldStop) {
     chunk.forEach((p, j) => { if (hashes?.[j]) hashOf.set(p, hashes[j]); });
   }
   const groups = buildGroups(bySize, hashOf);
-  lastScan = { groups, at: new Date().toISOString() };
+  lastScan = { groups: groups.map((g) => ({ ...g, files: [...g.files] })), at: new Date().toISOString() };
   return { groups, scanned: sized.length, truncated };
 }
 
 // Sends the selected copies to the Recycle Bin. Refuses (a) paths that are not in the
 // most recent scan, (b) protected locations, and (c) any selection that would remove
 // every copy of a group.
-export async function remove(paths) {
-  const groups = lastGroups();
+export const remove = (paths) => serialize(() => removeFiles(paths));
+const metadata = (st) => st && !st.dir && !st.link ? JSON.stringify([st.size, st.created, st.modified]) : null;
+async function removeFiles(paths) {
+  const groups = lastScan?.groups || [];
   if (!groups.length) return { ok: false, error: 'Run a scan first, then choose copies to remove.' };
   const known = new Map();
   for (const g of groups) for (const p of g.files) known.set(p.toLowerCase(), p);
@@ -107,10 +118,38 @@ export async function remove(paths) {
   if (wanted.some((p) => isProtected(p))) return { ok: false, error: 'One of the chosen files is in a protected location and was not removed.' };
   const blocked = lastCopies(groups, wanted);
   if (blocked.length) return { ok: false, error: `Keep at least one copy of each file — ${blocked[0]} is the last copy of its group.` };
+  const selected = new Set(wanted.map((p) => p.toLowerCase()));
+  const affected = groups.filter((g) => g.files.some((p) => selected.has(p.toLowerCase())));
+  const checked = new Map();
+  for (const group of affected) {
+    for (let i = 0; i < group.files.length; i += HASH_CHUNK) {
+      const chunk = group.files.slice(i, i + HASH_CHUNK);
+      const before = await Promise.all(chunk.map((p) => sys.stat(p).catch(() => null)));
+      const hashes = await sys.sha256Files(chunk).catch(() => []);
+      const after = await Promise.all(chunk.map((p) => sys.stat(p).catch(() => null)));
+      chunk.forEach((p, j) => {
+        const stamp = metadata(before[j]);
+        if (Array.isArray(hashes) && hashes.length === chunk.length && stamp && before[j].size === group.size && stamp === metadata(after[j]) &&
+            typeof hashes?.[j] === 'string' && /^[0-9a-f]{64}$/i.test(hashes[j]) && hashes[j].toLowerCase() === group.sha256) checked.set(p, stamp);
+      });
+    }
+  }
   const results = [];
   for (const p of wanted) {
     try {
+      const group = affected.find((g) => g.files.includes(p));
+      const survivor = group.files.find((f) => !selected.has(f.toLowerCase()) && checked.has(f));
+      if (!checked.has(p) || !survivor) throw new Error('The target or a remaining copy could not be verified. Run a new scan before removing it.');
+      const targetNow = await sys.stat(p);
+      const survivorNow = await sys.stat(survivor);
+      if (metadata(targetNow) !== checked.get(p) || metadata(survivorNow) !== checked.get(survivor)) {
+        checked.delete(p);
+        checked.delete(survivor);
+        throw new Error('A duplicate changed during verification. Run a new scan before removing it.');
+      }
       await sys.trash(p);
+      group.files = group.files.filter((f) => f.toLowerCase() !== p.toLowerCase());
+      group.wasted = group.size * Math.max(0, group.files.length - 1);
       results.push({ path: p, ok: true });
     } catch (e) {
       results.push({ path: p, ok: false, error: String(e?.message ?? e) });

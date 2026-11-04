@@ -1,5 +1,5 @@
 import { tx } from './backend/i18n.js';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Dialog, useModalLayer } from './core-dialog.jsx';
 
 export function CommandPalette({ commands, onRun, onClose }) {
@@ -8,6 +8,7 @@ export function CommandPalette({ commands, onRun, onClose }) {
   const [q, setQ] = useState('');
   const [i, setI] = useState(0);
   const ref = useRef(null);
+  const listId = useId();
   const fuzzyScore = (text, query) => {
     const t = text.toLowerCase();
     const q = query.toLowerCase();
@@ -50,21 +51,27 @@ export function CommandPalette({ commands, onRun, onClose }) {
     <div className="overlay palette-overlay" onMouseDown={onClose}>
         <div className="palette" ref={layerRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={tx("Command palette")} onMouseDown={(e) => e.stopPropagation()}>
         <input
+          role="combobox"
+          aria-label={tx("Find a command")}
+          aria-autocomplete="list"
+          aria-expanded="true"
+          aria-controls={listId}
+          aria-activedescendant={shown[i] ? `${listId}-${encodeURIComponent(shown[i].id)}` : undefined}
           autoFocus
           title={tx("Type part of a command or program name; Up and Down choose, Enter runs, Esc closes")}
           value={q}
           placeholder={tx("Type a command or a program name…")}
-          onChange={(e) => setQ(e.target.value)}
+          onChange={(e) => { setQ(e.target.value); setI(0); }}
           onKeyDown={(e) => {
-            if (e.key === 'ArrowDown') (e.preventDefault(), setI((x) => Math.min(shown.length - 1, x + 1)));
+            if (e.key === 'ArrowDown') (e.preventDefault(), setI((x) => Math.max(0, Math.min(shown.length - 1, x + 1))));
             else if (e.key === 'ArrowUp') (e.preventDefault(), setI((x) => Math.max(0, x - 1)));
             else if (e.key === 'Enter' && shown[i]) onRun(shown[i]);
             else if (e.key === 'Escape') { e.stopPropagation(); onClose(); }
           }}
         />
-        <div className="palette-list" ref={ref} role="listbox">
+        <div className="palette-list" ref={ref} id={listId} role="listbox" aria-label={tx("Commands")}>
           {shown.map((c, n) => (
-            <button key={c.id} role="option" aria-selected={n === i} className={n === i ? 'on' : ''} onMouseEnter={() => setI(n)} onClick={() => onRun(c)}>
+            <button key={c.id} id={`${listId}-${encodeURIComponent(c.id)}`} role="option" tabIndex={-1} aria-selected={n === i} className={n === i ? 'on' : ''} onMouseDown={(e) => e.preventDefault()} onMouseEnter={() => setI(n)} onClick={() => onRun(c)}>
               <span>{c.text}</span>
               <span className="accel">{c.hint || ''}</span>
             </button>

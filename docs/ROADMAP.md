@@ -20,7 +20,7 @@ Windows or another installed program still needs.
 - **Whole-PC migration.** Several programs packed into one folder, plus a winget list for the rest.
 - **Settings sync.** Chosen programs' settings kept in step through a shared folder.
 - **Portable apps.** Programs without an installer can be registered to get icons, groups and leftover scans; your own folders of portable apps are remembered, and Check for Updates finds newer versions through winget.
-- **Portable packaging.** Run installs in a disposable isolated test environment, capture every file and change, mark an app portable only when it runs from captured files without system-wide changes. Auto-exclude programs adding services, drivers, scheduled tasks, licensing data, or dependencies outside the app folder, and tell the user why. CLI: `--monitor test-install-start/finish/revert-test-install` and `--portableapps list|generate`.
+- **Disposable capture and heuristic assessment.** Preserve snapshot-based test installation, supported recovery and reasons for potential portability exclusions. This is not system isolation or proof that an app runs portably. CLI: `--monitor test-install-start/finish/revert-test-install`. PortableApps.com/PAF generation has been removed.
 - **Explorer right-click entries.** "Uninstall with Purgeon" and "Who owns this?", fully removed when turned off.
 - **Command palette.** `Ctrl+K` for every command and program, with fuzzy search scoring.
 - **Tray and notifications.** Optional tray icon for maintenance, updates, startup alerts and interrupted removals.

@@ -64,7 +64,7 @@ import * as tasks from './tasks.js';
 import * as cookierules from './cookierules.js';
 const browsers = lazyNamespace(lazyBrowsers);
 const portable = lazyNamespace(lazyPortable);
-import * as portableapps from './portableapps.js';
+import { classifyForPortable } from './portable-classification.js';
 const shellmenu = lazyNamespace(lazyShellmenu);
 const report = lazyNamespace(lazyReport);
 const ctxmenu = lazyNamespace(lazyCtxmenu);
@@ -228,14 +228,14 @@ const handlers = {
   'monitor:list': () => monitor.list(),
   'monitor:remove': (id) => monitor.remove(id),
   'monitor:setNotes': (args) => monitor.setNotes(args?.id ?? args, args?.notes ?? ''),
-  // Disposable isolated test environment for portable packaging.
-  // Runs an installer, captures every change it makes, but stores nothing
-  // permanently. Results can be kept (packaged as portable) or reverted.
+  // Disposable snapshot capture with heuristic portable assessment.
+  // Records installation changes for assessment and supported recovery.
   'monitor:test-install-start': async ({ installer, name }) => monitor.testInstallStart(installer, name),
   'monitor:test-install-finish': async (name) => {
     const result = await monitor.testInstallFinish(name);
+    if (result.cancelled) return result;
     // Classify for portable suitability using the captured items.
-    const suitability = await portableapps.classifyForPortable(result.items);
+    const suitability = await classifyForPortable(result.items);
     return { ...result, portable: suitability.portable, reasons: suitability.reasons };
   },
   'monitor:revert-test-install': async (items) => monitor.revertTestInstall(items),
@@ -616,9 +616,6 @@ const handlers = {
   'portable:checkUpdates': (apps) => portable.checkUpdates(apps),
   'portable:register': (app) => portable.register(app),
   'portable:unregister': (key) => portable.unregister(key),
-  // PortableApps.com installer generation from monitored programs
-  'portableapps:list': () => portableapps.list(),
-  'portableapps:generate': (args) => portableapps.generate(args),
   // 16. Explorer right-click menu
   'shell:enabled': () => shellmenu.enabled(),
   'shell:enable': () => shellmenu.enable(),
@@ -846,7 +843,7 @@ const recorders = {
         ? { type: 'Removal', title: 'Finished an interrupted removal', detail: `Backup ${out.backupId}`, undo: { channel: 'backups:restore', arg: out.backupId } }
         : null,
   'backups:prune': (_arg, removed) => (removed.length ? { type: 'Backups', title: `Removed ${plural(removed.length, 'old backup')} under the backup limits` } : null),
-  'monitor:finish': (_name, record) => ({ type: 'Monitor', title: `Recorded the installation of ${record.name}`, detail: plural(record.items.length, 'change') }),
+  'monitor:finish': (_name, record) => record.cancelled ? null : ({ type: 'Monitor', title: `Recorded the installation of ${record.name}`, detail: plural(record.items.length, 'change') }),
 };
 for (const [channel, describe] of Object.entries(recorders)) {
   const run = handlers[channel];
@@ -883,7 +880,7 @@ export async function initBackend() {
   // Every command Purgeon runs from here on is written to the command log.
   await log.setRoot(path.join(data, 'logs'));
   log.wrap(sys);
-  log.write(`---- Purgeon ${sys.info.exe} started`);
+  log.write('---- Purgeon started');
   await Promise.all([
     backups.setRoot(path.join(data, 'backups')),
     programs.setRoot(path.join(data, 'programs')),
@@ -899,7 +896,6 @@ export async function initBackend() {
     running.setRoot(path.join(data, 'startup')),
     schedule.setRoot(path.join(data, 'schedule')),
     plugins.setRoot(path.join(data, 'plugins')),
-    portableapps.setRoot(path.join(data, 'portableapps')),
     sync.setRoot(path.join(data, 'sync')),
     profiler.setRoot(path.join(data, 'profiles')),
   ]);
@@ -916,12 +912,48 @@ export async function initBackend() {
 
 profiler.mark('api:imports-loaded');
 let activeMutation = null;
-const mutates = (channel) => !/cancel$/i.test(channel) && /:(?:set|apply|remove|delete|run|restore|recover|undo|resolve|prune|start|finish|launch|revert|clear|enable|disable|add|save|arm|disarm|restart|kill|end|suspend|resume|generate|register|unregister|export|import|syncNow)/i.test(channel);
+// Only reviewed queries and cancellation/UI controls bypass serialization.
+// Unclassified handlers are guarded, including newly added handlers.
+const concurrentChannels = new Set(`
+app:isAdmin app:specs app:sysinfo app:ready app:dataDamage app:quit
+app:setTray app:setOnTop app:show app:hideToTray app:closeAnswered
+settings:get programs:list programs:measure programs:measureStore icons:get
+program:scan program:processes program:openFolder program:search
+monitor:status monitor:pickInstaller monitor:list
+backups:list backups:plan backups:forecast backups:interrupted backups:verifyPackage
+log:open shared:components erase:pick erase:collect policy:get
+duplicates:pick duplicates:scan programs:duplicates selfhealth:check
+games:list graph:graph graph:program snapshots:list snapshots:compare
+junk:scan junk:scanSystem drivers:list drivers:candidates drivers:recovery
+programs:insights programs:sizeHistory files:signatures security:verifySignature
+owners:who owners:pick orphans:scan winget:available winget:upgrades winget:find
+archive:list running:bootImpact running:inbound maintenance:status
+queue:get queue:restartPending trials:list
+explore:diskMap disk:drives disk:scan disk:list disk:measure disk:open
+processes:sample processes:alertThresholds processes:openFolder power:state
+restore:state restore:openUi boot:state logs:channels health:weekly
+tasks:list tasks:pickProgram cookies:rules explore:timeline program:analyze
+registry:search browsers:list browsers:running
+transfer:pickFolder transfer:folder portable:find portable:checkUpdates
+shell:enabled shell:resolve autostart:enabled
+i18n:languages i18n:current schedule:status associations:extensions
+associations:ownerFor associations:extensionsForProgram restorepoint:list
+plugins:list plugins:validate sync:status
+profiler:report profiler:regressions installers:check ctxmenu:list
+open:url groups:get transfer:pickSave transfer:pickOpen transfer:classify
+startup:list trusted:list trusted:isTrusted trusted:filterInsights
+update:settings dns:status debloat:list debloat:previousDamaged dialog:confirm history:list
+programs:measureCancel items:removeCancel backups:restoreCancel backups:verifyCancel
+erase:runCancel duplicates:scanCancel games:listCancel graph:graphCancel
+snapshots:cancel junk:scanCancel junk:cleanSystemCancel orphans:scanCancel
+explore:diskMapCancel disk:scanCancel disk:measureCancel health:cancel
+`.trim().split(/\s+/));
+const mutates = (channel) => !concurrentChannels.has(channel);
 
 export const api = {
   async invoke(channel, arg) {
     const fn = handlers[channel];
-    if (!fn) throw new Error(`Unknown request ${channel}`);
+    if (!Object.hasOwn(handlers, channel) || typeof fn !== 'function') throw new Error(`Unknown request ${channel}`);
     const mutation = mutates(channel);
     if (mutation && activeMutation) throw new Error(`Another operation (${activeMutation}) is in progress. Wait for it to finish before starting ${channel}.`);
     if (mutation) activeMutation = channel;

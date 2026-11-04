@@ -35,26 +35,24 @@ It runs on Windows 10 and 11 (64-bit). The full app is a **4.0 MB** executable i
 
 ## Installation monitor and disposable test installs
 
-**Monitor an installation** (`Ctrl+M`) — takes a snapshot before, runs your installer, takes a snapshot after, and records every file, folder, registry key, value and service added. Live tracking with Windows Event Tracing follows the installer and every process it starts when running as administrator.
+**Monitor an installation** (`Ctrl+M`) — takes a snapshot before, runs your installer, takes a snapshot after, and records detected changes in supported file, folder, registry and service locations. Live tracking with Windows Event Tracing follows the installer and its child processes when running as administrator; capture completeness is not guaranteed.
 
-**Monitored Programs** (`Ctrl+3`) — lists recordings. Uninstalling one removes exactly what its installation created, put back against a fresh snapshot.
+**Monitored Programs** (`Ctrl+3`) — lists recordings and compares them against a fresh snapshot before removal. Known program matches and unattributed snapshot changes remain distinct; unattributed changes start unticked for review. Capture cannot attribute every external or unsupported change to the installer.
 
 **Detecting installations** — with the setup monitor on (it is off by default; Settings › Active monitoring), while Purgeon runs (including from the tray), it notices installers starting and offers to record them. **Monitor It** takes the "before" snapshot while the installer waits on its first page, then you install as usual and click **Installation Finished**.
 
-**Disposable test install** — runs an installer and captures every change it makes without storing anything permanently:
+**Disposable test install** — runs an installer and retains before/after snapshot evidence for review and supported recovery:
 - `--monitor test-install-start --installer setup.exe` — takes the before snapshot and launches the installer.
 - `--monitor test-install-finish` — compares before/after and classifies for portable suitability.
-- `--monitor revert-test-install` — removes every captured change using the backup system, leaving the system exactly as it was before.
+- `--monitor revert-test-install` — reviews captured changes for removal using supported backup and recovery operations. External, unattributed or unsupported changes can remain; recovery cannot guarantee the system returns exactly to its earlier state.
 
-Results can be kept (packaged as portable) or reverted (truly disposable).
+Captured changes can be reviewed for supported recovery. A disposable test install is snapshot-based capture and recovery, not system isolation.
 
-## Portable packaging
+## Portable apps and heuristic assessment
 
 **Portable apps** — finds programs that run from a folder without being installed, remembers your own portable-app folders, and checks for updates through winget.
 
-**PortableApps.com packaging** (`--portableapps generate`) — copies a monitored program's recorded files into a PortableApps.com folder structure (App/AppInfo, App/<program>, Data) and writes an appinfo.ini, launcher.ini and NSIS installer script you compile with makensis.
-
-**Portable suitability classification** — `classifyForPortable()` checks captured items for:
+**Heuristic portable suitability assessment** — `classifyForPortable()` checks captured items for:
 - services — not portable (system-wide);
 - drivers (.sys) — not portable (kernel-level);
 - scheduled tasks — not portable (run outside the app folder);
@@ -62,7 +60,7 @@ Results can be kept (packaged as portable) or reverted (truly disposable).
 - files outside the app folder — not self-contained;
 - App Paths registry keys — allowed (not licensing).
 
-Programs matching any exclusion are rejected with a clear reason why.
+The assessment reports reasons for exclusions; it does not prove runtime portability.
 
 ## Trial installs
 
@@ -167,7 +165,7 @@ Items are marked as part of the program (install folders, shortcuts, machine-wid
 
 ## Browser clean-up
 
-**Browser Clean-up** — lists extensions, search engine and home page of Chrome, Edge, Brave and Firefox. Each extension also shows its author and what it can access (permissions and reachable sites), read from its manifest when it states them. Extensions a program added on its own (through the registry or into Firefox's shared folders) are flagged and can be removed with a backup. Extensions you added yourself are listed for reference only. Nothing is changed while the browser is running. The same window carries **cookie rules per site**: Blocked and Allowed lists written to Chrome's and Edge's policy keys, holding in every profile and while the browsers run (adding a block warns that it signs you out of that site). Firefox does not read those policies and is stated as not covered. The same listing and removal are available headlessly: `Purgeon --browsers list [--json]` and `Purgeon --browsers remove <browser> <extension-id>...` (program-added extensions only, with a backup, and never while that browser is running).
+**Browser Clean-up** — lists extensions, search engine and home page of Chrome, Edge, Brave and Firefox. Each extension also shows its author and what it can access (permissions and reachable sites), read from its manifest when it states them. Extensions a program added on its own (through the registry or into Firefox's shared folders) are flagged and can be removed with a backup. Extensions you added yourself are listed for reference only. Nothing is changed while the browser is running. The same window carries **cookie rules per site**: Blocked and Allowed lists combine Chrome and Edge policies, which may already differ. Changes made here apply to both browsers across their profiles; unrelated existing differences are preserved. Adding a block warns that it signs you out of that site. Firefox is not covered. The same listing and removal are available headlessly: `Purgeon --browsers list [--json]` and `Purgeon --browsers remove <browser> <extension-id>...` (program-added extensions only, with a backup, and never while that browser is running).
 
 ## Startup & Services
 
@@ -281,7 +279,7 @@ DNS changes affect the selected adapter's IPv4 configuration and preserve IPv6 s
 
 **Fingerprinted backups** — backups are sealed with SHA-256 fingerprints; a changed backup is not restored. Backup Settings limits backups by age or size, always keeping each program's newest.
 
-**Command log** — `Tools › Open Command Log` shows every command Purgeon ran with its result, for 14 days.
+**Command log** — `Tools › Open Command Log` shows operation identity, duration and outcome for 14 days. Arguments, script bodies, paths and exception text are omitted; recognized system tools retain their names.
 
 ## Confirmation management
 
@@ -358,8 +356,6 @@ Purgeon --trusted list|add|remove --name <publisher>
 Purgeon --update settings|enable|disable|check|install
 Purgeon --sync status|apply|now [--files settings.json]
 Purgeon --plugins list|enable|disable|validate <id> [--json]
-Purgeon --portableapps list
-Purgeon --portableapps generate --monitor-id <id> --output <folder>
 Purgeon --uninstall "<program name>"
 Purgeon --language <code> [--json]
 Purgeon --settings [--json]
@@ -403,6 +399,7 @@ Purgeon --help
 | `Ctrl+M` | Monitor an installation |
 | `Ctrl+H` | Change History |
 | `Ctrl++` / `Ctrl+-` / `Ctrl+0` | Zoom in / out / reset |
+| `Ctrl+Shift+0` | Disk Usage |
 | `Ctrl+S` | Export the list to HTML |
 | `F5` | Refresh |
 

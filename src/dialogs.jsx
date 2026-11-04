@@ -3,7 +3,7 @@ import { itemLabel, safeAllowed, PlanView, signatureText } from './dialog-shared
 export { Dialog, ConfirmDialog, Busy, useModalLayer } from './core-dialog.jsx';
 export { PlanView, planHtml, safeAllowed, signatureText } from './dialog-shared.jsx';
 import { tx } from './backend/i18n.js';
-import { useMemo, useState, useEffect, useRef } from 'react';
+import { useId, useMemo, useState, useEffect, useRef } from 'react';
 import { SettingHelp } from './onboarding.jsx';
 
 import { summarizeImpact, failureHint } from './backend/impact.js';
@@ -24,6 +24,7 @@ const GROUPS = [
 
 
 export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDryRun, onExportPlan, safeMode = false }) {
+  const treeId = useId();
   const allowed = (it) => safeAllowed(it, safeMode);
   const [checked, setChecked] = useState(() => new Set(items.map((it, idx) => (it.confidence === 'high' && allowed(it) ? idx : -1)).filter((i) => i >= 0)));
   const [plan, setPlan] = useState(null);
@@ -120,11 +121,12 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
               <div key={`p|${s.program}`} className="tree-program">
                 <input
                   type="checkbox"
+                  aria-labelledby={`${treeId}-program-${encodeURIComponent(s.program)}`}
                   checked={s.rows.every(({ idx }) => checked.has(idx))}
                   ref={(el) => el && (el.indeterminate = !s.rows.every(({ idx }) => checked.has(idx)) && s.rows.some(({ idx }) => checked.has(idx)))}
                   onChange={() => toggleGroup(s)}
                 />
-                <b>{s.program}</b> <span className="muted">({s.rows.length})</span>
+                <b id={`${treeId}-program-${encodeURIComponent(s.program)}`}>{s.program}</b> <span className="muted">({s.rows.length})</span>
               </div>
             ),
             ...s.groups.map((g) => {
@@ -136,6 +138,9 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
                 <div className="tree-group">
                   <button
                     className="twisty"
+                    aria-label={`${s.program ? `${s.program}: ` : ''}${tx(g.label)}`}
+                    aria-expanded={open}
+                    aria-controls={`${treeId}-rows-${encodeURIComponent(g.id)}`}
                     onClick={() =>
                       setCollapsed((s) => {
                         const n = new Set(s);
@@ -146,9 +151,10 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
                   >
                     {open ? '▾' : '▸'}
                   </button>
-                  <input type="checkbox" checked={all} ref={(el) => el && (el.indeterminate = some)} onChange={() => toggleGroup(g)} />
-                  <b>{tx(g.label)}</b> <span className="muted">({g.rows.length})</span>
+                  <input type="checkbox" aria-labelledby={`${treeId}-group-${encodeURIComponent(g.id)}`} checked={all} ref={(el) => el && (el.indeterminate = some)} onChange={() => toggleGroup(g)} />
+                  <b id={`${treeId}-group-${encodeURIComponent(g.id)}`}>{tx(g.label)}</b> <span className="muted">({g.rows.length})</span>
                 </div>
+                <div id={`${treeId}-rows-${encodeURIComponent(g.id)}`} hidden={!open}>
                 {open &&
                   g.rows.map(({ it, idx }) => (
                     <label key={idx} className={`tree-item ${it.confidence === 'low' ? 'low' : ''} ${allowed(it) ? '' : 'locked'}`} title={`${it.evidence || 'Ownership evidence'}: ${it.reason}`}>
@@ -161,6 +167,7 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
                       )}
                     </label>
                   ))}
+                </div>
               </div>
             );
             }),
@@ -972,7 +979,9 @@ export function MonitorWizard({ resume, onClose, onRecorded }) {
     setError('');
     setStep('before');
     try {
-      setLive(!!(await api.invoke('monitor:start', installer || null))?.live);
+      const started = await api.invoke('monitor:start', installer || null);
+      if (started.cancelled) return setStep('pick');
+      setLive(!!started.live);
       if (installer) await api.invoke('monitor:launch', installer);
       setStep('installing');
     } catch (e) {
@@ -984,6 +993,7 @@ export function MonitorWizard({ resume, onClose, onRecorded }) {
     setStep('after');
     try {
       const record = await api.invoke('monitor:finish', name.trim());
+      if (record.cancelled) return setStep('installing');
       onRecorded(record);
     } catch (e) {
       setError(e.message);

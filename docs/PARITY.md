@@ -11,6 +11,10 @@ listed in `QUALITY.md`.
 
 | Area | Verdict | State | Evidence / remaining gap |
 |---|---|---|---|
+| Generic portable discovery/registration | Include | Retained | `src/backend/portable.js`; configured folders and registration safety remain |
+| Disposable monitoring/recovery | Include | Partially Verified | `src/backend/monitor.js`; mocked capture/recovery tests, real installation gap |
+| Portable assessment | Include | Heuristic only | `src/backend/portable-classification.js`; recorded-change exclusions do not prove runtime portability |
+| PortableApps.com/PAF generation | Removed | Removed | UI, API and CLI entry points removed; existing user packages are preserved |
 | Full CLI grammar validation | Include | Verified in tests | 39/39 CLI tests; parser line/branch/function coverage 100%; all command forms, missing/extra/duplicate values, mixed commands, option typos, prototype names |
 | No operation on invalid input | Include | Verified in tests | 32 invalid-request tests assert zero initialization/system calls |
 | Valid command dispatch | Include | Partially Verified | Snapshot, comparison/report, list and initialization failure integration tests pass with a substituted system layer; real app operations not exercised |
@@ -45,4 +49,4 @@ a damaged interrupted-removal record threw and was silently ignored, hiding
 the interrupted removal forever; two settings writes at the same time could
 silently undo each other; a typed group name could impersonate a built-in
 group; Disk Usage listed drives with no readable space; and three working
-commands (--sync, --portableapps, --export) were missing from --help.
+commands (--sync, the now-removed --portableapps, --export) were historically missing from --help.

@@ -7,6 +7,10 @@ import * as snapshots from '../src/backend/snapshots.js';
 import { createNodeSys } from './node-sys.js';
 
 const invalid = [
+  ['removed portableapps list', ['--portableapps', 'list'], /Unknown command/],
+  ['removed portableapps generate', ['--portableapps', 'generate', '--monitor-id', '42', '--output', 'C:\\Packages'], /Unknown command/],
+  ['removed portableapps malformed', ['--portableapps', 'generate', '--json'], /Unknown command/],
+  ['removed portableapps empty', ['--portableapps'], /Unknown command/],
   ['unknown command', ['--maintenence'], /Unknown command/],
   ['bare argument', ['unexpected'], /Unknown command/],
   ['empty command', [''], /Unknown command/],
@@ -90,6 +94,7 @@ test('help aliases print help without initializing the backend', async () => {
     assert.equal(exitCode, 0);
     assert.match(output, /Purgeon command line/);
     assert.match(output, /Use one command at a time/);
+    assert.doesNotMatch(output, /portableapps|paf\.exe|makensis/i);
     assert.equal(output, `\r\n${sharedHelp.replace(/\n/g, '\r\n')}`);
   }
 });

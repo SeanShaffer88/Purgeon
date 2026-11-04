@@ -2,7 +2,16 @@
 
 ## Unreleased
 
+### Removed
+- Remove PortableApps.com/PAF generation and its UI, API and CLI entry points. Preserve generic portable discovery/registration, Purgeon’s portable ZIP, disposable capture/recovery and heuristic assessment; existing user packages are untouched.
+
 ### Fixed
+- Validate both power timeout values before changes; isolate nested settings values across callers and queued writes.
+- Redact command payloads from diagnostics and guard unclassified application operations against overlapping mutations while preserving cancellation and reviewed queries.
+- Correct cookie registry provider paths, propagate access failures and verify both browser results; partial failures require refreshing the displayed union before retrying.
+- Run performance checks through installed Node/Vite, reject failed child commands, and read TAP/spec test counts with explicit errors for missing summaries.
+- Separate Disk Usage (`Ctrl+Shift+0`) from reset zoom (`Ctrl+0`), discard stale disk work and expose control names and selection state. Live WebView/accessibility validation remains pending.
+- Pin native file mutation handles and ancestors; recheck Boot authorization at mutation boundaries and preserve refusal evidence. Live BCD behavior remains unverified.
 - Transfer registry recovery now pins every validated original export and a native-owned Unicode import image before any undo mutation, retaining file/ancestor pins through the fixed native importer's confirmed exit. Opaque lease-bound pins replace path-reopened undo imports; uncertain termination keeps the journal locked until reaped, and failed image preparation cleans only its owned identity. Regression checks use scratch files and neutral child processes, not live registry imports.
 - Program-restore undo now persists per-item intent/completion, checks recorded imported state and original evidence, stops on conflicts or persistence failures, and retries only unfinished proven phases. Native exclusive journal leases prevent concurrent writers; atomic restore ID reservation preserves older journals. Imported files are retained in same-volume recovery staging. Legacy journals lacking expected state require manual review; registry external-writer and directory-child race limits remain documented.
 - Settings replacement undo now records and validates an exact native Recycle Bin receipt (original file identity, machine/user, metadata and bounded content fingerprint), so newer same-path deletions cannot select the imported copy. Missing, changed or legacy ambiguous replacement evidence is refused before undo changes anything. Restoration uses the held original handle without overwriting another occupant; live Recycle Bin integration remains unverified.

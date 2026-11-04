@@ -31,11 +31,12 @@ test('signature cache uses first case spelling and its corresponding stamp', asy
 });
 
 test('archive attaches only newest case-insensitive entry without reordering entries or backups', async () => {
-  let data=JSON.stringify([{key:'A',backups:['old']},{key:'b',backups:[]},{key:'a',backups:['existing']}]);
-  setSys({makeDir:async()=>{},readText:async()=>data,writeTextAtomic:async(_p,s)=>{data=s;}});
+  const legacy = { name: 'Fixture', removed: '2026-01-01T00:00:00.000Z' };
+  let data=JSON.stringify([{...legacy,key:'A',backups:['old']},{...legacy,key:'b',backups:[]},{...legacy,key:'a',backups:['existing']}]);
+  setSys({makeDir:async()=>{},readOptionalText:async()=>data,writeTextAtomic:async(_p,s)=>{data=s;}});
   await archive.setRoot('C:\\MemoryArchive');
   await archive.attachBackup(['A','a','missing','b'],'new');
-  assert.deepEqual(JSON.parse(data),[{key:'A',backups:['old']},{key:'b',backups:['new']},{key:'a',backups:['existing','new']}]);
+  assert.deepEqual(JSON.parse(data),[{...legacy,key:'A',backups:['old']},{...legacy,key:'b',backups:['new']},{...legacy,key:'a',backups:['existing','new']}]);
 });
 
 test('shortcut scan retains depth-first order, uppercase extensions, depth limit and link refusal', async () => {
