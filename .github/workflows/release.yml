@@ -114,12 +114,6 @@ jobs:
         run: npm run dist:windows
       - name: Package verification failure tests
         run: ./scripts/test-package-verifier.ps1 -Directory release -Manifest release-manifest.json
-      - name: Packaged portable CLI (ten consecutive runs)
-        shell: pwsh
-        run: |
-          foreach ($repeat in 1..10) {
-            ./scripts/test-packaged-cli.ps1 -Directory release -Manifest release-manifest.json -OutputDirectory "verification/portable-cli-$repeat"
-          }
       - name: Fetch pinned prior installer and verify before execution
         shell: pwsh
         run: |
@@ -132,6 +126,12 @@ jobs:
         shell: pwsh
         run: |
           ./scripts/test-windows-installers.ps1 -Directory release -Manifest release-manifest.json -PriorInstaller "$env:RUNNER_TEMP/Purgeon-Setup-1.4.2-x64.exe" -PriorSha256 b8ab269d53fde168e6ffa495bba4009e0c576a65b37a4e8e6877b10c69fbe266 -PriorVersion 1.4.2 -Reinstall
+      - name: Packaged portable CLI (ten consecutive runs)
+        shell: pwsh
+        run: |
+          foreach ($repeat in 1..10) {
+            ./scripts/test-packaged-cli.ps1 -Directory release -Manifest release-manifest.json -OutputDirectory "verification/portable-cli-$repeat"
+          }
       - name: Upload CLI and lifecycle evidence including failures
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7

@@ -49,17 +49,27 @@ function Invoke-Installer([string] $File, [string] $Arguments, [string] $Stage) 
     } finally { $process.Dispose() }
 }
 function Assert-Installed([string] $Version, [string] $Hash) {
-    Assert-PeMachine $exe 0x8664
+    $row = [ordered]@{ stage = 'installed-identity'; lifecycleStage = $(if ($stages.Count) { $stages[-1].stage }); status = 'failed'; version = "$Version"; expectedSha256 = $Hash; actualSha256 = $null; byteLength = $null; peVersion = $null; registryIdentity = @() }
+    $stages.Add($row)
+    $actualHash = (Get-FileHash -LiteralPath $exe -ErrorAction Stop).Hash
+    $row.actualSha256 = $actualHash
+    $row.byteLength = (Get-Item -LiteralPath $exe -ErrorAction Stop).Length
     $actual = [Diagnostics.FileVersionInfo]::GetVersionInfo($exe).ProductVersion
-    Assert-InstallerVersion $actual $Version
+    $row.peVersion = $actual
     $found = @($registries | Where-Object { Test-Path -LiteralPath $_ })
+    $row.registryIdentity = @($found | ForEach-Object {
+        $identity = Get-ItemProperty -LiteralPath $_
+        @{ registryPath = $_; DisplayVersion = $identity.DisplayVersion; InstallLocation = $identity.InstallLocation }
+    })
+    $evidence | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $out 'result.json') -ErrorAction Stop
+    Assert-PeMachine $exe 0x8664
+    Assert-InstallerVersion $actual $Version
     if ($found.Count -ne 1) { throw 'Expected exactly one Purgeon uninstall registration across registry views.' }
     $reg = Get-ItemProperty -LiteralPath $found[0]
     Assert-InstallerVersion $reg.DisplayVersion $Version
     if ($reg.InstallLocation.Trim('"').TrimEnd('\') -ine $install.TrimEnd('\')) { throw 'Uninstall registration differs from expected version/path.' }
-    $actualHash = (Get-FileHash -LiteralPath $exe).Hash
     if ($Hash -and $actualHash -ne $Hash) { throw 'Installed candidate differs from portable executable hash.' }
-    $stages.Add(@{ stage = 'installed-identity'; version = "$Version"; sha256 = $actualHash; registration = $reg.DisplayVersion; registryPath = $found[0] })
+    $row.status = 'passed'
 }
 $sentinels = [ordered]@{}
 function Assert-Preserved {
@@ -124,8 +134,32 @@ try {
     }
     Assert-Preserved
     $evidence.status = 'passed'
-} catch { $evidence.error = $_.Exception.Message; throw }
+} catch {
+    $evidence.error = $_.Exception.Message
+    $evidence.diagnosticErrors = [Collections.Generic.List[string]]::new()
+    try {
+        $diagnostics = (New-Item -ItemType Directory -Path (Join-Path $out 'diagnostics') -ErrorAction Stop).FullName
+        $inputs = [ordered]@{
+            'Purgeon-Setup-x64.exe' = (Join-Path $Directory 'Purgeon-Setup-x64.exe')
+            'Purgeon-Portable-x64.zip' = (Join-Path $Directory 'Purgeon-Portable-x64.zip')
+            'release-manifest.json' = $Manifest
+            'installer.nsi' = (Join-Path $PSScriptRoot '../src-tauri/target/x86_64-pc-windows-msvc/release/nsis/x64/installer.nsi')
+        }
+        if ($stages | Where-Object { $_.stage -in @('upgrade-candidate', 'reinstall-candidate') }) { $inputs['installed-candidate.exe'] = $exe }
+        foreach ($name in $inputs.Keys) {
+            try {
+                if (Test-Path -LiteralPath $inputs[$name] -PathType Leaf) {
+                    $inputFile = Get-Item -LiteralPath $inputs[$name] -ErrorAction Stop
+                    if ($inputFile.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Diagnostic input is a reparse point: $name" }
+                    Copy-Item -LiteralPath $inputFile.FullName -Destination (Join-Path $diagnostics $name) -ErrorAction Stop
+                } elseif ($name -ne 'installer.nsi') { throw "Diagnostic input missing: $name" }
+            } catch { $evidence.diagnosticErrors.Add($_.Exception.Message) }
+        }
+    } catch { $evidence.diagnosticErrors.Add($_.Exception.Message) }
+    throw
+}
 finally {
-    $evidence | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $out 'result.json')
+    try { $evidence | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $out 'result.json') -ErrorAction Stop }
+    catch { if (!$evidence.error) { throw }; Write-Warning "Evidence write failed: $($_.Exception.Message); original failure: $($evidence.error)" }
     Write-Output "Installer lifecycle evidence: $out/result.json"
 }

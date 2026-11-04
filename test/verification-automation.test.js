@@ -181,3 +181,61 @@ try {
   const result = spawnSync('pwsh', ['-NoProfile', '-Command', command], { encoding: 'utf8', timeout: 30000, windowsHide: true });
   assert.equal(result.status, 0, result.stderr || result.error?.message);
 });
+
+
+test('installed identity persists actual and expected hashes before rejecting mismatch', () => {
+  const command = `
+$ErrorActionPreference = 'Stop'
+$tokens = $null; $errors = $null
+$ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD 'scripts/test-windows-installers.ps1'), [ref]$tokens, [ref]$errors)
+$function = $ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Assert-Installed' }, $true)
+Invoke-Expression $function.Extent.Text
+# Inert bytes and identity adapters only; never execute an installer or touch registry.
+function Assert-PeMachine { }
+function Assert-InstallerVersion { }
+function Test-Path { $true }
+function Get-ItemProperty { @{ DisplayVersion = '1.5.0-alpha.1'; InstallLocation = $install } }
+$exe = [IO.Path]::GetTempFileName()
+$out = Join-Path ([IO.Path]::GetTempPath()) ([Guid]::NewGuid().ToString('N'))
+[void][IO.Directory]::CreateDirectory($out)
+try {
+  [IO.File]::WriteAllText($exe, 'inert installed bytes')
+  $install = 'owned-test-install'
+  $registries = @('inert-registry-adapter')
+  $stages = [Collections.Generic.List[object]]::new()
+  $evidence = @{ stages = $stages }
+  $expected = '0' * 64
+  $rejected = $false
+  try { Assert-Installed '1.5.0-alpha.1' $expected }
+  catch {
+    if ($_.Exception.Message -ne 'Installed candidate differs from portable executable hash.') { throw }
+    $rejected = $true
+  }
+  $saved = Get-Content -LiteralPath (Join-Path $out 'result.json') -Raw | ConvertFrom-Json
+  $row = $saved.stages[0]
+  if (!$rejected -or $row.status -ne 'failed' -or $row.expectedSha256 -ne $expected -or $row.actualSha256 -ne (Get-FileHash -LiteralPath $exe).Hash -or $row.byteLength -ne 21 -or $row.registryIdentity[0].DisplayVersion -ne '1.5.0-alpha.1') { throw 'Mismatch evidence missing before throw' }
+  Assert-Installed '1.5.0-alpha.1' (Get-FileHash -LiteralPath $exe).Hash
+  if ($stages[1].status -ne 'passed') { throw 'Matching identity rejected' }
+  function Assert-PeMachine { throw 'injected architecture failure' }
+  try { Assert-Installed '1.5.0-alpha.1' $expected; throw 'Architecture gate bypassed' }
+  catch { if ($_.Exception.Message -ne 'injected architecture failure') { throw } }
+  $saved = Get-Content -LiteralPath (Join-Path $out 'result.json') -Raw | ConvertFrom-Json
+  if ($saved.stages[2].actualSha256 -ne (Get-FileHash -LiteralPath $exe).Hash -or $saved.stages[2].status -ne 'failed') { throw 'Early identity failure lost hash evidence' }
+} finally { [IO.File]::Delete($exe); [IO.File]::Delete((Join-Path $out 'result.json')); [IO.Directory]::Delete($out) }
+`;
+  const result = spawnSync('pwsh', ['-NoProfile', '-Command', command], { encoding: 'utf8', timeout: 30000, windowsHide: true });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+
+test('installer diagnostic inputs stay explicit and portable runs follow lifecycle', () => {
+  const source = readFileSync(new URL('../scripts/test-windows-installers.ps1', import.meta.url), 'utf8');
+  const capture = source.slice(source.indexOf('$inputs = [ordered]@{'));
+  assert.match(capture, /\$inputs\['installed-candidate.exe'\] = \$exe/);
+  assert.doesNotMatch(capture, /Copy-Item[^\n]*-Recurse/);
+  assert.match(capture, /ReparsePoint/);
+  assert.match(capture, /diagnosticErrors.Add/);
+  const workflow = readFileSync(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8');
+  assert.ok(workflow.indexOf('Disposable runner install upgrade reinstall uninstall lifecycle') < workflow.indexOf('Packaged portable CLI (ten consecutive runs)'));
+  assert.match(workflow, /Upload CLI and lifecycle evidence including failures\r?\n        if: always\(\)/);
+});
