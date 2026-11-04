@@ -60,6 +60,7 @@ import * as power from './power.js';
 import * as restoremgr from './restoremgr.js';
 import * as boot from './boot.js';
 import * as eventlogs from './eventlogs.js';
+import * as securitySoftware from './security-software.js';
 import * as health from './health.js';
 import * as tasks from './tasks.js';
 import * as cookierules from './cookierules.js';
@@ -523,6 +524,12 @@ const handlers = {
   'boot:undo': (request) => boot.undo(request),
   // Event Logs (Tools > System Tools).
   'logs:channels': () => eventlogs.channels(),
+  'securitySoftware:list': (request) => securitySoftware.list(request),
+  'securitySoftware:prepare': (request) => securitySoftware.prepare(request),
+  'securitySoftware:acknowledge': (request) => securitySoftware.acknowledge(request),
+  'securitySoftware:launch': (request) => securitySoftware.launch(request),
+  'securitySoftware:cancel': (request) => securitySoftware.cancel(request),
+  'securitySoftware:status': (request) => securitySoftware.status(request),
   'logs:exportPick': ({ channelId }) => eventlogs.exportLog(channelId),
   'logs:clear': ({ channelId }) => eventlogs.clearLog(channelId),
   'logs:setEnabled': ({ channelId, on }) => eventlogs.setEnabled(channelId, on),
@@ -922,6 +929,7 @@ let activeMutation = null;
 // Only reviewed queries and cancellation/UI controls bypass serialization.
 // Unclassified handlers are guarded, including newly added handlers.
 const concurrentChannels = new Set(`
+securitySoftware:list securitySoftware:prepare securitySoftware:status securitySoftware:cancel
 app:isAdmin app:specs app:sysinfo app:ready app:dataDamage app:quit
 app:setTray app:setOnTop app:show app:hideToTray app:closeAnswered
 settings:get programs:list programs:measure programs:measureStore icons:get
@@ -961,10 +969,13 @@ export const api = {
   async invoke(channel, arg, admission) {
     const fn = handlers[channel];
     if (!Object.hasOwn(handlers, channel) || typeof fn !== 'function') throw new Error(`Unknown request ${channel}`);
+    if (['securitySoftware:launch', 'securitySoftware:acknowledge'].includes(channel) && (admission?.requiresApproval !== true || typeof admission.approve !== 'function')) throw new Error(`Explicit approval admission required for ${channel}`);
     const mutation = mutates(channel) || !!admission?.requiresApproval;
     if (mutation && activeMutation) throw new Error(`Another operation (${activeMutation}) is in progress. Wait for it to finish before starting ${channel}.`);
     if (mutation) activeMutation = channel;
     try {
+    if (channel === 'securitySoftware:launch') arg = securitySoftware.launchRequest(arg);
+    if (channel === 'securitySoftware:acknowledge') arg = securitySoftware.acknowledgeRequest(arg);
     if (admission?.requiresApproval) await admission.approve();
     // Mutations never retry automatically: a failed response may follow a commit.
     const retryRead = /^(programs:list|settings:get|app:specs|groups:list|backups:list|history:list|snapshots:list)$/.test(channel);

@@ -32,7 +32,7 @@ for (const [subpath, exports] of Object.entries(modules)) {
     operations++;
   }
 }
-assert.equal(operations, 269);
+assert.equal(operations, 275);
 assert.equal(modules['./winpath'].join('C:\\demo', 'child'), 'C:\\demo\\child');
 assert.equal(modules['./cli-args'].parseCliArgs instanceof Function, true);
 const runtime = modules['./runtime'];
@@ -40,8 +40,17 @@ assert.throws(() => runtime.registerRuntime({ host: {} }), /Invalid runtime/);
 assert.equal(runtime.runtimeState(), 'unregistered');
 const files = new Map();
 let writes = 0, calls = 0, failWrite = false, release, entered;
+const avProductId = 'a'.repeat(32), avPlanId = 'b'.repeat(32);
+let avAcknowledgments = 0, avLaunches = 0, avApprovals = 0, avFailLaunch = false;
+const avStatus = { id: avPlanId, phase: 'prepared', bytesReceived: 0, cancellationRequested: false, cleanup: 'none', detail: 'Fixture' };
 const hit = () => { calls++; };
 const host = {
+  acknowledgeSecuritySoftwareRemoval: async request => { avAcknowledgments++; return { reviewId: request.reviewId, outcome: 'acknowledged' }; },
+  securitySoftwareInventory: async () => ({ products: [], reviews: [], sources: [{ id: 'fixture', status: 'unavailable', detail: 'Inert host' }], complete: false, observedAt: '2026-11-04T19:00:00Z' }),
+  prepareSecuritySoftwareRemoval: async request => { assert.deepEqual(request, { productId: avProductId }); return { id: avPlanId, productId: avProductId, toolId: 'avg', productName: 'AVG fixture', toolName: 'AVG Clear fixture', recoveryLimits: 'No rollback', expiresAt: '2026-11-04T20:00:00Z' }; },
+  launchSecuritySoftwareRemoval: async id => { assert.equal(id, avPlanId); avLaunches++; if (avFailLaunch) throw new Error('file busy after acceptance'); return { id, outcome: 'reviewRequired', detail: 'Utility may have started' }; },
+  cancelSecuritySoftwareRemoval: async id => { assert.equal(id, avPlanId); return { accepted: true, status: { ...avStatus, phase: 'cancelled' } }; },
+  securitySoftwareRemovalStatus: async id => { assert.equal(id, avPlanId); return avStatus; },
   info: { dataDir: 'C:\\fixture', env: {}, home: 'C:\\fixture', exe: '', version: 'test' },
   makeDir: async () => { hit(); if (mode === 'failed') throw new Error('init failed'); },
   readDir: async () => { hit(); return []; },
@@ -58,6 +67,7 @@ const host = {
 let decision = mode !== 'denied';
 let block = false;
 const confirm = async request => {
+  if (request.channel === 'securitySoftware:launch') avApprovals++;
   if (mode === 'throws') throw new Error('approval failed');
   if (mode === 'nonliteral') return { ok: true };
   if (block && request.kind === 'operation') { entered(); await new Promise(resolve => { release = resolve; }); }
@@ -93,6 +103,37 @@ if (mode === 'example') {
     assert.equal(runtime.runtimeState(), 'failed');
   } else {
     await init;
+    const av = modules['./securitySoftware'];
+    assert.equal((await av.list()).complete, false);
+    assert.equal((await av.prepare({ productId: avProductId })).id, avPlanId);
+    assert.deepEqual(await av.status({ planId: avPlanId }), avStatus);
+    assert.equal((await av.cancel({ planId: avPlanId })).accepted, true);
+    await assert.rejects(av.prepare({ productId: '../invalid' }), /Invalid/);
+    await assert.rejects(av.cancel({ planId: avPlanId, path: 'C:\\injected' }), /Invalid/);
+    if (['missing', 'denied', 'throws', 'nonliteral'].includes(mode)) {
+      await assert.rejects(av.launch({ planId: avPlanId }), /Explicit approval|approval failed/);
+      await assert.rejects(av.acknowledge({ reviewId: avPlanId, acknowledgment: 'reviewedUtilityClosed' }), /Explicit approval|approval failed/);
+      assert.equal(avAcknowledgments, 0);
+      assert.equal(avLaunches, 0);
+    } else {
+      const beforeAv = new Promise(resolve => { entered = resolve; });
+      block = true;
+      const launched = av.launch({ planId: avPlanId });
+      await beforeAv;
+      await assert.rejects(av.launch({ planId: avPlanId }), /Another operation/);
+      assert.equal((await av.cancel({ planId: avPlanId })).accepted, true);
+      assert.deepEqual(await av.status({ planId: avPlanId }), avStatus);
+      assert.equal((await av.list()).complete, false);
+      assert.equal((await av.prepare({ productId: avProductId })).id, avPlanId);
+      release(); block = false;
+      assert.equal((await launched).outcome, 'reviewRequired');
+      assert.equal(avApprovals, 1);
+      avFailLaunch = true;
+      await assert.rejects(av.launch({ planId: avPlanId }), /file busy/);
+      assert.equal(avLaunches, 2, 'ambiguous response does not retry launch');
+      assert.deepEqual(await av.acknowledge({ reviewId: avPlanId, acknowledgment: 'reviewedUtilityClosed' }), { reviewId: avPlanId, outcome: 'acknowledged' });
+      assert.equal(avAcknowledgments, 1);
+    }
     assert.equal(await modules['./i18n'].current(), 'en');
     const count = writes;
     const hostCalls = calls;

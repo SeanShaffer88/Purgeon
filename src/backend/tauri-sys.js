@@ -1,12 +1,24 @@
 // The app's system layer: thin calls into the Rust core (src-tauri/src/lib.rs).
 import { invoke } from '@tauri-apps/api/core';
 
+export function securitySoftwareAdapter(invokeNative) {
+  return {
+    acknowledgeSecuritySoftwareRemoval: (request) => invokeNative('acknowledge_security_software_removal', { request }),
+    securitySoftwareInventory: () => invokeNative('security_software_inventory'),
+    prepareSecuritySoftwareRemoval: (request) => invokeNative('prepare_security_software_removal', { request }),
+    launchSecuritySoftwareRemoval: (planId) => invokeNative('launch_security_software_removal', { request: { planId } }),
+    cancelSecuritySoftwareRemoval: (planId) => invokeNative('cancel_security_software_removal', { request: { planId } }),
+    securitySoftwareRemovalStatus: (planId) => invokeNative('security_software_removal_status', { request: { planId } }),
+  };
+}
+
 /** @returns {Promise<import('./system-contracts').SystemAdapter>} */
 export async function createTauriSys() {
   const info = /** @type {import('./system-contracts').NativeSystemInfo} */ (await invoke('sys_info'));
   return {
     openDialog: (options) => import('@tauri-apps/plugin-dialog').then(({ open }) => open(options)),
     saveDialog: (options) => import('@tauri-apps/plugin-dialog').then(({ save }) => save(options)),
+    ...securitySoftwareAdapter(invoke),
     queryOperation: (request) => invoke('query_operation', { request }),
     selectResource: (selection) => invoke('select_resource', { selection }),
     prepareOperation: (request) => invoke('prepare_operation', { request }),

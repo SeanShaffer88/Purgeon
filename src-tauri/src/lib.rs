@@ -30,6 +30,7 @@ mod registry_native;
 mod registry_recovery;
 mod restore_native;
 mod security;
+mod security_software_native;
 mod snapshot;
 mod state_store;
 mod task_native;
@@ -42,6 +43,121 @@ mod windows_tools;
 static DATA_LOCK: std::sync::OnceLock<fs::File> = std::sync::OnceLock::new();
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct SecuritySoftwarePlanRequest {
+    plan_id: String,
+}
+
+async fn security_software_call<T: Send + 'static>(
+    call: impl FnOnce() -> Result<T, String> + Send + 'static,
+) -> Result<T, String> {
+    tauri::async_runtime::spawn_blocking(call)
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn acknowledge_security_software_removal(
+    request: security_software_native::AcknowledgeRequest,
+) -> Result<security_software_native::AcknowledgeResult, String> {
+    security_software_call(move || security_software_native::acknowledge(request)).await
+}
+
+#[tauri::command]
+async fn security_software_inventory() -> Result<security_software_native::Inventory, String> {
+    security_software_call(security_software_native::inventory).await
+}
+#[tauri::command]
+async fn prepare_security_software_removal(
+    request: security_software_native::PrepareRequest,
+) -> Result<security_software_native::Plan, String> {
+    security_software_call(move || security_software_native::prepare(request)).await
+}
+#[tauri::command]
+async fn launch_security_software_removal(
+    request: SecuritySoftwarePlanRequest,
+) -> Result<security_software_native::LaunchResult, String> {
+    security_software_call(move || security_software_native::launch(&request.plan_id)).await
+}
+#[tauri::command]
+async fn cancel_security_software_removal(
+    request: SecuritySoftwarePlanRequest,
+) -> Result<security_software_native::CancelResult, String> {
+    security_software_call(move || security_software_native::cancel(&request.plan_id)).await
+}
+#[tauri::command]
+async fn security_software_removal_status(
+    request: SecuritySoftwarePlanRequest,
+) -> Result<security_software_native::Status, String> {
+    security_software_call(move || security_software_native::status(&request.plan_id)).await
+}
+
+#[cfg(test)]
+mod security_software_binding_tests {
+    use super::*;
+
+    #[test]
+    fn requests_are_closed_and_invalid_ids_reach_real_native_validation() {
+        assert!(serde_json::from_value::<SecuritySoftwarePlanRequest>(
+            serde_json::json!({"planId": "bad", "path": "C:/untrusted"})
+        )
+        .is_err());
+        let request = || {
+            serde_json::from_value::<SecuritySoftwarePlanRequest>(
+                serde_json::json!({"planId": "../invalid"}),
+            )
+            .unwrap()
+        };
+        tauri::async_runtime::block_on(async {
+            assert!(
+                prepare_security_software_removal(security_software_native::PrepareRequest {
+                    product_id: "../invalid".into(),
+                })
+                .await
+                .is_err()
+            );
+            assert!(
+                serde_json::from_value::<security_software_native::AcknowledgeRequest>(
+                    serde_json::json!({"reviewId": "bad", "acknowledgment": "removed"})
+                )
+                .is_err()
+            );
+            assert!(serde_json::from_value::<security_software_native::AcknowledgeRequest>(
+                serde_json::json!({"reviewId": "bad", "acknowledgment": "reviewedUtilityClosed", "path": "C:/untrusted"})
+            ).is_err());
+            let acknowledgment = serde_json::from_value::<security_software_native::AcknowledgeRequest>(
+                serde_json::json!({"reviewId": "../invalid", "acknowledgment": "reviewedUtilityClosed"})
+            ).unwrap();
+            assert!(acknowledge_security_software_removal(acknowledgment)
+                .await
+                .is_err());
+            assert!(launch_security_software_removal(request()).await.is_err());
+            assert!(cancel_security_software_removal(request()).await.is_err());
+            assert!(security_software_removal_status(request()).await.is_err());
+        });
+    }
+
+    #[test]
+    fn blocking_boundary_preserves_success_native_error_and_worker_failure() {
+        tauri::async_runtime::block_on(async {
+            assert_eq!(security_software_call(|| Ok(42)).await.unwrap(), 42);
+            assert_eq!(
+                security_software_call::<()>(|| Err("native refusal".into()))
+                    .await
+                    .unwrap_err(),
+                "native refusal"
+            );
+            assert!(
+                security_software_call::<()>(|| panic!("inert worker failure"))
+                    .await
+                    .unwrap_err()
+                    .contains("inert worker failure")
+            );
+        });
+    }
+}
 
 #[tauri::command]
 async fn reserve_update_download(
@@ -2263,6 +2379,12 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
+            acknowledge_security_software_removal,
+            security_software_inventory,
+            prepare_security_software_removal,
+            launch_security_software_removal,
+            cancel_security_software_removal,
+            security_software_removal_status,
             task_inventory,
             task_recovery,
             task_owned_status,

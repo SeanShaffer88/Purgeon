@@ -1,5 +1,40 @@
 # Development record
 
+## 2026-11-04: Remove AV implementation and qualification limits
+
+The current Remove AV slice adds a dedicated inventory and vendor-utility workflow;
+see [the user guide](../README.md#remove-av) for supported products and official
+procedures. Native inventory reads SecurityCenter2 antivirus, antispyware and
+firewall registrations plus HKLM/HKCU uninstall entries in both registry views.
+Source failures remain visible, and stale WMI evidence does not prove installation
+or active protection. Unsupported and enterprise products remain visible; Defender
+has no removal action and ESET remains instructions only.
+
+The native policy uses fixed official AVG Clear, standard Avast Clear, Norton 360
+Remover and McAfee MCPR consumer downloads. Generic Avast One is unsupported.
+Publisher policy was observed from official downloaded payloads on 2026-11-04 by
+static inspection, without execution. Windows Authenticode trust, exact signer
+subject DER identity and product metadata must match; leaf certificate thumbprints
+are not pinned. A vendor identity or metadata change fails closed pending review.
+The verified payload remains pinned through launch.
+
+One native utility may run at a time. Each launch has a nonsuppressible confirmation,
+prelaunch cancellation and an exclusive persisted checkpoint; persistence failure
+halts launch. Previous attempts block fresh plans until explicit acknowledgment
+that the user reviewed the attempt and the utility, including any elevation prompt,
+has closed. Uncertain launches have no automatic retry. Launch status never means
+removal completed and provides no undo. Retained payloads may remain after review
+until future explicit cleanup of owned files. No silent/forced-removal switches,
+automatic boot changes or reboot are supplied.
+
+[Antivirus Removal Tool](https://antivirus-removal-tool.com/) is background reference
+for the inventory workflow and stale-WMI caveat, not a bundled dependency or a
+27-vendor support catalog. Full root checks and independent qualification for this
+slice are pending. No AV remover was executed. Live UAC, vendor UI, Safe Mode and
+utilities outliving the app require manual vendor-flow testing in a disposable
+Windows VM; source/unit fixtures cannot prove these behaviors. No version tag or
+release is prepared for this slice.
+
 ## 2026-11-04: bounded coverage policy transition
 
 [CONSTRAINTS.md](../CONSTRAINTS.md) and [coverage/policy.json](../coverage/policy.json)

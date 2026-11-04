@@ -1074,3 +1074,21 @@ button:focus-visible, select:focus-visible, input:focus-visible, .tweak:focus-vi
   .action-bar.simplified > .action-button { min-width: 90px; padding: 0 8px; }
   .sync-choices { grid-template-columns: 1fr; }
 }
+
+/* Remove AV uses the existing compact desktop palette and controls. */
+.security-software { flex: 1; min-height: 0; min-width: 0; overflow: auto; padding: 12px; }
+.security-toolbar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+.security-warning { border: 1px solid var(--border-strong); border-left: 3px solid var(--amber); background: var(--raised); padding: 10px 12px; margin: 0 0 12px; }
+.security-sources { color: var(--muted); margin-bottom: 12px; overflow-wrap: anywhere; }
+.security-table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: 8px; }
+.security-table { width: 100%; border-collapse: collapse; text-align: left; }
+.security-table th, .security-table td { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.security-table thead { color: var(--muted); background: var(--raised); }
+.security-table tbody th { font-weight: 400; }
+.security-table tr.selected { background: var(--accent-sel); }
+.security-product { border: 0; background: transparent; padding: 4px; text-align: left; min-width: 140px; }
+.security-detail { background: var(--panel); border: 1px solid var(--border); border-radius: 8px; padding: 12px; margin-top: 12px; overflow-wrap: anywhere; }
+.security-detail h2 { font-size: 14px; margin: 0 0 8px; }
+.security-detail p { margin: 6px 0; }
+.security-operation { color: var(--muted); overflow-wrap: anywhere; }
+@media (max-width: 760px) { .security-software { padding: 8px; } .security-table { min-width: 600px; } .security-toolbar button { white-space: normal; } }

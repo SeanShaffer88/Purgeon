@@ -211,6 +211,14 @@
       "setWakeTimers": "power:setWakeTimers",
       "setUsbSuspend": "power:setUsbSuspend"
     },
+    "securitySoftware": {
+      "acknowledge": "securitySoftware:acknowledge",
+      "list": "securitySoftware:list",
+      "prepare": "securitySoftware:prepare",
+      "launch": "securitySoftware:launch",
+      "cancel": "securitySoftware:cancel",
+      "status": "securitySoftware:status"
+    },
     "eventlogs": {
       "channels": "logs:channels",
       "exportPick": "logs:exportPick",
