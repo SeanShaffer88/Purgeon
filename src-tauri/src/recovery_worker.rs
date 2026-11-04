@@ -279,8 +279,10 @@ mod tests {
             String::from_utf8_lossy(&result.stderr)
         );
         let output = String::from_utf8(result.stdout).unwrap();
-        assert!(
-            output.ends_with(&format!("input\nquoted \"value\" é{}", root.display())),
+        let (_, directory) = output.split_once("input\nquoted \"value\" é").unwrap();
+        assert_eq!(
+            std::fs::canonicalize(directory).unwrap(),
+            std::fs::canonicalize(&root).unwrap(),
             "{output}"
         );
         let result = run(self::frame("exit 7"), None).unwrap();
