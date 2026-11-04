@@ -53,3 +53,24 @@ Future ratios compare by integer cross multiplication, without rounding or toler
 Independent review approved the evidence. Activation requires PR91's merge after
 passing final-head CI; consult that PR for the hosted result rather than treating
 this pre-merge record as a CI pass.
+
+## Process spawn containment candidate
+
+[Review record](reviews/process-spawn-containment.json) measures source commit
+`f0627a9721aba2c40325675a5e16032106c2f2dd`. It preserves all 290 file counts,
+source proof, artifact hashes, exact aggregate and touched-file comparisons, and
+failure-path evidence. Changed critical Rust coverage is 104/118 (88.14%);
+JavaScript is 0/0, not applicable. All four aggregate ratios meet no-fall comparisons.
+
+The earlier 122/155 changed-line result failed. ACK test fault plumbing moved
+exclusively into the existing canonical `cfg(test)` test module; production
+validation, authentication, normal/error ACK dispatch and waits remain measured.
+The final result uses unchanged v2 rules. The reporter still exits 1 below the
+historical 85%/70% floors, with no incomplete reasons; those floors did not pass.
+
+This candidate can become the latest manual comparison reference only after
+independent review and a passing final-head PR merge. Preserve the original
+baseline and prior records. This record neither activates the baseline nor claims
+hosted CI readiness. Its relative evidence paths require the local analysis-log
+archive. Production worker entry, privileged/UAC/VM operation and full application
+performance remain unqualified by these unit and Node workloads.
