@@ -57,7 +57,7 @@ this pre-merge record as a CI pass.
 ## Process spawn containment candidate
 
 [Review record](reviews/process-spawn-containment.json) measures source commit
-`f0627a9721aba2c40325675a5e16032106c2f2dd`. It preserves all 290 file counts,
+`e9fbb023dbbb6101eb0b9f1af6b48492c38c83f0`. It preserves all 290 file counts,
 source proof, artifact hashes, exact aggregate and touched-file comparisons, and
 failure-path evidence. Changed critical Rust coverage is 104/118 (88.14%);
 JavaScript is 0/0, not applicable. All four aggregate ratios meet no-fall comparisons.
@@ -74,3 +74,7 @@ baseline and prior records. This record neither activates the baseline nor claim
 hosted CI readiness. Its relative evidence paths require the local analysis-log
 archive. Production worker entry, privileged/UAC/VM operation and full application
 performance remain unqualified by these unit and Node workloads.
+
+PR93 head `276e2ea` failed a literal current-directory spelling assertion
+(`runneradmin` versus `RUNNER~1`). The test-only correction compares canonical
+directory identity; passing hosted CI for the final head remains required.

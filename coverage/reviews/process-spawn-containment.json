@@ -2,12 +2,12 @@
   "schemaVersion": 1,
   "metricVersion": "purgeon-coverage-v2",
   "status": "candidate; independent review and passing final-head PR merge required before activation",
-  "sourceCommit": "f0627a9721aba2c40325675a5e16032106c2f2dd",
-  "sourceTreeHash": "e06549c5b8a56cb333ddc452fcdca096acfcec9d5a92f368cde5f0eb4f597938",
+  "sourceCommit": "e9fbb023dbbb6101eb0b9f1af6b48492c38c83f0",
+  "sourceTreeHash": "e9f48b3e00f275929d0cf60e92c5a0baf4ec581595b0261a3ab6192dd50f5d5a",
   "instrumentationId": "2e4ffcb6e5daac69142a683e704464f956c2772c70bf7dcff98f6d2d510a2a1d",
   "reference": "coverage/baseline.json (preserved; activation remains conditional on PR91)",
   "manualAssessment": {
-    "sourceTreeHash": "e06549c5b8a56cb333ddc452fcdca096acfcec9d5a92f368cde5f0eb4f597938",
+    "sourceTreeHash": "e9f48b3e00f275929d0cf60e92c5a0baf4ec581595b0261a3ab6192dd50f5d5a",
     "instrumentationId": "2e4ffcb6e5daac69142a683e704464f956c2772c70bf7dcff98f6d2d510a2a1d",
     "ratios": [
       {
@@ -157,7 +157,7 @@
         "runnerExitCode": 0,
         "shellExitCode": 0,
         "status": "Succeeded",
-        "runDirectory": "C:\\Users\\Sean Shaffer\\Documents\\DevTools\\runs\\20261104T091012948Z-7835c96badfa4e86a9923f33787f5ead"
+        "runDirectory": "C:\\Users\\Sean Shaffer\\Documents\\DevTools\\runs\\20261104T092806011Z-e46ee28614c949218138320e32e49607"
       },
       {
         "name": "clippy",
@@ -165,7 +165,7 @@
         "runnerExitCode": 0,
         "shellExitCode": 0,
         "status": "Succeeded",
-        "runDirectory": "C:\\Users\\Sean Shaffer\\Documents\\DevTools\\runs\\20261104T091013928Z-76f9833090094e7b89e6536d22c42bac"
+        "runDirectory": "C:\\Users\\Sean Shaffer\\Documents\\DevTools\\runs\\20261104T092807084Z-ac1c7d32b1204f40a8d56cd07e1e0d34"
       },
       {
         "name": "native",
@@ -173,7 +173,7 @@
         "runnerExitCode": 0,
         "shellExitCode": 0,
         "status": "Succeeded",
-        "runDirectory": "C:\\Users\\Sean Shaffer\\Documents\\DevTools\\runs\\20261104T091015077Z-2e92bc4fa53c43d4a751cb996303a58a"
+        "runDirectory": "C:\\Users\\Sean Shaffer\\Documents\\DevTools\\runs\\20261104T092813131Z-d9de9a89810b402ea7f3c59f2e679370"
       }
     ],
     "nativeCommands": [
@@ -228,25 +228,25 @@
       "testExitCode": 0,
       "exportExitCode": 0,
       "sourceUnchanged": true,
-      "run": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\ten-native-collection\\20261104T091004Z-724bbe56"
+      "run": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\ten-native-collection\\20261104T092756Z-71b1e948"
     },
     "reporter": {
       "executable": "C:\\Program Files\\nodejs\\node.exe",
       "args": [
         "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\Purgeon\\scripts\\coverage-report.mjs",
         "--manifest",
-        "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\spawn-isolated-combined\\manifest.json",
+        "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\spawn-cwd-combined\\manifest.json",
         "--evidence",
-        "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\spawn-isolated-combined\\evidence.json",
+        "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\spawn-cwd-combined\\evidence.json",
         "--out",
-        "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\spawn-isolated-combined\\report.json",
+        "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\spawn-cwd-combined\\report.json",
         "--llvm-cov",
         "C:\\Users\\Sean Shaffer\\.rustup\\toolchains\\1.99.0-x86_64-pc-windows-msvc\\lib\\rustlib\\x86_64-pc-windows-msvc\\bin\\llvm-cov.exe"
       ],
       "exitCode": 1,
       "signal": null
     },
-    "commandProvenance": "Native and static command arrays verified against archived spawn-isolated-native-checks.ps1 and spawn-js-static-checks.ps1. npm aliases above execute through node npm-cli.js as recorded by those scripts.",
+    "commandProvenance": "Native and static command arrays verified against archived spawn-cwd-native-checks.ps1 and spawn-js-static-checks.ps1. npm aliases above execute through node npm-cli.js as recorded by those scripts.",
     "dependencyInstall": "npm ci evidence was not part of this bounded record input; this record does not independently certify dependency installation or all final-head hosted gates."
   },
   "failurePaths": [
@@ -328,88 +328,92 @@
   ],
   "artifacts": [
     {
-      "path": "../analysis-logs/spawn-isolated-combined/report.json",
-      "sha256": "d273a3fd9868d9c58707b9c47d9b58b66be122867127b5f8b2b9a193c39c4d4b"
+      "path": "../analysis-logs/spawn-cwd-combined/report.json",
+      "sha256": "6475f643fca340242a44baacab40dc5a956ce19ca9be7cdcd6073f0638eee0ad"
     },
     {
-      "path": "../analysis-logs/spawn-isolated-combined/manifest.json",
-      "sha256": "5530a25ba486e1824bb8ee0471911a8d3f6155230dc2b6777ad62efeea106b5f"
+      "path": "../analysis-logs/spawn-cwd-combined/manifest.json",
+      "sha256": "ed527682e52942108f5bf5092db41ef2d5686971a1b518d233a8dab6cc844370"
     },
     {
-      "path": "../analysis-logs/spawn-isolated-combined/evidence.json",
-      "sha256": "39a06e264ef3a7141f8c2158f0b515e1f2e4aeaaa34fb5cfff3d3c7f91dfca00"
+      "path": "../analysis-logs/spawn-cwd-combined/evidence.json",
+      "sha256": "f2674b9718578ce799aa1ba9d29ba71b3794201759ba1c3b398b0099442b3861"
     },
     {
-      "path": "../analysis-logs/spawn-isolated-combined/execution.json",
-      "sha256": "eb0b5081bdc748169ae932e2f04d0882fa3fef4aad8e1fc5407e64154cf7939a"
+      "path": "../analysis-logs/spawn-cwd-combined/execution.json",
+      "sha256": "5a7d34e63ffe240731f4cbcbdc1f1f92f50885d6b05b1901f3a45d76b247b4d4"
     },
     {
-      "path": "../analysis-logs/spawn-isolated-combined/merge-inputs.json",
-      "sha256": "4218f2fe150418abf0daaf393bb8c9673c45c6ca8e0909e04f012c376e11a2ee"
+      "path": "../analysis-logs/spawn-cwd-combined/merge-inputs.json",
+      "sha256": "9a2b38159ffe5b063e39223963f94c2f3dc796838b9a0a810270f702509710d0"
     },
     {
-      "path": "../analysis-logs/spawn-source-proof.json",
-      "sha256": "7ee18892f653336dfe1511ae52f67e410ec4a2be065116e30a1b9f7c23e92a21"
+      "path": "../analysis-logs/spawn-cwd-source-proof.json",
+      "sha256": "0d9fc3ea4e24fc28ab400afb616ca8be7f0207b438fc0795471b375c15b1c3a1"
     },
     {
-      "path": "../analysis-logs/spawn-isolated-assessment.json",
-      "sha256": "8f4b2bfd47eb6238c75359e187e52abd845501323e53971d50c60cf5b18675e3"
+      "path": "../analysis-logs/spawn-cwd-assessment.json",
+      "sha256": "e128ce2fea6a562a69121889e62c91581688a20af4a37d4ee8e108aabd8b23ca"
     },
     {
-      "path": "../analysis-logs/spawn-isolated-native-checks.json",
-      "sha256": "88909f676262431997f7d00d383e4f4d1683344ace113f80d7c139167803fbba"
+      "path": "../analysis-logs/spawn-cwd-native-checks.json",
+      "sha256": "6db1511aeb8d9cd8d90a8b979ff60465f90ef081526ace640cc25061cb666852"
     },
     {
       "path": "../analysis-logs/spawn-js-static-checks.json",
       "sha256": "3ad0a8ca129329a8b1b2a6583cf86a4a49d5685c75c386ecc3c2799a7f6e3666"
     },
     {
-      "path": "../analysis-logs/spawn-isolated-node-coverage/execution.json",
+      "path": "../analysis-logs/spawn-cwd-node-coverage/execution.json",
       "sha256": "91ed95a45cb1d60e3e8acf1574fc1108342fdc189a5c007d7af14020a3d8ee3a"
     },
     {
-      "path": "../analysis-logs/spawn-isolated-node-coverage/artifact-hashes.json",
-      "sha256": "5e92d0d9150677d00f410be2f59f1d29d4b82c6235a5d5212f370f682d86cd7b"
+      "path": "../analysis-logs/spawn-cwd-node-coverage/artifact-hashes.json",
+      "sha256": "13d214c82f616a14d2dab1a65f7e35806e5ba49fcaef8c2e266bb295cc12c192"
     },
     {
-      "path": "../analysis-logs/spawn-isolated-node-coverage/raw-hashes.json",
-      "sha256": "0a101e162e191bc5dcfea650c15ac5d1a0fdc383fce61ad42b7730237cd34d68"
+      "path": "../analysis-logs/spawn-cwd-node-coverage/raw-hashes.json",
+      "sha256": "f248955d067fe5ea0694c9faa90e394be70ad8239deec50883b9714f1329e7b1"
     },
     {
-      "path": "../analysis-logs/spawn-isolated-node-coverage/workload-inputs.json",
+      "path": "../analysis-logs/spawn-cwd-node-coverage/workload-inputs.json",
       "sha256": "7b7214da4327383508982382bffe053cf1f3db59c39475baa5f3464859132cef"
     },
     {
-      "path": "../analysis-logs/ten-native-collection/20261104T091004Z-724bbe56/result.json",
-      "sha256": "02160e931bd0eacd9208c7bea43704603f21e00fafa37c8569cd681a5d0d3456"
+      "path": "../analysis-logs/ten-native-collection/20261104T092756Z-71b1e948/result.json",
+      "sha256": "cdfb7474f6200391e0dc20723b5fec29bbf5e08c1f80db6660087c7bd69ed408"
     },
     {
-      "path": "../analysis-logs/ten-native-collection/20261104T091004Z-724bbe56/export/provenance.json",
-      "sha256": "214f90cfa715ea5bd93ea9699a73084a208f0e01e9d5024c917353183920c980"
+      "path": "../analysis-logs/ten-native-collection/20261104T092756Z-71b1e948/export/provenance.json",
+      "sha256": "e0df73e49b9b915d011f2184c0ef9e971065e62f7763d6e110188a8697f4af26"
     },
     {
-      "path": "../analysis-logs/spawn-isolated-native-checks.ps1",
-      "sha256": "f50025a262854db28cff70d5cde348b7e36a3fa862d7df6e2b42ad5ad0316a61"
+      "path": "../analysis-logs/spawn-cwd-native-checks.ps1",
+      "sha256": "c8ff098c770130730a94d073eb37198a26a45ad167625caae9851ab0562b5522"
     },
     {
       "path": "../analysis-logs/spawn-js-static-checks.ps1",
       "sha256": "3d5d71968e70069c6104c94a33553fd6f70969ec44ac25125f8e5d3a51382e92"
     },
     {
-      "path": "../analysis-logs/spawn-isolated-node-coverage/stdout.log",
-      "sha256": "b1b5cc78ee4d447f4153e9bfb563a088b0831c2d26b8c109c6c66623f08dd23b"
+      "path": "../analysis-logs/spawn-cwd-node-coverage/stdout.log",
+      "sha256": "e0544156332426d16da4d91727a6d7b2b0dac1e02a0ada09a8d9fc5f2abac517"
     },
     {
-      "path": "../analysis-logs/ten-native-collection/20261104T091004Z-724bbe56/tool-inputs.json",
+      "path": "../analysis-logs/ten-native-collection/20261104T092756Z-71b1e948/tool-inputs.json",
       "sha256": "4838fe688bcd351eafbb1842f3244e37049af9637436f294cdb6c904d1c0d7a7"
     },
     {
-      "path": "../analysis-logs/ten-native-collection/20261104T091004Z-724bbe56/source-before.json",
-      "sha256": "11d72ce7367320c16083ab32dcdd25cb2751e03696cfdc6842dee7f18ae2d8a8"
+      "path": "../analysis-logs/ten-native-collection/20261104T092756Z-71b1e948/source-before.json",
+      "sha256": "fae966ed67212c931aae2c394a800f086a9f6707c72a2084e1ecf7cc19eeac8b"
     },
     {
-      "path": "../analysis-logs/ten-native-collection/20261104T091004Z-724bbe56/source-after.json",
-      "sha256": "11d72ce7367320c16083ab32dcdd25cb2751e03696cfdc6842dee7f18ae2d8a8"
+      "path": "../analysis-logs/ten-native-collection/20261104T092756Z-71b1e948/source-after.json",
+      "sha256": "fae966ed67212c931aae2c394a800f086a9f6707c72a2084e1ecf7cc19eeac8b"
+    },
+    {
+      "path": "../analysis-logs/spawn-ci-failure.log",
+      "sha256": "5b3c8bddbd73e6b83f77ac38ae791978036e4dd1e6af8a2c2985d99c2bb9f174"
     }
   ],
   "files": [
@@ -2019,8 +2023,8 @@
       "core": true,
       "covered": 175,
       "executable": 185,
-      "sourceSHA256": "b034c20822b0cb81e846287291e35626f0073c6ab53e2ff45f1c555114b20231",
-      "gitCanonicalBlobSHA256": "b034c20822b0cb81e846287291e35626f0073c6ab53e2ff45f1c555114b20231",
+      "sourceSHA256": "9da7a0d40797b818b1c43f9387cbcb57342e7a142d25906f520a12fed09d0f39",
+      "gitCanonicalBlobSHA256": "9da7a0d40797b818b1c43f9387cbcb57342e7a142d25906f520a12fed09d0f39",
       "transformation": "identity"
     },
     {
@@ -3313,5 +3317,11 @@
       "gitCanonicalBlobSHA256": "942a972a2df29e11a444430ee1b9173260338f5ca75de27784470c894e487e57",
       "transformation": "checkout-crlf-to-lf"
     }
-  ]
+  ],
+  "ciPathAliasQualification": {
+    "failedHead": "276e2ea",
+    "log": "../analysis-logs/spawn-ci-failure.log",
+    "correction": "Seven test-only lines canonicalize current-directory identity for the runneradmin/RUNNER~1 path alias; exact prefix, stderr, nonzero-exit and missing-executable assertions remain unchanged.",
+    "status": "Passing hosted CI for the final head remains required; not established by this local evidence."
+  }
 }
