@@ -8,9 +8,10 @@ its leftovers. Preserve its Rust/Tauri/React stack and existing data identity.
 The current maintenance slice is specified in `docs/DEVELOPMENT.md`.
 
 - UI calls application operations in `src/backend/api.js`; backend modules use
-  `src/backend/sys.js`. Native system access lives in `src-tauri`. Do not move
+  the canonical implementations in `packages/purgeon-core/src/internal` through
+  compatibility wrappers in `src/backend`, including `sys.js`. Native system access lives in `src-tauri`. Do not move
   system-changing behavior into UI handlers.
-- CLI validation is pure (`src/cli-args.js`). Dispatch and backend initialization
+- CLI validation is pure (`packages/purgeon-core/src/internal/cli-args.js`, wrapped by `src/cli-args.js`). Dispatch and backend initialization
   happen only after the entire request passes. Preserve native window launch
   arguments when editing `src-tauri/src/launch_args.rs`.
 - Preview, backup/recovery, conservative selection, and pre-delete checks are
@@ -21,7 +22,8 @@ The current maintenance slice is specified in `docs/DEVELOPMENT.md`.
   `cargo fmt --all --check`, `cargo clippy --locked --all-targets -- -D warnings`,
   and `cargo test --locked --all-targets`. Run lint/tests with `--target` for
   `x86_64-pc-windows-msvc` (Purgeon is x64-only). Record every failure; a passing subset
-  does not replace the full gate. JavaScript lint/type gates remain to be established.
+  does not replace the full gate. Also run `npm run lint`, `npm run typecheck`
+  and `npm run test:package`; type checks cover the declared incremental boundaries.
 - Coverage floors are 85% core, 70% overall, and every safety-relevant/destructive
   path exercised. Parser-only coverage does not establish application coverage.
   Application performance budgets are not yet established; do not invent results.

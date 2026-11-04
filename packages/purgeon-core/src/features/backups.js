@@ -1,0 +1,14 @@
+import { dispatchFeature } from '../runtime.js';
+export const list = (arg) => dispatchFeature('backups:list', arg);
+export const plan = (arg) => dispatchFeature('backups:plan', arg);
+export const forecast = (arg) => dispatchFeature('backups:forecast', arg);
+export const interrupted = (arg) => dispatchFeature('backups:interrupted', arg);
+export const resolveInterrupted = (arg) => dispatchFeature('backups:resolveInterrupted', arg);
+export const prune = (arg) => dispatchFeature('backups:prune', arg);
+export const restore = (arg) => dispatchFeature('backups:restore', arg);
+export const restoreCancel = (arg) => dispatchFeature('backups:restoreCancel', arg);
+export const restoreEntries = (arg) => dispatchFeature('backups:restoreEntries', arg);
+export const verifyPackage = (arg) => dispatchFeature('backups:verifyPackage', arg);
+export const verifyCancel = (arg) => dispatchFeature('backups:verifyCancel', arg);
+export const remove = (arg) => dispatchFeature('backups:remove', arg);
+export const exportPlan = (arg) => dispatchFeature('backups:exportPlan', arg);

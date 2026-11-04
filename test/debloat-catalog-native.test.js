@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 // the catalog is embedded in the Rust core and validated strictly at runtime —
 // a catalog entry the native side rejects takes the whole Debloat view down,
 // so the same rules are checked here where catalog edits are gated.
-const tweaks = JSON.parse(readFileSync(new URL('../src/backend/debloat-catalog.json', import.meta.url), 'utf8'));
+const tweaks = JSON.parse(readFileSync(new URL('../packages/purgeon-core/src/internal/debloat-catalog.json', import.meta.url), 'utf8'));
 const PREFIXES = ['hkcu\\software\\', 'hkcu\\control panel\\', 'hklm\\software\\', 'hklm\\system\\currentcontrolset\\control\\'];
 
 test('debloat catalog passes the native validator rules', () => {

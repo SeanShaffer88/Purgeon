@@ -4,6 +4,43 @@ import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { runWorkload, workload, scenarios } from '../scripts/benchmark-workload.mjs';
 
+test('installer versions validate upgrade ordering and preserve exact prerelease identity', () => {
+  const command = `
+. ./scripts/windows-package-tools.ps1
+$tokens = $null; $errors = $null
+$ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD 'scripts/test-windows-installers.ps1'), [ref]$tokens, [ref]$errors)
+if ($errors.Count) { throw ($errors | Out-String) }
+foreach ($name in @('Get-InstallerBaseVersion', 'Assert-InstallerVersion')) {
+  $function = $ast.Find({ param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq $name }, $true)
+  if (!$function) { throw "Missing helper: $name" }
+  Invoke-Expression $function.Extent.Text
+}
+foreach ($version in @('1.4.3', '1.5.0-alpha.1', '1.5.0-beta.2', '1.5.0-rc.0')) {
+  if ((Get-InstallerBaseVersion $version) -le [version]'1.4.2') { throw 'Newer candidate rejected' }
+  Assert-InstallerVersion $version $version
+}
+foreach ($version in @('1.4.2', '1.4.2-alpha.1', '1.4.1')) {
+  if ((Get-InstallerBaseVersion $version) -gt [version]'1.4.2') { throw 'Non-upgrade accepted' }
+}
+foreach ($version in @('1.5', '1.5.0-alpha.01', '1.5.0+build', '1.5.0-alpha.1+build', '1.5.0.0', 'garbage')) {
+  $rejected = $false
+  try { Get-InstallerBaseVersion $version } catch { $rejected = $true }
+  if (!$rejected) { throw "Invalid version accepted: $version" }
+}
+foreach ($actual in @('1.5.0', '1.5.0-alpha.2', '1.5.0-beta.1', '1.4.3', '1.5.0-alpha.1+build', '1.5.0-ALPHA.1', '1.5.0.0')) {
+  $rejected = $false
+  try { Assert-InstallerVersion $actual '1.5.0-alpha.1' } catch { $rejected = $true }
+  if (!$rejected) { throw "Wrong identity accepted: $actual" }
+}
+`;
+  const result = spawnSync('pwsh', ['-NoProfile', '-Command', command], { encoding: 'utf8', timeout: 30000, windowsHide: true });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+  const source = readFileSync(new URL('../scripts/test-windows-installers.ps1', import.meta.url), 'utf8');
+  assert.match(source, /Assert-InstallerVersion \$actual \$Version/);
+  assert.match(source, /Assert-InstallerVersion \$reg.DisplayVersion \$Version/);
+  assert.match(source, /if \(\$Hash -and \$actualHash -ne \$Hash\)/);
+});
+
 test('benchmark fixture fixes pairs, denial, unequal content and path aliases', () => {
   const a = workload(1000);
   assert.equal(a.workloadHash, workload(1000).workloadHash);

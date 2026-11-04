@@ -38,6 +38,9 @@ jobs:
       - name: JavaScript static and adapter type gates
         run: npm run lint && npm run typecheck
 
+      - name: Packed core consumer
+        run: npm run test:package
+
       - name: Safety tests
         run: npm test
 
@@ -177,6 +180,8 @@ jobs:
           # honestly stating whether binaries are signed or unsigned.
           body_path: RELEASE_NOTES.md
           fail_on_unmatched_files: true
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          make_latest: ${{ contains(github.ref_name, '-') && 'false' || 'true' }}
           files: |
             verified/release/Purgeon-Setup-x64.exe
             verified/release/Purgeon-Portable-x64.zip

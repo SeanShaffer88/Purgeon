@@ -31,16 +31,20 @@ export function collectScriptFiles(root, files, coverageFiles) {
   return [...descriptors.values()];
 }
 
+export function collectSourceFiles(root) {
+return inventory(root).map((entry) => {
+  const source = fs.readFileSync(path.join(root,entry.path));
+  return {...entry,sha256:hash(source),core:entry.language === 'javascript' ? entry.path.startsWith('src/backend/') || entry.path.startsWith('packages/purgeon-core/src/') || ['src/cli.js','src/cli-args.js'].includes(entry.path) : entry.path.startsWith('src-tauri/src/') && entry.path !== 'src-tauri/src/main.rs',excludedRanges:entry.language === 'rust' ? rustTestModules(source.toString('utf8')) : []};
+});
+}
+
 function main() {
 const root = fileURLToPath(new URL('../', import.meta.url));
 const destination = process.argv[2] && path.resolve(process.argv[2]);
 if (process.argv.length !== 3 || !destination || fs.existsSync(destination)) throw new Error('Supply a new output directory');
 fs.mkdirSync(destination, { recursive: true });
 const save = (name, value) => fs.writeFileSync(path.join(destination,name), JSON.stringify(value,null,2)+'\n', {flag:'wx'});
-const files = inventory(root).map((entry) => {
-  const source = fs.readFileSync(path.join(root,entry.path));
-  return {...entry,sha256:hash(source),core:entry.language === 'javascript' ? entry.path.startsWith('src/backend/') || ['src/cli.js','src/cli-args.js'].includes(entry.path) : entry.path.startsWith('src-tauri/src/') && entry.path !== 'src-tauri/src/main.rs',excludedRanges:entry.language === 'rust' ? rustTestModules(source.toString('utf8')) : []};
-});
+const files = collectSourceFiles(root);
 const workload = [process.execPath,path.join(root,'package-lock.json'),...fs.readdirSync(path.join(root,'test'),{recursive:true}).filter((name) => /\.(js|json)$/.test(name)).map((name) => path.join(root,'test',name))].map((filename) => ({path:filename,sha256:hash(fs.readFileSync(filename))}));
 save('workload-inputs.json',workload);
 const instrumentation = {metricVersion,nodeVersion:process.version,webviewVersion:null,viteVersion:JSON.parse(fs.readFileSync(path.join(root,'node_modules/vite/package.json'))).version,jsFlags:{precise:true,detailed:true,sourceMaps:true,productionMode:true},rustVersion:null,llvmVersion:null,target:'x86_64-pc-windows-msvc',nativeFlags:[]};

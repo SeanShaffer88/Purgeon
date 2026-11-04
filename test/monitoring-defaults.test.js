@@ -151,7 +151,7 @@ test('size measurements remain visible while history recording defaults off and 
 });
 
 test('backend samples remain available but resource alerts require a strict saved opt-in', async () => {
-  const text = fs.readFileSync(new URL('../src/backend/api.js', import.meta.url), 'utf8');
+  const text = fs.readFileSync(new URL('../packages/purgeon-core/src/internal/api.js', import.meta.url), 'utf8');
   const tree = parse(text, { ecmaVersion: 'latest', sourceType: 'module', range: true });
   let handler;
   function find(n) { if (!n || typeof n !== 'object') return; if (n.type === 'Property' && n.key.value === 'processes:sample') handler = n.value; for (const v of Object.values(n)) if (Array.isArray(v)) v.forEach(find); else if (v && typeof v === 'object') find(v); }

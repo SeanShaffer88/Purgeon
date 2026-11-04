@@ -140,11 +140,11 @@ test('every data-store module writes through the atomic path', async () => {
   // The stores below hold only Purgeon state (no user-chosen export files), so a
   // plain sys.writeText in any of them is a torn-write risk sneaking back in.
   for (const name of ['settings', 'groups', 'history', 'archive', 'debloat', 'insights', 'filecache', 'monitor', 'snapshots', 'plugins', 'profiler', 'queue', 'running', 'schedule', 'startup', 'trials', 'transfer']) {
-    const src = fs.readFileSync(new URL(`../src/backend/${name}.js`, import.meta.url), 'utf8');
+    const src = fs.readFileSync(new URL(`../packages/purgeon-core/src/internal/${name}.js`, import.meta.url), 'utf8');
     assert.ok(!src.includes('sys.writeText('), `${name}.js must write state via sys.writeTextAtomic`);
     assert.ok(src.includes('sys.writeTextAtomic('), `${name}.js writes state atomically`);
   }
-  const backupsSrc = fs.readFileSync(new URL('../src/backend/backups.js', import.meta.url), 'utf8');
+  const backupsSrc = fs.readFileSync(new URL('../packages/purgeon-core/src/internal/backups.js', import.meta.url), 'utf8');
   assert.ok(backupsSrc.includes('sys.writeTextAtomic(pendingFile()'), 'the interrupted-removal record is written atomically');
   assert.ok(backupsSrc.includes('await sys.writeTextAtomic(p, toWrite)'), 'backup content files are written atomically');
 });

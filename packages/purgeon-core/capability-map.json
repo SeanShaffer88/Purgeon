@@ -1,0 +1,416 @@
+{
+  "features": {
+    "programs": {
+      "list": "programs:list",
+      "removeProvisioned": "programs:removeProvisioned",
+      "restoreStore": "programs:restoreStore",
+      "get": "icons:get",
+      "runUninstaller": "program:runUninstaller",
+      "prepare": "program:prepare",
+      "processes": "program:processes",
+      "killProcesses": "program:killProcesses",
+      "openFolder": "program:openFolder",
+      "openRegistry": "program:openRegistry",
+      "search": "program:search",
+      "outside": "programs:outside",
+      "analyze": "program:analyze"
+    },
+    "installers": {
+      "describe": "installers:describe",
+      "items": "installers:items"
+    },
+    "leftovers": {
+      "scan": "program:scan",
+      "remove": "items:remove",
+      "removeCancel": "items:removeCancel"
+    },
+    "deepscan": {
+      "scan": "deepscan:scan"
+    },
+    "owners": {
+      "who": "owners:who",
+      "pick": "owners:pick",
+      "scan": "orphans:scan",
+      "scanCancel": "orphans:scanCancel"
+    },
+    "shared": {
+      "components": "shared:components"
+    },
+    "safety": {
+      "dependencies": "safety:dependencies",
+      "classify": "safety:classify"
+    },
+    "graph": {
+      "graph": "graph:graph",
+      "graphCancel": "graph:graphCancel",
+      "program": "graph:program",
+      "removeOrphan": "graph:removeOrphan"
+    },
+    "games": {
+      "list": "games:list",
+      "listCancel": "games:listCancel",
+      "cleanup": "games:cleanup"
+    },
+    "measure": {
+      "measure": "programs:measure",
+      "measureCancel": "programs:measureCancel",
+      "measureStore": "programs:measureStore"
+    },
+    "insights": {
+      "insights": "programs:insights",
+      "recordSizes": "programs:recordSizes",
+      "sizeHistory": "programs:sizeHistory",
+      "signatures": "files:signatures",
+      "verifySignature": "security:verifySignature"
+    },
+    "appdupes": {
+      "duplicates": "programs:duplicates"
+    },
+    "backups": {
+      "list": "backups:list",
+      "plan": "backups:plan",
+      "forecast": "backups:forecast",
+      "interrupted": "backups:interrupted",
+      "resolveInterrupted": "backups:resolveInterrupted",
+      "prune": "backups:prune",
+      "restore": "backups:restore",
+      "restoreCancel": "backups:restoreCancel",
+      "restoreEntries": "backups:restoreEntries",
+      "verifyPackage": "backups:verifyPackage",
+      "verifyCancel": "backups:verifyCancel",
+      "remove": "backups:remove",
+      "exportPlan": "backups:exportPlan"
+    },
+    "snapshots": {
+      "list": "snapshots:list",
+      "take": "snapshots:take",
+      "remove": "snapshots:remove",
+      "rename": "snapshots:rename",
+      "compare": "snapshots:compare",
+      "cancel": "snapshots:cancel",
+      "cleanupItems": "snapshots:cleanupItems"
+    },
+    "monitor": {
+      "status": "monitor:status",
+      "pickInstaller": "monitor:pickInstaller",
+      "start": "monitor:start",
+      "launch": "monitor:launch",
+      "finish": "monitor:finish",
+      "poll": "monitor:poll",
+      "list": "monitor:list",
+      "remove": "monitor:remove",
+      "setNotes": "monitor:setNotes",
+      "testInstallStart": "monitor:test-install-start",
+      "testInstallFinish": "monitor:test-install-finish",
+      "revertTestInstall": "monitor:revert-test-install",
+      "attach": "monitor:attach"
+    },
+    "transfer": {
+      "pickFolder": "transfer:pickFolder",
+      "folder": "transfer:folder",
+      "pickSave": "transfer:pickSave",
+      "pickOpen": "transfer:pickOpen",
+      "classify": "transfer:classify",
+      "read": "transfer:read",
+      "restore": "transfer:restore",
+      "undo": "transfer:undo",
+      "exportList": "transfer:export"
+    },
+    "duplicates": {
+      "pick": "duplicates:pick",
+      "scan": "duplicates:scan",
+      "scanCancel": "duplicates:scanCancel",
+      "remove": "duplicates:remove"
+    },
+    "erase": {
+      "pick": "erase:pick",
+      "collect": "erase:collect",
+      "run": "erase:run",
+      "runCancel": "erase:runCancel"
+    },
+    "junk": {
+      "scan": "junk:scan",
+      "scanCancel": "junk:scanCancel",
+      "scanSystem": "junk:scanSystem",
+      "cleanSystem": "junk:cleanSystem",
+      "cleanSystemCancel": "junk:cleanSystemCancel"
+    },
+    "restore": {
+      "create": "restore:create"
+    },
+    "restorepoint": {
+      "create": "restorepoint:create",
+      "list": "restorepoint:list"
+    },
+    "restoremgr": {
+      "state": "restore:state",
+      "setProtection": "restore:setProtection",
+      "setMax": "restore:setMax",
+      "removePoint": "restore:removePoint",
+      "createPoint": "restore:createPoint",
+      "openUi": "restore:openUi"
+    },
+    "trials": {
+      "list": "trials:list",
+      "start": "trials:start",
+      "launch": "trials:launch",
+      "tryOver": "trials:tryOver",
+      "finish": "trials:finish"
+    },
+    "startup": {
+      "trust": "startup:trust",
+      "newEntries": "startup:newEntries",
+      "accept": "startup:accept",
+      "list": "startup:list",
+      "set": "startup:set",
+      "delayed": "startup:delayed"
+    },
+    "running": {
+      "bootImpact": "running:bootImpact",
+      "inbound": "running:inbound"
+    },
+    "processes": {
+      "sample": "processes:sample",
+      "end": "processes:end",
+      "suspend": "processes:suspend",
+      "resume": "processes:resume",
+      "setPriority": "processes:setPriority",
+      "setAffinity": "processes:setAffinity",
+      "alertThresholds": "processes:alertThresholds",
+      "setAlertThresholds": "processes:setAlertThresholds",
+      "openFolder": "processes:openFolder"
+    },
+    "tasks": {
+      "list": "tasks:list",
+      "setEnabled": "tasks:setEnabled",
+      "runNow": "tasks:runNow",
+      "stop": "tasks:stop",
+      "remove": "tasks:remove",
+      "restore": "tasks:restore",
+      "create": "tasks:create",
+      "pickProgram": "tasks:pickProgram"
+    },
+    "drivers": {
+      "list": "drivers:list",
+      "candidates": "drivers:candidates",
+      "recover": "drivers:recover",
+      "recovery": "drivers:recovery",
+      "removeDriver": "drivers:delete"
+    },
+    "boot": {
+      "state": "boot:state",
+      "setSafeBoot": "boot:setSafeBoot",
+      "setTimeout": "boot:setTimeout",
+      "undo": "boot:undo"
+    },
+    "power": {
+      "state": "power:state",
+      "setPlan": "power:setPlan",
+      "setTimeout": "power:setTimeout",
+      "setBatterySaver": "power:setBatterySaver",
+      "setWakeTimers": "power:setWakeTimers",
+      "setUsbSuspend": "power:setUsbSuspend"
+    },
+    "eventlogs": {
+      "channels": "logs:channels",
+      "exportPick": "logs:exportPick",
+      "clear": "logs:clear",
+      "setEnabled": "logs:setEnabled",
+      "undoEnabled": "logs:undoEnabled"
+    },
+    "health": {
+      "run": "health:run",
+      "cancel": "health:cancel",
+      "weekly": "health:weekly",
+      "setWeekly": "health:setWeekly",
+      "saveReport": "health:saveReport"
+    },
+    "dns": {
+      "status": "dns:status",
+      "apply": "dns:apply",
+      "setNagle": "dns:setNagle",
+      "reset": "dns:reset"
+    },
+    "debloat": {
+      "list": "debloat:list",
+      "previousDamaged": "debloat:previousDamaged",
+      "recover": "debloat:recover",
+      "set": "debloat:set",
+      "restartExplorer": "debloat:restartExplorer"
+    },
+    "cookierules": {
+      "rules": "cookies:rules",
+      "addRule": "cookies:addRule",
+      "removeRule": "cookies:removeRule"
+    },
+    "winget": {
+      "available": "winget:available",
+      "upgrades": "winget:upgrades",
+      "upgrade": "winget:upgrade",
+      "find": "winget:find",
+      "install": "winget:install",
+      "repair": "winget:repair",
+      "exportTo": "winget:exportTo",
+      "exportList": "winget:export"
+    },
+    "portable": {
+      "find": "portable:find",
+      "addFolder": "portable:addFolder",
+      "removeFolder": "portable:removeFolder",
+      "checkUpdates": "portable:checkUpdates",
+      "register": "portable:register",
+      "unregister": "portable:unregister"
+    },
+    "associations": {
+      "extensions": "associations:extensions",
+      "ownerFor": "associations:ownerFor",
+      "extensionsForProgram": "associations:extensionsForProgram"
+    },
+    "ctxmenu": {
+      "list": "ctxmenu:list",
+      "set": "ctxmenu:set"
+    },
+    "shellmenu": {
+      "enabled": "shell:enabled",
+      "enable": "shell:enable",
+      "disable": "shell:disable",
+      "resolve": "shell:resolve"
+    },
+    "browsers": {
+      "list": "browsers:list",
+      "running": "browsers:running"
+    },
+    "diskusage": {
+      "drives": "disk:drives",
+      "scan": "disk:scan",
+      "scanCancel": "disk:scanCancel",
+      "list": "disk:list",
+      "measure": "disk:measure",
+      "measureCancel": "disk:measureCancel",
+      "open": "disk:open"
+    },
+    "explore": {
+      "diskMap": "explore:diskMap",
+      "diskMapCancel": "explore:diskMapCancel",
+      "timeline": "explore:timeline",
+      "search": "registry:search"
+    },
+    "installwatch": {
+      "check": "installers:check"
+    },
+    "settings": {
+      "get": "settings:get",
+      "set": "settings:set"
+    },
+    "groups": {
+      "get": "groups:get",
+      "set": "groups:set",
+      "restore": "groups:restore"
+    },
+    "history": {
+      "list": "history:list",
+      "undo": "history:undo"
+    },
+    "archive": {
+      "list": "archive:list",
+      "add": "archive:add",
+      "attachBackup": "archive:attachBackup",
+      "setPackage": "archive:setPackage",
+      "remove": "archive:remove"
+    },
+    "maintenance": {
+      "status": "maintenance:status",
+      "apply": "maintenance:apply",
+      "runNow": "maintenance:runNow"
+    },
+    "queue": {
+      "get": "queue:get",
+      "add": "queue:add",
+      "remove": "queue:remove",
+      "save": "queue:save",
+      "clear": "queue:clear",
+      "arm": "queue:arm",
+      "disarm": "queue:disarm",
+      "restartPending": "queue:restartPending",
+      "restartNow": "queue:restartNow"
+    },
+    "schedule": {
+      "status": "schedule:status",
+      "apply": "schedule:apply",
+      "backgroundScan": "schedule:backgroundScan",
+      "markMissed": "schedule:markMissed"
+    },
+    "autostart": {
+      "enabled": "autostart:enabled",
+      "set": "autostart:set"
+    },
+    "plugins": {
+      "list": "plugins:list",
+      "setEnabled": "plugins:setEnabled",
+      "runLeftoverRules": "plugins:runLeftoverRules",
+      "validate": "plugins:validate"
+    },
+    "sync": {
+      "status": "sync:status",
+      "apply": "sync:apply",
+      "syncNow": "sync:syncNow"
+    },
+    "trusted": {
+      "list": "trusted:list",
+      "add": "trusted:add",
+      "remove": "trusted:remove",
+      "isTrusted": "trusted:isTrusted",
+      "filterInsights": "trusted:filterInsights"
+    },
+    "policy": {
+      "get": "policy:get"
+    },
+    "log": {
+      "open": "log:open",
+      "flush": "log:flush"
+    },
+    "datadamage": {
+      "dataDamage": "app:dataDamage"
+    },
+    "profiler": {
+      "report": "profiler:report",
+      "baseline": "profiler:baseline",
+      "regressions": "profiler:regressions"
+    },
+    "report": {
+      "monthly": "report:monthly"
+    },
+    "selfhealth": {
+      "check": "selfhealth:check"
+    },
+    "sysinfo": {
+      "sysinfo": "app:sysinfo"
+    },
+    "updatecheck": {
+      "settings": "update:settings",
+      "enable": "update:enable",
+      "check": "update:check",
+      "install": "update:install"
+    },
+    "i18n": {
+      "languages": "i18n:languages",
+      "current": "i18n:current",
+      "set": "i18n:set"
+    }
+  },
+  "appOnly": [
+    "app:isAdmin",
+    "app:specs",
+    "app:ready",
+    "app:quit",
+    "app:elevate",
+    "app:setTray",
+    "app:setOnTop",
+    "app:show",
+    "app:hideToTray",
+    "app:closeAnswered",
+    "open:url",
+    "export:html",
+    "dialog:confirm"
+  ]
+}

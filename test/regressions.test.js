@@ -55,7 +55,7 @@ test('settings sync keeps its folder and on/off across a restart', async () => {
   assert.equal(saved.syncFolder, cloud);
   // A fresh module instance is a restarted app: only the internal setRoot
   // (what backend init does) plus restore() may run before status is read.
-  const fresh = await import('../src/backend/sync.js?restart=1');
+  const fresh = await import('../packages/purgeon-core/src/internal/sync.js?restart=1');
   await fresh.setRoot(internal);
   await fresh.restore();
   const st = await fresh.status();

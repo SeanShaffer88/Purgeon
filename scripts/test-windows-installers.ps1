@@ -8,13 +8,21 @@ param(
     [switch] $Reinstall
 )
 . "$PSScriptRoot/windows-package-tools.ps1"
+function Get-InstallerBaseVersion([string] $Version) {
+    [void](Get-NsisSetupName $Version)
+    return [version]($Version -split '-', 2)[0]
+}
+function Assert-InstallerVersion([string] $Actual, [string] $Expected) {
+    [void](Get-InstallerBaseVersion $Expected)
+    if ($Actual -cne $Expected) { throw "Installed version $Actual differs from $Expected" }
+}
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
     throw 'Installer lifecycle tests are restricted to disposable GitHub-hosted runners.'
 }
 if ((Get-FileHash -LiteralPath $PriorInstaller -Algorithm SHA256).Hash -ne $PriorSha256) { throw 'Prior installer SHA256 mismatch; no installer executed.' }
 & "$PSScriptRoot/verify-windows-package.ps1" -Directory $Directory -Manifest $Manifest
 $package = Get-Content -LiteralPath $Manifest -Raw | ConvertFrom-Json
-if ([version]$package.version -le $PriorVersion) { throw 'Candidate must be newer than prior installer.' }
+if ((Get-InstallerBaseVersion $package.version) -le $PriorVersion) { throw 'Candidate must be newer than prior installer.' }
 if (Test-Path -LiteralPath $OutputDirectory) { throw 'Installer evidence destination must be new.' }
 $out = (New-Item -ItemType Directory -Path $OutputDirectory).FullName
 $testRoot = Join-Path $env:RUNNER_TEMP ('purgeon-installer-tests-' + [Guid]::NewGuid().ToString('N'))
@@ -40,14 +48,15 @@ function Invoke-Installer([string] $File, [string] $Arguments, [string] $Stage) 
         $row.status = 'passed'
     } finally { $process.Dispose() }
 }
-function Assert-Installed([version] $Version, [string] $Hash) {
+function Assert-Installed([string] $Version, [string] $Hash) {
     Assert-PeMachine $exe 0x8664
-    $actual = [Diagnostics.FileVersionInfo]::GetVersionInfo($exe).ProductVersion -replace '\+.*$', ''
-    if ([version]$actual -ne $Version) { throw "Installed version $actual differs from $Version" }
+    $actual = [Diagnostics.FileVersionInfo]::GetVersionInfo($exe).ProductVersion
+    Assert-InstallerVersion $actual $Version
     $found = @($registries | Where-Object { Test-Path -LiteralPath $_ })
     if ($found.Count -ne 1) { throw 'Expected exactly one Purgeon uninstall registration across registry views.' }
     $reg = Get-ItemProperty -LiteralPath $found[0]
-    if ([version]$reg.DisplayVersion -ne $Version -or $reg.InstallLocation.Trim('"').TrimEnd('\') -ine $install.TrimEnd('\')) { throw 'Uninstall registration differs from expected version/path.' }
+    Assert-InstallerVersion $reg.DisplayVersion $Version
+    if ($reg.InstallLocation.Trim('"').TrimEnd('\') -ine $install.TrimEnd('\')) { throw 'Uninstall registration differs from expected version/path.' }
     $actualHash = (Get-FileHash -LiteralPath $exe).Hash
     if ($Hash -and $actualHash -ne $Hash) { throw 'Installed candidate differs from portable executable hash.' }
     $stages.Add(@{ stage = 'installed-identity'; version = "$Version"; sha256 = $actualHash; registration = $reg.DisplayVersion; registryPath = $found[0] })
@@ -83,11 +92,11 @@ try {
     $evidence.sentinels = $sentinels
     $candidate = (Resolve-Path -LiteralPath (Join-Path $Directory 'Purgeon-Setup-x64.exe')).Path
     Invoke-Installer $candidate "/S /D=$install" 'upgrade-candidate'
-    Assert-Installed ([version]$package.version) $package.portable.'Purgeon-Portable-x64.exe'
+    Assert-Installed $package.version $package.portable.'Purgeon-Portable-x64.exe'
     Assert-Preserved
     if ($Reinstall) {
         Invoke-Installer $candidate "/S /D=$install" 'reinstall-candidate'
-        Assert-Installed ([version]$package.version) $package.portable.'Purgeon-Portable-x64.exe'
+        Assert-Installed $package.version $package.portable.'Purgeon-Portable-x64.exe'
         Assert-Preserved
     }
     foreach ($repeat in 1..10) {

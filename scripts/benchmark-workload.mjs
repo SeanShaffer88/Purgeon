@@ -1,9 +1,9 @@
 // Deterministic backend-only workload. Never touches native files, registry, or shell.
 import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
-import { setSys } from '../src/backend/sys.js';
-import * as duplicates from '../src/backend/duplicates.js';
-import * as diskusage from '../src/backend/diskusage.js';
+import { setSys } from '../packages/purgeon-core/src/internal/sys.js';
+import * as duplicates from '../packages/purgeon-core/src/internal/duplicates.js';
+import * as diskusage from '../packages/purgeon-core/src/internal/diskusage.js';
 export const adapterIdentity = 'purgeon-in-memory-backend-v1';
 export const scenarios = ['duplicates-scan', 'duplicates-group', 'duplicates-cancel-enumeration', 'duplicates-cancel-hashing', 'disk-scan', 'disk-cancel', 'disk-measure'];
 export const digest = (value) => createHash('sha256').update(JSON.stringify(value)).digest('hex');

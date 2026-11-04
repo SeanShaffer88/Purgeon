@@ -1,6 +1,34 @@
 # Quality and release gate
 
-## 2026-11-03: ten reliability priorities, validation in progress
+## 2026-11-03: PR91/PR92 final local integration, merge blocked
+
+The resolved integration of `3011ffd` and `origin/main` `e06ff02` retains both
+histories and PR92's canonical `purgeon-core` at `1.5.0-alpha.1`. Independent
+integration and alpha-fixture reviews accepted the contents. Fresh root gates
+passed: `npm ci`, 598 JavaScript tests, lint, incremental typecheck, frontend
+build, eight packed-consumer modes, formatting, strict locked all-target x64
+Clippy and 168 native tests (166 unit plus two manifest, two ignored). Fresh
+merged distribution, nine safe packaged CLI cases and package-verifier failure
+regressions passed. Recorded process and runner exits are all 0; root PE
+ProductVersion/FileVersion are `1.5.0-alpha.1`.
+
+Combined coverage accounting exits 1 (`below-floor`) with no incomplete reasons:
+JavaScript overall/core 34.51% / 62.36%; Rust 34.93% / 34.89%. The unchanged
+70% overall / 85% core floors still fail. Fresh native collection tests/export
+exit 0 with source unchanged; no production WebView workload was collected.
+The merged benchmark passed 42 children at two repeats; the earlier 210-child
+result is historical and CI's ten-repeat run remains pending.
+
+CI for the merged head, disposable installer lifecycle, privileged runtime and
+full accessibility qualification remain pending. Earlier actual UI checks cover
+unchanged frontend source; integrated module runtime behavior is unqualified.
+Draft PR91 remains blocked from merge. Do not tag or release this alpha; release
+authorization begins at beta and requires the full gate. See
+[the final integration record](docs/RELIABILITY_VALIDATION.md#2026-11-03-final-local-integration-record-before-merge-commit)
+for exact counts, commands, local evidence links and accepted review identifiers.
+Earlier records retain their historical scope.
+
+## 2026-11-03: ten reliability priorities (previous snapshot)
 
 See [Reliability validation](docs/RELIABILITY_VALIDATION.md) for scoped evidence.
 The original CI run had seven native failures. The two-file CI short-path
@@ -18,6 +46,52 @@ reasons and all 32 Rust files mapped. Diagnostic overall/core results are 35.26%
 collected. The required 70% overall / 85% core floors remain blockers; do not
 merge, tag or claim release readiness. Disposable installer CI and privileged
 runtime qualification remain pending. Earlier entries retain their historical scope.
+
+## 2026-11-03: modular feature alpha extraction
+
+The isolated modular extraction retains the existing Rust/Tauri/React stack and data identity. `packages/purgeon-core` owns canonical backend code; app paths are compatibility wrappers. Public feature imports use explicit host registration, initialization and guarded dispatch. One host per loaded package instance is intentional.
+
+Local gates passed: 567 JavaScript tests, lint, incremental typecheck, frontend build, eight independent packed-consumer modes covering 269 named operations, native formatting, strict locked x64 Clippy and 143 native tests (two probes ignored). Independent review found and then verified fixes for the relocated catalog include and measurement result subscription. Actual prerelease NSIS output, two Windows assets, portable contents, package-verifier negative tests and native CLI help were verified. Local binaries are unsigned.
+
+Coverage inventory includes canonical package sources. Coverage floors, native accounting and live privileged/runtime/installer/accessibility gaps remain unresolved; this alpha does not claim full release qualification. GitHub checks and artifact verification are recorded separately from these local results. The other active recovery worktree was not changed or included in this extraction.
+## Reusable core extraction (local implementation)
+
+`packages/purgeon-core` owns the canonical backend implementation; app compatibility
+wrappers retain the existing API. The packed offline consumer verifies all 71
+supported subpaths and 269 named feature operations before initialization, then
+fake-host settings/groups/dialog workflows, denied/missing/nonliteral/throwing
+approval, ownership conflicts, shared initialization, terminal failure, argument
+snapshots, serialization and no mutation retries. Imports start no timers; package
+source closure checks reject app, Node, React, Tauri and DOM dependencies.
+
+The first extraction run passed 564/565 app tests; a retained update-watcher
+import caused the failure and was removed from the canonical package. The next
+run passed all 565. Lint, incremental TypeScript and frontend build passed locally.
+Completion rerun passed all 567 current app tests, lint, incremental TypeScript,
+frontend build and packed consumer checks (all exit 0). The first completion run
+failed on a JavaScript interpolation error in the new filename regression test;
+that test was corrected and passed both focused and full reruns. Gate logs are
+retained locally under `out/completion`.
+TypeScript includes new runtime/facades through private dispatcher/host declarations
+and canonical contracts; it does not establish whole-backend typing. The coverage
+source inventory now includes package JavaScript in the core denominator; no new
+coverage percentage or performance claim is made.
+
+Native implementation source is unchanged; crate metadata is aligned. Final native gates and independent audit remain
+controller work. The DevTools build runner could not create its external run-log
+directory (access denied); direct `npm run build` passed. Default npm cache writes
+were also denied; packed checks now use an owned temporary cache and independent
+consumer outside the worktree, with bounded cleanup. The shipped example passes
+against the installed artifact using a mock host.
+
+Core, app and native metadata are aligned at `1.5.0-alpha.1`. Packaging preserves
+numeric stable versions and alpha.N/beta.N/rc.N prereleases in NSIS filenames;
+focused regression checks pass. Real generated filename verification remains
+controller work. CI marks prerelease tags as prereleases and excludes them from
+latest status, retaining exactly two Windows assets. Do not merge/tag/release with
+remaining full-gate blockers. No commit, push, tag, release, npm publication or
+installer execution occurred in this implementation task. Windows release assets
+remain the existing two files; the core tarball is a separate local deliverable.
 
 ## 2026-11-03: v1.4.3 scoped maintenance preparation
 

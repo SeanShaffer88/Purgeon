@@ -11,7 +11,7 @@ if (args[0] === '--child') {
   const output = args[0];
   const repeats = Number(args[1] ?? 1);
   if (!output || !Number.isSafeInteger(repeats) || repeats < 1 || repeats > 10) throw new Error('Usage: node scripts/benchmark-backend.mjs NEW-OUTPUT.json [1..10 repeats]');
-  const report = { status: 'failed', repeats, results: [], sourceHashes: Object.fromEntries(['src/backend/duplicates.js', 'src/backend/diskusage.js', 'src/backend/sys.js', 'src/backend/paths.js', 'scripts/benchmark-workload.mjs', 'scripts/benchmark-backend.mjs'].map((p) => [p, createHash('sha256').update(readFileSync(p)).digest('hex')])) };
+  const report = { status: 'failed', repeats, results: [], sourceHashes: Object.fromEntries(['packages/purgeon-core/src/internal/duplicates.js', 'packages/purgeon-core/src/internal/diskusage.js', 'packages/purgeon-core/src/internal/sys.js', 'packages/purgeon-core/src/internal/paths.js', 'scripts/benchmark-workload.mjs', 'scripts/benchmark-backend.mjs'].map((p) => [p, createHash('sha256').update(readFileSync(p)).digest('hex')])) };
   const hashes = new Map();
   try {
     for (const count of [1000, 10000, 100000]) for (const scenario of scenarios) for (let repeat = 0; repeat < repeats; repeat++) {
