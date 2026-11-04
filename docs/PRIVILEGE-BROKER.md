@@ -203,7 +203,7 @@ The command used was a targeted `rg` source query, not execution of the program.
 | Firewall: startup, backups | enumerate rules/application/port filters | remove rule; restore validated rule |
 | Browser policies: cookierules | list current policies/rules | add/remove an exact policy list value under supported browser branches |
 | Processes: processes, leftovers | sample identity/resources/running processes | terminate/suspend/resume/priority/affinity using PID + creation time and critical-status checks |
-| Files: lib, backups, transfer, monitor, portableapps | stat/list/walk/hash/snapshot/size | state write/atomic write/append; checked binary copy; recycle; own-state deletion; secure erase; bounded archive extraction |
+| Files: lib, backups, transfer, monitor | stat/list/walk/hash/snapshot/size | state write/atomic write/append; checked binary copy; recycle; own-state deletion; secure erase; bounded archive extraction |
 | Boot: boot | enumerate BCD/current loader | persistent safe-boot state; boot timeout with explicit persistent-change review |
 | Power: power | enumerate plans/query indices | choose plan; AC/DC timeouts; bounded documented power values |
 | Event logs: eventlogs | enumerate/query; export a selected log | clear selected non-Security log after successful backup; enable/disable non-Security channel |

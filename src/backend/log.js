@@ -48,13 +48,15 @@ export async function flushNow() {
 
 // A short, single-line description of a call.
 export function describe(name, args) {
-  const oneLine = (s, n = 200) => String(s).replace(/\s+/g, ' ').trim().slice(0, n);
-  if (name === 'runPS') return `PowerShell: ${oneLine(args[0])}${args[1] ? ` [input ${String(args[1]).length} chars]` : ''}`;
-  if (name === 'exec' || name === 'launch') return `${args[0]} ${(args[1] || []).map((a) => (/\s/.test(a) ? `"${a}"` : a)).join(' ')}`;
-  if (name === 'runCommandLine') return `Uninstall command: ${oneLine(args[0])}`;
-  if (name === 'trash') return `Move to Recycle Bin: ${args[0]}`;
+  if (name === 'runPS') return 'PowerShell';
+  if (name === 'exec' || name === 'launch') {
+    const tool = String(args[0]).split(/[\\/]/).pop();
+    return `${name}: ${/^(?:powercfg|reg|sc|winget|dism|sfc|taskkill|cmd|powershell|pwsh|msiexec)(?:\.exe)?$/i.test(tool) ? tool : '[executable]'}`;
+  }
+  if (name === 'runCommandLine') return 'Uninstall command';
+  if (name === 'trash') return 'Move to Recycle Bin';
   if (name === 'trashMany') return `Move ${args[0].length} items to Recycle Bin`;
-  if (name === 'trackLaunch') return `Start tracked installer: ${args[0]}`;
+  if (name === 'trackLaunch') return 'Start tracked installer';
   return `${name}`;
 }
 
@@ -74,10 +76,10 @@ export function wrap(target) {
       try {
         const result = await original(...args);
         const failed = result && typeof result === 'object' && 'ok' in result && !result.ok;
-        write(`${failed ? 'FAIL' : 'ok  '}  ${String(Date.now() - t0).padStart(6)}ms  ${describe(name, args)}${failed ? `  -> exit ${result.code}` : ''}`);
+        write(`${failed ? 'FAIL' : 'ok  '}  ${String(Date.now() - t0).padStart(6)}ms  ${describe(name, args)}${failed ? `  -> exit ${Number.isInteger(result.code) ? result.code : 'unknown'}` : ''}`);
         return result;
       } catch (e) {
-        write(`FAIL  ${String(Date.now() - t0).padStart(6)}ms  ${describe(name, args)}  -> ${String(e?.message || e).replace(/\s+/g, ' ').slice(0, 200)}`);
+        write(`FAIL  ${String(Date.now() - t0).padStart(6)}ms  ${describe(name, args)}  -> exception`);
         throw e;
       }
     };

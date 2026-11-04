@@ -1,12 +1,11 @@
 {
-  "note": "English-only presentation source inventory. Other-language translation work was explicitly cancelled by the user. This records source authoring only; no tests, build, lint, type check, app launch or accessibility validation was run.",
-  "occurrences": 1269,
+  "note": "English-only presentation source inventory. Other-language translation work was explicitly cancelled by the user. This records source authoring only; no tests, build, lint, type check, app launch or accessibility validation was run. PortableApps.com removal reconciles deleted tx occurrences and metadata against the edited App.jsx/more.jsx only; unrelated historical source locations were not regenerated.",
+  "occurrences": 1217,
   "uniqueTexts": [
     " (The run was cancelled, so this covers only the checks that finished.)",
     " (in the Recycle Bin)",
     " (of {p0})",
     " (v{p0})",
-    " ({p0} items)",
     " + {p0} Windows clean-up{p1}",
     " Backup limits from Tools › Backup Settings are applied too. Windows' own permanent clean-ups are never run automatically.",
     " Cleanup keeps recovery records, but files require their Recycle Bin copies, and some actions cannot be undone.",
@@ -110,7 +109,6 @@
     "% of the drive",
     "% · disk under ",
     "% · memory over ",
-    "(auto-detect)",
     "(click a line for details)",
     ") will be deleted. A deleted restore point cannot be brought back.",
     ", and a restore point is made first",
@@ -150,7 +148,6 @@
     "Add to Weekly Maintenance",
     "Admin",
     "Administrator",
-    "After generating, place a PortableApps.com launcher executable in the package folder and compile the .nsi script with NSIS (makensis) to produce the .paf.exe installer.",
     "Alerts while Purgeon runs: processor over ",
     "All Groups",
     "All commands ",
@@ -162,14 +159,12 @@
     "Always",
     "Always on top is on: Purgeon stays in front of other windows. Click to turn it off.",
     "Always on top: keep Purgeon in front of other windows, even when you click elsewhere (View › Always on Top).",
-    "Always test the resulting portable package before relying on it.",
     "An HTML report of a month: programs installed and removed, space freed, startup changes, updates, clean-ups, and programs flagged by the insights.",
     "An independent project, not affiliated with any other uninstaller.",
     "An uninstall cannot be undone here. Reinstall the program, or use the restore point made before it.",
     "Analysis of {p0} cancelled.",
     "Analyze Leftovers…",
     "Analyze – {p0}",
-    "Analyzing program for portable packaging…",
     "Analyzing {p0}: measuring its folders and finding what it hooks into Windows…",
     "Apply",
     "Architecture",
@@ -225,7 +220,6 @@
     "Checking…",
     "Checking… (drive health, system files, restore points, updates, crashes, startup, battery)",
     "Choose a folder that holds portable apps, such as D:\\PortableApps. It is remembered and looked at every time: the folder itself and each folder inside it.",
-    "Choose a program…",
     "Choose a shared folder",
     "Choose files to erase",
     "Choose the installer. Purgeon takes a snapshot and then starts it.",
@@ -283,14 +277,11 @@
     "Core {p0}",
     "Could not restore {p0}: {p1}",
     "Covers Program Files, ProgramData, AppData, the Start Menu and desktops, plus the software and services parts of the registry. Temporary files and caches are left out.",
-    "Create a PortableApps.com package from a monitored installation. Purgeon copies the recorded program files into a PortableApps.com folder structure and writes an NSIS installer script (.nsi) that you compile with makensis into a .paf.exe.",
-    "Create a PortableApps.com package from this program. Purgeon copies the program's files into a PortableApps.com folder structure and writes an NSIS installer script that you compile with makensis into a .paf.exe.",
     "Create a restore point first (recommended)",
     "Create a restore point right now",
     "Create a simple task: run a program at sign-in, daily or weekly",
     "Create one now",
     "Create the task",
-    "Creating PortableApps.com package…",
     "Creating a restore point…\nThis can take a minute.",
     "Ctrl+K",
     "Ctrl+click a second snapshot to compare the two, or click Now.",
@@ -313,7 +304,6 @@
     "Depended on by: ",
     "Depends on it",
     "Depth",
-    "Description (optional)",
     "Desktop program",
     "Digital signature status of the program's main executable",
     "Direct reference",
@@ -359,7 +349,6 @@
     "Exporting the program list with winget…",
     "Export…",
     "Extensions that a program added on its own are flagged and can be removed here, with a backup. Extensions you added yourself are listed for reference; remove those in the browser.",
-    "Failed to analyze program: {p0}",
     "File…",
     "Filter",
     "Find out which installed program a file, folder or registry key belongs to.",
@@ -373,9 +362,6 @@
     "Freeze the selected process where it stands, without closing it",
     "Games",
     "Games the launchers on this PC report, with the space each one takes. Uninstalling a game stays with its launcher — that is where its files and account live. If a game's files are already gone, Purgeon can clean up the leftover entry, with a backup made first.",
-    "Generate Package",
-    "Generating PortableApps.com package…",
-    "Generating…",
     "Get",
     "Get Settings",
     "Get Started",
@@ -389,7 +375,6 @@
     "Help › Welcome Back",
     "Hidden from the list (Action › Hide From List). It is still installed; Action › Unhide shows it normally again.",
     "Hidden programs are shown dimmed. Click to hide them again.",
-    "Homepage (optional)",
     "Honest limit: on modern SSDs the drive moves data around internally, so overwriting lowers the chance of recovery but cannot promise it. For total certainty, encrypt the drive or destroy it physically.",
     "How each program connects to the rest of the system — worked out entirely on this PC; nothing leaves the machine.",
     "How it was installed, which decides how it is uninstalled",
@@ -397,9 +382,7 @@
     "How many entries the list shows, and their total size where it is known",
     "How much of the processor this process gets when the PC is busy",
     "How this PC uses power. Every change is recorded in Change History and can be undone there.",
-    "I understand – don't show this notice again",
     "If Windows will not start at all: hold Shift while choosing Restart (from the sign-in screen if needed) and Windows shows its recovery tools, including Startup Settings, where Safe Mode can be picked directly.",
-    "If left blank, Purgeon picks the largest .exe from the recorded files",
     "If the installer has already begun copying files, what it copied so far is missed; Tools › Monitor an Installation records from the very start. Tools › Detect Installations turns this question off.",
     "Import Settings…",
     "In the group \"{p0}\". Pick it in the group list to show only this group; Set Group (Ctrl+G) changes it.",
@@ -458,10 +441,7 @@
     "Looking for portable apps…",
     "Looking up {p0} in winget…",
     "Looks up each app in winget’s catalogue (the Windows Package Manager) and shows where a newer version exists, with its download page. Nothing is downloaded or changed.",
-    "Main executable",
-    "Main executable (optional)",
     "Maintenance Report",
-    "Make PortableApps.com Package",
     "Make a restore point before changing the start mode, so the change sits behind a safety net",
     "Maximize",
     "Maximize the window",
@@ -483,7 +463,6 @@
     "Monitor an Installation",
     "Monitor an installation",
     "Monitor installations:",
-    "Monitored program",
     "Monitoring is active. Run the installer to the end, including any first-run setup.",
     "Month",
     "Monthly Report",
@@ -506,7 +485,6 @@
     "No copy of {p0} remains on this PC, so its Microsoft Store page was opened instead.",
     "No differences here.",
     "No drives found.",
-    "No executable found in program files.",
     "No fixed drives were found.",
     "No games were found. Steam, Epic and GOG libraries are checked.",
     "No installed program matches it. It may be a leftover; Tools › Find Orphaned Leftovers looks for these.",
@@ -514,7 +492,6 @@
     "No leftovers found. Everything was removed cleanly.",
     "No limit",
     "No logs match.",
-    "No monitored programs with portable files were found. Use Tools › Monitor an Installation to record a program first.",
     "No new startup entries.",
     "No portable apps found in the usual places or your folders. Use Add a Folder to point to the folder that holds them.",
     "No power plans were found.",
@@ -579,7 +556,6 @@
     "Overwrites each file’s contents before deleting it, so the data cannot be undeleted. There is no backup and no undo — that is the point of this tool. Registry items are not offered: overwriting has no meaning there.",
     "PARTIAL",
     "Pack ",
-    "Package name",
     "Packs the chosen programs into one folder, one package each, plus a winget list of all your programs. On the new PC, use File › Restore Programs From Folder, and run winget import for the rest.",
     "Parts used by more than one program. These are what Purgeon refuses to delete during a removal — here is exactly why, and who would be affected.",
     "Paused",
@@ -589,9 +565,6 @@
     "Plugged in",
     "Portable Apps",
     "Portable mode: settings, backups and snapshots are kept in the \"Purgeon Data\" folder next to the program.",
-    "Portable version of Foo Editor",
-    "PortableApps.com Installer",
-    "PortableApps.com package generated for \"{p0}\". NSIS script: {p1}",
     "Power Options",
     "Power down idle USB devices",
     "Power plan",
@@ -619,8 +592,6 @@
     "Properties – {p0}",
     "Protected",
     "Provisioned copy of {p0} removed.",
-    "Publisher",
-    "Publisher (developer)",
     "Publisher name",
     "Publisher of the selected program, as its uninstall entry reports it",
     "Purgeon",
@@ -639,7 +610,6 @@
     "Reading Explorer’s right-click entries…",
     "Reading browser extensions…",
     "Reading current settings…",
-    "Reading monitored programs…",
     "Reading restore settings…",
     "Reading startup entries…",
     "Reading the backup…",
@@ -839,7 +809,6 @@
     "Temperatures appear only where Windows reports them.",
     "Temporary files, crash dumps, error reports and caches that Windows and programs recreate when needed. The registry is not touched.",
     "That folder has no program packages (.swpkg).",
-    "The PortableApps.com package generator is recent and may make mistakes or produce packages that don't work perfectly. The developer is actively polishing it to mitigate issues. ",
     "The Security log is the record Windows keeps of sign-ins and security events. Purgeon can save a copy of it, but never clears it or turns it off.",
     "The actions below apply to every selected program.",
     "The day of the week",
@@ -858,7 +827,6 @@
     "The processor the program’s main file is built for, read from the file itself. .NET programs built for “Any CPU” show as 32-bit here but run as 64-bit.",
     "The program file the task runs",
     "The program itself is still running underneath, but the window could not be drawn. The error was:",
-    "The program name shown in the PortableApps.com menu",
     "The provisioned copy could not be removed: {p0}",
     "The queue is empty. Right-click programs and choose Add to Uninstall Queue.",
     "The removal “",
@@ -954,7 +922,6 @@
     "Verification found problems: {p0}",
     "Verify Selected",
     "Verifying…",
-    "Version",
     "View Releases",
     "View my programs",
     "Visit the Purgeon releases page to see what’s changed and download the installer.",
@@ -1004,17 +971,13 @@
     "counting stopped early",
     "done by Windows itself; cannot be undone",
     "e.g. Back up my photos",
-    "e.g. Example Corp",
     "e.g. Foo Editor",
-    "e.g. FooEditor",
-    "e.g. FooEditor.exe",
     "e.g. Games, Work, Utilities",
     "e.g. a program or publisher name",
     "example.com",
     "files gone",
     "growing",
     "hidden",
-    "https://example.com",
     "installed with ",
     "link · not counted",
     "missing file",
@@ -1083,8 +1046,7 @@
     "…and ",
     "↑ Up",
     "↻ Retry",
-    "⚠ Check",
-    "⚠ Portable compiler is new – may have bugs."
+    "⚠ Check"
   ],
   "namedKeys": [
     "actionsLabel",
@@ -1582,18 +1544,6 @@
     {
       "file": "src/App.jsx",
       "text": "Looking for portable apps…"
-    },
-    {
-      "file": "src/App.jsx",
-      "text": "Reading monitored programs…"
-    },
-    {
-      "file": "src/App.jsx",
-      "text": "Analyzing program for portable packaging…"
-    },
-    {
-      "file": "src/App.jsx",
-      "text": "Failed to analyze program: {p0}"
     },
     {
       "file": "src/App.jsx",
@@ -2114,22 +2064,6 @@
     {
       "file": "src/App.jsx",
       "text": "{p0} is now in the program list."
-    },
-    {
-      "file": "src/App.jsx",
-      "text": "Generating PortableApps.com package…"
-    },
-    {
-      "file": "src/App.jsx",
-      "text": "PortableApps.com package generated for \"{p0}\". NSIS script: {p1}"
-    },
-    {
-      "file": "src/App.jsx",
-      "text": "Creating PortableApps.com package…"
-    },
-    {
-      "file": "src/App.jsx",
-      "text": "PortableApps.com package generated for \"{p0}\". NSIS script: {p1}"
     },
     {
       "file": "src/App.jsx",
@@ -4073,10 +4007,6 @@
     },
     {
       "file": "src/more.jsx",
-      "text": "Close"
-    },
-    {
-      "file": "src/more.jsx",
       "text": "Programs are uninstalled one after another, silently where possible, so you don't have to watch. If one needs a restart, Purgeon continues after you sign back in. At the end, every leftover is shown at once for you to review."
     },
     {
@@ -4190,10 +4120,6 @@
     {
       "file": "src/more.jsx",
       "text": "Analyze Leftovers…"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Cancel"
     },
     {
       "file": "src/more.jsx",
@@ -4789,91 +4715,7 @@
     },
     {
       "file": "src/more.jsx",
-      "text": "PortableApps.com Installer"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Generate Package"
-    },
-    {
-      "file": "src/more.jsx",
       "text": "Close"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Create a PortableApps.com package from a monitored installation. Purgeon copies the recorded program files into a PortableApps.com folder structure and writes an NSIS installer script (.nsi) that you compile with makensis into a .paf.exe."
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "No monitored programs with portable files were found. Use Tools › Monitor an Installation to record a program first."
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Monitored program"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Choose a program…"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": " ({p0} items)"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Package name"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "e.g. FooEditor"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "The program name shown in the PortableApps.com menu"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Version"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Publisher"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "e.g. Example Corp"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Homepage (optional)"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "https://example.com"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Description (optional)"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Portable version of Foo Editor"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Main executable (optional)"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "e.g. FooEditor.exe"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "If left blank, Purgeon picks the largest .exe from the recorded files"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "After generating, place a PortableApps.com launcher executable in the package folder and compile the .nsi script with NSIS (makensis) to produce the .paf.exe installer."
     },
     {
       "file": "src/more.jsx",
@@ -4973,95 +4815,7 @@
     },
     {
       "file": "src/more.jsx",
-      "text": "Make PortableApps.com Package"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "I understand – don't show this notice again"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Generating…"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Generate Package"
-    },
-    {
-      "file": "src/more.jsx",
       "text": "Cancel"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "⚠ Portable compiler is new – may have bugs."
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "The PortableApps.com package generator is recent and may make mistakes or produce packages that don't work perfectly. The developer is actively polishing it to mitigate issues. "
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Always test the resulting portable package before relying on it."
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Create a PortableApps.com package from this program. Purgeon copies the program's files into a PortableApps.com folder structure and writes an NSIS installer script that you compile with makensis into a .paf.exe."
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Package name"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "e.g. FooEditor"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "The program name shown in the PortableApps.com menu"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Version"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Publisher (developer)"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "e.g. Example Corp"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Homepage (optional)"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "https://example.com"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Description (optional)"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Portable version of Foo Editor"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "Main executable"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "(auto-detect)"
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "No executable found in program files."
-    },
-    {
-      "file": "src/more.jsx",
-      "text": "After generating, place a PortableApps.com launcher executable in the package folder and compile the .nsi script with NSIS (makensis) to produce the .paf.exe installer."
     },
     {
       "file": "src/more.jsx",

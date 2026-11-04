@@ -19,22 +19,15 @@
 //         Shows or configures cloud-synced settings. apply takes --folder <path> and --on|--off.
 //   Purgeon --plugins list|enable|disable|validate <id> [--json]
 //         Manages user plugins; validate computes and stores script integrity hashes.
-//   Purgeon --portableapps list
-//         Lists monitored programs that can be packaged as PortableApps.com installers.
-//   Purgeon --portableapps generate --monitor-id <id> --output <folder>
-//         Creates a PortableApps.com directory structure and NSIS installer script
-//         from a monitored program's recorded files.
 //   Purgeon --monitor test-install-start --installer <path> [--name <name>]
-//         Runs an installer in a disposable test environment: takes a before
-//         snapshot, launches the installer, captures every change it makes.
-//         Nothing is stored permanently. Finish with test-install-finish.
+//         Takes a before snapshot and launches the installer for test capture.
+//         Finish with test-install-finish; this does not isolate the system.
 //   Purgeon --monitor test-install-finish [--name <name>]
 //         Takes the after snapshot, compares changes, classifies for portable
-//         suitability. Results are not stored — keep them (package as portable)
-//         or revert them with revert-test-install.
+//         suitability heuristically. Review captured changes for supported recovery
+//         with revert-test-install.
 //   Purgeon --monitor revert-test-install
-//         Reverts every change captured during a disposable test install,
-//         leaving the system exactly as it was before.
+//         Reviews captured changes for supported backup and recovery.
 //   Purgeon --profiler [--json]
 //         Startup performance profile.
 //   Purgeon --profiler baseline
@@ -76,7 +69,7 @@ import * as plugins from './backend/plugins.js';
 import * as profiler from './backend/profiler.js';
 import * as sync from './backend/sync.js';
 import * as startup from './backend/startup.js';
-import * as portableapps from './backend/portableapps.js';
+import { classifyForPortable } from './backend/portable-classification.js';
 import * as programs from './backend/programs.js';
 import * as junk from './backend/junk.js';
 import * as backups from './backend/backups.js';
@@ -342,6 +335,7 @@ async function run(args) {
       if (await monitor.status()) throw new Error('Another installation is being monitored. Finish or cancel it in Purgeon first.');
       const name = option(args, '--name') || installer.split('\\\\').pop().replace(/\.[^.]+$/, '');
       const started = await monitor.testInstallStart(installer, name);
+      if (started.cancelled) return wrap(false, 'Monitoring cancelled.\r\n');
       if (started.live) {
         const pid = await sys.trackLaunch(installer);
         await sys.waitProcess(pid, 4 * 3600 * 1000);
@@ -354,14 +348,15 @@ async function run(args) {
     if (sub === 'test-install-finish') {
       const name = option(args, '--name');
       const rec = await monitor.testInstallFinish(name);
+      if (rec.cancelled) return wrap(false, 'Monitoring cancelled.\r\n');
+      const suitability = await classifyForPortable(rec.items);
       const lines = [
         `Test install finished for "${rec.name}".`,
         `${rec.items.length} items captured (not stored permanently).`,
-        rec.portable ? 'Portable: YES — no system-wide changes detected.' : 'Portable: NO — system-wide changes detected:',
-        ...rec.reasons.map((r) => `  • ${r}`),
+        suitability.portable ? 'Portable: YES — no system-wide changes detected.' : 'Portable: NO — system-wide changes detected:',
+        ...suitability.reasons.map((r) => `  • ${r}`),
         ...(rec.tracked ? [`Tracked processes: ${rec.tracked.processes.join(', ')}`] : []),
         '',
-        'Keep: Purgeon --portableapps generate --monitor-id <id> --output <folder>',
         'Revert: Purgeon --monitor revert-test-install',
       ];
       return wrap(true, lines.join('\r\n') + '\r\n');
@@ -374,6 +369,7 @@ async function run(args) {
     if (!(await sys.exists(sub))) throw new Error(`Installer not found: ${sub}`);
     if (await monitor.status()) throw new Error('Another installation is being monitored. Finish or cancel it in Purgeon first.');
     const started = await monitor.start(sub);
+    if (started.cancelled) return wrap(false, 'Monitoring cancelled.\r\n');
     if (started.live) {
       const pid = await sys.trackLaunch(sub);
       await sys.waitProcess(pid, 4 * 3600 * 1000);
@@ -383,6 +379,7 @@ async function run(args) {
     }
     const name = option(args, '--name') || sub.split('\\\\').pop().replace(/\.[^.]+$/, '');
     const rec = await monitor.finish(name);
+    if (rec.cancelled) return wrap(false, 'Monitoring cancelled.\r\n');
     const lines = [
       `Recorded the installation of ${rec.name} (${started.live ? 'live tracking and snapshots' : 'snapshots only; run as administrator for live tracking'}).`,
       `${rec.items.length} items, saved under Monitored Programs.`,
@@ -562,30 +559,6 @@ async function run(args) {
     }
     throw new Error('Use --plugins list|enable|disable|validate <id>.');
   }
-  if (cmd === '--portableapps') {
-    const sub = option(args, '--portableapps');
-    if (sub === 'list') {
-      const list = await portableapps.list();
-      if (j) return wrap(true, JSON.stringify(list, null, 2));
-      return wrap(true, list.map((p) => `${p.hasProgramFiles ? '[+]' : '[-]'} ${p.id} — ${p.name} (${p.items} items, monitored ${p.finished.slice(0, 10)})\r\n`).join('') || 'No monitored programs.\r\n');
-    }
-    if (sub === 'generate') {
-      const monitorId = option(args, '--monitor-id') || option(args, '--id');
-      const outputDir = option(args, '--output') || option(args, '--dir');
-      if (!monitorId || monitorId.startsWith('--')) throw new Error('Specify the monitored program id: --portableapps generate --monitor-id <id> --output <folder>');
-      if (!outputDir || outputDir.startsWith('--')) throw new Error('Specify the output folder: --portableapps generate --monitor-id <id> --output <folder>');
-      const appName = option(args, '--name');
-      const appVersion = option(args, '--version');
-      const appPublisher = option(args, '--publisher');
-      const appHomepage = option(args, '--homepage');
-      const appDescription = option(args, '--description');
-      const startExe = option(args, '--start-exe');
-      const result = await portableapps.generate({ monitorId, outputDir, appName, appVersion, appPublisher, appHomepage, appDescription, startExe });
-      if (j) return wrap(true, JSON.stringify(result, null, 2));
-      return wrap(true, `PortableApps.com package generated for "${result.name}" (${result.id}).\n  Package: ${result.packageDir}\n  NSIS script: ${result.nsiScriptPath}\n  AppInfo: ${result.appInfoPath}\n  Start exe: ${result.startExe}\n  Files copied: ${result.files.length}\nTo build the .paf.exe: place a PortableApps.com launcher as ${result.packageDir}\\${result.launcherExe}, then compile ${result.nsiScriptPath} with NSIS (makensis).\r\n`);
-    }
-    throw new Error('Use --portableapps list|generate --monitor-id <id> --output <folder>.');
-  }
   if (cmd === '--trusted') {
     const trusted = await import('./backend/trusted.js');
     const sub = option(args, '--trusted');
@@ -713,7 +686,7 @@ async function run(args) {
 // parser and keep their existing dispatch below; a disposable test install under
 // --monitor also stays on that path because it takes its own options.
 const PARSER_COMMANDS = new Set(['--snapshot', '--compare', '--list-snapshots', '--monitor', '--maintenance', '--autostart', '--help', '-h', '/?']);
-const LEGACY_COMMANDS = new Set(['--background-scan', '--restore-point', '--associations', '--associations-for', '--schedule', '--startup', '--trusted', '--update', '--sync', '--plugins', '--portableapps', '--export', '--uninstall', '--language', '--settings', '--profiler', '--timeline', '--history', '--archive', '--policy', '--duplicates', '--selfcheck', '--browsers', '--dns', '--setup-monitor', '--startup-monitor', '--quiet', '-q', '--json']);
+const LEGACY_COMMANDS = new Set(['--background-scan', '--restore-point', '--associations', '--associations-for', '--schedule', '--startup', '--trusted', '--update', '--sync', '--plugins', '--export', '--uninstall', '--language', '--settings', '--profiler', '--timeline', '--history', '--archive', '--policy', '--duplicates', '--selfcheck', '--browsers', '--dns', '--setup-monitor', '--startup-monitor', '--quiet', '-q', '--json']);
 
 async function dispatch(args, initialize) {
   const first = Array.isArray(args) && typeof args[0] === 'string' ? args[0].toLowerCase() : null;

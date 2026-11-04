@@ -53,9 +53,11 @@ export function DiskUsageView({ filter, onError, onStatus }) {
   };
 
   useEffect(() => {
+    let active = true;
     api
       .invoke('disk:drives')
       .then((d) => {
+        if (!active) return;
         setDrives(d);
         // Opening the view scans a drive straight away: the system drive
         // when it is listed, otherwise the first one.
@@ -64,9 +66,14 @@ export function DiskUsageView({ filter, onError, onStatus }) {
         else setData({ entries: [], total: 0, complete: true });
       })
       .catch((e) => {
+        if (!active) return;
         onError(e.message);
         setDrives([]);
       });
+    return () => {
+      active = false;
+      run.current++;
+    };
   }, []);
 
   useEffect(() => {

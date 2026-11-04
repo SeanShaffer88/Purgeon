@@ -106,6 +106,43 @@ struct Parent {
     // Pin every ancestor, including directories above the immediate parent.
     handles: Vec<(PathBuf, File)>,
 }
+
+/// Mutate the selected object without replacing it (preserving its ACL).
+pub(crate) fn write_in_place(target: &str, contents: &[u8], append: bool) -> Result<(), String> {
+    write_in_place_with_hooks(target, contents, append, || {}, || {})
+}
+
+fn write_in_place_with_hooks(
+    target: &str,
+    contents: &[u8],
+    append: bool,
+    before_open: impl FnOnce(),
+    before_write: impl FnOnce(),
+) -> Result<(), String> {
+    crate::security::checked_path(target)?;
+    let target = Path::new(target);
+    let parent = Parent::open(target)?;
+    before_open();
+    let mut file = OpenOptions::new()
+        .write(true)
+        .append(append)
+        .create(true)
+        .share_mode(0)
+        .custom_flags(OPEN_REPARSE)
+        .open(target)
+        .map_err(|e| e.to_string())?;
+    verify(&file, target, false)?;
+    parent.recheck()?;
+    before_write();
+    if !append {
+        file.set_len(0).map_err(|e| e.to_string())?;
+    }
+    file.write_all(contents).map_err(|e| e.to_string())
+}
+
+pub(crate) fn pin_existing_parent(target: &Path) -> Result<impl Sized, String> {
+    Parent::open(target)
+}
 impl Parent {
     fn open(target: &Path) -> Result<Self, String> {
         let path = target
@@ -695,8 +732,57 @@ mod tests {
             String::from_utf8_lossy(&output.stderr)
         );
         assert!(write(link.join("state.json").to_str().unwrap(), b"new").is_err());
+        for append in [false, true] {
+            assert!(
+                write_in_place(link.join("state.json").to_str().unwrap(), b"new", append).is_err()
+            );
+        }
         assert_eq!(fs::read(real.join("state.json")).unwrap(), b"old");
         fs::remove_dir(&link).unwrap();
         fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn in_place_pins_ancestry_and_excludes_target_replacement() {
+        for append in [false, true] {
+            let root = scratch();
+            let parent = root.join("parent");
+            fs::create_dir(&parent).unwrap();
+            let target = parent.join("file");
+            fs::write(&target, b"old").unwrap();
+            let victim = root.join("victim");
+            fs::write(&victim, b"unrelated").unwrap();
+            assert!(write_in_place_with_hooks(
+                target.to_str().unwrap(),
+                b"new",
+                append,
+                || {
+                    fs::remove_file(&target).unwrap();
+                    fs::hard_link(&victim, &target).unwrap();
+                },
+                || panic!("hardlink must be rejected before mutation")
+            )
+            .is_err());
+            assert_eq!(fs::read(&victim).unwrap(), b"unrelated");
+            fs::remove_file(&target).unwrap();
+            fs::write(&target, b"old").unwrap();
+            write_in_place_with_hooks(
+                target.to_str().unwrap(),
+                b"new",
+                append,
+                || {},
+                || {
+                    assert!(fs::rename(&parent, root.join("moved")).is_err());
+                    assert!(fs::remove_file(&target).is_err());
+                    assert!(OpenOptions::new().write(true).open(&target).is_err());
+                },
+            )
+            .unwrap();
+            assert_eq!(
+                fs::read(&target).unwrap(),
+                if append { &b"oldnew"[..] } else { &b"new"[..] }
+            );
+            fs::remove_dir_all(root).unwrap();
+        }
     }
 }

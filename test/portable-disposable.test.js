@@ -1,4 +1,4 @@
-// Tests for the disposable isolated test environment for portable packaging.
+// Tests for snapshot-based disposable capture and heuristic assessment.
 // Run with: npm test
 import test from 'node:test';
 import assert from 'node:assert/strict';
@@ -92,7 +92,7 @@ test('revertTestInstall with no items returns empty', async () => {
 });
 
 test('classifyForPortable integrates with test install results', async () => {
-  const { classifyForPortable } = await import('../src/backend/portableapps.js');
+  const { classifyForPortable } = await import('../src/backend/portable-classification.js');
   // Items from a test install of a clean program (no system changes)
   const cleanItems = [
     { kind: 'dir', path: 'C:\\Program Files\\Foo\\Foo' },
@@ -124,7 +124,7 @@ test('testInstallFinish returns portable classification via API handler pattern'
   });
   const result = await monitor.testInstallFinish('Foo');
   // Simulate what the API handler does: classify the items
-  const { classifyForPortable } = await import('../src/backend/portableapps.js');
+  const { classifyForPortable } = await import('../src/backend/portable-classification.js');
   const suitability = await classifyForPortable(result.items);
   assert.equal(suitability.portable, true, 'single exe in program files should be portable');
   assert.equal(suitability.reasons.length, 0);

@@ -23,6 +23,7 @@ const afterFile = () => path.join(storeDir, 'session-after.snap');
 
 async function start(installer) {
   const stats = await capture(beforeFile(), 'Before installation', 'standard');
+  if (stats.cancelled) return { cancelled: true };
   // Live tracking only follows an installer Purgeon starts itself.
   const live = !!installer && !!sys.trackStart && (await sys.trackStart().then(() => true, () => false));
   await sys.writeTextAtomic(sessionFile(), JSON.stringify({ started: new Date().toISOString(), installer, live }));
@@ -33,6 +34,7 @@ async function start(installer) {
 // snapshot is taken now, while it waits on its first page. Snapshots only, no live tracking.
 async function attach(installer, name) {
   const stats = await capture(beforeFile(), 'Before installation', 'standard');
+  if (stats.cancelled) return { cancelled: true };
   await sys.writeTextAtomic(sessionFile(), JSON.stringify({ started: new Date().toISOString(), installer, name, live: false, attached: true }));
   return { entries: stats.dirs + stats.files + stats.keys + stats.values };
 }
@@ -163,8 +165,9 @@ $v = [System.Diagnostics.FileVersionInfo]::GetVersionInfo(${psq(file)})
 
 async function finish(name) {
   const session = JSON.parse(await sys.readText(sessionFile()));
+  const stats = await capture(afterFile(), 'After installation', 'standard');
+  if (stats.cancelled) return { cancelled: true };
   const tracked = sys.trackRunning && (await sys.trackRunning()) ? await sys.trackStop().catch(() => null) : null;
-  await capture(afterFile(), 'After installation', 'standard');
   const comparison = await sys.compareSnapshots(beforeFile(), afterFile(), 100000);
   const { items, uninstallKeys } = await buildItems(session, comparison, tracked);
 
@@ -194,6 +197,7 @@ async function finish(name) {
 // finish() knows not to persist it.
 async function testInstallStart(installer, name) {
   const stats = await capture(beforeFile(), 'Before installation (test)', 'standard');
+  if (stats.cancelled) return { cancelled: true };
   const live = !!installer && !!sys.trackStart && (await sys.trackStart().then(() => true, () => false));
   await sys.writeTextAtomic(sessionFile(), JSON.stringify({ started: new Date().toISOString(), installer, name, live, testInstall: true }));
   return { entries: stats.dirs + stats.files + stats.keys + stats.values, live };
@@ -207,11 +211,11 @@ const TEST_RESULT_FILE = () => path.join(sys.info.dataDir, 'test-install-last.js
 
 async function testInstallFinish(name) {
   const session = JSON.parse(await sys.readText(sessionFile()));
+  const stats = await capture(afterFile(), 'After installation (test)', 'standard');
+  if (stats.cancelled) return { cancelled: true };
   const tracked = sys.trackRunning && (await sys.trackRunning()) ? await sys.trackStop().catch(() => null) : null;
-  await capture(afterFile(), 'After installation (test)', 'standard');
   const comparison = await sys.compareSnapshots(beforeFile(), afterFile(), 100000);
   const { items, uninstallKeys } = await buildItems(session, comparison, tracked);
-  await cancel(); // clean up session files, do NOT store permanently
   const result = {
     name: name || path.basename(session.installer || 'Test install'),
     installer: session.installer,
@@ -225,6 +229,7 @@ async function testInstallFinish(name) {
   };
   // Keep a temp copy so revertTestInstall can remove the captured changes.
   await sys.writeTextAtomic(TEST_RESULT_FILE(), JSON.stringify(result, null, 2));
+  await cancel(); // recovery result is durable before session evidence is removed
   return result;
 }
 

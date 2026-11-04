@@ -1,8 +1,8 @@
-// Tests for portable packaging classification (#4).
+// Tests for heuristic portable suitability classification.
 // Run with: npm test
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { classifyForPortable } from '../src/backend/portableapps.js';
+import { classifyForPortable } from '../src/backend/portable-classification.js';
 
 test('program with no system-wide changes is portable', async () => {
   const items = [

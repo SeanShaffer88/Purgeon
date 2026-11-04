@@ -71,8 +71,6 @@ const MigratePcDialog = optionalDialog(() => import('./more.jsx'), 'MigratePcDia
 const FolderRestoreDialog = optionalDialog(() => import('./more.jsx'), 'FolderRestoreDialog');
 const SyncDialog = optionalDialog(() => import('./more.jsx'), 'SyncDialog');
 const PortableDialog = optionalDialog(() => import('./more.jsx'), 'PortableDialog');
-const PortableAppsDialog = optionalDialog(() => import('./more.jsx'), 'PortableAppsDialog');
-const MakePortableDialog = optionalDialog(() => import('./more.jsx'), 'MakePortableDialog');
 const TrustedPublishersDialog = optionalDialog(() => import('./more.jsx'), 'TrustedPublishersDialog');
 const UpdateCheckDialog = optionalDialog(() => import('./more.jsx'), 'UpdateCheckDialog');
 const ReportDialog = optionalDialog(() => import('./more.jsx'), 'ReportDialog');
@@ -123,7 +121,7 @@ const VIEW_CHIPS = [
   ['services', 'Services', 'Windows and application services: inspect automatic start and delayed start'],
   ['debloat', 'Debloat', 'Debloat Windows: safe, reversible tweaks that remove Windows ads, telemetry and clutter (Ctrl+5)'],
   ['junk', 'Cleaner', 'Cleaner: temporary files, crash dumps and caches that can be cleaned (Ctrl+8)'],
-  ['disk', 'Disk Usage', 'Disk Usage: what is using the space on each drive, biggest first (Ctrl+0)'],
+  ['disk', 'Disk Usage', 'Disk Usage: what is using the space on each drive, biggest first (Ctrl+Shift+0)'],
   ['snapshots', 'Snapshots', 'Take snapshots and compare them to see what changed (Ctrl+7)'],
   ['archive', 'Archives', 'Uninstall archive: programs removed so far, with how to get them back (Ctrl+9)'],
   ['timeline', 'History', 'Change timeline: everything that changed, newest first (Ctrl+T)'],
@@ -365,7 +363,7 @@ const MENUS = [
         ['view:startup', 'Startup', 'Ctrl+6'],
         ['view:services', 'Services'],
         ['view:junk', 'Cleaner', 'Ctrl+8'],
-        ['view:disk', 'Disk Usage', 'Ctrl+0'],
+        ['view:disk', 'Disk Usage', 'Ctrl+Shift+0'],
         ['view:archive', 'Uninstall Archive', 'Ctrl+9'],
         ['view:timeline', 'Change Timeline', 'Ctrl+T'],
         ['diskMap', 'Disk Space Map...'],
@@ -430,11 +428,10 @@ const MENUS = [
       ] },
       ['sysinfo', 'System Info...'],
       null,
-      { group: 'Lists & Portable', tip: 'Program lists, updates and portable packages', items: [
+      { group: 'Lists & Portable', tip: 'Program lists, updates and portable apps.', items: [
         ['updates', 'Program Updates (winget)...'],
         ['exportWinget', 'Export Program List (winget)...'],
         ['portable', 'Portable Apps...'],
-        ['portableapps', 'PortableApps.com Installer...'],
       ] },
       ['maintenance', 'Scheduled Maintenance...'],
       null,
@@ -1915,66 +1912,6 @@ const [reducedMotion, setReducedMotion] = useState(false);
     }
   };
 
-  const openPortableApps = async () => {
-    setBusy(tx("Reading monitored programs…"));
-    try {
-      const programs = await api.invoke('portableapps:list');
-      setModal({ type: 'portableapps', programs });
-    } catch (e) {
-      setError(e.message);
-    } finally {
-      setBusy('');
-    }
-  };
-
-  const openMakePortable = async (program) => {
-    // Bug notice: shown before any portable packaging.
-    const bugOk = await api.invoke('dialog:confirm', { confirmId: 'bugReport',
-      message: 'Portable compiler notice',
-      detail: 'The PortableApps.com compiler is new and may have bugs or make mistakes. The developer is actively polishing it to mitigate issues. Always test the resulting portable package before relying on it. Continue?',
-      checkboxLabel: "Don't show this notice again",
-    });
-    if (!bugOk.ok) return;
-    if (bugOk.checked) {
-      // Remember dismissal (stored in settings)
-      try {
-        await api.invoke('settings:set', { portableBugNoticeDismissed: true });
-      } catch {}
-    }
-
-    setBusy(tx("Analyzing program for portable packaging…"));
-    let items = null;
-    let recName = program.name;
-    let recPublisher = program.publisher || '';
-    let recVersion = program.version || '';
-
-    try {
-      // If this is a monitored program, it already has recorded items.
-      // Otherwise, scan the installed program to get its files/folders/registry.
-      if (program.items && program.items.length > 0) {
-        items = program.items;
-      } else {
-        const scanned = await api.invoke('program:scan', program);
-        items = scanned;
-      }
-    } catch (e) {
-      setError(tx("Failed to analyze program: {p0}", { p0: (e.message) }));
-      setBusy('');
-      return;
-    } finally {
-      setBusy('');
-    }
-
-    setModal({
-      type: 'makePortable',
-      program,
-      items,
-      name: recName,
-      publisher: recPublisher,
-      version: recVersion,
-    });
-  };
-
   // ---- 16. Explorer right-click requests (from the command line) -----------------------------------------------
 
   const uninstallTarget = async (target) => {
@@ -2341,8 +2278,6 @@ const [reducedMotion, setReducedMotion] = useState(false);
     regSearch: () => setModal({ type: 'regSearch' }),
     browsers: () => openBrowsers(),
     portable: () => openPortable(),
-    portableapps: async () => openPortableApps(),
-    makePortable: async (p) => openMakePortable(p),
     migratePc: () => setModal({ type: 'migratePc' }),
     restoreFolder: () => restoreFolder(),
     sync: () => openSync(),
@@ -2573,7 +2508,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     setModal(null);
     setBusy(tx("Taking a snapshot before {p0} installs… Leave its installer on the first page until this is done.", { p0: (inst.name) }));
     try {
-      await api.invoke('monitor:attach', { installer: inst.path, name: inst.name });
+      const attached = await api.invoke('monitor:attach', { installer: inst.path, name: inst.name });
+      if (attached.cancelled) return;
       setModal({ type: 'monitor', resume: await api.invoke('monitor:status') });
     } catch (e) {
       setError(e.message);
@@ -2588,7 +2524,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
       let action = null;
       if (e.ctrlKey && !e.altKey && /^[1-9]$/.test(key)) action = `view:${['desktop', 'store', 'monitored', 'backups', 'debloat', 'startup', 'snapshots', 'junk', 'archive'][Number(key) - 1]}`;
-      else if (e.ctrlKey && !e.altKey && key === '0') action = 'view:disk';
+      else if (e.ctrlKey && !e.altKey && (key === '0' || e.code === 'Digit0')) action = e.shiftKey ? 'view:disk' : 'zoomReset';
       else if (e.ctrlKey && key === 'g') action = 'setGroup';
       else if (e.ctrlKey && key === 't') action = 'view:timeline';
       else if (e.ctrlKey && key === 'k') action = 'palette';
@@ -2600,7 +2536,6 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       else if (e.ctrlKey && key === 'h') action = 'view:history';
       else if (e.ctrlKey && (key === '=' || key === '+')) action = 'zoomIn';
       else if (e.ctrlKey && key === '-') action = 'zoomOut';
-      else if (e.ctrlKey && key === '0') action = 'zoomReset';
       else if (e.ctrlKey && key === 'l') action = 'analyze';
       else if (key === 'F5') action = 'refresh';
       else if (e.altKey && key === 'Enter') action = 'properties';
@@ -2689,9 +2624,9 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     : view === 'backups'
       ? [['restore', 'Restore'], ['properties', 'Show Contents'], null, ['deleteBackup', 'Delete Backup']]
       : view === 'monitored'
-        ? [['uninstall', 'Uninstall...'], ['makePortable', 'Make Portable...'], null, ['properties', 'Recorded Changes'], ['search', 'Search Online']]
+        ? [['uninstall', 'Uninstall...'], null, ['properties', 'Recorded Changes'], ['search', 'Search Online']]
         : view === 'store'
-          ? [['uninstall', 'Uninstall...'], ['setGroup', 'Set Group...', 'Ctrl+G'], ['makePortable', 'Make Portable...'], null, ['folder', 'Installation Folder'], ['search', 'Search Online'], null, ['properties', 'Properties']]
+          ? [['uninstall', 'Uninstall...'], ['setGroup', 'Set Group...', 'Ctrl+G'], null, ['folder', 'Installation Folder'], ['search', 'Search Online'], null, ['properties', 'Properties']]
           : [
               ['uninstall', 'Uninstall...', 'Del'],
               ['force', 'Force...', 'Shift+Del'],
@@ -2703,7 +2638,6 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
               current && hidden[current.key] ? ['unhide', 'Unhide'] : ['hide', 'Hide From List'],
               ['analyzeProgram', 'Analyze Program...', 'Ctrl+I'],
               ['rescue', 'Rescue Broken Uninstall...'],
-              ['makePortable', 'Make Portable...'],
               null,
               ['registry', 'Registry Entry'],
               ['folder', 'Installation Folder'],
@@ -3093,7 +3027,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           {error.retry && (
             <button onClick={error.retry} title={tx("Try again")}>{tx("↻ Retry")}</button>
           )}
-          <button onClick={() => setError('')}>✕</button>
+          <button onClick={() => setError('')} aria-label={tx("Dismiss error")}>✕</button>
         </div>
       )}
       {notice && (
@@ -3111,7 +3045,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             const u = undoStack[undoStack.length - 1];
             u.undoFn().then(() => clearUndo()).catch(() => setError(tx("Undo failed.")));
           }}>{tx("Undo")}</button>
-          <button onClick={clearUndo}>✕</button>
+          <button onClick={clearUndo} aria-label={tx("Dismiss undo notification")}>✕</button>
         </div>
       )}
       </main>
@@ -3465,62 +3399,6 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
             }
           }}
           onOpenUrl={(url) => /^https?:\/\//i.test(url) && api.invoke('open:url', url)}
-          onClose={() => setModal(null)}
-        />
-      )}
-      {modal?.type === 'portableapps' && (
-        <PortableAppsDialog
-          programs={modal.programs}
-          onGenerate={async (args) => {
-            try {
-              const f = await api.invoke('transfer:pickFolder', 'Choose the folder for the PortableApps.com package');
-              if (!f) return;
-              setBusy(tx("Generating PortableApps.com package…"));
-              const result = await api.invoke('portableapps:generate', { ...args, outputDir: f });
-              setBusy('');
-              setNotice({
-                tone: 'ok',
-                text: tx("PortableApps.com package generated for \"{p0}\". NSIS script: {p1}", { p0: (result.name), p1: (result.nsiScriptPath) }),
-              });
-              setModal(null);
-            } catch (e) {
-              setError(e.message);
-            } finally {
-              setBusy('');
-            }
-          }}
-          onClose={() => setModal(null)}
-        />
-      )}
-      {modal?.type === 'makePortable' && (
-        <MakePortableDialog
-          program={modal.program}
-          items={modal.items}
-          name={modal.name}
-          publisher={modal.publisher}
-          version={modal.version}
-          onGenerate={async (args) => {
-            try {
-              const f = await api.invoke('transfer:pickFolder', 'Choose the folder for the PortableApps.com package');
-              if (!f) return;
-              setBusy(tx("Creating PortableApps.com package…"));
-              const result = await api.invoke('portableapps:generate', {
-                ...args,
-                outputDir: f,
-                items: modal.items,
-              });
-              setBusy('');
-              setNotice({
-                tone: 'ok',
-                text: tx("PortableApps.com package generated for \"{p0}\". NSIS script: {p1}", { p0: (result.name), p1: (result.nsiScriptPath) }),
-              });
-              setModal(null);
-            } catch (e) {
-              setError(e.message);
-            } finally {
-              setBusy('');
-            }
-          }}
           onClose={() => setModal(null)}
         />
       )}

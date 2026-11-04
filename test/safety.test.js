@@ -652,9 +652,10 @@ test('the command log records each command with its outcome', async () => {
   await target.runCommandLine('"C:\\X\\uninst.exe" /S');
   await new Promise((r) => setTimeout(r, 700));
   const text = fs.readFileSync(path.join(dir, fs.readdirSync(dir)[0]), 'utf8');
-  assert.match(text, /ok +\d+ms  reg\.exe query "HKCU\\Software\\X Y"/);
-  assert.match(text, /FAIL +\d+ms  PowerShell: Get-Item -LiteralPath x \[input 5 chars\]  -> boom/);
-  assert.match(text, /FAIL +\d+ms  Uninstall command: "C:\\X\\uninst\.exe" \/S  -> exit 3/);
+  assert.match(text, /ok +\d+ms  exec: reg\.exe/);
+  assert.match(text, /FAIL +\d+ms  PowerShell  -> exception/);
+  assert.match(text, /FAIL +\d+ms  Uninstall command  -> exit 3/);
+  assert.doesNotMatch(text, /HKCU|Get-Item|boom|uninst\.exe/);
   fs.rmSync(dir, { recursive: true, force: true });
 });
 

@@ -41,7 +41,7 @@ test('scan refuses protected locations', async () => {
 // the shared protection guard refuses anything that is not a drive path.
 function fakeSys() {
   const sizes = { 'C:\\Data\\a.txt': 18, 'C:\\Data\\b.txt': 18, 'C:\\Data\\c.txt': 19 };
-  const hashes = { 'C:\\Data\\a.txt': 'h1', 'C:\\Data\\b.txt': 'h1', 'C:\\Data\\c.txt': 'h2' };
+  const hashes = { 'C:\\Data\\a.txt': '1'.repeat(64), 'C:\\Data\\b.txt': '1'.repeat(64), 'C:\\Data\\c.txt': '2'.repeat(64) };
   const trashed = [];
   return {
     trashed,

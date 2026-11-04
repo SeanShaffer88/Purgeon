@@ -5,7 +5,6 @@ import { tx } from './backend/i18n.js';
 const api = window.api;
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dialog, useModalLayer } from './core-dialog.jsx';
-import * as path from './backend/winpath.js';
 
 const fmt = (b) => (!b ? '0 B' : b < 1048576 ? `${(b / 1024).toFixed(0)} KB` : b < 1073741824 ? `${(b / 1048576).toFixed(1)} MB` : `${(b / 1073741824).toFixed(2)} GB`);
 
@@ -184,9 +183,10 @@ export function DiskMapDialog({ data, onAnalyze, onClose }) {
         {fmt(total)}{tx(" used by ")}{data.length}{tx(" programs: their install folders plus the data folders named after them. Click a block for details.")}</p>
       <div className="treemap" role="list">
         {boxes.map((b, i) => (
+          <div key={b.item.key} role="listitem">
           <button
-            key={b.item.key}
-            role="listitem"
+            aria-pressed={sel === b.item.key}
+            aria-label={`${b.item.name}: ${fmt(b.item.total)}`}
             className={`tm-box ${sel === b.item.key ? 'on' : ''}`}
             style={{ left: `${b.x}%`, top: `${b.y}%`, width: `${b.w}%`, height: `${b.h}%`, background: COLORS[i % COLORS.length] }}
             title={`${b.item.name}: ${fmt(b.item.total)}`}
@@ -200,6 +200,7 @@ export function DiskMapDialog({ data, onAnalyze, onClose }) {
               </span>
             )}
           </button>
+          </div>
         ))}
       </div>
       {p && (
@@ -352,7 +353,7 @@ function CookieRules() {
   return (
     <div style={{ marginTop: 18 }}>
       <p className="heading">{tx("Cookie rules per site")}</p>
-      <p className="muted">{tx("These are written to Chrome's and Edge's own policy settings, so they hold in every profile and while the browser runs. Blocking a site signs you out of it there. Firefox does not read these policies, so the rules do not cover it. Changing them needs administrator rights.")}</p>
+      <p className="muted">{tx("Changes made here apply to Chrome and Edge policy settings across their profiles. This list combines both browsers' rules; existing policies may differ, and unrelated differences are preserved. Blocking a site signs you out of it there. Firefox is not covered. Changing these rules needs administrator rights.")}</p>
       {err && <p className="error-text" style={{ margin: '8px 0' }}>{err}</p>}
       {rules === null ? <p className="muted">{tx("Reading the rules…")}</p> : (<>
         {listFor('blocked', 'Never allow cookies from', 'Sites here may never set cookies in Chrome or Edge', 'Blocking a site signs you out of it in Chrome and Edge')}
@@ -742,111 +743,6 @@ export function ContextMenuDialog({ entries, admin, onToggle, onRestartExplorer,
   );
 }
 
-// ---- PortableApps.com installer generator ---------------------------------------
-
-export function PortableAppsDialog({ programs, onGenerate, onClose }) {
-  const [chosen, setChosen] = useState(null);
-  const [fields, setFields] = useState({
-    name: '',
-    version: '1.0.0',
-    publisher: '',
-    homepage: '',
-    description: '',
-    startExe: '',
-  });
-
-  useEffect(() => {
-    if (chosen && !fields.name) setFields({ ...fields, name: chosen.name });
-  }, [chosen]);
-
-  const eligible = programs.filter((p) => p.hasProgramFiles);
-
-  return (
-    <Dialog
-      title={tx("PortableApps.com Installer")}
-      onClose={onClose}
-      width={760}
-      buttons={
-        <>
-          <button disabled={!chosen} onClick={() => onGenerate({ ...fields, monitorId: chosen.id })}>{tx("Generate Package")}</button>
-          <button className="primary" onClick={onClose}>{tx("Close")}</button>
-        </>
-      }
-    >
-      <p className="heading">{tx("Create a PortableApps.com package from a monitored installation. Purgeon copies the recorded program files into a PortableApps.com folder structure and writes an NSIS installer script (.nsi) that you compile with makensis into a .paf.exe.")}</p>
-      {!eligible.length && (
-        <div className="empty-box">{tx("No monitored programs with portable files were found. Use Tools › Monitor an Installation to record a program first.")}</div>
-      )}
-      {eligible.length && (
-        <>
-          <div className="field-row">
-            <label>{tx("Monitored program")}</label>
-            <select value={chosen?.id || ''} onChange={(e) => setChosen(eligible.find((p) => p.id === e.value) || null)}>
-              <option value="">{tx("Choose a program…")}</option>
-              {eligible.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}{p.items > 0 ? tx(" ({p0} items)", { p0: (p.items) }) : ''}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div className="field-row">
-            <label>{tx("Package name")}</label>
-            <input
-              value={fields.name}
-              onChange={(e) => setFields({ ...fields, name: e.target.value })}
-              placeholder={tx("e.g. FooEditor")}
-              title={tx("The program name shown in the PortableApps.com menu")}
-            />
-          </div>
-          <div className="field-row">
-            <label>{tx("Version")}</label>
-            <input
-              value={fields.version}
-              onChange={(e) => setFields({ ...fields, version: e.target.value })}
-              placeholder="1.0.0"
-            />
-          </div>
-          <div className="field-row">
-            <label>{tx("Publisher")}</label>
-            <input
-              value={fields.publisher}
-              onChange={(e) => setFields({ ...fields, publisher: e.target.value })}
-              placeholder={tx("e.g. Example Corp")}
-            />
-          </div>
-          <div className="field-row">
-            <label>{tx("Homepage (optional)")}</label>
-            <input
-              value={fields.homepage}
-              onChange={(e) => setFields({ ...fields, homepage: e.target.value })}
-              placeholder={tx("https://example.com")}
-            />
-          </div>
-          <div className="field-row">
-            <label>{tx("Description (optional)")}</label>
-            <input
-              value={fields.description}
-              onChange={(e) => setFields({ ...fields, description: e.target.value })}
-              placeholder={tx("Portable version of Foo Editor")}
-            />
-          </div>
-          <div className="field-row">
-            <label>{tx("Main executable (optional)")}</label>
-            <input
-              value={fields.startExe}
-              onChange={(e) => setFields({ ...fields, startExe: e.target.value })}
-              placeholder={tx("e.g. FooEditor.exe")}
-              title={tx("If left blank, Purgeon picks the largest .exe from the recorded files")}
-            />
-          </div>
-          <p className="footnote">{tx("After generating, place a PortableApps.com launcher executable in the package folder and compile the .nsi script with NSIS (makensis) to produce the .paf.exe installer.")}</p>
-        </>
-      )}
-    </Dialog>
-  );
-}
-
 // ---- Trusted publishers dialog -------------------------------------------------------
 
 export function TrustedPublishersDialog({ publishers, onClose }) {
@@ -1026,9 +922,9 @@ export function SettingsDialog({ initial, onApply, onClose, shellOn, onToggleShe
   return (
     <Dialog title="Settings" onClose={onClose} width={860} buttons={<button className="primary" onClick={onClose}>Close</button>}>
       <div className="settings-wrap">
-        <div className="settings-rail" role="tablist" aria-label="Settings categories">
+        <div className="settings-rail" role="group" aria-label="Settings categories">
           {SETTINGS_PAGES.map(([id, label]) => (
-            <button key={id} className={page === id ? 'active' : ''} onClick={() => setPage(id)} title={`Settings: ${label}`}>{label}</button>
+            <button key={id} aria-pressed={page === id} className={page === id ? 'active' : ''} onClick={() => setPage(id)} title={`Settings: ${label}`}>{label}</button>
           ))}
         </div>
         <div className="settings-pane">
@@ -1249,142 +1145,6 @@ export function UpdateCheckDialog({ enabled, lastCheck, onClose }) {
   );
 }
 
-// ---- make portable dialog -------------------------------------------------------
-
-// ---- make portable dialog -------------------------------------------------------
-
-export function MakePortableDialog({ program, items, name, publisher, version, onGenerate, onClose }) {
-  const [bugDismissed, setBugDismissed] = useState(false);
-  const [fields, setFields] = useState({
-    name: name || program.name || '',
-    version: version || '1.0.0',
-    publisher: publisher || '',
-    homepage: '',
-    description: `Portable version of ${program.name || ''}`,
-    startExe: '',
-  });
-  const [saving, setSaving] = useState(false);
-
-  // Collect .exe candidates from the items for the main executable suggestion.
-  const exes = useMemo(() => {
-    if (!items || !items.length) return [];
-    return items
-      .filter((i) => i.kind === 'file' && /\.exe$/i.test(i.path || ''))
-      .map((i) => i.path)
-      .slice(0, 20);
-  }, [items]);
-
-  useEffect(() => {
-    if (exes.length && !fields.startExe) {
-      setFields({ ...fields, startExe: path.basename(exes[0]) });
-    }
-  }, [exes]);
-
-  const generatePackage = async () => {
-    if (!fields.name.trim()) return;
-    setSaving(true);
-    try {
-      await onGenerate({
-        monitorId: program.id || undefined,
-        appName: fields.name.trim(),
-        appVersion: fields.version.trim() || '1.0.0',
-        appPublisher: fields.publisher.trim() || 'Unknown',
-        appHomepage: fields.homepage.trim(),
-        appDescription: fields.description.trim(),
-        startExe: fields.startExe.trim(),
-      });
-    } finally {
-      setSaving(false);
-      onClose();
-    }
-  };
-
-  return (
-    <Dialog
-      title={tx("Make PortableApps.com Package")}
-      onClose={onClose}
-      width={760}
-      buttons={
-        <>
-          {!bugDismissed && (
-            <button onClick={() => setBugDismissed(true)}>{tx("I understand – don't show this notice again")}</button>
-          )}
-          <button disabled={saving} onClick={generatePackage}>
-            {saving ? tx("Generating…") : tx("Generate Package")}
-          </button>
-          <button className="primary" onClick={onClose}>{tx("Cancel")}</button>
-        </>
-      }
-    >
-      {!bugDismissed && (
-        <div className="safe-note" style={{ border: '1px solid var(--red)', padding: '10px', marginBottom: '12px', background: 'var(--red-dim)' }}>
-          <strong>{tx("⚠ Portable compiler is new – may have bugs.")}</strong>
-          <br />{tx("The PortableApps.com package generator is recent and may make mistakes or produce packages that don't work perfectly. The developer is actively polishing it to mitigate issues. ")}<strong>{tx("Always test the resulting portable package before relying on it.")}</strong>
-        </div>
-      )}
-      <p className="heading">{tx("Create a PortableApps.com package from this program. Purgeon copies the program's files into a PortableApps.com folder structure and writes an NSIS installer script that you compile with makensis into a .paf.exe.")}</p>
-      <div className="field-row">
-        <label>{tx("Package name")}</label>
-        <input
-          value={fields.name}
-          onChange={(e) => setFields({ ...fields, name: e.target.value })}
-          placeholder={tx("e.g. FooEditor")}
-          title={tx("The program name shown in the PortableApps.com menu")}
-        />
-      </div>
-      <div className="field-row">
-        <label>{tx("Version")}</label>
-        <input
-          value={fields.version}
-          onChange={(e) => setFields({ ...fields, version: e.target.value })}
-          placeholder="1.0.0"
-        />
-      </div>
-      <div className="field-row">
-        <label>{tx("Publisher (developer)")}</label>
-        <input
-          value={fields.publisher}
-          onChange={(e) => setFields({ ...fields, publisher: e.target.value })}
-          placeholder={tx("e.g. Example Corp")}
-        />
-      </div>
-      <div className="field-row">
-        <label>{tx("Homepage (optional)")}</label>
-        <input
-          value={fields.homepage}
-          onChange={(e) => setFields({ ...fields, homepage: e.target.value })}
-          placeholder={tx("https://example.com")}
-        />
-      </div>
-      <div className="field-row">
-        <label>{tx("Description (optional)")}</label>
-        <input
-          value={fields.description}
-          onChange={(e) => setFields({ ...fields, description: e.target.value })}
-          placeholder={tx("Portable version of Foo Editor")}
-        />
-      </div>
-      <div className="field-row">
-        <label>{tx("Main executable")}</label>
-        <select
-          value={fields.startExe}
-          onChange={(e) => setFields({ ...fields, startExe: e.target.value })}
-        >
-          <option value="">{tx("(auto-detect)")}</option>
-          {exes.map((exe) => (
-            <option key={exe} value={path.basename(exe)}>
-              {path.basename(exe)}
-            </option>
-          ))}
-        </select>
-        {exes.length === 0 && <span className="muted">{tx("No executable found in program files.")}</span>}
-      </div>
-      <p className="footnote">{tx("After generating, place a PortableApps.com launcher executable in the package folder and compile the .nsi script with NSIS (makensis) to produce the .paf.exe installer.")}</p>
-    </Dialog>
-  );
-}
-
-// Program detail pane: a read-only view of everything Purgeon knows about one program.
 export function ProgramDetailDialog({ program, insight = {}, sizes = {}, onClose }) {
   const sig = insight?.signature || 'Unknown';
   const signer = insight?.signer || '';

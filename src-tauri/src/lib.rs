@@ -551,11 +551,7 @@ fn read_text(path: String) -> Result<String, String> {
 
 #[tauri::command]
 fn write_text(path: String, contents: String) -> Result<(), String> {
-    security::checked_path(&path)?;
-    if let Some(parent) = Path::new(&path).parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    fs::write(path, contents).map_err(|e| e.to_string())
+    atomic_file::write_in_place(&path, contents.as_bytes(), false)
 }
 
 #[tauri::command]
@@ -887,16 +883,7 @@ async fn sha256_files(paths: Vec<String>) -> Vec<String> {
 /// Appends text to a file (the command log), creating it and its folder if needed.
 #[tauri::command]
 fn append_text(path: String, contents: String) -> Result<(), String> {
-    security::checked_path(&path)?;
-    if let Some(parent) = Path::new(&path).parent() {
-        let _ = fs::create_dir_all(parent);
-    }
-    fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(&path)
-        .and_then(|mut f| f.write_all(contents.as_bytes()))
-        .map_err(|e| e.to_string())
+    atomic_file::write_in_place(&path, contents.as_bytes(), true)
 }
 /// When each uninstall entry was last written (ms since 1970), keyed like the program list
 /// ("HKLM\SOFTWARE\...\Uninstall\X"). Programs written within a minute or two of each other were
@@ -1361,6 +1348,9 @@ fn cancel_snapshot() {
 
 static ERASE_CANCELLED: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
+#[cfg(test)]
+mod file_mutation_tests;
+
 /// Asks an in-progress secure erase to stop; the file being erased is left
 /// partially overwritten and is NOT deleted.
 #[tauri::command]
@@ -1376,6 +1366,7 @@ fn cancel_erase() {
 /// overwrite with, and it keeps the crate free of a random-number dependency.
 #[tauri::command]
 async fn secure_erase_file(path: String, passes: Vec<String>) -> Result<(), String> {
+    ERASE_CANCELLED.store(false, std::sync::atomic::Ordering::SeqCst);
     security::checked_path(&path)?;
     tauri::async_runtime::spawn_blocking(move || erase_file_inner(path, passes))
         .await
@@ -1383,6 +1374,22 @@ async fn secure_erase_file(path: String, passes: Vec<String>) -> Result<(), Stri
 }
 
 fn erase_file_inner(path: String, passes: Vec<String>) -> Result<(), String> {
+    erase_file_with_hooks(
+        path,
+        passes,
+        || ERASE_CANCELLED.load(std::sync::atomic::Ordering::SeqCst),
+        || {},
+        || {},
+    )
+}
+
+fn erase_file_with_hooks(
+    path: String,
+    passes: Vec<String>,
+    cancelled: impl Fn() -> bool,
+    before_open: impl FnOnce(),
+    after_flush: impl FnOnce(),
+) -> Result<(), String> {
     use std::io::{Seek, SeekFrom, Write};
     use std::os::windows::fs::OpenOptionsExt;
     use std::os::windows::io::AsRawHandle;
@@ -1394,8 +1401,6 @@ fn erase_file_inner(path: String, passes: Vec<String>) -> Result<(), String> {
     {
         return Err("Invalid erase pattern".into());
     }
-    ERASE_CANCELLED.store(false, std::sync::atomic::Ordering::SeqCst);
-    let cancelled = || ERASE_CANCELLED.load(std::sync::atomic::Ordering::SeqCst);
     let md = std::fs::symlink_metadata(&path).map_err(|e| e.to_string())?;
     if md.file_type().is_symlink() {
         return Err("Links are not erased — erase the real file instead".to_string());
@@ -1403,7 +1408,8 @@ fn erase_file_inner(path: String, passes: Vec<String>) -> Result<(), String> {
     if !md.is_file() {
         return Err("Not a file".to_string());
     }
-    let len = md.len();
+    before_open();
+    let _parent = atomic_file::pin_existing_parent(Path::new(&path))?;
     let mut seed = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos() as u64)
@@ -1448,6 +1454,7 @@ fn erase_file_inner(path: String, passes: Vec<String>) -> Result<(), String> {
         return Err("Hardlinks and reparse points cannot be erased".into());
     }
     security::verify_handle_path(&file, &path)?;
+    let len = file.metadata().map_err(|e| e.to_string())?.len();
     let mut buf = vec![0u8; 1 << 20];
     for pass in &passes {
         if cancelled() {
@@ -1472,6 +1479,10 @@ fn erase_file_inner(path: String, passes: Vec<String>) -> Result<(), String> {
             written += n as u64;
         }
         file.sync_all().map_err(|e| e.to_string())?;
+    }
+    after_flush();
+    if cancelled() {
+        return Err("cancelled".into());
     }
     #[link(name = "kernel32")]
     extern "system" {

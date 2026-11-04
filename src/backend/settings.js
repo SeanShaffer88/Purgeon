@@ -26,6 +26,7 @@ export const DEFAULT_SETTINGS = {
 };
 
 export const settingsFile = () => path.join(sys.info.dataDir, 'settings.json');
+const clone = (value) => JSON.parse(JSON.stringify(value));
 
 // Settings are read by many backend calls, so the parsed file is cached and only
 // re-read when the file's modified time changes; edits made outside the app are
@@ -42,14 +43,14 @@ const statMtime = async (file) => {
 async function refreshCache(next, file = settingsFile()) {
   const mtime = await statMtime(file);
   if (mtime === null) { invalidateCache(); return; }
-  cachedValue = { ...DEFAULT_SETTINGS, ...next }; cachedMtime = mtime; cachedFile = file;
+  cachedValue = clone({ ...DEFAULT_SETTINGS, ...next }); cachedMtime = mtime; cachedFile = file;
 }
 async function readSettingsInternal({ fresh = false, serialized = false } = {}) {
   const file = settingsFile(), mtime = await statMtime(file);
-  if (!fresh && mtime !== null && cachedValue && cachedFile === file && cachedMtime === mtime) return { ...cachedValue };
+  if (!fresh && mtime !== null && cachedValue && cachedFile === file && cachedMtime === mtime) return clone(cachedValue);
   try {
     const text = await sys.readOptionalText(file);
-    if (text === null) { invalidateCache(); return { ...DEFAULT_SETTINGS }; }
+    if (text === null) { invalidateCache(); return clone(DEFAULT_SETTINGS); }
     if (typeof text !== 'string') throw new Error('Invalid optional settings read response');
     let parsed;
     try { parsed = JSON.parse(text); if (!plainSettings(parsed)) throw new Error('Settings must be an object'); }
@@ -59,12 +60,12 @@ async function readSettingsInternal({ fresh = false, serialized = false } = {}) 
       if (!serialized) return await serializeWrite(() => readSettingsInternal({ fresh: true, serialized: true }));
       const copy = await datadamage.quarantine(file, text);
       if (await sys.readOptionalText(copy) !== text) throw new Error('Damaged settings copy could not be verified; original settings were retained');
-      const value = { ...DEFAULT_SETTINGS };
+      const value = clone(DEFAULT_SETTINGS);
       await sys.writeTextAtomic(file, JSON.stringify(value, null, 2));
       await refreshCache(value, file);
-      return { ...value };
+      return clone(value);
     }
-    const value = { ...DEFAULT_SETTINGS, ...parsed, language: 'en' };
+    const value = { ...clone(DEFAULT_SETTINGS), ...parsed, language: 'en' };
     // Migrate legacy plaintext only after a successful, valid data read.
     if (typeof value.encryptionKey === 'string' && value.encryptionKey) {
       if (!serialized) return await serializeWrite(() => readSettingsInternal({ fresh: true, serialized: true }));
@@ -74,7 +75,7 @@ async function readSettingsInternal({ fresh = false, serialized = false } = {}) 
       await refreshCache(value, file);
     } else if (mtime !== null) { cachedValue = value; cachedMtime = mtime; cachedFile = file; }
     else invalidateCache();
-    return { ...value };
+    return clone(value);
   } catch (error) { invalidateCache(); throw new Error(`Settings could not be read or preserved: ${error.message}. Restore access or review the retained settings before changing them.`); }
 }
 export const readSettings = () => readSettingsInternal();
@@ -90,6 +91,7 @@ const serializeWrite = (fn) => {
 };
 
 export function writeSettings(patch) {
+  patch = clone(patch);
   return serializeWrite(async () => {
     // Migrate an older plaintext secret before applying a replacement secret.
     // Doing this after secretSet would silently restore the old password.
@@ -109,6 +111,7 @@ export function writeSettings(patch) {
 }
 
 export function replaceSettings(next) {
+  next = clone(next);
   return serializeWrite(async () => {
     await readSettingsInternal({ fresh: true, serialized: true });
     next = { ...next };

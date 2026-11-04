@@ -208,7 +208,7 @@ pub struct ResultView {
     ok: bool,
     journal_id: String,
 }
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Journal {
     version: u8,
@@ -260,7 +260,9 @@ fn now_ms() -> Result<u64, String> {
         .as_millis() as u64)
 }
 fn deadline(envelope: &Envelope) -> Result<(), String> {
-    let now = now_ms()?;
+    deadline_at(envelope, now_ms()?)
+}
+fn deadline_at(envelope: &Envelope, now: u64) -> Result<(), String> {
     if !valid_id(&envelope.plan_id)
         || !valid_sid(&envelope.caller_sid)
         || envelope.parent_pid == 0
@@ -283,7 +285,10 @@ trait Executor {
     fn confirm(&mut self, envelope: &Envelope) -> Result<(), String>;
     fn read(&mut self, id: &str) -> Result<Option<Journal>, String>;
     fn save(&mut self, id: &str, journal: &Journal) -> Result<(), String>;
-    fn apply(&mut self, before: &Core, after: &Core) -> Result<(), String>;
+    fn apply(&mut self, envelope: &Envelope) -> Result<(), String>;
+    fn authority(&mut self, envelope: &Envelope) -> Result<(), String> {
+        deadline(envelope)
+    }
 }
 struct NativeExecutor;
 fn journal_hash() -> String {
@@ -300,7 +305,8 @@ impl Executor for NativeExecutor {
         broker::confirm_native(&format!("{}\n\nCurrent loader: {}\nBoot manager: {}\nSafeBoot: {:?} -> {:?}\nAlternate shell (preserved): {:?}\nBoot-menu timeout: {:?} -> {:?}\nNone means the element is absent; absent timeout means indefinite waiting.\n\nNative recovery journal: {}",summary(&envelope.request),envelope.before.loader_id,envelope.before.manager_id,envelope.before.safe_boot,envelope.after.safe_boot,envelope.before.alternate_shell,envelope.before.timeout,envelope.after.timeout,envelope.plan_id))
     }
     fn read(&mut self, id: &str) -> Result<Option<Journal>, String> {
-        if id != "head" && !valid_id(id) {
+        let record_id = id.strip_prefix("refused-").unwrap_or(id);
+        if id != "head" && !valid_id(record_id) {
             return Err("Invalid Boot journal key".into());
         }
         state_store::read(
@@ -313,7 +319,7 @@ impl Executor for NativeExecutor {
         .map(|bytes| {
             let journal: Journal = serde_json::from_slice(&bytes)
                 .map_err(|e| format!("Boot journal is unreadable; evidence retained: {e}"))?;
-            journal.validate(if id == "head" { &journal.id } else { id })?;
+            journal.validate(if id == "head" { &journal.id } else { record_id })?;
             Ok(journal)
         })
         .transpose()
@@ -329,14 +335,20 @@ impl Executor for NativeExecutor {
             &serde_json::to_vec(journal).map_err(|e| e.to_string())?,
         )
     }
-    fn apply(&mut self, before: &Core, after: &Core) -> Result<(), String> {
-        run_bcd(Some((before, after))).map(|_| ())
+    fn apply(&mut self, envelope: &Envelope) -> Result<(), String> {
+        run_bcd(Some(envelope)).map(|_| ())
+    }
+    fn authority(&mut self, envelope: &Envelope) -> Result<(), String> {
+        deadline(envelope)?;
+        broker::require_live_parent(envelope.parent_pid)
     }
 }
 fn available(executor: &mut impl Executor) -> Result<(), String> {
     if let Some(head) = executor.read("head")? {
         head.validate(&head.id)?;
-        if !head.completed {
+        if !head.completed
+            && executor.read(&format!("refused-{}", head.id))?.as_ref() != Some(&head)
+        {
             return Err(format!("An earlier Boot operation has an uncertain result. Native journal {} is retained; review it before further Boot changes",head.id));
         }
     }
@@ -413,8 +425,23 @@ fn perform(
     };
     executor.save(&journal.id, &journal)?;
     executor.save("head", &journal)?;
+    if let Err(error) = executor.authority(envelope) {
+        // A separate protected receipt records that apply was never entered.
+        // Keep the original intent unchanged, and never call it completed.
+        executor.save(&format!("refused-{}", journal.id), &journal).map_err(|save_error| {
+            format!("Boot refused before apply: {error}; could not save refusal evidence for {}: {save_error}", journal.id)
+        })?;
+        return Err(format!(
+            "Boot refused before apply; nothing changed: {error}"
+        ));
+    }
     let outcome: Result<ResultView, String> = (|| {
-        executor.apply(&envelope.before, &envelope.after)?;
+        if let Err(error) = executor.apply(envelope) {
+            if error.starts_with("BOOT_REFUSED_BEFORE_APPLY:") {
+                executor.save(&format!("refused-{}", journal.id), &journal)?;
+            }
+            return Err(error);
+        }
         if executor.inventory()?.core != envelope.after {
             return Err("Boot readback did not match the exact target".into());
         }
@@ -442,7 +469,13 @@ fn perform(
             journal_id: journal.id.clone(),
         })
     })();
-    outcome.map_err(|error|format!("Boot operation failed or is uncertain; native journal {} is retained and further changes are blocked until reviewed: {error}",journal.id))
+    outcome.map_err(|error| {
+        if error.starts_with("BOOT_REFUSED_BEFORE_APPLY:") {
+            format!("Boot refused before apply; nothing changed: {error}")
+        } else {
+            format!("Boot operation failed or is uncertain; native journal {} is retained and further changes are blocked until reviewed: {error}",journal.id)
+        }
+    })
 }
 
 pub fn state() -> Result<State, String> {
@@ -757,9 +790,11 @@ pub(crate) fn helper(pipe_name: &str) -> Result<(), String> {
 fn local_inventory() -> Result<Inventory, String> {
     run_bcd(None)
 }
-fn run_bcd(change: Option<(&Core, &Core)>) -> Result<Inventory, String> {
+fn run_bcd(change: Option<&Envelope>) -> Result<Inventory, String> {
     let payload = match change {
-        Some((before, after)) => serde_json::json!({"before":before,"after":after}),
+        Some(envelope) => {
+            serde_json::json!({"before":envelope.before,"after":envelope.after,"parentPid":envelope.parent_pid,"deadlineUtcMs":envelope.deadline_utc_ms})
+        }
         None => serde_json::json!(null),
     };
     let encoded: Vec<u8> = BCD_SCRIPT
@@ -789,6 +824,11 @@ fn run_bcd(change: Option<(&Core, &Core)>) -> Result<Inventory, String> {
     if !output.status.success() {
         return Err(if output.status.code() == Some(5) {
             "BOOT_ACCESS_DENIED: Windows denied native BCD access".into()
+        } else if output.status.code() == Some(6) {
+            format!(
+                "BOOT_REFUSED_BEFORE_APPLY: {}",
+                String::from_utf8_lossy(&output.stderr).trim()
+            )
         } else {
             format!(
                 "Windows BCD provider failed: {}",
@@ -901,6 +941,15 @@ try {
       $object=$script:loader.Object;$type=[uint32]0x25000080;$value=$target.safeBoot
     } elseif($timeoutChanged){$object=$script:manager.Object;$type=[uint32]0x25000004;$value=$target.timeout}
     if($safeChanged -or $timeoutChanged){
+      # Provider discovery and readback above can take time. Recheck authority
+      # at the actual mutation boundary, including Undo's recovery mutation.
+      try {
+        $now=[DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
+        if([uint64]$request.deadlineUtcMs -lt $now -or [uint64]$request.deadlineUtcMs -gt ($now+120000)){throw 'Boot plan expired before provider apply'}
+        if([int]$request.parentPid -le 0){throw 'Invalid Boot parent before provider apply'}
+        $parent=[Diagnostics.Process]::GetProcessById([int]$request.parentPid)
+        try {if($parent.HasExited){throw 'Boot parent exited before provider apply'}} finally {$parent.Dispose()}
+      } catch {[Console]::Error.WriteLine($_.Exception.Message);exit 6}
       if($null -eq $value){$null=Invoke-Bcd $object 'DeleteElement' @{Type=$type}}
       else{$null=Invoke-Bcd $object 'SetIntegerElement' @{Type=$type;Integer=[uint64]$value}}
       $actual=Read-Core
@@ -1003,6 +1052,8 @@ mod tests {
         reads: usize,
         change_at: usize,
         writes: usize,
+        lose_authority_at: &'static str,
+        authority_lost: bool,
     }
     impl Fake {
         fn new(core: Core) -> Self {
@@ -1014,6 +1065,8 @@ mod tests {
                 reads: 0,
                 change_at: usize::MAX,
                 writes: 0,
+                lose_authority_at: "",
+                authority_lost: false,
             }
         }
     }
@@ -1021,6 +1074,9 @@ mod tests {
         fn inventory(&mut self) -> Result<Inventory, String> {
             self.trace.push("read".into());
             self.reads += 1;
+            if self.reads == 3 && self.lose_authority_at.starts_with("inventory") {
+                self.authority_lost = true;
+            }
             if self.reads == self.change_at {
                 self.core.loader_id = "{66666666-2222-3333-4444-555555555555}".into();
             }
@@ -1043,6 +1099,7 @@ mod tests {
         fn save(&mut self, id: &str, journal: &Journal) -> Result<(), String> {
             self.trace.push(format!("save:{id}:{}", journal.completed));
             if (self.fail == "intent" && !journal.completed)
+                || (self.fail == "refusal" && id.starts_with("refused-"))
                 || (self.fail == "head-intent" && id == "head" && !journal.completed)
                 || (self.fail == "complete" && journal.completed)
                 || (self.fail == "head-complete" && id == "head" && journal.completed)
@@ -1050,13 +1107,30 @@ mod tests {
                 return Err("journal write failed".into());
             }
             self.journals.insert(id.into(), journal.clone());
+            if id == "head" && self.lose_authority_at.starts_with("journal") {
+                self.authority_lost = true;
+            }
             Ok(())
         }
-        fn apply(&mut self, before: &Core, after: &Core) -> Result<(), String> {
-            assert_eq!(self.core, *before);
+        fn authority(&mut self, envelope: &Envelope) -> Result<(), String> {
+            if self.authority_lost {
+                if self.lose_authority_at.ends_with("clock") {
+                    deadline_at(envelope, envelope.deadline_utc_ms + 1)
+                } else {
+                    Err("Injected dead parent".into())
+                }
+            } else {
+                deadline(envelope)
+            }
+        }
+        fn apply(&mut self, envelope: &Envelope) -> Result<(), String> {
+            assert_eq!(self.core, envelope.before);
+            if self.fail == "provider-refused" {
+                return Err("BOOT_REFUSED_BEFORE_APPLY: injected provider expiry".into());
+            }
             self.writes += 1;
             self.trace.push("write".into());
-            self.core = after.clone();
+            self.core = envelope.after.clone();
             if self.fail == "after-write" {
                 return Err("provider failed after write".into());
             }
@@ -1065,6 +1139,84 @@ mod tests {
             }
             Ok(())
         }
+    }
+    #[test]
+    fn provider_authority_boundary_parses_and_refuses_expiry_and_dead_parent() {
+        use std::os::windows::process::CommandExt;
+        let start = BCD_SCRIPT.find("      try {\n        $now=").unwrap();
+        let end = BCD_SCRIPT[start..]
+            .find("      if($null -eq $value)")
+            .unwrap()
+            + start;
+        let authority = &BCD_SCRIPT[start..end];
+        for (parent, expiry, expected) in [
+            (std::process::id(), now_ms().unwrap() + TTL_MS, 0),
+            (std::process::id(), 0, 6),
+            (0, now_ms().unwrap() + TTL_MS, 6),
+        ] {
+            let script = format!(
+                "$request=[pscustomobject]@{{parentPid={parent};deadlineUtcMs={expiry}}};\n{authority}"
+            );
+            let encoded: Vec<u8> = script.encode_utf16().flat_map(u16::to_le_bytes).collect();
+            let output = Command::new(crate::windows_tools::system_file("powershell.exe").unwrap())
+                .args([
+                    "-NoProfile",
+                    "-NonInteractive",
+                    "-EncodedCommand",
+                    &STANDARD.encode(encoded),
+                ])
+                .creation_flags(0x0800_0000)
+                .output()
+                .unwrap();
+            assert_eq!(
+                output.status.code(),
+                Some(expected),
+                "{}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+        }
+    }
+
+    #[test]
+    fn late_authority_loss_never_applies_and_retains_known_refusal() {
+        for phase in [
+            "inventory-clock",
+            "journal-clock",
+            "inventory-parent",
+            "journal-parent",
+        ] {
+            let plan = envelope(Request::Timeout { seconds: 5 }, core());
+            let mut fake = Fake::new(plan.before.clone());
+            fake.lose_authority_at = phase;
+            let error = perform(&plan, &mut fake, || Ok(())).unwrap_err();
+            assert!(error.contains("nothing changed"), "{error}");
+            assert_eq!(fake.writes, 0);
+            assert!(!fake.journals["head"].completed);
+            assert_eq!(
+                fake.journals[&format!("refused-{}", plan.plan_id)],
+                fake.journals["head"]
+            );
+            available(&mut fake).unwrap();
+            // A receipt for a different intent cannot clear uncertainty.
+            fake.journals.get_mut("head").unwrap().id = "b".repeat(32);
+            assert!(available(&mut fake).is_err());
+        }
+        let plan = envelope(Request::Timeout { seconds: 5 }, core());
+        let mut fake = Fake::new(plan.before.clone());
+        fake.fail = "provider-refused";
+        assert!(perform(&plan, &mut fake, || Ok(()))
+            .unwrap_err()
+            .contains("nothing changed"));
+        assert_eq!(fake.writes, 0);
+        available(&mut fake).unwrap();
+        let mut fake = Fake::new(plan.before.clone());
+        fake.lose_authority_at = "journal-clock";
+        fake.fail = "refusal";
+        assert!(perform(&plan, &mut fake, || Ok(()))
+            .unwrap_err()
+            .contains("could not save refusal"));
+        assert_eq!(fake.writes, 0);
+        assert!(available(&mut fake).is_err());
     }
     #[test]
     fn requests_are_closed_and_bounded_and_unresolved_provider_values_fail_closed() {

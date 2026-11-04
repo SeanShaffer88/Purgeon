@@ -1,5 +1,28 @@
 # Quality and release gate
 
+## 2026-11-03: project audit, final local gates passed
+
+Final local gates passed: 562 JavaScript tests (zero failures or skips), 141
+native unit plus two manifest tests (143 passed, two ignored), lint, typecheck,
+production build, formatting and strict locked all-target x64 MSVC Clippy.
+Every process and DevTools runner exited 0; the earlier `npm ci` repair exited 0.
+Final independent review `20261104T000933Z-5e11f3164e15` accepted the bounded
+PortableApps.com/PAF generation removal with no blockers. Generic portable
+support remains. Earlier native/UI and backend acceptance retains its scoped limits.
+
+The [project audit ledger](docs/PROJECT_AUDIT.md) records the checks and remaining
+gaps. Fixed `npm run perf` exited 0 (process and runner) on Node 26.13.0:
+509 ms build, 1,156,286 asset bytes across 53 files, and 34,307 ms test wall time
+with 562 passed and zero failed. Against the actual pre-removal audited dirty
+source build (1,174,736 bytes, 53 files), assets decreased 18,450 bytes (1.57%).
+These measurements establish no application CPU/idle or speed improvement.
+
+Production WebView/native coverage, the LLVM denominator discrepancy and the
+85% core / 70% overall coverage floors remain unresolved. Privileged runtime,
+installer lifecycle and accessibility qualification remain incomplete. GitHub CI,
+artifact verification and merge are pending; local gates do not qualify a release.
+Historical records below retain their original scope and dates.
+
 ## 2026-10-29: resource and latest UI/defaults validation
 
 All 25 approved resource source changes passed independent review. The latest

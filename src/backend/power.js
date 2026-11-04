@@ -101,10 +101,13 @@ const TIMEOUT_LABELS = { screen: 'Screen off', sleep: 'Sleep', hibernate: 'Hiber
 export async function setTimeout(kind, acMin, dcMin, previous) {
   const flags = TIMEOUT_FLAGS[kind];
   if (!flags) throw new Error('Unknown power timing.');
-  for (const [flag, value] of [[flags[0], acMin], [flags[1], dcMin]]) {
+  for (const value of [acMin, dcMin]) {
     if (!Number.isInteger(value) || value < 0 || value > 6000) throw new Error('Choose a time between never and 100 hours.');
-    await cfg(['/change', flag, String(value)]);
   }
+  await cfg(['/change', flags[0], String(acMin)]);
+  await cfg(['/change', flags[1], String(dcMin)]).catch((error) => {
+    throw new Error(`Power timing change may be partial: AC command completed; DC command failed: ${error.message}. Refresh before retrying.`);
+  });
   note({
     type: 'Power', title: `${TIMEOUT_LABELS[kind]} timing changed`,
     detail: `Plugged in: ${acMin === 0 ? 'never' : acMin + ' min'} · On battery: ${dcMin === 0 ? 'never' : dcMin + ' min'}.`,
@@ -115,8 +118,12 @@ export async function setTimeout(kind, acMin, dcMin, previous) {
 
 async function setIndex(sub, setting, ac, dc) {
   await cfg(['/setacvalueindex', 'SCHEME_CURRENT', sub, setting, String(ac)]);
-  await cfg(['/setdcvalueindex', 'SCHEME_CURRENT', sub, setting, String(dc)]);
-  await cfg(['/setactive', 'SCHEME_CURRENT']); // re-apply so the change takes hold now
+  await cfg(['/setdcvalueindex', 'SCHEME_CURRENT', sub, setting, String(dc)]).catch((error) => {
+    throw new Error(`Power change may be partial: AC command completed; DC command failed: ${error.message}. Refresh before retrying.`);
+  });
+  await cfg(['/setactive', 'SCHEME_CURRENT']).catch((error) => {
+    throw new Error(`Power change may be partial: AC and DC commands completed; scheme activation failed: ${error.message}. Refresh before retrying.`);
+  });
 }
 
 export async function setBatterySaver(pct, previous) {
