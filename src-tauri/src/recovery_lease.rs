@@ -276,6 +276,30 @@ pub fn release(token: &str) -> Result<(), String> {
 mod tests {
     use super::*;
     #[test]
+    fn short_spelling_keeps_configured_parent_pins() {
+        use std::os::windows::ffi::OsStrExt;
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn GetShortPathNameW(long: *const u16, short: *mut u16, size: u32) -> u32;
+        }
+        let root = std::env::temp_dir().join(format!(
+            "purgeon-recovery-short-{}",
+            crate::broker::random_id().unwrap()
+        ));
+        std::fs::create_dir(&root).unwrap();
+        let long: Vec<u16> = root.as_os_str().encode_wide().chain(Some(0)).collect();
+        let mut short = vec![0u16; 32768];
+        let n = unsafe { GetShortPathNameW(long.as_ptr(), short.as_mut_ptr(), short.len() as u32) }
+            as usize;
+        assert!(n > 0 && n < short.len());
+        let alias = std::path::PathBuf::from(String::from_utf16(&short[..n]).unwrap());
+        assert_ne!(alias, root, "Fixture requires a distinct short-path alias");
+        let token = acquire(&alias).unwrap();
+        validate(&token).unwrap();
+        release(&token).unwrap();
+        std::fs::remove_dir_all(root).unwrap();
+    }
+    #[test]
     fn ordinary_exec_outlives_recovery_deadline() {
         if isolated("recovery_lease::tests::ordinary_exec_outlives_recovery_deadline") {
             return;

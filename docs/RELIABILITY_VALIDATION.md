@@ -5,6 +5,17 @@ tree on 2026-11-03. Local validation is recorded below; coverage and runtime gat
 the release gate and [DEVELOPMENT.md](DEVELOPMENT.md) for historical limitations.
 Passing focused tests does not establish final native or packaged behavior.
 
+The original CI run had seven native failures. The two-file CI short-path
+correction passed local root checks: 168 native tests (166 unit plus two manifest,
+two ignored), formatting and strict locked all-target x64 Clippy, all exit 0
+(`../analysis-logs/ten-ci-corrected-native-checks.json`). Review
+`20261104T042931Z-b6af90967538` accepted the implementation and requested the
+distinct-alias fixture assertion, now added. Its focused rerun and new CI are
+pending. The unchanged JavaScript suite passed 594 tests. Coverage and package
+results below are previous-snapshot evidence predating the two-file correction;
+no new coverage percentage or packaged pass is claimed. The 85% core / 70%
+overall coverage floors remain unchanged and unmet.
+
 ## Status by priority
 
 | Priority | Evidence and remaining work |
@@ -20,7 +31,7 @@ Passing focused tests does not establish final native or packaged behavior.
 | 9. Native coverage accounting and measurement | Fresh collection maps all 32 Rust files and cross-checks exact JSON segments against LCOV. Alias filters and restart-query descriptors are corrected. Accounting completes with no incomplete reasons but exits 1 (`below-floor`); see measurements below. No production WebView workload was collected. |
 | 10. Large backend benchmarks | All 210 child runs passed across ten fresh-process repeats and 1,000/10,000/100,000-item fixtures. The actual backend runs through an in-memory adapter with correctness, cancellation, denial and alias checks. These measurements do not establish real-disk performance, application budgets or an improvement over a prior build. |
 
-## Recorded local checks
+## Recorded local checks (previous snapshot before the CI short-path correction)
 
 The final Node run passed 594/594 tests (execution exit 0). Its collector exit 2
 reflects only the expected missing native input before combined accounting.

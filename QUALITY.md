@@ -3,12 +3,16 @@
 ## 2026-11-03: ten reliability priorities, validation in progress
 
 See [Reliability validation](docs/RELIABILITY_VALIDATION.md) for scoped evidence.
-Final local checks passed: 594 JavaScript tests; 167 native tests (165 unit plus
-two manifest, two ignored); formatting; strict locked all-target x64 Clippy;
-lint, typecheck and frontend build. The corrected candidate build, safe CLI suite and package regressions all exited 0 (process and runner).
+The original CI run had seven native failures. The two-file CI short-path
+correction passed local root checks: 168 native tests (166 unit plus two manifest,
+two ignored), formatting and strict locked all-target x64 Clippy, all exit 0
+(`../analysis-logs/ten-ci-corrected-native-checks.json`). New CI is pending.
+The unchanged JavaScript suite passed 594 tests; lint, typecheck and frontend
+build passed. Previous-snapshot candidate build, safe CLI suite and package
+regressions exited 0 before the two-file correction; they do not validate it.
 Earlier candidate CLI 9/9 and static package checks passed before that rebuild.
 
-Fresh combined coverage accounting exits 1 (`below-floor`), with no incomplete
+Previous-snapshot combined coverage accounting exits 1 (`below-floor`), with no incomplete
 reasons and all 32 Rust files mapped. Diagnostic overall/core results are 35.26% /
 65.16% JavaScript and 34.81% / 34.84% Rust. No production WebView workload was
 collected. The required 70% overall / 85% core floors remain blockers; do not

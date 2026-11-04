@@ -151,12 +151,25 @@ pub(crate) struct Parents(Vec<(PathBuf, File)>);
 impl Parents {
     pub(crate) fn open(path: &Path) -> Result<Self, String> {
         let mut pins = Vec::new();
-        for parent in path
-            .parent()
-            .ok_or("Replacement has no parent")?
-            .ancestors()
-        {
-            pins.push((parent.to_path_buf(), open(parent, true, ATTR, 3)?));
+        let parent = path.parent().ok_or("Replacement has no parent")?;
+        let canonical = fs::canonicalize(parent).map_err(|e| e.to_string())?;
+        let canonical = PathBuf::from(text(&canonical)?.trim_start_matches("\\\\?\\"));
+        let parents: Vec<_> = parent.ancestors().collect();
+        let canonical_parents: Vec<_> = canonical.ancestors().collect();
+        if parents.len() != canonical_parents.len() {
+            return Err("Replacement ancestor path changed".into());
+        }
+        for (parent, canonical) in parents.into_iter().zip(canonical_parents) {
+            let file = OpenOptions::new()
+                .access_mode(ATTR)
+                .share_mode(3)
+                .custom_flags(FLAGS)
+                .open(parent)
+                .map_err(|e| e.to_string())?;
+            // Open every supplied ancestor so canonicalization cannot hide a redirect.
+            identity(&file, true)?;
+            verify_path(&file, canonical)?;
+            pins.push((canonical.to_path_buf(), file));
         }
         Ok(Self(pins))
     }
