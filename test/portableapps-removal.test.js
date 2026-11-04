@@ -44,10 +44,10 @@ test('UI/help have no generator entry points and generic portable API remains wi
   for (const p of ['src/App.jsx', 'src/more.jsx', 'src/tips.js', 'src/cli.js', 'src/cli-help.json', 'src/backend/api.js']) {
     assert.doesNotMatch(read(p), /portableapps:|\/portableapps\.js|'portableapps'|PortableAppsDialog|MakePortable|makePortable|paf\.exe|makensis/i, p);
   }
-  assert.equal(fs.existsSync(new URL('../src/backend/portableapps.js', import.meta.url)), false);
-  const source = read('src/backend/api.js');
+  assert.equal(fs.existsSync(new URL('../packages/purgeon-core/src/internal/portableapps.js', import.meta.url)), false);
+  const source = read('packages/purgeon-core/src/internal/api.js');
   for (const op of ['find', 'addFolder', 'removeFolder', 'checkUpdates', 'register', 'unregister']) assert.ok(source.includes(`'portable:${op}'`));
-  const classifier = read('src/backend/portable-classification.js');
+  const classifier = read('packages/purgeon-core/src/internal/portable-classification.js');
   assert.deepEqual([...classifier.matchAll(/^import .* from '([^']+)'/gm)].map(m => m[1]), ['./winpath.js']);
 });
 

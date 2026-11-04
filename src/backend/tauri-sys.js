@@ -5,6 +5,8 @@ import { invoke } from '@tauri-apps/api/core';
 export async function createTauriSys() {
   const info = /** @type {import('./system-contracts').NativeSystemInfo} */ (await invoke('sys_info'));
   return {
+    openDialog: (options) => import('@tauri-apps/plugin-dialog').then(({ open }) => open(options)),
+    saveDialog: (options) => import('@tauri-apps/plugin-dialog').then(({ save }) => save(options)),
     queryOperation: (request) => invoke('query_operation', { request }),
     selectResource: (selection) => invoke('select_resource', { selection }),
     prepareOperation: (request) => invoke('prepare_operation', { request }),

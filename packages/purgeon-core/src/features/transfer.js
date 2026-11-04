@@ -1,0 +1,10 @@
+import { dispatchFeature } from '../runtime.js';
+export const pickFolder = (arg) => dispatchFeature('transfer:pickFolder', arg);
+export const folder = (arg) => dispatchFeature('transfer:folder', arg);
+export const pickSave = (arg) => dispatchFeature('transfer:pickSave', arg);
+export const pickOpen = (arg) => dispatchFeature('transfer:pickOpen', arg);
+export const classify = (arg) => dispatchFeature('transfer:classify', arg);
+export const read = (arg) => dispatchFeature('transfer:read', arg);
+export const restore = (arg) => dispatchFeature('transfer:restore', arg);
+export const undo = (arg) => dispatchFeature('transfer:undo', arg);
+export const exportList = (arg) => dispatchFeature('transfer:export', arg);

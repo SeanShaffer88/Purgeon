@@ -1,0 +1,14 @@
+import { dispatchFeature } from '../runtime.js';
+export const status = (arg) => dispatchFeature('monitor:status', arg);
+export const pickInstaller = (arg) => dispatchFeature('monitor:pickInstaller', arg);
+export const start = (arg) => dispatchFeature('monitor:start', arg);
+export const launch = (arg) => dispatchFeature('monitor:launch', arg);
+export const finish = (arg) => dispatchFeature('monitor:finish', arg);
+export const poll = (arg) => dispatchFeature('monitor:poll', arg);
+export const list = (arg) => dispatchFeature('monitor:list', arg);
+export const remove = (arg) => dispatchFeature('monitor:remove', arg);
+export const setNotes = (arg) => dispatchFeature('monitor:setNotes', arg);
+export const testInstallStart = (arg) => dispatchFeature('monitor:test-install-start', arg);
+export const testInstallFinish = (arg) => dispatchFeature('monitor:test-install-finish', arg);
+export const revertTestInstall = (arg) => dispatchFeature('monitor:revert-test-install', arg);
+export const attach = (arg) => dispatchFeature('monitor:attach', arg);

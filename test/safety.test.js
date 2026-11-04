@@ -197,7 +197,7 @@ test('StartupApproved flags are read like Task Manager', () => {
 test('PowerShell snippets never use the automatic $args variable', () => {
   // `$args`/`@args` silently splat an empty list in a script block: a restore once ran
   // New-NetFirewallRule with no settings and still reported success.
-  const dir = path.join(here, '..', 'src', 'backend');
+  const dir = path.join(here, '..', 'packages', 'purgeon-core', 'src', 'internal');
   for (const f of fs.readdirSync(dir).filter((n) => n.endsWith('.js'))) {
     const src = fs.readFileSync(path.join(dir, f), 'utf8');
     assert.ok(!/[@$]args\b/.test(src), `${f} uses $args/@args inside PowerShell`);

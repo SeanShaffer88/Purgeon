@@ -1,5 +1,24 @@
 # Development record
 
+## Reusable feature package
+
+See [ADR 001](adr/001-reusable-feature-package.md) and the
+[core consumption guide](../packages/purgeon-core/README.md). Canonical backend
+code and the pure CLI parser live in `packages/purgeon-core/src/internal`;
+application paths are compatibility wrappers. Public feature facades expose fixed
+channels through explicit runtime ownership and serialized approval. Tauri dialog
+methods, the update-exit watcher, DOM language application and CLI dispatch stay
+app-owned. No UI design change is included.
+
+Run `npm run test:package` to pack and install the actual dependency-free artifact
+offline with scripts disabled into a temporary consumer outside the repository. It retains the
+verified tarball and SHA256 under `out/core`; CI also runs this gate. Existing app
+tests continue to test compatibility wrappers; static source assertions inspect
+canonical files. Package sources are included in lint, incremental type checks
+and coverage inventory. Coverage floors and live Windows qualification remain
+unestablished for this extraction. App and core metadata are aligned at
+`1.5.0-alpha.1`; the controller must verify real NSIS filename behavior before release preparation.
+
 ## 2026-10-29: resource and latest UI/defaults validation
 
 All 25 approved resource source changes passed independent review. The latest

@@ -89,11 +89,12 @@ function inventory(root) {
     }
   };
   descend(path.join(root, 'src'), 'javascript');
+  descend(path.join(root, 'packages', 'purgeon-core', 'src'), 'javascript');
   descend(path.join(root, 'src-tauri', 'src'), 'rust');
   for (const filename of ['build.rs','build_support.rs']) if (fs.existsSync(path.join(root, 'src-tauri', filename))) found.push({ path: `src-tauri/${filename}`, language: 'rust' });
   return found.sort((a, b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
 }
-const coreFor = (file, language) => language === 'javascript' ? file.startsWith('src/backend/') || ['src/cli.js','src/cli-args.js'].includes(file) : file.startsWith('src-tauri/src/') && file !== 'src-tauri/src/main.rs';
+const coreFor = (file, language) => language === 'javascript' ? (file.startsWith('src/backend/') || file.startsWith('packages/purgeon-core/src/')) || ['src/cli.js','src/cli-args.js'].includes(file) : file.startsWith('src-tauri/src/') && file !== 'src-tauri/src/main.rs';
 
 // Deliberately narrow lexical proof, not a Rust parser. Only whole top-level
 // #[cfg(test)] mod NAME { ... } spans may be excluded; ambiguity retains lines.
