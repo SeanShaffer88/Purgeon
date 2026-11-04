@@ -304,13 +304,83 @@ mod tests {
     }
     #[test]
     fn root_exit_confirms_descendant_termination_before_return() {
-        let mut command = child(
-            "$s=New-Object Diagnostics.ProcessStartInfo;$s.FileName=([Environment]::SystemDirectory+'\\WindowsPowerShell\\v1.0\\powershell.exe');$s.Arguments='-NoProfile -NonInteractive -Command \"Start-Sleep -Seconds 30\"';$s.UseShellExecute=$false;$s.CreateNoWindow=$true;$p=[Diagnostics.Process]::Start($s);[Console]::Out.Write($p.Id)",
+        use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut std::ffi::c_void;
+            fn WaitForSingleObject(handle: *mut std::ffi::c_void, milliseconds: u32) -> u32;
+        }
+        struct Markers(std::path::PathBuf);
+        impl Drop for Markers {
+            fn drop(&mut self) {
+                for stage in ["admission", "pid", "pid-ready", "release"] {
+                    let _ = std::fs::remove_file(self.0.join(stage));
+                }
+                let _ = std::fs::remove_dir(&self.0);
+            }
+        }
+        let directory = std::env::temp_dir().join(format!(
+            "purgeon-root-exit-{}",
+            crate::broker::random_id().unwrap()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let markers = Markers(directory);
+        let [admission, pid, pid_ready, release] = ["admission", "pid", "pid-ready", "release"]
+            .map(|stage| markers.0.join(stage).to_string_lossy().replace('\'', "''"));
+        let mut command = child(&format!(
+            "$ErrorActionPreference='Stop';$deadline=[DateTime]::UtcNow.AddSeconds(15);while(-not [IO.File]::Exists('{admission}')){{if([DateTime]::UtcNow -ge $deadline){{throw 'admission timeout'}};Start-Sleep -Milliseconds 10}};$s=New-Object Diagnostics.ProcessStartInfo;$s.FileName=([Environment]::SystemDirectory+'\\WindowsPowerShell\\v1.0\\powershell.exe');$s.Arguments='-NoProfile -NonInteractive -Command \"Start-Sleep -Seconds 60\"';$s.UseShellExecute=$false;$s.CreateNoWindow=$true;$p=[Diagnostics.Process]::Start($s);[IO.File]::WriteAllText('{pid}',[string]$p.Id);[IO.File]::Open('{pid_ready}',[IO.FileMode]::CreateNew).Dispose();$deadline=[DateTime]::UtcNow.AddSeconds(15);while(-not [IO.File]::Exists('{release}')){{if([DateTime]::UtcNow -ge $deadline){{throw 'release timeout'}};Start-Sleep -Milliseconds 10}}"
+        ));
+        let mut descendant = None;
+        let result = execute_authorized(
+            &mut command,
+            None,
+            Duration::from_secs(40),
+            OUTPUT_LIMIT,
+            |_| {
+                std::fs::File::create_new(markers.0.join("admission"))
+                    .map_err(|error| format!("admission write: {error}"))?;
+                let deadline = Instant::now() + Duration::from_secs(15);
+                while !markers.0.join("pid-ready").exists() {
+                    if Instant::now() >= deadline {
+                        return Err("descendant PID publication timeout".into());
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                let pid = std::fs::read_to_string(markers.0.join("pid"))
+                    .map_err(|error| format!("descendant PID read: {error}"))?
+                    .parse::<u32>()
+                    .map_err(|error| format!("descendant PID parse: {error}"))?;
+                // Capture the original descendant before allowing root exit.
+                // Reopening its PID after cleanup can observe a different process.
+                let handle = unsafe { OpenProcess(0x00100000, 0, pid) };
+                if handle.is_null() {
+                    return Err(format!(
+                        "descendant OpenProcess: {}",
+                        io::Error::last_os_error()
+                    ));
+                }
+                let handle = unsafe { OwnedHandle::from_raw_handle(handle) };
+                let wait = unsafe { WaitForSingleObject(handle.as_raw_handle(), 0) };
+                descendant = Some(handle);
+                if wait != 258 {
+                    return Err(format!(
+                        "descendant was not live before root release: {wait}"
+                    ));
+                }
+                std::fs::File::create_new(markers.0.join("release"))
+                    .map(|_| ())
+                    .map_err(|error| format!("release write: {error}"))
+            },
         );
-        let result = execute(&mut command, None, Duration::from_secs(20)).unwrap();
+        let descendant = descendant
+            .unwrap_or_else(|| panic!("original descendant handle was not captured: {result:?}"));
+        assert_eq!(
+            unsafe { WaitForSingleObject(descendant.as_raw_handle(), 0) },
+            0, // WAIT_OBJECT_0
+            "original descendant remained alive after executor returned"
+        );
+        let result = result.unwrap();
         assert!(result.status.success());
-        let pid: u32 = String::from_utf8(result.stdout).unwrap().parse().unwrap();
-        assert_terminated(pid);
     }
     fn assert_terminated(pid: u32) {
         #[link(name = "kernel32")]
