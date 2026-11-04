@@ -1,5 +1,25 @@
 # Quality and release gate
 
+## 2026-11-04: manual coverage policy, merge-gated adoption
+
+The owner-approved replacement in [CONSTRAINTS.md](CONSTRAINTS.md) requires exact
+JavaScript/Rust core and overall no-fall ratios against the last reviewed baseline,
+85% changed-critical executable lines separately per language, touched legacy
+critical per-file no-fall (with an 85% floor once achieved), and failure-path review.
+Overall 50/60/70 milestones are aspirational.
+
+This is a manual review gate using existing v2 reports; automated CI ratchet
+enforcement is deferred. Existing CI tests, builds and package checks are unchanged.
+The measured [baseline candidate](coverage/baseline.json) identifies source commit
+448ad8f2b51f163f35f34e99fc5e16ab65b01b73 and complete matching Node/native reports.
+Independent audit approved the baseline. It activates only when PR91 merges after
+all required checks pass for its final head; current hosted CI is required before merge.
+Local Node tests passed 615; native tests passed 178 library and 2 integration
+(two existing ignored). Formatting, strict x64 Clippy, lint, incremental types,
+build and packed-consumer checks exited 0. See the current reliability record. The authorized PR91 legacy transition does not claim the old
+85% core / 70% overall floors or 85% pre-transition changed lines passed.
+Historical failures below remain evidence; merge/release blockers remain in force.
+
 ## 2026-11-03: NSIS capture correction, final CI pending
 
 Current product: `1.5.0-alpha.1`, retaining PR92's canonical package. CI run

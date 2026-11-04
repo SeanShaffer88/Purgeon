@@ -1,6 +1,94 @@
 # Reliability validation
 
-## 2026-11-03: NSIS payload capture correction (current)
+## 2026-11-04: manual coverage and failure-path review
+
+The approved replacement is in [CONSTRAINTS.md](../CONSTRAINTS.md); the manual
+procedure is in [coverage/README.md](../coverage/README.md). The [baseline](../coverage/baseline.json) passed independent audit.
+It activates only when PR91 merges after its final head passes all required checks.
+No current hosted full-gate pass, repeated CI pass or
+85% pre-transition changed-line pass is claimed. Historical old-floor failures
+below remain recorded.
+
+For each touched critical file, review denial, invalid input, cancellation,
+timeout, partial mutation, persistence failure, crash/restart and recovery failure.
+Each entry must cite an executed test/assertion or a reviewed applicability reason.
+Include the complete PR91 diff and all ten priorities recorded below. Virtual
+host/storage tests do not establish privileged-provider, production WebView,
+installer lifecycle or accessibility behavior. Automated CI enforcement is deferred.
+
+### Final measured candidate: 2026-11-04
+
+Source commit: `448ad8f2b51f163f35f34e99fc5e16ab65b01b73`; source tree SHA256:
+`7c10aed9b4c5a63911dfd00106b9b26d1b41c795ad3baba6c8a2de88b0496f57`.
+The baseline records exact counts, per-file source/checkout provenance, tool versions
+and hashes of the frozen inputs and executions. No raw profiles are committed.
+
+| Check | Recorded result |
+| --- | --- |
+| Final Node workload | 615 passed; child exit 0 |
+| Native primary gate | 178 library + 2 integration passed; 2 existing ignored; fmt, strict x64 Clippy and tests process/runner/shell exits 0 |
+| Matching native instrumentation | Rust 1.99.0 / LLVM 23.1.1; tests/export exits 0; source unchanged |
+| JS static/build/packed gates | lint, incremental types, build and packed-consumer process/runner/shell exits 0 |
+| Combined v2 accounting | JS overall 4835/13734, core 4548/7141; Rust overall 5508/14519, core 5508/14506; exit 1, below-floor, incomplete reasons empty |
+| Independent baseline review / current hosted CI | Approved (20261104T072956Z-da4e36621603) / required before merge; see PR91 |
+
+Evidence identities are in the candidate's artifacts and mergeInputs lists. The
+combined report is in the retained `coverage-adoption-final-combined` archive;
+matching native run is `20261104T071736Z-836ff935`. Earlier CI run 41782097498
+passed at old f6c70d4 and does not qualify this source commit. The earlier raw
+Git-byte equality rejection remains preserved; the approved binary proof resolves
+only checkout provenance (8 identical, 282 exclusively CRLF-to-LF, 0 unexplained).
+No old-floor or pre-transition changed-line pass is inferred.
+
+### Current failure scenarios
+
+The 14 executed API cases below use virtual host/storage adapters; retain the
+prior PR91 matrix below for the complete change. These names map denial, invalid
+input, cancellation, uncertain completion, partial mutation, persistence failure,
+interrupted restart and recovery failure to assertions:
+
+- [L30](../test/coverage-api-recovery.test.js#L30): approved application removal persists a sealed package and history, then restores through the public facade.
+- [L53](../test/coverage-api-recovery.test.js#L53): failed initial checkpoint admits no deletion or success history and releases both guards.
+- [L64](../test/coverage-api-recovery.test.js#L64): corrupt pending evidence blocks real removal before storage writes and is retained byte-for-byte.
+- [L75](../test/coverage-api-recovery.test.js#L75): fresh ownership and modification checks reject stale scan selections without deleting them.
+- [L89](../test/coverage-api-recovery.test.js#L89): cancellation remains available while real removal holds admission and seals only completed items.
+- [L112](../test/coverage-api-recovery.test.js#L112): uncertain completion never retries deletion or records success and blocks later removal.
+- [L132](../test/coverage-api-recovery.test.js#L132): explicit keep resolves an interrupted package without replaying its original selection.
+- [L148](../test/coverage-api-recovery.test.js#L148): interrupted rollback persists completion before clearing pending evidence.
+- [L161](../test/coverage-api-recovery.test.js#L161): partial selected restore reports exact outcomes and leaves unselected virtual files untouched.
+- [L175](../test/coverage-api-recovery.test.js#L175): partial interrupted rollback retains durable progress and refuses automatic replay or new cleanup.
+- [L192](../test/coverage-api-recovery.test.js#L192): restore cancellation stops between entries while retaining the sealed recovery package.
+- [L208](../test/coverage-api-recovery.test.js#L208): prototype and unknown requests reject without invoking inherited functions or acquiring recovery admission.
+- [L217](../test/coverage-api-recovery.test.js#L217): rejected and thrown approvals release serialized admission before any handler effects.
+- [L228](../test/coverage-api-recovery.test.js#L228): real invalid recovery handler and non-Error host failures release admission without retry.
+
+Native [state_store tests](../src-tauri/src/state_store.rs) cover ambiguous namespace
+rejection, UTF-16 bounds, legacy 247/248 directory boundaries, extended directories
+through 512 units and files at 259/260/261/301/512 units.
+`scratch_long_unicode_store_round_trips_identity_bounds` exercises protected
+read/write/replacement at a 512-unit root with 1/96-character identities.
+`scratch_ancestor_pinning_is_preserved` and
+`scratch_driver_ancestor_pin_blocks_rename_until_released` reject owned rename
+attempts while handles pin ancestors, then allow them after release. ACL validation
+remains active; `scratch_hardlink_alias_is_rejected` and
+`scratch_junction_is_rejected_without_following_target` assert rejection and
+sentinel preservation. These are owned fixtures, not arbitrary-host qualification.
+
+In [process_io](../src-tauri/src/process_io.rs),
+`root_exit_confirms_descendant_termination_before_return` captures the original
+descendant handle before root release, asserts it is initially live, then requires
+`WaitForSingleObject(handle, 0) == 0` after execution and a successful root exit.
+It does not reopen a reusable PID. The marker existence flags avoid admitting a
+partially published PID. The full native suites executed this test. Timeout and
+other prior transport scenarios remain in the existing matrix; no new provider
+runtime or installer workload is claimed.
+
+Current tooling evidence: XERJ indexed 441 files at f6c70d4; index/query exited 0
+and the owned node was cleaned up. This is not an index of 448ad8f. Latest source
+was inspected and tested directly. Live privileged-provider, production WebView,
+installer lifecycle and full accessibility limits remain unchanged.
+
+## 2026-11-03: NSIS payload capture correction (historical)
 
 The integrated product remains `1.5.0-alpha.1`, with PR92's canonical package.
 CI run `41776785387` failed the installed-versus-portable hash comparison.
@@ -265,9 +353,9 @@ gates prevent a release-readiness claim; this record authorizes no tag or releas
 
 ## Tooling limitations
 
-The coordinator's authenticated loopback XERJ dry-run exited 4: disk usage was
+Historical attempt: the coordinator's authenticated loopback XERJ dry-run exited 4: disk usage was
 97%, above the 95% watermark, with 20.9 GB free, a zero budget and a 5.7 MB
-estimate. No index or search passed. The owned node was stopped, guards were
+estimate. No index or search passed in that attempt. The owned node was stopped, guards were
 preserved and targeted current-source reads replaced indexing. Authenticated Codex CLI workers ran via the Ruflo launcher after the MCP request timed out at 120 seconds; no live MCP success is claimed.
 
 ## Module boundaries

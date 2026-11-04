@@ -1,5 +1,22 @@
 # Development record
 
+## 2026-11-04: bounded coverage policy transition
+
+[CONSTRAINTS.md](../CONSTRAINTS.md) and [coverage/policy.json](../coverage/policy.json)
+record the owner-approved manual review gate. Review existing v2 source reports
+against the last reviewed baseline; retain baseline/report comparisons and explicit
+failure-path evidence for future changes. See [the procedure](../coverage/README.md).
+Automated CI ratchet enforcement and new browser instrumentation are deferred;
+existing collectors, reporters, CI checks and dependencies are unchanged.
+
+The [measured baseline candidate](../coverage/baseline.json) binds complete matching
+Node/native evidence to source commit 448ad8f2b51f163f35f34e99fc5e16ab65b01b73.
+Independent review approved the evidence. Adoption requires PR91's merge after
+all required checks pass for its final head; local gates passed as
+recorded in [reliability validation](RELIABILITY_VALIDATION.md).
+The one-time PR91 legacy transition does not claim historical floors or 85%
+pre-transition changed-line coverage passed. No baseline is fabricated or reset.
+
 ## Reusable feature package
 
 See [ADR 001](adr/001-reusable-feature-package.md) and the
