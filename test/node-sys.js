@@ -5,6 +5,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFile, spawn } from 'node:child_process';
+import { recoveryLeaseFixture } from './recovery-lease-fixture.js';
 
 // Like the Rust core, without a PSModulePath inherited from PowerShell 7.
 const { PSModulePath, ...childEnv } = process.env;
@@ -47,6 +48,7 @@ function folderSize(dir, maxEntries, maxMs) {
 
 export function createNodeSys(dataDir = path.join(os.tmpdir(), 'purgeon-test-data')) {
   return {
+    ...recoveryLeaseFixture(),
     info: { env: { ...process.env }, home: os.homedir(), dataDir, exe: process.execPath },
     // Scheduler APIs are always fake here; tests must never enumerate/mutate
     // the host scheduler. Dedicated task tests supply explicit fixture behavior.

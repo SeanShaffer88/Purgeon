@@ -6,6 +6,7 @@ the owner's project defaults apply. Private profile guidance is not stored here.
 Purgeon helps Windows users inspect, remove, and recover installed software and
 its leftovers. Preserve its Rust/Tauri/React stack and existing data identity.
 The current maintenance slice is specified in `docs/DEVELOPMENT.md`.
+Read `CONSTRAINTS.md` before writing code. Do not weaken it to make a change pass.
 
 - UI calls application operations in `src/backend/api.js`; backend modules use
   the canonical implementations in `packages/purgeon-core/src/internal` through
@@ -24,8 +25,19 @@ The current maintenance slice is specified in `docs/DEVELOPMENT.md`.
   `x86_64-pc-windows-msvc` (Purgeon is x64-only). Record every failure; a passing subset
   does not replace the full gate. Also run `npm run lint`, `npm run typecheck`
   and `npm run test:package`; type checks cover the declared incremental boundaries.
-- Coverage floors are 85% core, 70% overall, and every safety-relevant/destructive
-  path exercised. Parser-only coverage does not establish application coverage.
+- The owner-approved coverage replacement is exact no-fall JS/Rust core and
+  overall ratchets, 85% changed-critical executable lines separately per language,
+  touched legacy critical per-file no-fall (retaining 85% if already above it),
+  and an explicit failure-path matrix. See `CONSTRAINTS.md`. Adoption requires
+  fresh complete verified evidence at one identified source commit and independent
+  audit; no baseline is fabricated or reset. The old 85% core / 70% overall
+  failures remain historical and are not claimed passed. Before adoption the
+  coverage gate remains blocked. The independently reviewed coverage/baseline.json
+  activates only on PR91's merge after its final head passes all required checks.
+  Enforcement is manual review against the last
+  reviewed baseline; automated CI ratchets are deferred. Broader 50/60/70 milestones are aspirational.
+  Every safety-relevant/destructive path still needs evidence.
+  Parser-only coverage does not establish application coverage.
   Application performance budgets are not yet established; do not invent results.
 - Do not merge or tag a release while full-gate blockers remain. Windows releases
   are x64-only and require exactly `Purgeon-Setup-x64.exe` and

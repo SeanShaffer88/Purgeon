@@ -730,14 +730,6 @@ fn pipe_security() -> Result<Handle, String> {
 fn event() -> Result<Owned, String> {
     Owned::new(unsafe { CreateEventW(std::ptr::null_mut(), 1, 0, std::ptr::null()) })
 }
-fn finish_io(pipe: Handle, overlapped: &mut Overlapped, pending: bool) -> Result<u32, String> {
-    finish_io_until(
-        pipe,
-        overlapped,
-        pending,
-        Instant::now() + Duration::from_millis(TIMEOUT as u64),
-    )
-}
 fn finish_io_until(
     pipe: Handle,
     overlapped: &mut Overlapped,
@@ -893,15 +885,16 @@ fn launch_elevated(parameters: &str) -> Result<Owned, String> {
     info.directory = directory.as_ptr();
     info.show = 0;
     if unsafe { ShellExecuteExW(&mut info) } == 0 {
-        return Err(
-            if std::io::Error::last_os_error().raw_os_error() == Some(1223) {
-                "USER_CANCELLED: administrator permission was cancelled".into()
-            } else {
-                last_error()
-            },
-        );
+        return Err(launch_error(std::io::Error::last_os_error()));
     }
     Owned::new(info.process)
+}
+fn launch_error(error: std::io::Error) -> String {
+    if error.raw_os_error() == Some(1223) {
+        "USER_CANCELLED: administrator permission was cancelled".into()
+    } else {
+        error.to_string()
+    }
 }
 pub(crate) enum HelperKind {
     Debloat,
@@ -948,6 +941,9 @@ pub(crate) fn server_pipe(pipe_name: &str) -> Result<Owned, String> {
     pipe
 }
 pub(crate) fn accept_pipe(pipe: Handle) -> Result<(), String> {
+    accept_pipe_until(pipe, Instant::now() + Duration::from_millis(TIMEOUT as u64))
+}
+pub(crate) fn accept_pipe_until(pipe: Handle, deadline: Instant) -> Result<(), String> {
     let ready = event()?;
     let mut overlapped = Overlapped {
         internal: 0,
@@ -959,7 +955,7 @@ pub(crate) fn accept_pipe(pipe: Handle) -> Result<(), String> {
         match std::io::Error::last_os_error().raw_os_error() {
             Some(535) => {}
             Some(997) => {
-                finish_io(pipe, &mut overlapped, true)?;
+                finish_io_until(pipe, &mut overlapped, true, deadline)?;
             }
             _ => return Err(last_error()),
         }
@@ -1052,33 +1048,103 @@ pub fn execute(id: &str, data: &Path) -> Result<ProcessResult, String> {
     }
     result
 }
+// Private wire boundary: tests replace I/O, while exercising the production handshake.
+pub(crate) trait ParentTransport {
+    fn launch(&mut self, mode: &str, prefix: &str) -> Result<(), String>;
+    fn connect(&mut self) -> Result<(), String>;
+    fn authenticate(&mut self) -> Result<(), String>;
+    fn send<T: Serialize>(&mut self, value: &T, deadline: Instant) -> Result<(), String>;
+    fn receive<T: serde::de::DeserializeOwned>(&mut self, deadline: Instant) -> Result<T, String>;
+    fn now(&self) -> Instant {
+        Instant::now()
+    }
+}
+#[derive(Default)]
+pub(crate) struct PipeTransport {
+    pipe: Option<Owned>,
+    helper: Option<Owned>,
+}
+impl ParentTransport for PipeTransport {
+    fn launch(&mut self, mode: &str, prefix: &str) -> Result<(), String> {
+        let name = format!("{prefix}{}-{}", std::process::id(), random_id()?);
+        self.pipe = Some(server_pipe(&name)?);
+        self.helper = Some(if mode == "--operation-broker" {
+            launch_domain_helper(HelperKind::EventLogs, &name)?
+        } else {
+            launch_elevated(&format!("{mode} {name}"))?
+        });
+        Ok(())
+    }
+    fn connect(&mut self) -> Result<(), String> {
+        accept_pipe(self.pipe.as_ref().ok_or("Missing pipe")?.0)
+    }
+    fn authenticate(&mut self) -> Result<(), String> {
+        authenticate_client(
+            self.pipe.as_ref().ok_or("Missing pipe")?.0,
+            self.helper.as_ref().ok_or("Missing helper")?.0,
+        )
+    }
+    fn send<T: Serialize>(&mut self, value: &T, deadline: Instant) -> Result<(), String> {
+        send_until(self.pipe.as_ref().ok_or("Missing pipe")?.0, value, deadline)
+    }
+    fn receive<T: serde::de::DeserializeOwned>(&mut self, deadline: Instant) -> Result<T, String> {
+        receive_until(self.pipe.as_ref().ok_or("Missing pipe")?.0, deadline)
+    }
+}
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum CommitState {
+    NotSent,
+    MayHaveBeenDelivered,
+    Completed,
+}
+impl CommitState {
+    pub(crate) fn failure(self, error: String) -> String {
+        if self == Self::MayHaveBeenDelivered {
+            format!("UNCERTAIN: approval may have been delivered; mutation may have completed. Retain journal/artifacts and reconcile before any retry. {error}")
+        } else {
+            error
+        }
+    }
+}
 fn execute_envelope(envelope: &Envelope) -> Result<ProcessResult, String> {
     if open_process(envelope.request.pid, envelope.request.action.access()).is_ok() {
         return execute_request(envelope, || Ok(()));
     }
-    let pipe_name = format!("{PIPE_PREFIX}{}-{}", std::process::id(), random_id()?);
-    let pipe = server_pipe(&pipe_name)?;
-    let helper = launch_elevated(&format!("--broker {pipe_name}"))?;
-    accept_pipe(pipe.0)?;
-    authenticate_client(pipe.0, helper.0)?;
-    send(pipe.0, envelope)?;
-    let reply = match receive::<HelperMessage>(pipe.0)? {
-        HelperMessage::Result { result } => result,
-        HelperMessage::Ready => {
-            authenticate_client(pipe.0, helper.0)?;
-            send(pipe.0, &true)?;
-            match receive::<HelperMessage>(pipe.0)? {
-                HelperMessage::Result { result } => result,
-                _ => return Err("Unexpected broker commit phase".into()),
+    process_transport(envelope, &mut PipeTransport::default())
+}
+fn process_transport(
+    envelope: &Envelope,
+    io: &mut impl ParentTransport,
+) -> Result<ProcessResult, String> {
+    let mut commit = CommitState::NotSent;
+    let outcome = (|| {
+        let deadline = io.now() + Duration::from_millis(TIMEOUT as u64);
+        io.launch("--broker", PIPE_PREFIX)?;
+        io.connect()?;
+        io.authenticate()?;
+        io.send(envelope, deadline)?;
+        let reply = match io.receive::<HelperMessage>(deadline)? {
+            HelperMessage::Result { result } => result,
+            HelperMessage::Ready => {
+                io.authenticate()?;
+                // A write error cannot prove that the helper did not receive approval.
+                commit = CommitState::MayHaveBeenDelivered;
+                io.send(&true, deadline)?;
+                match io.receive::<HelperMessage>(deadline)? {
+                    HelperMessage::Result { result } => result,
+                    _ => return Err("Unexpected broker commit phase".into()),
+                }
             }
+        };
+        if !reply.ok {
+            return Err(reply
+                .error
+                .unwrap_or_else(|| "Broker operation failed".into()));
         }
-    };
-    if !reply.ok {
-        return Err(reply
-            .error
-            .unwrap_or_else(|| "Broker operation failed".into()));
-    }
-    Ok(reply)
+        commit = CommitState::Completed;
+        Ok(reply)
+    })();
+    outcome.map_err(|error| commit.failure(error))
 }
 
 fn helper(pipe_name: &str) -> Result<(), String> {
@@ -1221,5 +1287,167 @@ pub fn private_mode() -> Result<bool, String> {
             Ok(false)
         }
         _ => Ok(false),
+    }
+}
+
+#[cfg(test)]
+pub(crate) mod transport_tests {
+    use super::*;
+    use std::collections::VecDeque;
+    #[derive(Default)]
+    pub(crate) struct Script {
+        pub replies: VecDeque<Result<serde_json::Value, String>>,
+        pub sent: Vec<serde_json::Value>,
+        pub calls: Vec<String>,
+        pub fail: Option<&'static str>,
+        pub launch_failure: Option<String>,
+        pub on_launch: Option<Box<dyn FnMut()>>,
+        pub on_commit: Option<Box<dyn FnMut()>>,
+        pub expired: bool,
+    }
+    impl Script {
+        fn step(&mut self, name: &str) -> Result<(), String> {
+            self.calls.push(name.into());
+            if self.fail == Some(name) {
+                Err(format!("injected {name}"))
+            } else {
+                Ok(())
+            }
+        }
+    }
+    impl ParentTransport for Script {
+        fn launch(&mut self, _: &str, _: &str) -> Result<(), String> {
+            self.step("launch")?;
+            if let Some(error) = &self.launch_failure {
+                return Err(error.clone());
+            }
+            if let Some(hook) = &mut self.on_launch {
+                hook();
+            }
+            Ok(())
+        }
+        fn connect(&mut self) -> Result<(), String> {
+            self.step("connect timeout")
+        }
+        fn authenticate(&mut self) -> Result<(), String> {
+            self.step("authenticate")
+        }
+        fn send<T: Serialize>(&mut self, value: &T, _: Instant) -> Result<(), String> {
+            let value = serde_json::to_value(value).map_err(|e| e.to_string())?;
+            let approved = value == serde_json::Value::Bool(true)
+                || value.get("approved") == Some(&serde_json::Value::Bool(true));
+            self.sent.push(value);
+            if approved {
+                if let Some(hook) = &mut self.on_commit {
+                    hook();
+                }
+                // Record delivery BEFORE injecting a write failure.
+                self.step("commit write after delivery")
+            } else {
+                self.step("send")
+            }
+        }
+        fn receive<T: serde::de::DeserializeOwned>(&mut self, _: Instant) -> Result<T, String> {
+            self.step("receive")?;
+            let value = self
+                .replies
+                .pop_front()
+                .unwrap_or_else(|| Err("pipe closed/lost completion".into()))?;
+            serde_json::from_value(value).map_err(|e| e.to_string())
+        }
+        fn now(&self) -> Instant {
+            if self.expired {
+                Instant::now() + Duration::from_secs(7200)
+            } else {
+                Instant::now()
+            }
+        }
+    }
+    fn request() -> Envelope {
+        Envelope {
+            request: ProcessRequest {
+                pid: 99999,
+                creation_time: "123".into(),
+                action: ProcessAction::End,
+            },
+            image: "inert.exe".into(),
+            parent_pid: 1,
+            deadline_utc_ms: u64::MAX,
+        }
+    }
+    #[test]
+    fn uac_cancellation_preserves_native_error_mapping() {
+        assert_eq!(
+            launch_error(std::io::Error::from_raw_os_error(1223)),
+            "USER_CANCELLED: administrator permission was cancelled"
+        );
+        assert!(!launch_error(std::io::Error::from_raw_os_error(2)).starts_with("USER_CANCELLED"));
+    }
+    #[test]
+    fn process_transport_failures_keep_commit_uncertainty() {
+        let mut cancelled = Script {
+            launch_failure: Some(launch_error(std::io::Error::from_raw_os_error(1223))),
+            ..Script::default()
+        };
+        assert!(process_transport(&request(), &mut cancelled)
+            .err()
+            .unwrap()
+            .starts_with("USER_CANCELLED:"));
+        assert_eq!(cancelled.calls, ["launch"]);
+        assert!(cancelled.sent.is_empty());
+        for failure in ["launch", "connect timeout", "authenticate", "send"] {
+            let mut io = Script {
+                fail: Some(failure),
+                ..Script::default()
+            };
+            let error = process_transport(&request(), &mut io).err().unwrap();
+            assert!(!error.starts_with("UNCERTAIN:"), "{error}");
+            assert!(!io.sent.contains(&serde_json::json!(true)));
+        }
+        for failure in [None, Some("commit write after delivery")] {
+            let mut io = Script {
+                fail: failure,
+                replies: VecDeque::from([Ok(serde_json::json!({"phase":"ready"}))]),
+                ..Script::default()
+            };
+            let error = process_transport(&request(), &mut io).err().unwrap();
+            assert!(error.starts_with("UNCERTAIN:"), "{error}");
+            assert_eq!(
+                io.sent
+                    .iter()
+                    .filter(|v| **v == serde_json::json!(true))
+                    .count(),
+                1
+            );
+            assert_eq!(io.calls.iter().filter(|c| *c == "launch").count(), 1);
+        }
+    }
+    #[test]
+    fn process_transport_preserves_results_and_rejects_malformed_completion() {
+        let result = serde_json::json!({"phase":"result","result":{"ok":true,"previousPriority":"Normal","error":null}});
+        let mut io = Script {
+            replies: VecDeque::from([Ok(serde_json::json!({"phase":"ready"})), Ok(result)]),
+            ..Script::default()
+        };
+        assert_eq!(
+            process_transport(&request(), &mut io)
+                .unwrap()
+                .previous_priority
+                .as_deref(),
+            Some("Normal")
+        );
+        for value in [
+            serde_json::json!({"phase":"ready"}),
+            serde_json::json!({"phase":"result","extra":true}),
+        ] {
+            let mut io = Script {
+                replies: VecDeque::from([Ok(serde_json::json!({"phase":"ready"})), Ok(value)]),
+                ..Script::default()
+            };
+            assert!(process_transport(&request(), &mut io)
+                .err()
+                .unwrap()
+                .starts_with("UNCERTAIN:"));
+        }
     }
 }

@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import { setSys } from '../src/backend/sys.js';
 import * as backups from '../src/backend/backups.js';
 import * as history from '../src/backend/history.js';
+import { recoveryLeaseFixture } from './recovery-lease-fixture.js';
 
 let sequence = 0;
 const noState = { programs: [], shared: [] };
@@ -11,6 +12,7 @@ async function fixture({ failAt, persistent = false, committed = false, pendingF
   const root = `C:\\CheckpointFixture${++sequence}`, files = new Map(), calls = [];
   let manifestWrites = 0;
   setSys({
+    ...recoveryLeaseFixture(),
     info: { dataDir: root, env: { TEMP: 'C:\\CheckpointTemp' } },
     makeDir: async (path) => { calls.push(['mkdir', path]); }, stat: async (path) => { calls.push(['stat', path]); return null; },
     readOptionalText: async (path) => { if (pendingReadDenied && path.endsWith('pending.json')) throw Error('Pending read denied'); return files.get(path) ?? null; },

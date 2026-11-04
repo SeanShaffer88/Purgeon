@@ -12,7 +12,7 @@ const cache = new Map();
 const noop = () => {};
 const dialog = ({ children, buttons }) => React.createElement('section', null, children, buttons);
 const compiled = new Map();
-for (const name of ['dialog-shared.jsx', 'command-dialogs.jsx', 'dialogs.jsx', 'more.jsx']) {
+for (const name of ['dialog-shared.jsx', 'command-dialogs.jsx', 'dialogs.jsx', 'more.jsx', 'onboarding.jsx']) {
   const entry = `fixture:${name}`;
   const bundle = await rolldown({ input: entry, transform: { jsx: 'react-jsx' }, plugins: [{
     name: 'inert-ui-fixture',
@@ -44,6 +44,20 @@ function componentModule(name) {
   return module.exports;
 }
 const render = (Component, props) => renderToStaticMarkup(React.createElement(Component, props));
+
+test('React exposes one current onboarding step status and hides decorative progress dots', () => {
+  const { WelcomeDialog } = componentModule('onboarding.jsx');
+  const html = render(WelcomeDialog, { onClose: noop, onGetStarted: noop });
+  const dots = [...html.matchAll(/<span\b[^>]*class="step-dot[^"]*"[^>]*>/g)];
+  assert.equal(dots.length, 3);
+  for (const [dot] of dots) {
+    assert.match(dot, /aria-hidden="true"/);
+    assert.doesNotMatch(dot, /aria-label=/);
+  }
+  assert.equal([...html.matchAll(/role="status"/g)].length, 1);
+  assert.match(html, /class="welcome-step-text" role="status" aria-live="polite">Step 1 of 3\s*<\/span>/);
+  assert.doesNotMatch(html, /Step [23] of 3/);
+});
 
 test('React renders the palette active descendant as an existing selected option', () => {
   const { CommandPalette } = componentModule('command-dialogs.jsx');

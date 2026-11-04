@@ -1,0 +1,57 @@
+{
+  "schemaVersion": 1,
+  "metricVersion": "purgeon-coverage-v2",
+  "changedCritical": {
+    "numerator": 85,
+    "denominator": 100
+  },
+  "criticalPrefixes": [
+    "packages/purgeon-core/src/",
+    "src/backend/",
+    "src-tauri/src/"
+  ],
+  "criticalFiles": [
+    "src/cli.js",
+    "src/cli-args.js",
+    "src-tauri/build.rs",
+    "src-tauri/build_support.rs"
+  ],
+  "failurePaths": [
+    "denial",
+    "invalid-input",
+    "cancellation",
+    "timeout",
+    "partial-mutation",
+    "persistence-failure",
+    "crash-restart",
+    "recovery-failure"
+  ],
+  "aspirationalOverallMilestones": [
+    50,
+    60,
+    70
+  ],
+  "enforcement": "manual-review",
+  "automatedCiEnforcement": "deferred",
+  "baselineStatus": "independently-reviewed; activation requires passing PR91 merge",
+  "ratchetReference": "last-reviewed-baseline",
+  "ratchets": [
+    "javascript-core",
+    "javascript-overall",
+    "rust-core",
+    "rust-overall"
+  ],
+  "touchedLegacyCritical": {
+    "exactRatioNoFall": true,
+    "floorOnceAchieved": {
+      "numerator": 85,
+      "denominator": 100
+    }
+  },
+  "baseline": "coverage/baseline.json",
+  "adoptionRequires": [
+    "independent-review",
+    "current-hosted-ci",
+    "applicable-full-gates"
+  ]
+}

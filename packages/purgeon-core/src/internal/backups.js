@@ -5,7 +5,7 @@ import { firewallRemovalScript, firewallRestoreScript } from './backup-scripts.j
 import * as nativeTasks from './tasks.js';
 import { sys, env } from './sys.js';
 import * as path from './winpath.js';
-import { reg, runPS, runPSJson, psq, execFile } from './shell.js';
+import { reg, runPS, runPSJson, psq } from './shell.js';
 import { isProtected, isProtectedKey } from './paths.js';
 import { regAddArgs } from './snapshots.js';
 import { isJunkPath, installedFamilies } from './junk.js';
@@ -25,6 +25,60 @@ const setRoot = async (dir) => {
 // to read or restore. Losing the key means losing the backup.
 
 const recoveryRestoreToken = Symbol('internal interrupted rollback');
+// Tokens remain in each operation's lexical scope; concurrent reads and other
+// roots never borrow an ambient recovery capability.
+// Service stop/delete, firewall removal/restoration, and Recycle Bin COM
+// restoration delegate to Windows providers. Job closure proves application
+// processes exited, not provider completion; inFlight/rollback guards retain
+// that uncertainty. registry_recovery transfer journals are a separate workflow
+// outside this backup-journal lease contract.
+function recoveryCommands(token) {
+  return {
+    runPS: (script, { input, timeout = 60000 } = {}) => sys.runPS(script, input, timeout, token),
+    reg: async (args) => {
+      // Query is observational; export writes only the requested backup file.
+      // Add/delete/import mutate registry state and require contained dispatch.
+      const mutation = ['add', 'delete', 'import'].includes(args[0]?.toLowerCase());
+      const r = await sys.exec('reg.exe', args, mutation ? token : undefined);
+      return { ok: r.ok, stdout: r.stdout, stderr: r.stderr || (r.ok ? '' : `reg.exe exited with code ${r.code}`) };
+    },
+    execFile: async (file, args) => {
+      const r = await sys.exec(file, args, token);
+      return { ok: r.ok, out: (r.stdout || '') + (r.ok ? '' : r.stderr || '') };
+    },
+  };
+}
+let pendingRelease;
+let releaseRetry;
+async function withRecoveryLease(operation) {
+  if (typeof sys.acquireRecoveryLease !== 'function' || typeof sys.releaseRecoveryLease !== 'function') throw new Error('Recovery lease capability unavailable; no operation was started');
+  if (pendingRelease) {
+    releaseRetry ||= Promise.resolve().then(() => sys.releaseRecoveryLease(pendingRelease))
+      .then(() => { pendingRelease = undefined; })
+      .finally(() => { releaseRetry = undefined; });
+    await releaseRetry;
+  }
+  const token = await sys.acquireRecoveryLease();
+  let operationFailure;
+  try { return await operation(token); }
+  catch (error) { operationFailure = { error }; throw error; }
+  finally {
+    try { await sys.releaseRecoveryLease(token); }
+    catch (error) {
+      pendingRelease = token;
+      if (operationFailure) throw new AggregateError([operationFailure.error, error], 'Recovery operation and lease release failed');
+      throw error;
+    }
+  }
+}
+const removeItems = (...args) => withRecoveryLease((token) => removeItemsLocked(token, ...args));
+const restore = (...args) => withRecoveryLease((token) => restoreLocked(token, ...args));
+const prune = (...args) => withRecoveryLease((token) => pruneLocked(token, ...args));
+const restoreManyFromRecycleBin = (...args) => withRecoveryLease((token) => restoreManyFromRecycleBinLocked(token, ...args));
+const resolveInterrupted = async (action) => {
+  if (!['dismiss', 'keep', 'rollback', 'finish'].includes(action)) throw new Error('Invalid recovery action');
+  return action === 'dismiss' ? Promise.resolve({ action, results: [], retained: true }) : withRecoveryLease((token) => resolveInterruptedLocked(token, action));
+};
 const ENC_PREFIX = 'PURGEON-ENC1:';  // marks an encrypted manifest file
 
 async function encryptionKey() {
@@ -267,7 +321,8 @@ async function planRemoval({ items, owners = [], state }) {
 
 // `owners`: uninstall keys of the programs being removed (see safety.js). `state` replaces the
 // live system state in tests.
-async function removeItems({ title, items, owners = [], state, trashItem = (p) => sys.trash(p), shouldStop }) {
+async function removeItemsLocked(leaseToken, { title, items, owners = [], state, trashItem = (p) => sys.trash(p), shouldStop }) {
+  const { reg, runPS, execFile } = recoveryCommands(leaseToken);
   const pending = await readPending();
   if (pending?.corrupt) throw new Error(pending.detail);
   if (pending) throw recoveryError('the interrupted removal requires review or resolution before another cleanup');
@@ -607,7 +662,7 @@ async function readRecoveryManifest(p, allowChangedFiles = false) {
         if (!intent.status && m.inFlight?.intentId !== intent.intentId) throw new Error('unresolved operation evidence without its in-flight marker');
       }
     }
-    if ('recovery' in m && (!isObject(m.recovery) || m.recovery.action !== 'rollback' || m.recovery.status !== 'in-progress' || !nonblank(m.recovery.started))) throw new Error('invalid rollback progress evidence');
+    if ('recovery' in m && (!isObject(m.recovery) || m.recovery.action !== 'rollback' || !['in-progress', 'completed'].includes(m.recovery.status) || !nonblank(m.recovery.started) || (m.recovery.status === 'completed' && (!nonblank(m.recovery.completed) || !m.fingerprint || m.complete !== true || m.inFlight || !m.entries.length)))) throw new Error('invalid rollback progress evidence');
     if (!m.entries.length && !m.inFlight && (m.intents || []).some((intent) => intent.status !== 'not-present')) throw new Error('empty manifest has unresolved operation evidence');
     if (m.fingerprint && (await verify(dir, m)).size && !allowChangedFiles) throw new Error('stored backup files changed after sealing');
     return { dir, manifest: m };
@@ -629,7 +684,7 @@ async function interrupted() {
   }
 }
 
-async function resolveInterrupted(action) {
+async function resolveInterruptedLocked(leaseToken, action) {
   if (!['dismiss', 'keep', 'rollback', 'finish'].includes(action)) throw new Error('Invalid recovery action');
   // Closing the review never reads, clears, or modifies its evidence.
   if (action === 'dismiss') return { action, results: [], retained: true };
@@ -637,6 +692,11 @@ async function resolveInterrupted(action) {
   if (!p) return { action, results: [] };
   if (p.corrupt) throw new Error(p.detail);
   const { dir, manifest: m } = await readRecoveryManifest(p);
+  if (m.recovery?.status === 'completed') {
+    if (action === 'finish') throw recoveryError('automatic finish cannot prove the remaining item identities; the completed rollback must not be replayed');
+    await sys.removePath(pendingFile());
+    return { action, results: [], alreadyCompleted: true };
+  }
   if (m.recovery) throw recoveryError('an earlier rollback may have partially restored data; automatic retry is refused');
   // An explicit rollback may reconcile a completed native task whose outer
   // completion save was interrupted. Unknown/native-uncertain records stay held.
@@ -657,11 +717,11 @@ async function resolveInterrupted(action) {
     if (action === 'rollback') m.recovery = { action: 'rollback', status: 'in-progress', started: new Date().toISOString() };
     await seal(dir, m);
     if (action === 'rollback') {
-      const results = await restore(p.id, undefined, undefined, recoveryRestoreToken);
+      const results = await restoreLocked(leaseToken, p.id, undefined, undefined, recoveryRestoreToken);
       if (results.length !== m.entries.length || results.some((result) => !result.ok)) return { action, results, retained: true, reviewRequired: true };
-      await sys.removePath(pendingFile());
-      delete m.recovery;
+      m.recovery = { ...m.recovery, status: 'completed', completed: new Date().toISOString() };
       await seal(dir, m);
+      await sys.removePath(pendingFile());
       return { action, results };
     }
   } else {
@@ -673,7 +733,7 @@ async function resolveInterrupted(action) {
 
 // Deletes old backups beyond the limits (days, megabytes; 0 = no limit), oldest first, but
 // never the newest backup made for each title (each program), nor an unfinished one.
-async function prune({ maxDays = 0, maxMB = 0 } = {}, now = Date.now(), hooks = {}) {
+async function pruneLocked(_leaseToken, { maxDays = 0, maxMB = 0 } = {}, now = Date.now(), hooks = {}) {
   // Called once, just before the first backup is actually removed (so a caller can
   // take a safety snapshot only when something is really about to be deleted).
   let hookDone = false;
@@ -690,12 +750,12 @@ async function prune({ maxDays = 0, maxMB = 0 } = {}, now = Date.now(), hooks = 
   for (const m of all) if (!seenTitles.has(m.title)) (seenTitles.add(m.title), newest.add(m.id));
   const pending = await readPending();
   if (pending?.corrupt) throw new Error(pending.detail);
-  const candidates = all.filter((m) => !newest.has(m.id) && m.id !== pending?.id && m.complete !== false && !m.inFlight && !m.recovery).reverse(); // oldest first
+  const candidates = all.filter((m) => !newest.has(m.id) && m.id !== pending?.id && m.complete !== false && !m.inFlight && (!m.recovery || m.recovery.status === 'completed')).reverse(); // oldest first
   const removed = [];
   for (const m of candidates) {
     if (maxDays && now - new Date(m.created).getTime() > maxDays * 86400000) {
       await beforeRemove();
-      await destroy(m.id);
+      await destroyLocked(m.id);
       removed.push(m.id);
     }
   }
@@ -714,7 +774,7 @@ async function prune({ maxDays = 0, maxMB = 0 } = {}, now = Date.now(), hooks = 
       if (total <= maxMB * 1048576) break;
       if (removed.includes(m.id)) continue;
       await beforeRemove();
-      await destroy(m.id);
+      await destroyLocked(m.id);
       removed.push(m.id);
       total -= sizes.get(m.id) || 0;
     }
@@ -839,7 +899,8 @@ async function verifyPackage(id, shouldStop) {
 // recycled item has a $I record holding its original path (format 2: path length at byte 24,
 // UTF-16 path from 28; format 1: fixed 520-byte path from 24) next to the $R item itself.
 // Resolves to { [original]: 'OK' | 'EXISTS' | 'NOTFOUND' | error text }.
-async function restoreManyFromRecycleBin(originals) {
+async function restoreManyFromRecycleBinLocked(leaseToken, originals) {
+  const { runPS } = recoveryCommands(leaseToken);
   if (!originals.length) return {};
   const out = await runPS(
     `# Windows PowerShell passes a parsed JSON array on as one object; assigning it first unrolls it.
@@ -887,14 +948,17 @@ async function restoreManyFromRecycleBin(originals) {
     $result | ConvertTo-Json -Compress`,
     { input: JSON.stringify(originals) }
   );
-  return JSON.parse(out.trim() || '{}');
+  const result = JSON.parse(out.trim() || '{}');
+  if (!isObject(result) || originals.some(original => !Object.hasOwn(result, original) || typeof result[original] !== 'string')) throw new Error('Recycle Bin helper returned invalid or missing outcome evidence');
+  return result;
 }
 
 const restoreFromRecycleBin = async (original) => (await restoreManyFromRecycleBin([original]))[original] || 'NOTFOUND';
 
 // Restores a backup. With `onlyIndexes` (an array of entry positions), only
 // those entries are restored — the Recovery Packages tool's selective restore.
-async function restore(id, onlyIndexes, shouldStop, internalToken) {
+async function restoreLocked(leaseToken, id, onlyIndexes, shouldStop, internalToken) {
+  const { reg, runPS } = recoveryCommands(leaseToken);
   const dir = backupDir(id);
   if (!(await sys.exists(path.join(dir, 'manifest.json')))) throw new Error('This backup no longer exists. It may have been removed by the backup limits in Tools › Backup Settings.');
   const { manifest } = await readRecoveryManifest({ id }, true);
@@ -903,7 +967,6 @@ async function restore(id, onlyIndexes, shouldStop, internalToken) {
   const changed = await verify(dir, manifest);
   const only = Array.isArray(onlyIndexes) ? new Set(onlyIndexes) : null;
   const results = [];
-  const recycled = shouldStop && shouldStop() ? {} : await restoreManyFromRecycleBin(manifest.entries.filter((e, i) => e.recycled && (!only || only.has(i))).map((e) => e.path)).catch((err) => ({ error: `ERR ${err.message}` }));
   for (const [entryIndex, e] of manifest.entries.entries()) {
     if (only && !only.has(entryIndex)) continue;
     if (shouldStop && shouldStop()) {
@@ -940,9 +1003,15 @@ async function restore(id, onlyIndexes, shouldStop, internalToken) {
       const out = await runPS(firewallRestoreScript(e.path, path.join(dir, e.file))).catch((err) => err.message);
       results.push({ ...e, ok: /^OK/.test(out.trim()), detail: /^OK/.test(out.trim()) ? 'Firewall rule restored' : out.trim() });
     } else if (e.recycled) {
-      const out = String(recycled[e.path] || recycled.error || 'NOTFOUND').trim();
+      let recycled;
+      try { recycled = await restoreManyFromRecycleBinLocked(leaseToken, [e.path]); }
+      catch (error) {
+        results.push({ ...e, ok: false, uncertain: true, detail: `Restore outcome uncertain; inspect the original path before retrying: ${error.message}` });
+        continue;
+      }
+      const out = String(recycled[e.path] || 'Restore outcome uncertain; helper returned no result').trim();
       const detail = { OK: 'Restored from the Recycle Bin', EXISTS: 'Already back in place', NOTFOUND: 'Not in the Recycle Bin any more (it may have been emptied)' }[out] || out.replace(/^ERR /, '');
-      results.push({ ...e, ok: out === 'OK' || out === 'EXISTS', detail });
+      results.push({ ...e, ok: out === 'OK' || out === 'EXISTS', ...(!recycled[e.path] ? { uncertain: true } : {}), detail });
     } else {
       results.push({ ...e, ok: false, detail: 'Not restorable' });
     }
@@ -976,16 +1045,16 @@ async function deletableBackup(id) {
   if (pending?.corrupt) throw new Error(pending.detail);
   if (pending?.id === id) throw recoveryError('this backup belongs to the active interrupted removal');
   const { manifest } = await readRecoveryManifest({ id });
-  if (manifest.complete === false || manifest.inFlight || manifest.recovery) throw recoveryError('this backup contains unfinished recovery evidence');
+  if (manifest.complete === false || manifest.inFlight || (manifest.recovery && manifest.recovery.status !== 'completed')) throw recoveryError('this backup contains unfinished recovery evidence');
   return dir;
 }
 
 // Manual deletion goes to the Recycle Bin; only limit pruning deletes permanently.
 function remove(id) {
   backupDir(id); // Preserve immediate validation for existing callers.
-  return deletableBackup(id).then((dir) => sys.trash(dir));
+  return withRecoveryLease(async () => sys.trash(await deletableBackup(id)));
 }
-async function destroy(id) {
+async function destroyLocked(id) {
   return sys.removePath(await deletableBackup(id));
 }
 

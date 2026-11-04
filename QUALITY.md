@@ -1,5 +1,105 @@
 # Quality and release gate
 
+## 2026-11-04: manual coverage policy, merge-gated adoption
+
+The owner-approved replacement in [CONSTRAINTS.md](CONSTRAINTS.md) requires exact
+JavaScript/Rust core and overall no-fall ratios against the last reviewed baseline,
+85% changed-critical executable lines separately per language, touched legacy
+critical per-file no-fall (with an 85% floor once achieved), and failure-path review.
+Overall 50/60/70 milestones are aspirational.
+
+This is a manual review gate using existing v2 reports; automated CI ratchet
+enforcement is deferred. Existing CI tests, builds and package checks are unchanged.
+The measured [baseline candidate](coverage/baseline.json) identifies source commit
+448ad8f2b51f163f35f34e99fc5e16ab65b01b73 and complete matching Node/native reports.
+Independent audit approved the baseline. It activates only when PR91 merges after
+all required checks pass for its final head; current hosted CI is required before merge.
+Local Node tests passed 615; native tests passed 178 library and 2 integration
+(two existing ignored). Formatting, strict x64 Clippy, lint, incremental types,
+build and packed-consumer checks exited 0. See the current reliability record. The authorized PR91 legacy transition does not claim the old
+85% core / 70% overall floors or 85% pre-transition changed lines passed.
+Historical failures below remain evidence; merge/release blockers remain in force.
+
+## 2026-11-03: NSIS capture correction, final CI pending
+
+Current product: `1.5.0-alpha.1`, retaining PR92's canonical package. CI run
+`41776785387` exposed an incorrect installed-versus-portable hash comparison:
+the downloaded installed executable matches the extracted NSIS payload exactly.
+Tauri intentionally changes the three-byte `NSS` / `UNK` marker for NSIS and
+restores the portable main executable. This is not installation corruption.
+
+The correction captures the actual NSIS main executable at the packaging hook.
+Manifest v2 and internal payload/receipt evidence preserve separate full-file
+installed and portable hashes. Freshness checks include `app.manifest` and
+`build_support.rs`; stale `SkipBuild` inputs, artifacts and signing mode fail.
+Public assets remain the existing two files. Signing with credentials is untested.
+
+Fresh local gates passed: 601 JavaScript tests, lint, incremental typecheck,
+frontend build and eight packed-consumer modes (process/runner exits 0).
+The first capture build, nine portable CLI cases and negative verifier checks
+passed; independent static extraction matched the captured NSIS hash. The final
+post-fix package rebuild, nine safe portable CLI cases and negative-verifier
+reruns passed (process/runner exits 0). Independent audit accepted the freshness fix with
+no remaining findings. Earlier CI passed 168 native tests (two ignored) before
+build-script edits and the 210-child benchmark on both operating systems.
+Final CI for the correction remains pending; the previous hash gate is not a pass.
+
+Last measured merged coverage remains JavaScript core/overall 62.36% / 34.51%
+and Rust 34.89% / 34.93%, below the unchanged 85% / 70% floors. Live UAC/provider
+recovery, production WebView coverage and full accessibility remain unqualified.
+Earlier Narrator/keyboard checks retain their frontend scope. Merge remains
+blocked by the full gate. Do not tag or release this alpha.
+
+See [the capture correction record](docs/RELIABILITY_VALIDATION.md#2026-11-03-nsis-payload-capture-correction-current)
+for evidence, source/provenance and check limitations. Historical entries follow.
+
+## 2026-11-03: PR91/PR92 final local integration, merge blocked
+
+The resolved integration of `3011ffd` and `origin/main` `e06ff02` retains both
+histories and PR92's canonical `purgeon-core` at `1.5.0-alpha.1`. Independent
+integration and alpha-fixture reviews accepted the contents. Fresh root gates
+passed: `npm ci`, 598 JavaScript tests, lint, incremental typecheck, frontend
+build, eight packed-consumer modes, formatting, strict locked all-target x64
+Clippy and 168 native tests (166 unit plus two manifest, two ignored). Fresh
+merged distribution, nine safe packaged CLI cases and package-verifier failure
+regressions passed. Recorded process and runner exits are all 0; root PE
+ProductVersion/FileVersion are `1.5.0-alpha.1`.
+
+Combined coverage accounting exits 1 (`below-floor`) with no incomplete reasons:
+JavaScript overall/core 34.51% / 62.36%; Rust 34.93% / 34.89%. The unchanged
+70% overall / 85% core floors still fail. Fresh native collection tests/export
+exit 0 with source unchanged; no production WebView workload was collected.
+The merged benchmark passed 42 children at two repeats; the earlier 210-child
+result is historical and CI's ten-repeat run remains pending.
+
+CI for the merged head, disposable installer lifecycle, privileged runtime and
+full accessibility qualification remain pending. Earlier actual UI checks cover
+unchanged frontend source; integrated module runtime behavior is unqualified.
+Draft PR91 remains blocked from merge. Do not tag or release this alpha; release
+authorization begins at beta and requires the full gate. See
+[the final integration record](docs/RELIABILITY_VALIDATION.md#2026-11-03-final-local-integration-record-before-merge-commit)
+for exact counts, commands, local evidence links and accepted review identifiers.
+Earlier records retain their historical scope.
+
+## 2026-11-03: ten reliability priorities (previous snapshot)
+
+See [Reliability validation](docs/RELIABILITY_VALIDATION.md) for scoped evidence.
+The original CI run had seven native failures. The two-file CI short-path
+correction passed local root checks: 168 native tests (166 unit plus two manifest,
+two ignored), formatting and strict locked all-target x64 Clippy, all exit 0
+(`../analysis-logs/ten-ci-corrected-native-checks.json`). New CI is pending.
+The unchanged JavaScript suite passed 594 tests; lint, typecheck and frontend
+build passed. Previous-snapshot candidate build, safe CLI suite and package
+regressions exited 0 before the two-file correction; they do not validate it.
+Earlier candidate CLI 9/9 and static package checks passed before that rebuild.
+
+Previous-snapshot combined coverage accounting exits 1 (`below-floor`), with no incomplete
+reasons and all 32 Rust files mapped. Diagnostic overall/core results are 35.26% /
+65.16% JavaScript and 34.81% / 34.84% Rust. No production WebView workload was
+collected. The required 70% overall / 85% core floors remain blockers; do not
+merge, tag or claim release readiness. Disposable installer CI and privileged
+runtime qualification remain pending. Earlier entries retain their historical scope.
+
 ## 2026-11-03: modular feature alpha extraction
 
 The isolated modular extraction retains the existing Rust/Tauri/React stack and data identity. `packages/purgeon-core` owns canonical backend code; app paths are compatibility wrappers. Public feature imports use explicit host registration, initialization and guarded dispatch. One host per loaded package instance is intentional.

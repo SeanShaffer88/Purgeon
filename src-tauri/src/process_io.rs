@@ -53,71 +53,148 @@ fn execute_bounded(
     timeout: Duration,
     cap: usize,
 ) -> Result<Output, String> {
+    execute_authorized(command, input, timeout, cap, |_| Ok(()))
+}
+
+pub(crate) fn execute_authorized(
+    command: &mut Command,
+    input: Option<String>,
+    timeout: Duration,
+    cap: usize,
+    authorize: impl FnOnce(&std::process::Child) -> Result<(), String>,
+) -> Result<Output, String> {
+    execute_in_job(command, input, timeout, cap, None, authorize)
+}
+
+pub(crate) fn execute_in_job(
+    command: &mut Command,
+    input: Option<String>,
+    timeout: Duration,
+    cap: usize,
+    existing_job: Option<&crate::security::ProcessJob>,
+    authorize: impl FnOnce(&std::process::Child) -> Result<(), String>,
+) -> Result<Output, String> {
     validate_input(input.as_deref())?;
-    let mut child = command
+    let mut child = match command
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| e.to_string())?;
-    let start = Instant::now();
-    let job = match crate::security::ProcessJob::assign(&child) {
-        Ok(job) => job,
+    {
+        Ok(child) => child,
         Err(error) => {
-            let _ = child.kill();
-            let _ = child.wait();
-            return Err(error);
+            return Err(error.to_string());
         }
     };
-    // All three pipes were requested at spawn; take them before launching any
-    // worker so a setup failure cannot strand an already running reader.
-    let pipes = (child.stdin.take(), child.stdout.take(), child.stderr.take());
-    let (Some(mut stdin), Some(stdout), Some(stderr)) = pipes else {
-        drop(job);
-        let _ = child.kill();
-        let _ = child.wait();
-        return Err("Missing command pipe".into());
+    let start = Instant::now();
+    let owned_job;
+    let assignment = match existing_job {
+        Some(job) => job.assign_child(&child).map(|()| None),
+        None => crate::security::ProcessJob::assign(&child).map(Some),
     };
-    let writer = std::thread::spawn(move || {
-        // stdin is dropped on success and failure, delivering EOF in either case.
-        if let Some(input) = input {
-            stdin
-                .write_all(input.as_bytes())
-                .map_err(|e| e.to_string())?;
+    let job = match assignment {
+        Ok(job) => {
+            owned_job = job;
+            existing_job.or(owned_job.as_ref()).unwrap()
         }
-        Ok::<_, String>(())
-    });
-    let out = std::thread::spawn(move || drain(stdout, cap));
-    let err = std::thread::spawn(move || drain(stderr, cap));
-    let outcome = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break Ok(status),
-            Err(error) => break Err(error.to_string()),
-            Ok(None) => {}
+        Err(error) => {
+            let killed = child.kill();
+            let deadline = Instant::now() + Duration::from_secs(5);
+            while matches!(child.try_wait(), Ok(None)) && Instant::now() < deadline {
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            // Generic callers have no recovery admission state. Recovery uses
+            // an inert worker here and has not sent authorization yet.
+            return Err(format!(
+                "Command job assignment failed: {error}; root kill: {killed:?}"
+            ));
         }
-        if start.elapsed() >= timeout {
-            break Err("Command timeout; inspect the operation before retrying".into());
-        }
-        std::thread::sleep(Duration::from_millis(30));
     };
-    // Retain the existing job lifetime: root exit or timeout ends descendants.
-    // Output overflow alone never terminates the child.
-    drop(job);
-    if outcome.is_err() {
-        let _ = child.kill();
+    let mut workers = Vec::new();
+    let outcome = (|| {
+        authorize(&child)?;
+        let pipes = (child.stdin.take(), child.stdout.take(), child.stderr.take());
+        let (Some(mut stdin), Some(stdout), Some(stderr)) = pipes else {
+            return Err("Missing command pipe".into());
+        };
+        workers.push(
+            std::thread::Builder::new()
+                .name("command-input".into())
+                .spawn(move || {
+                    if let Some(input) = input {
+                        stdin
+                            .write_all(input.as_bytes())
+                            .map_err(|e| e.to_string())?;
+                    }
+                    Ok::<_, String>(Vec::new())
+                })
+                .map_err(|e| e.to_string())?,
+        );
+        workers.push(
+            std::thread::Builder::new()
+                .name("command-output".into())
+                .spawn(move || drain(stdout, cap))
+                .map_err(|e| e.to_string())?,
+        );
+        workers.push(
+            std::thread::Builder::new()
+                .name("command-error".into())
+                .spawn(move || drain(stderr, cap))
+                .map_err(|e| e.to_string())?,
+        );
+        loop {
+            match child.try_wait() {
+                Ok(Some(status)) => return Ok(status),
+                Err(error) => return Err(error.to_string()),
+                Ok(None) => {}
+            }
+            if start.elapsed() >= timeout {
+                return Err("Command timeout; inspect the operation before retrying".into());
+            }
+            std::thread::sleep(Duration::from_millis(30));
+        }
+    })();
+    let cleanup_deadline = Instant::now() + Duration::from_secs(5);
+    if let Err(error) = job.terminate_and_confirm(cleanup_deadline) {
+        return Err(format!(
+            "Command containment unconfirmed: {error}; command outcome: {outcome:?}"
+        ));
     }
-    let _ = child.wait();
-    // Collect every join before propagating any error; no early ? skips workers.
-    let written = writer.join().map_err(|_| "Input writer failed");
-    let stdout = out.join().map_err(|_| "Output reader failed");
-    let stderr = err.join().map_err(|_| "Error reader failed");
+    // A worker can be blocked even after the root exits. Never join without
+    // observing completion. Recovery callers retain their own uncertainty state.
+    while workers.iter().any(|worker| !worker.is_finished()) {
+        if Instant::now() >= cleanup_deadline {
+            return Err(format!(
+                "Command pipe shutdown unconfirmed; command outcome: {outcome:?}"
+            ));
+        }
+        std::thread::sleep(Duration::from_millis(10));
+    }
+    let mut results = workers
+        .into_iter()
+        .map(|worker| {
+            worker
+                .join()
+                .map_err(|_| "Command pipe worker failed".to_string())
+                .and_then(|result| result)
+        })
+        .collect::<Vec<_>>();
     let status = outcome?;
-    written??;
+    if results.len() != 3 {
+        return Err("Missing command pipe worker".into());
+    }
+    let stderr = results.pop().unwrap();
+    let stdout = results.pop().unwrap();
+    results.pop().unwrap()?;
     Ok(Output {
         status,
-        stdout: stdout??,
-        stderr: stderr??,
+        stdout: stdout?,
+        stderr: stderr?,
     })
+}
+
+pub(crate) fn recovery_output_limit() -> usize {
+    OUTPUT_LIMIT
 }
 
 pub fn copy_hash(mut reader: impl Read, mut writer: impl Write) -> Result<(u64, Vec<u8>), String> {
@@ -224,6 +301,157 @@ mod tests {
             .unwrap_err(),
             "Command timeout; inspect the operation before retrying"
         );
+    }
+    #[test]
+    fn root_exit_confirms_descendant_termination_before_return() {
+        use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut std::ffi::c_void;
+            fn WaitForSingleObject(handle: *mut std::ffi::c_void, milliseconds: u32) -> u32;
+        }
+        struct Markers(std::path::PathBuf);
+        impl Drop for Markers {
+            fn drop(&mut self) {
+                for stage in ["admission", "pid", "pid-ready", "release"] {
+                    let _ = std::fs::remove_file(self.0.join(stage));
+                }
+                let _ = std::fs::remove_dir(&self.0);
+            }
+        }
+        let directory = std::env::temp_dir().join(format!(
+            "purgeon-root-exit-{}",
+            crate::broker::random_id().unwrap()
+        ));
+        std::fs::create_dir(&directory).unwrap();
+        let markers = Markers(directory);
+        let [admission, pid, pid_ready, release] = ["admission", "pid", "pid-ready", "release"]
+            .map(|stage| markers.0.join(stage).to_string_lossy().replace('\'', "''"));
+        let mut command = child(&format!(
+            "$ErrorActionPreference='Stop';$deadline=[DateTime]::UtcNow.AddSeconds(15);while(-not [IO.File]::Exists('{admission}')){{if([DateTime]::UtcNow -ge $deadline){{throw 'admission timeout'}};Start-Sleep -Milliseconds 10}};$s=New-Object Diagnostics.ProcessStartInfo;$s.FileName=([Environment]::SystemDirectory+'\\WindowsPowerShell\\v1.0\\powershell.exe');$s.Arguments='-NoProfile -NonInteractive -Command \"Start-Sleep -Seconds 60\"';$s.UseShellExecute=$false;$s.CreateNoWindow=$true;$p=[Diagnostics.Process]::Start($s);[IO.File]::WriteAllText('{pid}',[string]$p.Id);[IO.File]::Open('{pid_ready}',[IO.FileMode]::CreateNew).Dispose();$deadline=[DateTime]::UtcNow.AddSeconds(15);while(-not [IO.File]::Exists('{release}')){{if([DateTime]::UtcNow -ge $deadline){{throw 'release timeout'}};Start-Sleep -Milliseconds 10}}"
+        ));
+        let mut descendant = None;
+        let result = execute_authorized(
+            &mut command,
+            None,
+            Duration::from_secs(40),
+            OUTPUT_LIMIT,
+            |_| {
+                std::fs::File::create_new(markers.0.join("admission"))
+                    .map_err(|error| format!("admission write: {error}"))?;
+                let deadline = Instant::now() + Duration::from_secs(15);
+                while !markers.0.join("pid-ready").exists() {
+                    if Instant::now() >= deadline {
+                        return Err("descendant PID publication timeout".into());
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+                let pid = std::fs::read_to_string(markers.0.join("pid"))
+                    .map_err(|error| format!("descendant PID read: {error}"))?
+                    .parse::<u32>()
+                    .map_err(|error| format!("descendant PID parse: {error}"))?;
+                // Capture the original descendant before allowing root exit.
+                // Reopening its PID after cleanup can observe a different process.
+                let handle = unsafe { OpenProcess(0x00100000, 0, pid) };
+                if handle.is_null() {
+                    return Err(format!(
+                        "descendant OpenProcess: {}",
+                        io::Error::last_os_error()
+                    ));
+                }
+                let handle = unsafe { OwnedHandle::from_raw_handle(handle) };
+                let wait = unsafe { WaitForSingleObject(handle.as_raw_handle(), 0) };
+                descendant = Some(handle);
+                if wait != 258 {
+                    return Err(format!(
+                        "descendant was not live before root release: {wait}"
+                    ));
+                }
+                std::fs::File::create_new(markers.0.join("release"))
+                    .map(|_| ())
+                    .map_err(|error| format!("release write: {error}"))
+            },
+        );
+        let descendant = descendant
+            .unwrap_or_else(|| panic!("original descendant handle was not captured: {result:?}"));
+        assert_eq!(
+            unsafe { WaitForSingleObject(descendant.as_raw_handle(), 0) },
+            0, // WAIT_OBJECT_0
+            "original descendant remained alive after executor returned"
+        );
+        let result = result.unwrap();
+        assert!(result.status.success());
+    }
+    fn assert_terminated(pid: u32) {
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut std::ffi::c_void;
+            fn WaitForSingleObject(handle: *mut std::ffi::c_void, milliseconds: u32) -> u32;
+            fn CloseHandle(handle: *mut std::ffi::c_void) -> i32;
+        }
+        let handle = unsafe { OpenProcess(0x00100000, 0, pid) };
+        if handle.is_null() {
+            assert_eq!(std::io::Error::last_os_error().raw_os_error(), Some(87));
+        } else {
+            let wait = unsafe { WaitForSingleObject(handle, 0) };
+            unsafe { CloseHandle(handle) };
+            assert_eq!(wait, 0, "descendant remained alive after executor returned");
+        }
+    }
+    #[test]
+    fn parent_death_closes_job_after_assignment() {
+        const KEY: &str = "PURGEON_JOB_PARENT_DEATH_MARKER";
+        if let Ok(marker) = std::env::var(KEY) {
+            let script = format!(
+                "[IO.File]::WriteAllText('{}',[string]$PID);Start-Sleep -Seconds 30",
+                marker.replace('\'', "''")
+            );
+            let mut process = child(&script)
+                .stdin(Stdio::null())
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+                .unwrap();
+            let _job = crate::security::ProcessJob::assign(&process).unwrap();
+            let deadline = Instant::now() + Duration::from_secs(15);
+            loop {
+                if std::fs::read_to_string(&marker).is_ok_and(|value| value.parse::<u32>().is_ok())
+                {
+                    // exit deliberately skips Rust Drop. Windows must close
+                    // the job handle as part of parent process teardown.
+                    std::process::exit(0);
+                }
+                assert!(Instant::now() < deadline);
+                assert!(process.try_wait().unwrap().is_none());
+                std::thread::sleep(Duration::from_millis(20));
+            }
+        }
+        let marker = std::env::temp_dir().join(format!(
+            "purgeon-job-death-{}",
+            crate::broker::random_id().unwrap()
+        ));
+        std::fs::File::create_new(&marker).unwrap();
+        let result = Command::new(std::env::current_exe().unwrap())
+            .args([
+                "--exact",
+                "process_io::tests::parent_death_closes_job_after_assignment",
+                "--nocapture",
+            ])
+            .env(KEY, &marker)
+            .output()
+            .unwrap();
+        assert!(
+            result.status.success(),
+            "{}{}",
+            String::from_utf8_lossy(&result.stdout),
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let pid = std::fs::read_to_string(&marker).unwrap().parse().unwrap();
+        // OS termination is asynchronous at handle close; allow a bounded
+        // grace period before asserting the observed process is signalled.
+        std::thread::sleep(Duration::from_millis(200));
+        assert_terminated(pid);
+        std::fs::remove_file(marker).unwrap();
     }
     #[test]
     fn streaming_hash_handles_short_writes_and_independent_corruption() {

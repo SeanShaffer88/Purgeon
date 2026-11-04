@@ -7,7 +7,8 @@ import { spawnSync } from 'node:child_process';
 import { parse } from 'espree';
 import { SourceMapConsumer } from 'source-map-js';
 
-export const metricVersion = 'purgeon-coverage-v1';
+export const metricVersion = 'purgeon-coverage-v2';
+// Native metric: unique mapped source lines, independently derived from LLVM segments.
 export const hash = (text) => createHash('sha256').update(text).digest('hex');
 export function canonical(value) {
   if (Array.isArray(value)) return value.map(canonical);
@@ -77,7 +78,7 @@ export function rangeHit(functions, offset, length) {
   return containing.filter((range) => range.span === smallest).every((range) => range.count > 0);
 }
 
-function inventory(root) {
+export function inventory(root) {
   const found = [];
   const descend = (folder, language) => {
     if (!fs.existsSync(folder)) return;
@@ -307,12 +308,12 @@ function fileDigest(filename) {
   finally { fs.closeSync(handle); }
   return digest.digest('hex');
 }
-function exportNative(artifacts, tool) {
+function exportNative(artifacts, tool, sources) {
   if (!path.isAbsolute(tool || '')) throw new Error('An explicit configured absolute --llvm-cov path is required');
   const inputs = [artifacts.profdataPath,...artifacts.objects.map((object) => object.path),tool];
   const before = inputs.map((filename) => ({path:filename,sha256:fileDigest(filename)}));
   const objects = [...artifacts.objects].sort((a,b) => a.path < b.path ? -1 : a.path > b.path ? 1 : 0);
-  const base = ['export',objects[0].path,`-instr-profile=${artifacts.profdataPath}`,...objects.slice(1).map((object) => `-object=${object.path}`)];
+  const base = ['export',objects[0].path,`-instr-profile=${artifacts.profdataPath}`,...objects.slice(1).map((object) => `-object=${object.path}`),...sources];
   const calls = [base,[...base,'-format=lcov']].map((args) => {
     const result = spawnSync(tool,args,{encoding:'utf8',windowsHide:true,timeout:60000,maxBuffer:128*1024*1024});
     if (result.error || result.status !== 0) throw new Error(`llvm-cov export failed (${result.status}): ${result.error?.message || result.stderr}`);
@@ -322,6 +323,106 @@ function exportNative(artifacts, tool) {
   if (JSON.stringify(before) !== JSON.stringify(after)) throw new Error('Native tool/profile/object bytes changed during export');
   return {json:calls[0].stdout,lcov:calls[1].stdout,provenance:{tool,inputs:before,calls:calls.map(({stdout,...call}) => call)}};
 }
+
+// LLVM 23 LineCoverageStats / LineCoverageIterator, not interval union:
+// https://github.com/llvm/llvm-project/blob/release/23.x/llvm/lib/ProfileData/Coverage/CoverageMapping.cpp#L1447
+// Keep segment order (including LLVM's preceding-uncounted same-location exception).
+export function nativeSegmentLines(segments, source) {
+  if (!Array.isArray(segments)) throw new Error('Missing LLVM segments');
+  const sourceLines = source.split('\n');
+  let previous;
+  for (const segment of segments) {
+    if (!Array.isArray(segment) || segment.length !== 6 ||
+        !segment.slice(0,3).every((n) => Number.isSafeInteger(n) && n >= 0) ||
+        !segment.slice(3).every((flag) => typeof flag === 'boolean') ||
+        segment[0] < 1 || segment[0] > sourceLines.length || segment[1] < 1 ||
+        segment[1] > Buffer.byteLength(sourceLines[segment[0]-1]) + 1 ||
+        (!segment[3] && segment[2] !== 0)) throw new Error('Invalid LLVM segment');
+    if (previous && (segment[0] < previous[0] || segment[0] === previous[0] &&
+        (segment[1] < previous[1] || segment[1] === previous[1] && previous[3]))) throw new Error('Invalid LLVM segment ordering');
+    previous = segment;
+  }
+  const result = new Map();
+  if (!segments.length) return result;
+  let next = 0, wrapped;
+  for (let line = segments[0][0]; next < segments.length; line++) {
+    const group = [];
+    while (next < segments.length && segments[next][0] === line) group.push(segments[next++]);
+    const starts = group.filter((s) => s[3] && s[4] && !s[5]);
+    const skipped = group.length && !group[0][3] && group[0][4];
+    const mapped = (!skipped && (wrapped?.[3] || starts.length > 0)) || group.some((s) => s[3] && s[4]);
+    if (mapped) {
+      let count = wrapped?.[2] ?? 0;
+      for (const segment of starts) count = Math.max(count,segment[2]);
+      result.set(line,count);
+    }
+    if (group.length) wrapped = group.at(-1);
+  }
+  return result;
+}
+
+export function validateNativeExports(jsonText, lcovText, entries, root) {
+  const llvm = JSON.parse(jsonText);
+  if (llvm.type !== 'llvm.coverage.json.export' || llvm.version !== '3.1.0' || !Array.isArray(llvm.data)) throw new Error('Invalid llvm-cov JSON');
+  const identities = new Map([...entries.keys()].map((name) => [path.resolve(root,name).toLowerCase(),name]));
+  const sourceName = (filename) => {
+    if (typeof filename !== 'string' || !path.isAbsolute(filename)) throw new Error('Invalid native source path');
+    return identities.get(path.resolve(filename).toLowerCase()) ?? slash(path.relative(root,path.resolve(filename)));
+  };
+  if (llvm.data.some((group) => !group || !Array.isArray(group.files))) throw new Error('Invalid llvm-cov file group');
+  const jsonFiles = new Map();
+  for (const group of llvm.data) for (const file of group.files) {
+    const relative = sourceName(file.filename);
+    if (!entries.has(relative)) continue;
+    if (jsonFiles.has(relative)) throw new Error('Duplicate LLVM source records');
+    jsonFiles.set(relative, file);
+  }
+  let current = null;
+  const lcov = new Map();
+  const summaries = new Map();
+  for (const line of lcovText.split(/\r?\n/)) {
+    if (line.startsWith('SF:')) {
+      if (current !== null) throw new Error('Unterminated LCOV source record');
+      current = sourceName(line.slice(3));
+      if (!entries.has(current)) continue;
+      if (lcov.has(current)) throw new Error('Duplicate LCOV source records');
+      lcov.set(current, new Map());
+      summaries.set(current, {});
+    } else if (line.startsWith('DA:') && lcov.has(current)) {
+      const match = line.match(/^DA:(\d+),(\d+)(?:,[^,]+)?$/);
+      if (!match) throw new Error('Invalid LCOV line counter');
+      const number = Number(match[1]);
+      if (!Number.isSafeInteger(number) || !Number.isSafeInteger(Number(match[2])) || number < 1 || number > entries.get(current).source.split('\n').length || lcov.get(current).has(number)) throw new Error('Invalid or duplicate LCOV executable line');
+      lcov.get(current).set(number, Number(match[2]));
+    } else if (/^(LF|LH):/.test(line) && lcov.has(current)) {
+      const match = line.match(/^(LF|LH):(\d+)$/);
+      if (!match || !Number.isSafeInteger(Number(match[2])) || Object.hasOwn(summaries.get(current), match[1])) throw new Error('Invalid or duplicate LCOV line summary');
+      summaries.get(current)[match[1]] = Number(match[2]);
+    } else if (line === 'end_of_record') {
+      if (current === null) throw new Error('Unexpected LCOV record terminator');
+      current = null;
+    } else if (/^(DA|LF|LH):/.test(line) && current === null) throw new Error('LCOV line data outside source record');
+  }
+  if (current !== null) throw new Error('Unterminated LCOV source record');
+
+  const result = new Map();
+  for (const [relative, file] of entries) {
+    if (file.language !== 'rust') continue;
+    const jsonFile = jsonFiles.get(relative), lines = lcov.get(relative);
+    if (!jsonFile && !lines) continue;
+    if (!jsonFile || !lines) throw new Error(`Missing native source record: ${relative}`);
+    const summary = jsonFile.summary?.lines;
+    if (!summary || !Number.isSafeInteger(summary.count) || !Number.isSafeInteger(summary.covered) || summary.count < 0 || summary.covered < 0 || summary.covered > summary.count) throw new Error(`Invalid LLVM line summary: ${relative}`);
+    const header = summaries.get(relative);
+    if (!Number.isSafeInteger(header.LF) || !Number.isSafeInteger(header.LH)) throw new Error(`Missing LCOV line summary: ${relative}`);
+    if (header.LF !== summary.count || header.LH !== summary.covered) throw new Error(`LLVM JSON/LCOV line summary mismatch: ${relative}`);
+    const derived = nativeSegmentLines(jsonFile.segments,file.source);
+    if (derived.size !== lines.size || [...derived].some(([line,count]) => lines.get(line) !== count)) throw new Error(`LLVM segment/LCOV line counter mismatch: ${relative}`);
+    result.set(relative,{lines:derived,aggregate:{count:summary.count,covered:summary.covered},unique:{count:derived.size,covered:[...derived.values()].filter((n) => n > 0).length}});
+  }
+  return result;
+}
+
 function applyNative(run, entries, root, read, reasons, options, exports) {
   const artifacts = run.artifacts || {};
   let owned;
@@ -333,41 +434,20 @@ function applyNative(run, entries, root, read, reasons, options, exports) {
       if (!path.isAbsolute(object.path || '') || names.has(object.path) || fileDigest(object.path) !== object.sha256) throw new Error('Invalid or changed covered native object');
       names.add(object.path);
     }
-    owned = (options.exportNative || exportNative)(artifacts,options.llvmCovPath);
+    owned = (options.exportNative || exportNative)(artifacts,options.llvmCovPath,[...entries].filter(([,file]) => file.language === 'rust').map(([relative]) => path.resolve(root,relative)));
     exports.push({runId:run.id,...owned.provenance,jsonSHA256:hash(owned.json),lcovSHA256:hash(owned.lcov)});
     for (const filename of [artifacts.jsonPath,artifacts.lcovPath].filter(Boolean)) read(filename);
   } catch (error) { reasons.push(`${run.id}: native derivation incomplete: ${error.message}`); return; }
-  const llvm = JSON.parse(owned.json);
-  if (!Array.isArray(llvm.data)) throw new Error('Invalid llvm-cov JSON');
-  const jsonFiles = new Map();
-  for (const group of llvm.data) for (const file of group.files || []) {
-    const relative = slash(path.relative(root, path.resolve(file.filename)));
-    if (!entries.has(relative)) continue;
-    if (jsonFiles.has(relative)) throw new Error('Duplicate LLVM source records');
-    jsonFiles.set(relative, file);
-  }
-  let current = null;
-  const lcov = new Map();
-  for (const line of owned.lcov.split(/\r?\n/)) {
-    if (line.startsWith('SF:')) {
-      current = slash(path.relative(root, path.resolve(line.slice(3))));
-      if (!entries.has(current)) continue;
-      if (lcov.has(current)) throw new Error('Duplicate LCOV source records');
-      lcov.set(current, new Map());
-    } else if (line.startsWith('DA:') && lcov.has(current)) {
-      const match = line.match(/^DA:(\d+),(\d+)(?:,[^,]+)?$/);
-      if (!match) throw new Error('Invalid LCOV line counter');
-      const number = Number(match[1]);
-      if (number < 1 || number > entries.get(current).source.split('\n').length || lcov.get(current).has(number)) throw new Error('Invalid or duplicate LCOV executable line');
-      lcov.get(current).set(number, Number(match[2]));
-    } else if (line === 'end_of_record') current = null;
-  }
+  const validated = validateNativeExports(owned.json, owned.lcov, entries, root);
+  exports.at(-1).lineDiagnostics = [...validated].map(([filename,record]) => ({filename,aggregate:record.aggregate,unique:record.unique}));
   for (const [relative, file] of entries) {
     if (file.language !== 'rust') continue;
-    const lines = lcov.get(relative);
-    const summary = jsonFiles.get(relative)?.summary?.lines;
-    if (!lines || !summary) { reasons.push(`${run.id}: native denominator unknown for ${relative}`); continue; }
-    if (summary.count !== lines.size || summary.covered !== [...lines.values()].filter((count) => count > 0).length) throw new Error(`LLVM JSON/LCOV line summary mismatch: ${relative}`);
+    const record = validated.get(relative);
+    if (!record) { reasons.push(`${run.id}: native denominator unknown for ${relative}`); continue; }
+    const lines = record.lines;
+    const mapped = [...lines.keys()].sort((a,b) => a-b);
+    if (file.nativeMappedLines && JSON.stringify(file.nativeMappedLines) !== JSON.stringify(mapped)) throw new Error('Native executable denominator changed across runs');
+    file.nativeMappedLines = mapped;
     const excluded = (line) => (file.excludedRanges || []).some((range) => range.start <= line && line <= range.end);
     const included = [...lines.keys()].filter((line) => !excluded(line)).sort((a,b) => a-b);
     if (file.nativeLines && JSON.stringify(file.nativeLines) !== JSON.stringify(included)) throw new Error('Native executable denominator changed across runs');
@@ -418,7 +498,21 @@ export function reportCoverage(manifest, evidence, options = {}) {
   }
   const incompleteReasons = [...new Set(reasons)];
   const verdict = incompleteReasons.length ? 'incomplete' : Object.values(languages).every((language) => language.core.pass && language.overall.pass) ? 'pass' : 'below-floor';
-  return { schemaVersion: 1, metricVersion, sourceTreeHash: manifest.sourceTreeHash, instrumentationId: manifest.instrumentationId, instrumentation: settings, runs: evidence.runs.map((run) => ({id:run.id,kind:run.kind,profileSetHash:run.artifacts?.profileSetHash ?? null})), metric: 'Unique AST executable source lines; native LLVM LCOV executable lines', files, languages, incompleteReasons, verdict, exitCode: verdict === 'pass' ? 0 : verdict === 'below-floor' ? 1 : 2, provenance: [...provenance.values()], nativeExports, provenanceLimits: ['Artifact hashes verify supplied bytes, not that a collector executed the claimed workload.', 'Native line exports are derived read-only from hashed profile and object inputs.'] };
+  return { schemaVersion: 1, metricVersion, sourceTreeHash: manifest.sourceTreeHash, instrumentationId: manifest.instrumentationId, instrumentation: settings, runs: evidence.runs.map((run) => ({id:run.id,kind:run.kind,profileSetHash:run.artifacts?.profileSetHash ?? null})), metric: 'Unique AST executable source lines; native unique mapped source lines derived from LLVM segments and crosschecked with LCOV DA', files, languages, incompleteReasons, verdict, exitCode: verdict === 'pass' ? 0 : verdict === 'below-floor' ? 1 : 2, provenance: [...provenance.values()], nativeExports, provenanceLimits: ['Artifact hashes verify supplied bytes, not that a collector executed the claimed workload.', 'Native line exports are derived read-only from hashed profile and object inputs.'] };
+}
+
+function outputOverwrites(output, inputs) {
+  const normalized = (filename) => {
+    const resolved = fs.existsSync(filename) ? fs.realpathSync(filename) : path.resolve(filename);
+    return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+  };
+  const destination = normalized(output);
+  const existing = fs.existsSync(output) ? fs.statSync(output, { bigint:true }) : null;
+  return inputs.some((filename) => {
+    if (normalized(filename) === destination) return true;
+    const input = existing && fs.existsSync(filename) ? fs.statSync(filename, { bigint:true }) : null;
+    return input && input.dev === existing.dev && input.ino === existing.ino;
+  });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
@@ -431,14 +525,16 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     output = value('--out');
     const manifest = JSON.parse(fs.readFileSync(value('--manifest'),'utf8'));
     const evidence = JSON.parse(fs.readFileSync(value('--evidence'),'utf8'));
-    const artifactPaths = (evidence.runs || []).flatMap((run) => { const artifacts = run.artifacts || {}; return [...(artifacts.coverageFiles || []), ...(artifacts.scriptFiles || []).flatMap((file) => [file.sourcePath,file.mapPath].filter(Boolean)), ...[artifacts.jsonPath,artifacts.lcovPath].filter(Boolean)]; });
-    const protectedPaths = [value('--manifest'),value('--evidence'), ...artifactPaths, ...(manifest.files || []).map((file) => path.resolve(manifest.sourceRoot,file.path))].map((filename) => path.resolve(filename));
-    if (protectedPaths.includes(path.resolve(output))) { output = undefined; throw new Error('Report output would overwrite source or evidence'); }
+    const artifactPaths = (evidence.runs || []).flatMap((run) => { const artifacts = run.artifacts || {}; return [...(artifacts.coverageFiles || []), ...(artifacts.scriptFiles || []).flatMap((file) => [file.sourcePath,file.mapPath].filter(Boolean)), ...[artifacts.jsonPath,artifacts.lcovPath,artifacts.profdataPath].filter(Boolean), ...(artifacts.objects || []).map((object) => object.path)]; });
+    const protectedPaths = [value('--manifest'),value('--evidence'),value('--llvm-cov'), ...artifactPaths, ...(manifest.files || []).map((file) => path.resolve(manifest.sourceRoot,file.path))].filter(Boolean);
+    if (outputOverwrites(output,protectedPaths)) { output = undefined; throw new Error('Report output would overwrite source or evidence'); }
     outputAllowed = true;
     const report = reportCoverage(manifest,evidence,{llvmCovPath:value('--llvm-cov')});
     report.inputs = [value('--manifest'),value('--evidence')].map((filename) => ({path:path.resolve(filename),sha256:hash(fs.readFileSync(filename))}));
-    const protectedInputs = [...report.inputs.map((file) => file.path), ...report.provenance.map((file) => file.path), ...manifest.files.map((file) => path.resolve(manifest.sourceRoot,file.path))];
-    if (protectedInputs.includes(path.resolve(output))) { output = undefined; throw new Error('Report output would overwrite source or evidence'); }
+    outputAllowed = false;
+    const protectedInputs = [...protectedPaths, ...report.provenance.map((file) => file.path), ...report.nativeExports.flatMap((native) => native.inputs.map((file) => file.path))];
+    if (outputOverwrites(output,protectedInputs)) { output = undefined; throw new Error('Report output would overwrite source or evidence'); }
+    outputAllowed = true;
     fs.writeFileSync(output,JSON.stringify(report,null,2)+'\n',{flag:'w'});
     process.exitCode = report.exitCode;
   } catch (error) {

@@ -241,6 +241,11 @@ impl Manager {
             active: HashMap::new(),
         })
     }
+    fn take_plan(&mut self, id: &str) -> Result<Pending, String> {
+        self.plans
+            .remove(id)
+            .ok_or_else(|| "Native operation plan is missing, expired or already used".into())
+    }
     fn prune(&mut self) {
         self.channels
             .retain(|_, value| value.created.elapsed() < GRANT_TTL);
@@ -593,6 +598,18 @@ pub fn prepare(request: OperationRequest) -> Result<PlanView, String> {
         Some(selected_channel_id),
     )
 }
+fn cancel_before_commit(phase: &AtomicU8, cancelled: &AtomicBool) -> bool {
+    if phase
+        .compare_exchange(0, 3, Ordering::SeqCst, Ordering::SeqCst)
+        .is_ok()
+        || phase.load(Ordering::SeqCst) == 3
+    {
+        cancelled.store(true, Ordering::SeqCst);
+        true
+    } else {
+        false
+    }
+}
 pub fn cancel(plan_id: &str) -> Result<CancelResult, String> {
     valid_id(plan_id, 32)?;
     let sid = broker::current_sid()?;
@@ -616,13 +633,7 @@ pub fn cancel(plan_id: &str) -> Result<CancelResult, String> {
         });
     }
     if let Some(active) = state.active.get(plan_id) {
-        if active
-            .phase
-            .compare_exchange(0, 3, Ordering::SeqCst, Ordering::SeqCst)
-            .is_ok()
-            || active.phase.load(Ordering::SeqCst) == 3
-        {
-            active.cancelled.store(true, Ordering::SeqCst);
+        if cancel_before_commit(&active.phase, &active.cancelled) {
             return Ok(CancelResult {
                 cancelled: true,
                 phase: "prepared",
@@ -931,17 +942,6 @@ fn send_reply(
         deadline,
     )
 }
-fn receive_reply(
-    pipe: broker::Handle,
-    digest: &str,
-    deadline: Instant,
-) -> Result<ServerMessage, String> {
-    let reply: Reply = broker::receive_until(pipe, deadline)?;
-    if reply.digest != digest {
-        return Err("Native operation reply binding changed".into());
-    }
-    Ok(reply.message)
-}
 fn check_authorization(envelope: &Envelope) -> Result<(), String> {
     valid_id(&envelope.plan_id, 32)?;
     valid_id(&envelope.session, 32)?;
@@ -995,10 +995,7 @@ pub fn execute(plan_id: &str) -> Result<OperationResult, String> {
     let pending = {
         let mut state = manager()?.lock().map_err(|e| e.to_string())?;
         state.prune();
-        let plan = state
-            .plans
-            .remove(plan_id)
-            .ok_or("Native operation plan is missing, expired or already used")?;
+        let plan = state.take_plan(plan_id)?;
         if plan.envelope.caller_sid != sid
             || plan.envelope.session != state.session
             || plan.created.elapsed() >= PLAN_TTL
@@ -1044,138 +1041,148 @@ pub fn execute(plan_id: &str) -> Result<OperationResult, String> {
     result
 }
 fn transport(pending: &Pending) -> Result<OperationResult, String> {
+    transport_with(pending, &mut broker::PipeTransport::default())
+}
+fn transport_with(
+    pending: &Pending,
+    io: &mut impl broker::ParentTransport,
+) -> Result<OperationResult, String> {
     check_authorization(&pending.envelope)?;
     let deadline = remaining(pending.envelope.execution_deadline_utc)?;
     let digest = envelope_digest(&pending.envelope)?;
-    let pipe_name = format!(
-        "{PIPE_PREFIX}{}-{}",
-        std::process::id(),
-        broker::random_id()?
-    );
-    let pipe = broker::server_pipe(&pipe_name)?;
-    let helper = broker::launch_domain_helper(broker::HelperKind::EventLogs, &pipe_name)?;
-    broker::accept_pipe(pipe.0)?;
-    broker::authenticate_client(pipe.0, helper.0)?;
-    broker::send_until(
-        pipe.0,
+    io.launch("--operation-broker", PIPE_PREFIX)?;
+    io.connect()?;
+    io.authenticate()?;
+    io.send(
         &Dispatch {
             envelope: pending.envelope.clone(),
             digest: digest.clone(),
         },
         deadline,
     )?;
-    let mut committed = false;
-    let mut captured = false;
-    loop {
-        if Instant::now() >= deadline {
-            return Err(
+    let mut commit = broker::CommitState::NotSent;
+    let outcome = (|| {
+        let mut committed = false;
+        let mut captured = false;
+        loop {
+            if io.now() >= deadline {
+                return Err(
                 "Native event operation deadline exceeded; retained journal/capture require review"
                     .into(),
             );
-        }
-        match receive_reply(pipe.0, &digest, deadline)? {
-            ServerMessage::Heartbeat { .. } => {}
-            ServerMessage::Ready if !committed => {
-                broker::authenticate_client(pipe.0, helper.0)?;
-                let approved = !pending.cancelled.load(Ordering::SeqCst)
-                    && now_ms()? <= pending.envelope.authorization_expires_utc
-                    && pending
-                        .phase
-                        .compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst)
-                        .is_ok();
-                broker::send_until(
-                    pipe.0,
-                    &ClientMessage::Commit {
-                        digest: digest.clone(),
-                        approved,
-                    },
-                    deadline,
-                )?;
-                if !approved {
+            }
+            let reply: Reply = io.receive(deadline)?;
+            if reply.digest != digest {
+                return Err("Native operation reply binding changed".into());
+            }
+            match reply.message {
+                ServerMessage::Heartbeat { .. } => {}
+                ServerMessage::Ready if !committed => {
+                    io.authenticate()?;
+                    let approved = !pending.cancelled.load(Ordering::SeqCst)
+                        && now_ms()? <= pending.envelope.authorization_expires_utc
+                        && pending
+                            .phase
+                            .compare_exchange(0, 1, Ordering::SeqCst, Ordering::SeqCst)
+                            .is_ok();
+                    if approved {
+                        commit = broker::CommitState::MayHaveBeenDelivered;
+                    }
+                    io.send(
+                        &ClientMessage::Commit {
+                            digest: digest.clone(),
+                            approved,
+                        },
+                        deadline,
+                    )?;
+                    if !approved {
+                        return Err(
+                            "USER_CANCELLED: native operation was cancelled before commit".into(),
+                        );
+                    }
+                    committed = true;
+                }
+                ServerMessage::Captured { artifact }
+                    if committed
+                        && !captured
+                        && matches!(pending.envelope.operation, ResolvedOperation::Export) =>
+                {
+                    captured = true;
+                    if pending.envelope.artifact_id.as_deref() != Some(artifact.id.as_str()) {
+                        return Err("Native export artifact identity changed".into());
+                    }
+                    let mut last_progress = Instant::now()
+                        .checked_sub(Duration::from_secs(1))
+                        .ok_or("Invalid copy progress clock")?;
+                    let delivery = (|| {
+                        let source =
+                            protected_artifacts::read(&pending.envelope.caller_sid, &artifact)?;
+                        let destination = pending
+                            .destination
+                            .as_ref()
+                            .ok_or("Native export destination is unavailable")?;
+                        destination.deliver(source, &artifact.digest, deadline, |bytes| {
+                            if last_progress.elapsed() >= Duration::from_secs(1)
+                                || bytes == artifact.bytes
+                            {
+                                io.send(
+                                    &ClientMessage::DeliveryProgress {
+                                        digest: digest.clone(),
+                                        bytes,
+                                    },
+                                    deadline,
+                                )?;
+                                last_progress = Instant::now();
+                            }
+                            Ok(())
+                        })
+                    })();
+                    let error = delivery
+                        .as_ref()
+                        .err()
+                        .map(|error| error.chars().take(1024).collect());
+                    io.send(
+                        &ClientMessage::DeliveryResult {
+                            digest: digest.clone(),
+                            delivered: delivery.is_ok(),
+                            error,
+                        },
+                        deadline,
+                    )?;
+                }
+                ServerMessage::Result {
+                    result: Some(mut result),
+                    error: None,
+                } if committed
+                    && (!matches!(pending.envelope.operation, ResolvedOperation::Export)
+                        || captured) =>
+                {
+                    if let OperationResult::Export { path, .. } = &mut result {
+                        *path = pending
+                            .destination
+                            .as_ref()
+                            .ok_or("Missing native export destination")?
+                            .display_path();
+                    }
+                    let result = validate_result(&pending.envelope, result)?;
+                    commit = broker::CommitState::Completed;
+                    return Ok(result);
+                }
+                ServerMessage::Result {
+                    error: Some(error), ..
+                } => return Err(error),
+                _ => {
                     return Err(
-                        "USER_CANCELLED: native operation was cancelled before commit".into(),
-                    );
+                        "Unexpected native event operation phase; retained evidence needs review"
+                            .into(),
+                    )
                 }
-                committed = true;
-            }
-            ServerMessage::Captured { artifact }
-                if committed
-                    && !captured
-                    && matches!(pending.envelope.operation, ResolvedOperation::Export) =>
-            {
-                captured = true;
-                if pending.envelope.artifact_id.as_deref() != Some(artifact.id.as_str()) {
-                    return Err("Native export artifact identity changed".into());
-                }
-                let mut last_progress = Instant::now()
-                    .checked_sub(Duration::from_secs(1))
-                    .ok_or("Invalid copy progress clock")?;
-                let delivery = (|| {
-                    let source =
-                        protected_artifacts::read(&pending.envelope.caller_sid, &artifact)?;
-                    let destination = pending
-                        .destination
-                        .as_ref()
-                        .ok_or("Native export destination is unavailable")?;
-                    destination.deliver(source, &artifact.digest, deadline, |bytes| {
-                        if last_progress.elapsed() >= Duration::from_secs(1)
-                            || bytes == artifact.bytes
-                        {
-                            broker::send_until(
-                                pipe.0,
-                                &ClientMessage::DeliveryProgress {
-                                    digest: digest.clone(),
-                                    bytes,
-                                },
-                                deadline,
-                            )?;
-                            last_progress = Instant::now();
-                        }
-                        Ok(())
-                    })
-                })();
-                let error = delivery
-                    .as_ref()
-                    .err()
-                    .map(|error| error.chars().take(1024).collect());
-                broker::send_until(
-                    pipe.0,
-                    &ClientMessage::DeliveryResult {
-                        digest: digest.clone(),
-                        delivered: delivery.is_ok(),
-                        error,
-                    },
-                    deadline,
-                )?;
-            }
-            ServerMessage::Result {
-                result: Some(mut result),
-                error: None,
-            } if committed
-                && (!matches!(pending.envelope.operation, ResolvedOperation::Export)
-                    || captured) =>
-            {
-                if let OperationResult::Export { path, .. } = &mut result {
-                    *path = pending
-                        .destination
-                        .as_ref()
-                        .ok_or("Missing native export destination")?
-                        .display_path();
-                }
-                return validate_result(&pending.envelope, result);
-            }
-            ServerMessage::Result {
-                error: Some(error), ..
-            } => return Err(error),
-            _ => {
-                return Err(
-                    "Unexpected native event operation phase; retained evidence needs review"
-                        .into(),
-                )
             }
         }
-    }
+    })();
+    outcome.map_err(|error| commit.failure(error))
 }
+
 fn validate_result(
     envelope: &Envelope,
     result: OperationResult,
@@ -1653,6 +1660,236 @@ mod tests {
             execution_deadline_utc: now + 1800000,
             parent_pid: 1,
         }
+    }
+    fn transport_pending() -> Pending {
+        Pending {
+            envelope: envelope(ResolvedOperation::Clear),
+            destination: None,
+            destination_id: None,
+            created: Instant::now(),
+            cancelled: Arc::new(AtomicBool::new(false)),
+            phase: Arc::new(AtomicU8::new(0)),
+        }
+    }
+    fn wire(pending: &Pending, message: ServerMessage) -> serde_json::Value {
+        serde_json::to_value(Reply {
+            digest: envelope_digest(&pending.envelope).unwrap(),
+            message,
+        })
+        .unwrap()
+    }
+    #[test]
+    fn transport_precommit_failures_never_approve() {
+        use broker::transport_tests::Script;
+        let pending = transport_pending();
+        let mut io = Script {
+            launch_failure: Some("USER_CANCELLED: administrator permission was cancelled".into()),
+            ..Script::default()
+        };
+        assert!(transport_with(&pending, &mut io)
+            .unwrap_err()
+            .starts_with("USER_CANCELLED:"));
+        assert_eq!(io.calls, ["launch"]);
+        assert!(io.sent.is_empty());
+        for failure in [
+            "launch",
+            "connect timeout",
+            "authenticate",
+            "send",
+            "receive",
+        ] {
+            let pending = transport_pending();
+            let mut io = Script {
+                fail: Some(failure),
+                ..Script::default()
+            };
+            let error = transport_with(&pending, &mut io).unwrap_err();
+            assert!(!error.starts_with("UNCERTAIN:"), "{error}");
+            assert!(!io
+                .sent
+                .iter()
+                .any(|v| v.get("approved") == Some(&serde_json::json!(true))));
+            assert_eq!(pending.phase.load(Ordering::SeqCst), 0);
+        }
+        let pending = transport_pending();
+        let mut io = Script {
+            expired: true,
+            ..Script::default()
+        };
+        assert!(transport_with(&pending, &mut io)
+            .unwrap_err()
+            .contains("deadline"));
+        assert_eq!(io.sent.len(), 1); // dispatch is not mutation approval
+    }
+    #[test]
+    fn transport_commit_write_and_lost_completion_are_uncertain_without_retry() {
+        use broker::transport_tests::Script;
+        for failure in [None, Some("commit write after delivery")] {
+            let pending = transport_pending();
+            let mut io = Script {
+                fail: failure,
+                replies: VecDeque::from([Ok(wire(&pending, ServerMessage::Ready))]),
+                ..Script::default()
+            };
+            let error = transport_with(&pending, &mut io).unwrap_err();
+            assert!(error.starts_with("UNCERTAIN:"), "{error}");
+            assert!(error.contains("Retain journal/artifacts"));
+            assert_eq!(
+                io.sent
+                    .iter()
+                    .filter(|v| v.get("approved") == Some(&serde_json::json!(true)))
+                    .count(),
+                1
+            );
+            assert_eq!(io.calls.iter().filter(|c| *c == "launch").count(), 1);
+        }
+    }
+    #[test]
+    fn transport_rejects_schema_digest_and_phase_before_and_after_commit() {
+        use broker::transport_tests::Script;
+        for after in [false, true] {
+            for bad in [
+                serde_json::json!({"digest":"bad","message":{"phase":"ready"}}),
+                serde_json::json!({"unexpected":true}),
+            ] {
+                let pending = transport_pending();
+                let mut replies = VecDeque::new();
+                if after {
+                    replies.push_back(Ok(wire(&pending, ServerMessage::Ready)));
+                }
+                replies.push_back(Ok(bad));
+                let mut io = Script {
+                    replies,
+                    ..Script::default()
+                };
+                assert_eq!(
+                    transport_with(&pending, &mut io)
+                        .unwrap_err()
+                        .starts_with("UNCERTAIN:"),
+                    after
+                );
+            }
+        }
+        let pending = transport_pending();
+        let mut io = Script {
+            replies: VecDeque::from([
+                Ok(wire(&pending, ServerMessage::Ready)),
+                Ok(wire(&pending, ServerMessage::Ready)),
+            ]),
+            ..Script::default()
+        };
+        assert!(transport_with(&pending, &mut io)
+            .unwrap_err()
+            .starts_with("UNCERTAIN:"));
+    }
+    #[test]
+    fn transport_crash_and_lost_completion_do_not_restore_consumed_plans() {
+        use broker::transport_tests::Script;
+        for after in [false, true] {
+            for failure in [
+                "helper crashed",
+                "pipe closed",
+                "completion deadline exceeded",
+            ] {
+                let mut state = Manager::new().unwrap();
+                let pending = transport_pending();
+                let id = pending.envelope.plan_id.clone();
+                let artifact_id = pending.envelope.artifact_id.clone();
+                state.plans.insert(id.clone(), pending);
+                let pending = state.take_plan(&id).unwrap();
+                let mut replies = VecDeque::new();
+                if after {
+                    replies.push_back(Ok(wire(&pending, ServerMessage::Ready)));
+                }
+                replies.push_back(Err(failure.into()));
+                let mut io = Script {
+                    replies,
+                    ..Script::default()
+                };
+                let error = transport_with(&pending, &mut io).unwrap_err();
+                assert_eq!(error.starts_with("UNCERTAIN:"), after);
+                assert!(state.take_plan(&id).is_err());
+                assert_eq!(pending.envelope.artifact_id, artifact_id);
+                assert_eq!(
+                    io.sent
+                        .iter()
+                        .filter(|v| v.get("approved") == Some(&serde_json::json!(true)))
+                        .count(),
+                    usize::from(after)
+                );
+            }
+        }
+    }
+    #[test]
+    fn transport_accepts_only_bound_valid_completion() {
+        use broker::transport_tests::Script;
+        for correct in [true, false] {
+            let pending = transport_pending();
+            let result = OperationResult::Clear {
+                ok: true,
+                backup: "retained native artifact".into(),
+                journal_id: if correct {
+                    channel_key(&pending.envelope.before.name)
+                } else {
+                    "wrong channel".into()
+                },
+            };
+            let mut io = Script {
+                replies: VecDeque::from([
+                    Ok(wire(&pending, ServerMessage::Ready)),
+                    Ok(wire(
+                        &pending,
+                        ServerMessage::Result {
+                            result: Some(result),
+                            error: None,
+                        },
+                    )),
+                ]),
+                ..Script::default()
+            };
+            let result = transport_with(&pending, &mut io);
+            if correct {
+                assert!(matches!(
+                    result,
+                    Ok(OperationResult::Clear { ok: true, .. })
+                ));
+            } else {
+                assert!(result.unwrap_err().starts_with("UNCERTAIN:"));
+            }
+        }
+    }
+    #[test]
+    fn transport_cancellation_wins_during_consent_or_loses_after_commit() {
+        use broker::transport_tests::Script;
+        let pending = transport_pending();
+        let phase = pending.phase.clone();
+        let cancelled = pending.cancelled.clone();
+        let mut io = Script {
+            replies: VecDeque::from([Ok(wire(&pending, ServerMessage::Ready))]),
+            on_launch: Some(Box::new(move || {
+                assert!(cancel_before_commit(&phase, &cancelled));
+            })),
+            ..Script::default()
+        };
+        assert!(transport_with(&pending, &mut io)
+            .unwrap_err()
+            .starts_with("USER_CANCELLED:"));
+        assert_eq!(
+            io.sent.last().unwrap().get("approved"),
+            Some(&serde_json::json!(false))
+        );
+        let pending = transport_pending();
+        let phase = pending.phase.clone();
+        let mut io = Script {
+            replies: VecDeque::from([Ok(wire(&pending, ServerMessage::Ready))]),
+            on_commit: Some(Box::new(move || {
+                assert!(!cancel_before_commit(&phase, &AtomicBool::new(false)));
+            })),
+            ..Script::default()
+        };
+        assert!(transport_with(&pending, &mut io)
+            .unwrap_err()
+            .starts_with("UNCERTAIN:"));
     }
     fn artifact() -> ArtifactInfo {
         ArtifactInfo { id: "b".repeat(32), path: r"C:\ProgramData\Purgeon\Broker\EventLogs\S-1-5-21-123\payload\bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb.evtx".into(), bytes: 4096, digest: "f".repeat(64) }
