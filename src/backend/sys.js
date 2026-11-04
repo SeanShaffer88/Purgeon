@@ -8,6 +8,10 @@
 // walk(roots, maxDirDepth, maxFileDepth) -> ['D<path>' | 'F<path>']
 // folderSize(p, maxEntries, maxMs) -> { bytes, entries, truncated }
 // info: { env, home, dataDir, exe }
+// acquireRecoveryLease() -> opaque token; releaseRecoveryLease(token).
+// runPS(script, input, timeoutMs, recoveryToken) / exec(file, args, recoveryToken)
+// explicitly scope recovery subprocesses; omit the token for ordinary reads.
+// Native derives the configured data root. Busy rejects before admission; no expiry.
 export const sys = {};
 
 let lowerEnv = {};

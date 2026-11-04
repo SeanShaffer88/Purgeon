@@ -194,8 +194,164 @@ pub fn protect(bytes: &[u8], decrypt: bool) -> Result<Vec<u8>, String> {
 /// Assignment follows std::process spawn; no claim of sandbox isolation is made.
 pub struct ProcessJob(*mut std::ffi::c_void);
 impl ProcessJob {
+    pub fn recovery_name() -> Result<String, String> {
+        Ok(format!(
+            "Global\\Purgeon-Recovery-{}",
+            crate::broker::random_id()?
+        ))
+    }
+
+    pub fn valid_recovery_name(name: &str) -> bool {
+        name.strip_prefix("Global\\Purgeon-Recovery-")
+            .is_some_and(|s| s.len() == 32 && s.bytes().all(|b| b.is_ascii_hexdigit()))
+    }
+
+    /// Observation never adopts or terminates the job. Inaccessible objects
+    /// remain unknown, including across a change in elevation/user identity.
+    pub fn recovery_closed(name: &str) -> Result<bool, String> {
+        if !Self::valid_recovery_name(name) {
+            return Err("Invalid recovery job name".into());
+        }
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn OpenJobObjectW(access: u32, inherit: i32, name: *const u16)
+                -> *mut std::ffi::c_void;
+        }
+        let name: Vec<u16> = name.encode_utf16().chain(Some(0)).collect();
+        let handle = unsafe { OpenJobObjectW(0x100004, 0, name.as_ptr()) };
+        if handle.is_null() {
+            let error = std::io::Error::last_os_error();
+            return Self::missing_job(error.raw_os_error()).map_err(|_| error.to_string());
+        }
+        let observer = Self(handle);
+        observer.active().map(|count| count == 0)
+    }
+
+    fn missing_job(error: Option<i32>) -> Result<bool, String> {
+        match error {
+            Some(2) => Ok(true),
+            _ => Err("Recovery job observation unknown".into()),
+        }
+    }
+
+    fn active(&self) -> Result<u32, String> {
+        #[repr(C)]
+        #[derive(Default)]
+        struct Accounting {
+            times: [i64; 4],
+            faults: u32,
+            total: u32,
+            active: u32,
+            terminated: u32,
+        }
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn QueryInformationJobObject(
+                job: *mut std::ffi::c_void,
+                class: i32,
+                info: *mut std::ffi::c_void,
+                length: u32,
+                returned: *mut u32,
+            ) -> i32;
+        }
+        let mut info = Accounting::default();
+        if unsafe {
+            QueryInformationJobObject(
+                self.0,
+                1,
+                (&mut info as *mut Accounting).cast(),
+                std::mem::size_of::<Accounting>() as u32,
+                std::ptr::null_mut(),
+            )
+        } == 0
+        {
+            return Err(std::io::Error::last_os_error().to_string());
+        }
+        Ok(info.active)
+    }
+    /// Keep the handle open until Windows reports every member gone. A root
+    /// process exit or successful TerminateJobObject alone is not that evidence.
+    pub fn terminate_and_confirm(&self, deadline: std::time::Instant) -> Result<(), String> {
+        #[repr(C)]
+        #[derive(Default)]
+        struct Accounting {
+            user: i64,
+            kernel: i64,
+            period_user: i64,
+            period_kernel: i64,
+            faults: u32,
+            total: u32,
+            active: u32,
+            terminated: u32,
+        }
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn TerminateJobObject(job: *mut std::ffi::c_void, code: u32) -> i32;
+            fn QueryInformationJobObject(
+                job: *mut std::ffi::c_void,
+                class: i32,
+                info: *mut std::ffi::c_void,
+                length: u32,
+                returned: *mut u32,
+            ) -> i32;
+        }
+        let terminated = unsafe { TerminateJobObject(self.0, 1) };
+        let failure = (terminated == 0).then(|| std::io::Error::last_os_error().to_string());
+        loop {
+            let mut accounting = Accounting::default();
+            if unsafe {
+                QueryInformationJobObject(
+                    self.0,
+                    1,
+                    (&mut accounting as *mut Accounting).cast(),
+                    std::mem::size_of::<Accounting>() as u32,
+                    std::ptr::null_mut(),
+                )
+            } == 0
+            {
+                return Err(format!(
+                    "Job accounting failed: {}; termination error: {failure:?}",
+                    std::io::Error::last_os_error()
+                ));
+            }
+            if accounting.active == 0 {
+                return Ok(());
+            }
+            if std::time::Instant::now() >= deadline {
+                return Err(format!(
+                    "Job still has {} active processes; termination error: {failure:?}",
+                    accounting.active
+                ));
+            }
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+    }
+
     pub fn assign(child: &std::process::Child) -> Result<Self, String> {
+        let job = Self::create(None)?;
+        job.assign_child(child)?;
+        Ok(job)
+    }
+
+    pub fn assign_child(&self, child: &std::process::Child) -> Result<(), String> {
         use std::os::windows::io::AsRawHandle;
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn AssignProcessToJobObject(
+                job: *mut std::ffi::c_void,
+                process: *mut std::ffi::c_void,
+            ) -> i32;
+        }
+        if unsafe { AssignProcessToJobObject(self.0, child.as_raw_handle()) } == 0 {
+            return Err(std::io::Error::last_os_error().to_string());
+        }
+        Ok(())
+    }
+
+    pub fn create(name: Option<&str>) -> Result<Self, String> {
+        if name.is_some_and(|s| !Self::valid_recovery_name(s)) {
+            return Err("Invalid recovery job name".into());
+        }
         #[repr(C)]
         struct Basic {
             process_time: i64,
@@ -229,16 +385,24 @@ impl ProcessJob {
                 info: *const std::ffi::c_void,
                 length: u32,
             ) -> i32;
-            fn AssignProcessToJobObject(
-                job: *mut std::ffi::c_void,
-                process: *mut std::ffi::c_void,
-            ) -> i32;
         }
-        let handle = unsafe { CreateJobObjectW(std::ptr::null(), std::ptr::null()) };
+        let wide = name.map(|s| s.encode_utf16().chain(Some(0)).collect::<Vec<_>>());
+        // NULL security attributes give a noninheritable handle and the token's
+        // default DACL. No weaker ACL is installed for cross-user observation.
+        let handle = unsafe {
+            CreateJobObjectW(
+                std::ptr::null(),
+                wide.as_ref().map_or(std::ptr::null(), |s| s.as_ptr()),
+            )
+        };
+        let creation_error = std::io::Error::last_os_error();
         if handle.is_null() {
-            return Err(std::io::Error::last_os_error().to_string());
+            return Err(creation_error.to_string());
         }
         let job = Self(handle);
+        if creation_error.raw_os_error() == Some(183) {
+            return Err("Recovery job name collision".into());
+        }
         let mut limits: Limits = unsafe { std::mem::zeroed() };
         limits.basic.flags = 0x2000;
         if unsafe {
@@ -249,7 +413,6 @@ impl ProcessJob {
                 std::mem::size_of::<Limits>() as u32,
             )
         } == 0
-            || unsafe { AssignProcessToJobObject(handle, child.as_raw_handle()) } == 0
         {
             return Err(std::io::Error::last_os_error().to_string());
         }
@@ -265,5 +428,40 @@ impl Drop for ProcessJob {
         unsafe {
             CloseHandle(self.0);
         }
+    }
+}
+
+#[cfg(test)]
+mod recovery_job_tests {
+    use super::*;
+    #[test]
+    fn missing_denied_collision_and_real_lifetime() {
+        assert!(ProcessJob::missing_job(Some(2)).unwrap());
+        for code in [Some(5), Some(6), Some(87), None] {
+            assert!(ProcessJob::missing_job(code).is_err());
+        }
+        assert!(ProcessJob::recovery_closed("Local\\untrusted").is_err());
+        let name = ProcessJob::recovery_name().unwrap();
+        assert!(ProcessJob::recovery_closed(&name).unwrap());
+        let job = ProcessJob::create(Some(&name)).unwrap();
+        assert!(ProcessJob::create(Some(&name)).is_err());
+        let mut child = std::process::Command::new(crate::windows_tools::command("powershell.exe"))
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                "Start-Sleep -Seconds 30",
+            ])
+            .spawn()
+            .unwrap();
+        job.assign_child(&child).unwrap();
+        assert!(!ProcessJob::recovery_closed(&name).unwrap());
+        drop(job);
+        child.wait().unwrap();
+        assert!(ProcessJob::recovery_closed(&name).unwrap());
+        // The successor can now create this exact name without overlapping the
+        // first job's process lifetime, and observation handles did not pin it.
+        let successor = ProcessJob::create(Some(&name)).unwrap();
+        drop(successor);
     }
 }

@@ -1,5 +1,20 @@
 # Quality and release gate
 
+## 2026-11-03: ten reliability priorities, validation in progress
+
+See [Reliability validation](docs/RELIABILITY_VALIDATION.md) for scoped evidence.
+Final local checks passed: 594 JavaScript tests; 167 native tests (165 unit plus
+two manifest, two ignored); formatting; strict locked all-target x64 Clippy;
+lint, typecheck and frontend build. The corrected candidate build, safe CLI suite and package regressions all exited 0 (process and runner).
+Earlier candidate CLI 9/9 and static package checks passed before that rebuild.
+
+Fresh combined coverage accounting exits 1 (`below-floor`), with no incomplete
+reasons and all 32 Rust files mapped. Diagnostic overall/core results are 35.26% /
+65.16% JavaScript and 34.81% / 34.84% Rust. No production WebView workload was
+collected. The required 70% overall / 85% core floors remain blockers; do not
+merge, tag or claim release readiness. Disposable installer CI and privileged
+runtime qualification remain pending. Earlier entries retain their historical scope.
+
 ## 2026-11-03: v1.4.3 scoped maintenance preparation
 
 PR #89 passed GitHub CI and was merged. Its scoped audit and PortableApps.com/PAF

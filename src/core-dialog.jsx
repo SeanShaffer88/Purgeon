@@ -31,7 +31,15 @@ export function useModalLayer(ref, onClose) {
     if (!el) return;
     modalLayers.set(el, true);
     updateModalIsolation();
-    if (topModal() === el) (el.querySelector('[autofocus], [data-safe-default]') || el).focus();
+    if (topModal() === el) {
+      const items = focusableIn(el);
+      // React autoFocus runs before this effect without leaving an attribute.
+      // Preserve that focus, while always honoring a conservative safe default.
+      const safeDefault = items.find((node) => node.hasAttribute('data-safe-default'));
+      const current = document.activeElement;
+      const retained = current && el.contains(current) && current.getClientRects().length > 0 && !current.disabled && !current.closest('[inert]');
+      (safeDefault || (retained ? current : items.find((node) => node.hasAttribute('autofocus'))) || el).focus();
+    }
     const onKey = (event) => {
       if (topModal() !== el || event.defaultPrevented) return;
       if (event.key === 'Escape' && close.current) { event.preventDefault(); event.stopPropagation(); close.current(); }

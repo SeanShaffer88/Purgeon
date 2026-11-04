@@ -1,36 +1,122 @@
-param([Parameter(Mandatory)][string] $Directory)
+param(
+    [Parameter(Mandatory)][string] $Directory,
+    [Parameter(Mandatory)][string] $Manifest,
+    [Parameter(Mandatory)][string] $PriorInstaller,
+    [Parameter(Mandatory)][ValidatePattern('^[0-9a-fA-F]{64}$')][string] $PriorSha256,
+    [Parameter(Mandatory)][version] $PriorVersion,
+    [string] $OutputDirectory = (Join-Path $PWD 'verification/installer'),
+    [switch] $Reinstall
+)
 . "$PSScriptRoot/windows-package-tools.ps1"
 if ($env:GITHUB_ACTIONS -ne 'true' -or $env:RUNNER_ENVIRONMENT -ne 'github-hosted') {
-    throw 'Installer smoke tests are restricted to disposable GitHub-hosted runners.'
+    throw 'Installer lifecycle tests are restricted to disposable GitHub-hosted runners.'
 }
-$packages = (Resolve-Path -LiteralPath $Directory).Path
+if ((Get-FileHash -LiteralPath $PriorInstaller -Algorithm SHA256).Hash -ne $PriorSha256) { throw 'Prior installer SHA256 mismatch; no installer executed.' }
+& "$PSScriptRoot/verify-windows-package.ps1" -Directory $Directory -Manifest $Manifest
+$package = Get-Content -LiteralPath $Manifest -Raw | ConvertFrom-Json
+if ([version]$package.version -le $PriorVersion) { throw 'Candidate must be newer than prior installer.' }
+if (Test-Path -LiteralPath $OutputDirectory) { throw 'Installer evidence destination must be new.' }
+$out = (New-Item -ItemType Directory -Path $OutputDirectory).FullName
 $testRoot = Join-Path $env:RUNNER_TEMP ('purgeon-installer-tests-' + [Guid]::NewGuid().ToString('N'))
-New-Item -ItemType Directory -Path $testRoot | Out-Null
-
-function Invoke-Installer([string] $File, [string] $Arguments) {
+$install = Join-Path $testRoot 'EXE install with spaces'
+$data = Join-Path $env:APPDATA 'com.seanshaffer.sweepuninstall'
+$portable = Join-Path $testRoot 'external portable/Purgeon Data'
+$exe = Join-Path $install 'purgeon.exe'
+$registries = @('HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Purgeon', 'HKLM:\Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Purgeon')
+$stages = [Collections.Generic.List[object]]::new()
+$evidence = [ordered]@{ status = 'failed'; priorVersion = "$PriorVersion"; candidateVersion = $package.version; priorSha256 = $PriorSha256; installPath = $install; dataPath = $data; stages = $stages; scope = 'Inert preservation fixtures; no GUI launch, no real backup/restore or running-instance upgrade.' }
+function Invoke-Installer([string] $File, [string] $Arguments, [string] $Stage) {
+    $row = [ordered]@{ stage = $Stage; executableSha256 = (Get-FileHash -LiteralPath $File).Hash; status = 'failed' }
+    $stages.Add($row)
     $process = Start-Process -FilePath $File -ArgumentList $Arguments -PassThru -WindowStyle Hidden
-    if (-not $process.WaitForExit(180000)) {
-        Stop-Process -Id $process.Id -Force
-        throw "Installer timed out: $File"
-    }
-    if ($process.ExitCode -notin @(0, 3010)) {
-        Get-ChildItem -LiteralPath $testRoot -Filter '*.log' | ForEach-Object {
-            Get-Content -LiteralPath $_.FullName -Tail 40
+    try {
+        if (!$process.WaitForExit(180000)) {
+            $process.Kill($true)
+            if (!$process.WaitForExit(5000)) { throw "Installer termination timeout: $Stage" }
+            throw "Installer timeout: $Stage"
         }
-        throw "Installer failed ($($process.ExitCode)): $File"
+        $row.exitCode = $process.ExitCode
+        if ($process.ExitCode -notin @(0, 3010)) { throw "Installer failed ($($process.ExitCode)): $Stage" }
+        $row.status = 'passed'
+    } finally { $process.Dispose() }
+}
+function Assert-Installed([version] $Version, [string] $Hash) {
+    Assert-PeMachine $exe 0x8664
+    $actual = [Diagnostics.FileVersionInfo]::GetVersionInfo($exe).ProductVersion -replace '\+.*$', ''
+    if ([version]$actual -ne $Version) { throw "Installed version $actual differs from $Version" }
+    $found = @($registries | Where-Object { Test-Path -LiteralPath $_ })
+    if ($found.Count -ne 1) { throw 'Expected exactly one Purgeon uninstall registration across registry views.' }
+    $reg = Get-ItemProperty -LiteralPath $found[0]
+    if ([version]$reg.DisplayVersion -ne $Version -or $reg.InstallLocation.Trim('"').TrimEnd('\') -ine $install.TrimEnd('\')) { throw 'Uninstall registration differs from expected version/path.' }
+    $actualHash = (Get-FileHash -LiteralPath $exe).Hash
+    if ($Hash -and $actualHash -ne $Hash) { throw 'Installed candidate differs from portable executable hash.' }
+    $stages.Add(@{ stage = 'installed-identity'; version = "$Version"; sha256 = $actualHash; registration = $reg.DisplayVersion; registryPath = $found[0] })
+}
+$sentinels = [ordered]@{}
+function Assert-Preserved {
+    foreach ($file in $sentinels.Keys) {
+        if (!(Test-Path -LiteralPath $file) -or (Get-FileHash -LiteralPath $file).Hash -ne $sentinels[$file]) { throw "Preservation failure: $file" }
     }
 }
-
-# /S must install silently, /D must preserve spaces, and the setup must install the native x64 build.
-$exeInstall = Join-Path $testRoot 'EXE install'
-Invoke-Installer "$packages/Purgeon-Setup-x64.exe" "/S /D=$exeInstall"
-Assert-PeMachine "$exeInstall/purgeon.exe" 0x8664
-$uninstaller = Join-Path $exeInstall 'uninstall.exe'
-if (-not (Test-Path -LiteralPath $uninstaller)) { throw 'NSIS uninstaller missing.' }
-Invoke-Installer $uninstaller '/S'
-$deadline = (Get-Date).AddSeconds(30)
-while ((Test-Path -LiteralPath "$exeInstall/purgeon.exe") -and (Get-Date) -lt $deadline) {
-    Start-Sleep -Milliseconds 250
+try {
+    if (@($registries | Where-Object { Test-Path -LiteralPath $_ }).Count -or (Test-Path -LiteralPath $data) -or (Get-Process -Name purgeon -ErrorAction SilentlyContinue)) { throw 'Runner has pre-existing Purgeon state; refusing mutation.' }
+    $tasks = @(
+        @{ Path = '\Purgeon\'; Name = 'Start at Sign-in' }, @{ Path = '\Purgeon\'; Name = 'Weekly Maintenance' },
+        @{ Path = '\SweepUninstall\'; Name = 'Start at Sign-in' }, @{ Path = '\SweepUninstall\'; Name = 'Weekly Maintenance' }
+    )
+    foreach ($task in $tasks) {
+        if (Get-ScheduledTask -TaskPath $task.Path -TaskName $task.Name -ErrorAction SilentlyContinue) { throw 'Pre-existing owned task name; refusing mutation.' }
+    }
+    New-Item -ItemType Directory -Path $testRoot | Out-Null
+    Invoke-Installer (Resolve-Path -LiteralPath $PriorInstaller).Path "/S /D=$install" 'install-prior'
+    Assert-Installed $PriorVersion ''
+    foreach ($relative in @('settings.json', 'snapshots/lifecycle-sentinel.json', 'backups/lifecycle-sentinel/manifest.json')) {
+        $file = Join-Path $data $relative
+        New-Item -ItemType Directory -Path (Split-Path $file) -Force | Out-Null
+        '{"fixture":"purgeon-lifecycle-inert-v1","neverExecute":true}' | Set-Content -LiteralPath $file
+        $sentinels[$file] = (Get-FileHash -LiteralPath $file).Hash
+    }
+    New-Item -ItemType Directory -Path $portable -Force | Out-Null
+    $external = Join-Path $portable 'preserve.txt'
+    'external portable data sentinel' | Set-Content -LiteralPath $external
+    $sentinels[$external] = (Get-FileHash -LiteralPath $external).Hash
+    $evidence.sentinels = $sentinels
+    $candidate = (Resolve-Path -LiteralPath (Join-Path $Directory 'Purgeon-Setup-x64.exe')).Path
+    Invoke-Installer $candidate "/S /D=$install" 'upgrade-candidate'
+    Assert-Installed ([version]$package.version) $package.portable.'Purgeon-Portable-x64.exe'
+    Assert-Preserved
+    if ($Reinstall) {
+        Invoke-Installer $candidate "/S /D=$install" 'reinstall-candidate'
+        Assert-Installed ([version]$package.version) $package.portable.'Purgeon-Portable-x64.exe'
+        Assert-Preserved
+    }
+    foreach ($repeat in 1..10) {
+        & "$PSScriptRoot/test-packaged-cli.ps1" -Directory $Directory -Manifest $Manifest -Executable $exe -OutputDirectory (Join-Path $out "installed-cli-$repeat")
+    }
+    Assert-Preserved
+    # These inert tasks never run: a future one-shot trigger plus a no-op action.
+    $scheduler = New-Object -ComObject 'Schedule.Service'
+    $scheduler.Connect()
+    foreach ($folder in @('Purgeon', 'SweepUninstall')) {
+        try { [void]$scheduler.GetFolder("\$folder") }
+        catch { [void]$scheduler.GetFolder('\').CreateFolder($folder) }
+    }
+    foreach ($task in $tasks) {
+        $action = New-ScheduledTaskAction -Execute "$env:SystemRoot\System32\cmd.exe" -Argument '/d /c exit 0'
+        $trigger = New-ScheduledTaskTrigger -Once -At (Get-Date).AddYears(1)
+        Register-ScheduledTask -TaskPath $task.Path -TaskName $task.Name -Action $action -Trigger $trigger | Out-Null
+        if (!(Get-ScheduledTask -TaskPath $task.Path -TaskName $task.Name -ErrorAction SilentlyContinue)) { throw 'Task fixture registration failed.' }
+    }
+    # NSIS _?= keeps uninstall synchronous and must be the final argument, unquoted.
+    Invoke-Installer (Join-Path $install 'uninstall.exe') "/S _?=$install" 'uninstall-candidate'
+    if ((Test-Path -LiteralPath $exe) -or @($registries | Where-Object { Test-Path -LiteralPath $_ }).Count) { throw 'Uninstall left executable or registration.' }
+    foreach ($task in $tasks) {
+        if (Get-ScheduledTask -TaskPath $task.Path -TaskName $task.Name -ErrorAction SilentlyContinue) { throw "Uninstall left owned task: $($task.Path)$($task.Name)" }
+    }
+    Assert-Preserved
+    $evidence.status = 'passed'
+} catch { $evidence.error = $_.Exception.Message; throw }
+finally {
+    $evidence | ConvertTo-Json -Depth 12 | Set-Content -LiteralPath (Join-Path $out 'result.json')
+    Write-Output "Installer lifecycle evidence: $out/result.json"
 }
-if (Test-Path -LiteralPath "$exeInstall/purgeon.exe") { throw 'EXE uninstall left the executable behind.' }
-Write-Output 'Verified native x64 EXE silent install/uninstall and paths with spaces.'

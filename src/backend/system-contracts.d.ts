@@ -20,7 +20,10 @@ export interface SystemAdapter {
   executeOperation(planId: string): Promise<unknown>;
   recoverOperation(request: { journalId: string; decision: 'acknowledgeObserved' }): Promise<{ id: string; summary: string; requiresElevation: boolean; recoveryLimits: string }>;
   cancelOperation(planId: string): Promise<{ cancelled: boolean; phase: string }>;
-  runPS(script: string, input?: string, timeoutMs?: number): Promise<string>;
+  acquireRecoveryLease(): Promise<string>;
+  releaseRecoveryLease(token: string): Promise<void>;
+  runPS(script: string, input?: string, timeoutMs?: number, recoveryToken?: string): Promise<string>;
+  exec(file: string, args: string[], recoveryToken?: string): Promise<{ ok: boolean; code: number; stdout: string; stderr: string }>;
   copyFile(source: string, target: string): Promise<number>;
   observeTransferTarget(target: TransferTarget): Promise<TransferState>;
   acquireTransferUndo(id: string): Promise<string>;

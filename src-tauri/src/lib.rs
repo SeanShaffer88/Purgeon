@@ -24,6 +24,8 @@ mod native_operations;
 mod process_io;
 mod protected_artifacts;
 mod protected_driver_package;
+mod recovery_lease;
+mod recovery_worker;
 mod registry_native;
 mod registry_recovery;
 mod restore_native;
@@ -381,6 +383,19 @@ fn text(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
+#[tauri::command]
+fn acquire_recovery_lease(app: tauri::AppHandle) -> Result<String, String> {
+    let data = portable_dir()
+        .or_else(|| app.path().app_data_dir().ok())
+        .ok_or("No application data directory")?;
+    // Same data identity as sys_info/initBackend, never a renderer-supplied path.
+    recovery_lease::acquire(&data)
+}
+#[tauri::command]
+fn release_recovery_lease(token: String) -> Result<(), String> {
+    recovery_lease::release(&token)
+}
+
 /// Runs a PowerShell script (Windows PowerShell 5.1, always present) with optional stdin.
 /// Fails with stderr when the script exits with an error.
 #[tauri::command]
@@ -388,6 +403,7 @@ async fn run_ps(
     script: String,
     input: Option<String>,
     timeout_ms: Option<u64>,
+    recovery_token: Option<String>,
 ) -> Result<String, String> {
     tauri::async_runtime::spawn_blocking(move || {
         process_io::validate_input(input.as_deref())?;
@@ -400,7 +416,10 @@ async fn run_ps(
             .args(["-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-EncodedCommand", &STANDARD.encode(utf16)])
             .creation_flags(CREATE_NO_WINDOW);
         let limit = Duration::from_millis(timeout_ms.unwrap_or(60000).clamp(1000, 1800000));
-        let output = process_io::execute(&mut command, input, limit)?;
+        let output = match recovery_token {
+            Some(token) => recovery_worker::execute(&token, &command, input, limit)?,
+            None => process_io::execute(&mut command, input, limit)?,
+        };
         if output.status.success() {
             Ok(text(&output.stdout))
         } else {
@@ -413,14 +432,27 @@ async fn run_ps(
 }
 
 /// Runs a program directly (no shell), e.g. reg.exe, sc.exe or net.exe.
+fn dispatch_exec(
+    command: &mut Command,
+    recovery_token: Option<&str>,
+    timeout: Duration,
+) -> Result<std::process::Output, String> {
+    match recovery_token {
+        Some(token) => recovery_worker::execute(token, command, None, timeout),
+        None => command.output().map_err(|e| e.to_string()),
+    }
+}
+
 #[tauri::command]
-async fn exec(file: String, args: Vec<String>) -> ExecResult {
+async fn exec(file: String, args: Vec<String>, recovery_token: Option<String>) -> ExecResult {
     tauri::async_runtime::spawn_blocking(move || {
-        match Command::new(windows_tools::command(&file))
-            .args(&args)
-            .creation_flags(CREATE_NO_WINDOW)
-            .output()
-        {
+        let mut command = Command::new(windows_tools::command(&file));
+        command.args(&args).creation_flags(CREATE_NO_WINDOW);
+        match dispatch_exec(
+            &mut command,
+            recovery_token.as_deref(),
+            Duration::from_secs(120),
+        ) {
             Ok(o) => ExecResult {
                 ok: o.status.success(),
                 code: o.status.code().unwrap_or(-1),
@@ -2086,6 +2118,14 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    match recovery_worker::private_mode() {
+        Ok(true) => return,
+        Ok(false) => {}
+        Err(error) => {
+            eprintln!("Recovery worker failed: {error}");
+            std::process::exit(2);
+        }
+    }
     match broker::private_mode() {
         Ok(true) => return,
         Ok(false) => {}
@@ -2254,6 +2294,8 @@ pub fn run() {
             secret_set,
             copy_file_checked,
             run_ps,
+            acquire_recovery_lease,
+            release_recovery_lease,
             exec,
             run_command_line,
             launch,

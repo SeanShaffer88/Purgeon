@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import { setSys } from '../src/backend/sys.js';
+import { recoveryLeaseFixture } from './recovery-lease-fixture.js';
 import * as tasks from '../src/backend/tasks.js';
 import * as history from '../src/backend/history.js';
 import * as backups from '../src/backend/backups.js';
@@ -23,7 +24,7 @@ async function fixture(options={}){
     taskOwnedStatus:async(role)=>{calls.push(['owned',role]);return {registered:true,enabled:true,owned:true,nextRun:'',lastRun:'',lastResult:null};},
     taskRecovery:async(journalId)=>({journalId,completed:true,recovered:false,recoverable:true,path:'\\Vendor\\Fixture'}),
   };
-  setSys(impl);await history.setRoot('C:\\MockTaskHistory');return {calls,impl};
+  Object.assign(impl, recoveryLeaseFixture());setSys(impl);await history.setRoot('C:\\MockTaskHistory');return {calls,impl};
 }
 test('task inventory uses bounded native pagination and read-only unsupported rows',async()=>{
   const {calls}=await fixture({pages:{first:{rows:[row],nextCursor:'next'},next:{rows:[{...row,name:'Foreign',taskId:null,enabled:null,unsupportedReason:'Unsupported principal'}],nextCursor:null}}});assert.equal((await tasks.list()).length,2);assert.deepEqual(calls,[['inventory',null],['inventory','next']]);

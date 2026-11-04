@@ -41,6 +41,26 @@ jobs:
       - name: Safety tests
         run: npm test
 
+      - name: Verification helper regression tests (ten consecutive runs)
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path verification-focused | Out-Null
+          foreach ($repeat in 1..10) {
+            node --test test/verification-automation.test.js *> "verification-focused/run-$repeat.log"
+            if ($LASTEXITCODE) { Get-Content "verification-focused/run-$repeat.log"; exit $LASTEXITCODE }
+          }
+      - name: Deterministic backend benchmarks (ten fresh-process repeats)
+        run: node scripts/benchmark-backend.mjs backend-benchmark.json 10
+      - name: Upload backend benchmark evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: backend-benchmark-${{ matrix.os }}
+          path: |
+            backend-benchmark.json
+            verification-focused/
+          if-no-files-found: error
+
   # Builds the app and installer on the newest supported Windows, then publishes a release on tags.
   build:
     needs: test
@@ -91,12 +111,31 @@ jobs:
         run: npm run dist:windows
       - name: Package verification failure tests
         run: ./scripts/test-package-verifier.ps1 -Directory release -Manifest release-manifest.json
-      - name: Record unexecuted installer and VM mutation validation
+      - name: Packaged portable CLI (ten consecutive runs)
         shell: pwsh
         run: |
-          $notice = 'Installer/VM mutation validation not run at user instruction; release qualification remains incomplete.'
-          Write-Output "::warning::$notice"
-          $notice | Out-File -FilePath $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          foreach ($repeat in 1..10) {
+            ./scripts/test-packaged-cli.ps1 -Directory release -Manifest release-manifest.json -OutputDirectory "verification/portable-cli-$repeat"
+          }
+      - name: Fetch pinned prior installer and verify before execution
+        shell: pwsh
+        run: |
+          $prior = Join-Path $env:RUNNER_TEMP 'Purgeon-Setup-1.4.2-x64.exe'
+          Invoke-WebRequest -Uri 'https://github.com/SeanShaffer88/Purgeon/releases/download/v1.4.2/Purgeon-Setup-x64.exe' -OutFile $prior
+          if ((Get-FileHash -LiteralPath $prior -Algorithm SHA256).Hash -ne 'b8ab269d53fde168e6ffa495bba4009e0c576a65b37a4e8e6877b10c69fbe266') {
+            throw 'Pinned prior installer SHA256 mismatch.'
+          }
+      - name: Disposable runner install upgrade reinstall uninstall lifecycle
+        shell: pwsh
+        run: |
+          ./scripts/test-windows-installers.ps1 -Directory release -Manifest release-manifest.json -PriorInstaller "$env:RUNNER_TEMP/Purgeon-Setup-1.4.2-x64.exe" -PriorSha256 b8ab269d53fde168e6ffa495bba4009e0c576a65b37a4e8e6877b10c69fbe266 -PriorVersion 1.4.2 -Reinstall
+      - name: Upload CLI and lifecycle evidence including failures
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: windows-verification
+          path: verification/
+          if-no-files-found: warn
       - name: Dependency inventory
         shell: pwsh
         run: |

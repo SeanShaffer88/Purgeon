@@ -75,7 +75,7 @@ export function WelcomeDialog({ onClose, onGetStarted }) {
       <div className="welcome-page">
         <div className="welcome-progress">
           {[1, 2, 3].map((n) => (
-            <span key={n} className={`step-dot ${n <= step ? 'on' : ''}`} aria-label={tx("Step {p0} of {p1}", { p0: (n), p1: (totalSteps) })} />
+            <span key={n} className={`step-dot ${n <= step ? 'on' : ''}`} aria-hidden="true" />
           ))}
           <span className="welcome-step-text" role="status" aria-live="polite">{tx("Step ")}{step}{tx(" of ")}{totalSteps}
           </span>
