@@ -5,7 +5,10 @@ fn scratch() -> PathBuf {
     let path =
         std::env::temp_dir().join(format!("purgeon-mutation-{}", broker::random_id().unwrap()));
     fs::create_dir(&path).unwrap();
-    path
+    // Use the long fixture path so TEMP aliases match the opened handle's resolved path.
+    let path = fs::canonicalize(path).unwrap();
+    let path = path.to_str().expect("scratch path must be UTF-8");
+    PathBuf::from(path.strip_prefix(r"\\?\").unwrap_or(path))
 }
 
 #[test]
