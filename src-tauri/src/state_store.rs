@@ -173,8 +173,45 @@ impl Drop for Token {
 fn os_error() -> String {
     std::io::Error::last_os_error().to_string()
 }
-fn wide(path: &Path) -> Vec<u16> {
-    path.as_os_str().encode_wide().chain(Some(0)).collect()
+// Extended paths bypass Win32 normalization. Accept only literal normal local
+// drive paths before adding the prefix; stored paths remain in normal form.
+// https://learn.microsoft.com/en-us/windows/win32/fileio/maximum-file-path-limitation
+fn wide(path: &Path) -> Result<Vec<u16>, String> {
+    let units: Vec<u16> = path.as_os_str().encode_wide().collect();
+    let invalid = || "Invalid normal local Win32 path".to_string();
+    if units.len() < 3
+        || !matches!(units[0], 65..=90 | 97..=122)
+        || units[1] != b':' as u16
+        || units[2] != b'\\' as u16
+        || units.iter().any(|&u| u == 0 || u == b'/' as u16)
+        || units[2..].contains(&(b':' as u16))
+    {
+        return Err(invalid());
+    }
+    if units.len() > 3 {
+        for component in units[3..].split(|&u| u == b'\\' as u16) {
+            if component.is_empty()
+                || component.len() > 255
+                || component == [b'.' as u16]
+                || component == [b'.' as u16, b'.' as u16]
+                || matches!(component.last(), Some(32 | 46))
+                || component
+                    .iter()
+                    .any(|&u| u < 32 || matches!(u, 34 | 42 | 60 | 62 | 63 | 124))
+            {
+                return Err(invalid());
+            }
+        }
+    }
+    let length = units.len().checked_add(5).ok_or_else(invalid)?;
+    if length > 32767 {
+        return Err("Extended Win32 path exceeds UTF-16 limit".into());
+    }
+    let mut encoded = Vec::with_capacity(length);
+    encoded.extend(r"\\?\".encode_utf16());
+    encoded.extend(units);
+    encoded.push(0);
+    Ok(encoded)
 }
 fn text_wide(text: &str) -> Vec<u16> {
     text.encode_utf16().chain(Some(0)).collect()
@@ -512,11 +549,14 @@ impl Descriptor {
 }
 
 fn open(path: &Path, directory: bool, read: bool) -> Result<Option<File>, String> {
-    // Directories remain pinned without FILE_SHARE_DELETE for the operation.
-    let access = READ_CONTROL | 0x80 | if read { 0x80000000 } else { 0 };
+    // Listing access makes directory pins participate in delete-sharing checks.
+    let access = READ_CONTROL
+        | 0x80
+        | if directory { 0x1 } else { 0 } // FILE_LIST_DIRECTORY
+        | if read { 0x80000000 } else { 0 };
     let handle = unsafe {
         CreateFileW(
-            wide(path).as_ptr(),
+            wide(path)?.as_ptr(),
             access,
             if directory { 3 } else { 1 },
             null_mut(),
@@ -616,7 +656,7 @@ impl ArtifactSlot {
             let mut file = open(&path, true, false)?;
             if file.is_none() && create {
                 let attributes = descriptor.attributes();
-                if unsafe { CreateDirectoryW(wide(&path).as_ptr(), &attributes) } == 0 {
+                if unsafe { CreateDirectoryW(wide(&path)?.as_ptr(), &attributes) } == 0 {
                     let error = std::io::Error::last_os_error();
                     if error.raw_os_error() != Some(183) {
                         return Err(error.to_string());
@@ -739,7 +779,7 @@ impl ArtifactSlot {
         self.recheck()?;
         let handle = unsafe {
             CreateFileW(
-                wide(&self.path).as_ptr(),
+                wide(&self.path)?.as_ptr(),
                 0x80000000 | 0x40000 | READ_CONTROL | 0x80,
                 1,
                 null_mut(),
@@ -796,9 +836,10 @@ impl Store {
         hash: &str,
         id: &str,
         create: bool,
+        resolve_root: impl FnOnce(Authority) -> Result<PathBuf, String>,
     ) -> Result<Option<Self>, String> {
         validate_identity(authority, sid, hash, id, create)?;
-        let root = known_folder(authority)?;
+        let root = resolve_root(authority)?;
         let descriptor = Descriptor::new(authority, sid)?;
         let shared_machine = Descriptor::shared_machine()?;
         let mut directories = Vec::new();
@@ -826,7 +867,7 @@ impl Store {
             let mut file = open(&path, true, false)?;
             if file.is_none() && create {
                 let sa = creation_descriptor.attributes();
-                if unsafe { CreateDirectoryW(wide(&path).as_ptr(), &sa) } == 0 {
+                if unsafe { CreateDirectoryW(wide(&path)?.as_ptr(), &sa) } == 0 {
                     let error = std::io::Error::last_os_error();
                     if error.raw_os_error() != Some(183) {
                         return Err(error.to_string());
@@ -902,10 +943,10 @@ impl DriverPackageRoot {
             };
             if create && index == 5 {
                 let sa = descriptor.attributes();
-                checked(unsafe { CreateDirectoryW(wide(&path).as_ptr(), &sa) })?;
+                checked(unsafe { CreateDirectoryW(wide(&path)?.as_ptr(), &sa) })?;
             } else if open(&path, true, false)?.is_none() && create {
                 let sa = descriptor.attributes();
-                if unsafe { CreateDirectoryW(wide(&path).as_ptr(), &sa) } == 0
+                if unsafe { CreateDirectoryW(wide(&path)?.as_ptr(), &sa) } == 0
                     && std::io::Error::last_os_error().raw_os_error() != Some(183)
                 {
                     return Err(os_error());
@@ -965,7 +1006,7 @@ impl DriverPackageRoot {
         let path = self.path.join(relative);
         let handle = unsafe {
             CreateFileW(
-                wide(&path).as_ptr(),
+                wide(&path)?.as_ptr(),
                 READ_CONTROL
                     | 0x80
                     | if directory { 0 } else { 0x80000000 }
@@ -1153,7 +1194,35 @@ pub fn read(
     catalog_hash: &str,
     tweak_id: &str,
 ) -> Result<Option<Vec<u8>>, String> {
-    let Some(store) = Store::open(domain, authority, caller_sid, catalog_hash, tweak_id, false)?
+    read_resolving(
+        domain,
+        authority,
+        caller_sid,
+        catalog_hash,
+        tweak_id,
+        known_folder,
+    )
+}
+
+// The resolver stays private: public callers always use Windows known folders.
+// Identity, ancestor pinning, ACLs and DPAPI remain shared with scratch tests.
+fn read_resolving(
+    domain: Domain,
+    authority: Authority,
+    caller_sid: &str,
+    catalog_hash: &str,
+    tweak_id: &str,
+    resolve_root: impl FnOnce(Authority) -> Result<PathBuf, String>,
+) -> Result<Option<Vec<u8>>, String> {
+    let Some(store) = Store::open(
+        domain,
+        authority,
+        caller_sid,
+        catalog_hash,
+        tweak_id,
+        false,
+        resolve_root,
+    )?
     else {
         return Ok(None);
     };
@@ -1197,6 +1266,26 @@ pub fn write(
     tweak_id: &str,
     plaintext: &[u8],
 ) -> Result<(), String> {
+    write_resolving(
+        domain,
+        authority,
+        caller_sid,
+        catalog_hash,
+        tweak_id,
+        plaintext,
+        known_folder,
+    )
+}
+
+fn write_resolving(
+    domain: Domain,
+    authority: Authority,
+    caller_sid: &str,
+    catalog_hash: &str,
+    tweak_id: &str,
+    plaintext: &[u8],
+    resolve_root: impl FnOnce(Authority) -> Result<PathBuf, String>,
+) -> Result<(), String> {
     if plaintext.len() > MAX_PLAIN {
         return Err("Baseline exceeds plaintext size limit".into());
     }
@@ -1208,8 +1297,16 @@ pub fn write(
     if bytes.len() > MAX_STORED {
         return Err("Protected baseline exceeds stored size limit".into());
     }
-    let store = Store::open(domain, authority, caller_sid, catalog_hash, tweak_id, true)?
-        .ok_or("Baseline directory is missing")?;
+    let store = Store::open(
+        domain,
+        authority,
+        caller_sid,
+        catalog_hash,
+        tweak_id,
+        true,
+        resolve_root,
+    )?
+    .ok_or("Baseline directory is missing")?;
     if let Some(existing) = open(&store.path, false, false)? {
         store.descriptor.validate(&existing)?;
     }
@@ -1222,10 +1319,15 @@ pub fn write(
             unsafe { GetCurrentProcessId() },
             COUNTER.fetch_add(1, Ordering::Relaxed)
         ));
+        #[cfg(test)]
+        eprintln!(
+            "baseline temporary path UTF16={}",
+            path.as_os_str().encode_wide().count()
+        );
         let sa = store.descriptor.attributes();
         let handle = unsafe {
             CreateFileW(
-                wide(&path).as_ptr(),
+                wide(&path)?.as_ptr(),
                 0x40000000 | READ_CONTROL,
                 0,
                 (&sa as *const SecurityAttributes).cast_mut().cast(),
@@ -1252,16 +1354,16 @@ pub fn write(
         file.write_all(&bytes).map_err(|e| e.to_string())?;
         file.sync_all().map_err(|e| e.to_string())?;
         store.recheck()?;
-        // Parent directories are pinned and the existing target cannot be replaced
-        // while its validation handle is open. Release it immediately before rename.
+        // Parent directories are pinned; existing target metadata and ACL are
+        // revalidated immediately before atomic replacement.
         if let Some(existing) = open(&store.path, false, false)? {
             store.descriptor.validate(&existing)?;
         }
         drop(file);
         checked(unsafe {
             MoveFileExW(
-                wide(&temporary_path).as_ptr(),
-                wide(&store.path).as_ptr(),
+                wide(&temporary_path)?.as_ptr(),
+                wide(&store.path)?.as_ptr(),
                 1 | 8,
             )
         })?;
@@ -1273,4 +1375,459 @@ pub fn write(
         let _ = std::fs::remove_file(&temporary_path);
     }
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // Only this owned directory is created or removed. No known-folder lookup
+    // occurs in these tests; all security checks still use the actual token.
+    struct Scratch(PathBuf);
+    impl Scratch {
+        fn new(sid: &str) -> Self {
+            static NEXT: AtomicU64 = AtomicU64::new(0);
+            let parent = PathBuf::from(env!("CARGO_MANIFEST_DIR").replace('/', "\\"))
+                .join(r"target\coverage-fixtures");
+            std::fs::create_dir_all(&parent).expect("create fixture parent");
+            let path = parent.join(format!(
+                "state-store-{}-{}",
+                std::process::id(),
+                NEXT.fetch_add(1, Ordering::Relaxed)
+            ));
+            let descriptor = Descriptor::new(Authority::User, sid).expect("user descriptor");
+            let attributes = descriptor.attributes();
+            checked(unsafe {
+                CreateDirectoryW(wide(&path).expect("fixture path").as_ptr(), &attributes)
+            })
+            .expect("create fresh protected fixture root");
+            Self(path)
+        }
+    }
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            std::fs::remove_dir_all(&self.0).expect("remove owned fixture root");
+        }
+    }
+    const HASH: &str = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
+
+    #[test]
+    fn user_dpapi_round_trip_without_storage() {
+        let plaintext = b"state-store diagnostic baseline";
+        let protected = crate::security::protect(plaintext, false)
+            .expect("DPAPI encrypt without state-store filesystem operations");
+        assert_ne!(protected, plaintext);
+        let decoded = crate::security::protect(&protected, true)
+            .expect("DPAPI decrypt without state-store filesystem operations");
+        assert_eq!(decoded, plaintext);
+    }
+
+    #[test]
+    fn scratch_protected_store_opens_without_dpapi() {
+        let sid = current_sid(&token().expect("current token")).expect("current SID");
+        let scratch = Scratch::new(&sid);
+        let store = Store::open(
+            Domain::Restore,
+            Authority::User,
+            &sid,
+            HASH,
+            "diagnostic",
+            true,
+            |_| Ok(scratch.0.clone()),
+        )
+        .expect("open/create protected scratch directories without DPAPI")
+        .expect("protected scratch store exists after creation");
+        store
+            .recheck()
+            .expect("recheck protected scratch ancestors");
+        assert!(open(&store.path, false, false)
+            .expect("open absent scratch record after protected directory creation")
+            .is_none());
+    }
+
+    #[test]
+    fn scratch_missing_record_does_not_create_storage() {
+        let sid = current_sid(&token().expect("current token")).expect("current SID");
+        let scratch = Scratch::new(&sid);
+        let result = read_resolving(
+            Domain::Restore,
+            Authority::User,
+            &sid,
+            HASH,
+            "missing",
+            |_| Ok(scratch.0.clone()),
+        )
+        .expect("read missing scratch record");
+        assert_eq!(result, None);
+        assert_eq!(std::fs::read_dir(&scratch.0).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn scratch_user_round_trip_protects_and_replaces_record() {
+        let sid = current_sid(&token().expect("current token")).expect("current SID");
+        let scratch = Scratch::new(&sid);
+        for plaintext in [
+            b"original baseline".as_slice(),
+            b"replacement baseline".as_slice(),
+        ] {
+            write_resolving(
+                Domain::Restore,
+                Authority::User,
+                &sid,
+                HASH,
+                "roundtrip",
+                plaintext,
+                |_| Ok(scratch.0.clone()),
+            )
+            .expect("write protected scratch baseline");
+            assert_eq!(
+                read_resolving(
+                    Domain::Restore,
+                    Authority::User,
+                    &sid,
+                    HASH,
+                    "roundtrip",
+                    |_| Ok(scratch.0.clone()),
+                )
+                .expect("read protected scratch baseline"),
+                Some(plaintext.to_vec())
+            );
+            let path = scratch
+                .0
+                .join("com.seanshaffer.sweepuninstall/broker-native/restore")
+                .join(&sid)
+                .join(HASH)
+                .join("roundtrip.dpapi");
+            let protected = std::fs::read(&path).expect("stored ciphertext");
+            assert_ne!(protected, plaintext);
+            assert_eq!(
+                crate::security::protect(&protected, true).unwrap(),
+                plaintext
+            );
+            assert_eq!(
+                std::fs::read_dir(path.parent().unwrap()).unwrap().count(),
+                1
+            );
+        }
+    }
+
+    #[test]
+    fn local_path_encoder_rejects_ambiguous_namespaces() {
+        for path in [
+            r"relative",
+            r"C:relative",
+            r"\rooted",
+            r"\\server\share",
+            r"\\?\C:\safe",
+            r"\\.\C:\safe",
+            r"C:/safe",
+            r"C:\safe/mixed",
+            r"C:\safe:stream",
+            r"C:\.\safe",
+            r"C:\safe\..\other",
+            r"C:\trailing.",
+            r"C:\trailing ",
+            r"C:\\empty",
+            "C:\\nul\0name",
+        ] {
+            assert!(wide(Path::new(path)).is_err(), "accepted {path:?}");
+        }
+    }
+
+    #[test]
+    fn local_path_encoder_preserves_unicode_and_bounds_utf16() {
+        for path in [r"C:\", r"C:\normal\file", r"Z:\基準\é\🦀"] {
+            let encoded = wide(Path::new(path)).unwrap();
+            assert_eq!(encoded, text_wide(&format!(r"\\?\{path}")));
+        }
+        // All segments remain <=255 units; this tests the total, including
+        // the four-unit prefix and terminating NUL, independently of a volume.
+        let path_of_length = |length: usize| {
+            let mut path = String::from(r"C:\");
+            while length - path.len() > 255 {
+                path.push_str(&"a".repeat(254));
+                path.push('\\');
+            }
+            path.push_str(&"b".repeat(length - path.len()));
+            path
+        };
+        assert_eq!(
+            wide(Path::new(&path_of_length(32762))).unwrap().len(),
+            32767
+        );
+        assert!(wide(Path::new(&path_of_length(32763))).is_err());
+        assert!(wide(Path::new(&format!(r"C:\{}", "a".repeat(256)))).is_err());
+    }
+
+    fn path_units(path: &Path) -> usize {
+        path.as_os_str().encode_wide().count()
+    }
+
+    // Create each component explicitly with the same protected descriptor.
+    // This never normalizes or redirects the owned scratch root.
+    fn owned_directory_at(scratch: &Scratch, sid: &str, length: usize) -> PathBuf {
+        let descriptor = Descriptor::new(Authority::User, sid).unwrap();
+        let attributes = descriptor.attributes();
+        let mut path = scratch.0.clone();
+        assert!(path_units(&path) < length);
+        while path_units(&path) < length {
+            let remaining = length - path_units(&path);
+            assert!(remaining >= 2, "directory boundary must fit a component");
+            let mut segment = (remaining - 1).min(120);
+            if remaining - segment - 1 == 1 {
+                segment -= 1;
+            }
+            path.push("界".repeat(segment));
+            let encoded = wide(&path).unwrap();
+            if unsafe { CreateDirectoryW(encoded.as_ptr(), &attributes) } == 0 {
+                let error = std::io::Error::last_os_error();
+                assert_eq!(
+                    error.raw_os_error(),
+                    Some(183),
+                    "create owned boundary: {error}"
+                );
+            }
+            assert!(open(&path, true, false).unwrap().is_some());
+        }
+        assert_eq!(path_units(&path), length);
+        path
+    }
+
+    #[test]
+    fn scratch_legacy_directory_api_and_extended_boundaries() {
+        let sid = current_sid(&token().unwrap()).unwrap();
+        let scratch = Scratch::new(&sid);
+        let descriptor = Descriptor::new(Authority::User, &sid).unwrap();
+        let attributes = descriptor.attributes();
+        eprintln!("owned root UTF16={}", path_units(&scratch.0));
+        for length in [247, 248, 285, 512] {
+            let parent = owned_directory_at(&scratch, &sid, length - 2);
+            let path = parent.join("x");
+            let legacy: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+            let result = unsafe { CreateDirectoryW(legacy.as_ptr(), &attributes) };
+            let error = if result == 0 {
+                std::io::Error::last_os_error().raw_os_error()
+            } else {
+                None
+            };
+            eprintln!(
+                "CreateDirectoryW legacy path UTF16={length}, result={result}, raw_error={error:?}"
+            );
+            if result != 0 {
+                // A host may opt into long paths. Record that result without
+                // requiring or changing its manifest or machine policy.
+                assert!(open(&path, true, false).unwrap().is_some());
+            } else {
+                checked(unsafe { CreateDirectoryW(wide(&path).unwrap().as_ptr(), &attributes) })
+                    .expect("extended CreateDirectoryW after legacy failure");
+                assert!(open(&path, true, false).unwrap().is_some());
+            }
+            eprintln!("extended directory verified UTF16={}", path_units(&path));
+        }
+        for length in [259, 260, 261, 301, 512] {
+            let parent_length = if length < 285 { 247 } else { 285 };
+            let parent = owned_directory_at(&scratch, &sid, parent_length);
+            let path = parent.join("f".repeat(length - parent_length - 1));
+            let encoded = wide(&path).unwrap();
+            let handle = unsafe {
+                CreateFileW(
+                    encoded.as_ptr(),
+                    READ_CONTROL | 0x40000000,
+                    0,
+                    (&attributes as *const SecurityAttributes).cast_mut().cast(),
+                    1,
+                    OPEN_REPARSE,
+                    null_mut(),
+                )
+            };
+            assert_ne!(
+                handle,
+                -1isize as Handle,
+                "CreateFileW UTF16={length}: {}",
+                os_error()
+            );
+            let file = unsafe { File::from_raw_handle(handle) };
+            verify(&file, &path, false).unwrap();
+            descriptor.validate(&file).unwrap();
+            drop(file);
+            assert_eq!(path_units(&path), length);
+            eprintln!("extended file verified UTF16={length}, parent={parent_length}");
+        }
+    }
+
+    #[test]
+    fn scratch_long_unicode_store_round_trips_identity_bounds() {
+        let sid = current_sid(&token().unwrap()).unwrap();
+        let scratch = Scratch::new(&sid);
+        let root = owned_directory_at(&scratch, &sid, 512);
+        assert_eq!(
+            read_resolving(
+                Domain::Restore,
+                Authority::User,
+                &sid,
+                HASH,
+                "missing",
+                |_| Ok(root.clone())
+            )
+            .unwrap(),
+            None
+        );
+        assert_eq!(std::fs::read_dir(&root).unwrap().count(), 0);
+        for id in ["a".to_string(), "z".repeat(96)] {
+            let store = Store::open(
+                Domain::Restore,
+                Authority::User,
+                &sid,
+                HASH,
+                &id,
+                true,
+                |_| Ok(root.clone()),
+            )
+            .unwrap()
+            .unwrap();
+            let record = store.path.clone();
+            let parent = record.parent().unwrap().to_path_buf();
+            eprintln!(
+                "store root={}, parent={}, record={}, id={}",
+                path_units(&root),
+                path_units(&parent),
+                path_units(&record),
+                id.len()
+            );
+            assert!(!record.to_string_lossy().starts_with(r"\\?\"));
+            drop(store);
+            for plaintext in [b"first".as_slice(), b"replacement".as_slice()] {
+                write_resolving(
+                    Domain::Restore,
+                    Authority::User,
+                    &sid,
+                    HASH,
+                    &id,
+                    plaintext,
+                    |_| Ok(root.clone()),
+                )
+                .unwrap();
+                assert_eq!(
+                    read_resolving(Domain::Restore, Authority::User, &sid, HASH, &id, |_| Ok(
+                        root.clone()
+                    ))
+                    .unwrap(),
+                    Some(plaintext.to_vec())
+                );
+                let bytes = std::fs::read(&record).unwrap();
+                assert_ne!(bytes, plaintext);
+                assert_eq!(crate::security::protect(&bytes, true).unwrap(), plaintext);
+                assert!(std::fs::read_dir(&parent).unwrap().all(|entry| !entry
+                    .unwrap()
+                    .file_name()
+                    .to_string_lossy()
+                    .starts_with(".baseline-")));
+            }
+        }
+    }
+
+    #[test]
+    fn scratch_ancestor_pinning_is_preserved() {
+        let sid = current_sid(&token().unwrap()).unwrap();
+        let scratch = Scratch::new(&sid);
+        let store = Store::open(
+            Domain::Restore,
+            Authority::User,
+            &sid,
+            HASH,
+            "pin",
+            true,
+            |_| Ok(scratch.0.clone()),
+        )
+        .unwrap()
+        .unwrap();
+        let parent = store.path.parent().unwrap().to_path_buf();
+        let record_name = store.path.file_name().unwrap().to_owned();
+        let moved = scratch.0.join("moved");
+        std::fs::write(&store.path, b"original record").unwrap();
+        let sentinel = scratch.0.join("sentinel");
+        std::fs::write(&sentinel, b"unchanged").unwrap();
+        assert!(checked(unsafe {
+            MoveFileExW(
+                wide(&parent).unwrap().as_ptr(),
+                wide(&moved).unwrap().as_ptr(),
+                0,
+            )
+        })
+        .is_err());
+        assert!(std::fs::rename(&parent, &moved).is_err());
+        assert_eq!(std::fs::read(&store.path).unwrap(), b"original record");
+        assert_eq!(std::fs::read(&sentinel).unwrap(), b"unchanged");
+        store.recheck().unwrap();
+        drop(store);
+        std::fs::rename(&parent, &moved).unwrap();
+        assert_eq!(
+            std::fs::read(moved.join(record_name)).unwrap(),
+            b"original record"
+        );
+    }
+
+    #[test]
+    fn scratch_driver_ancestor_pin_blocks_rename_until_released() {
+        let sid = current_sid(&token().unwrap()).unwrap();
+        let scratch = Scratch::new(&sid);
+        let parent = scratch.0.join("ancestor");
+        let moved = scratch.0.join("moved");
+        std::fs::create_dir(&parent).unwrap();
+        let pin = pin_driver_ancestor(&parent).unwrap();
+        assert!(checked(unsafe {
+            MoveFileExW(
+                wide(&parent).unwrap().as_ptr(),
+                wide(&moved).unwrap().as_ptr(),
+                0,
+            )
+        })
+        .is_err());
+        assert!(std::fs::rename(&parent, &moved).is_err());
+        drop(pin);
+        std::fs::rename(&parent, &moved).unwrap();
+    }
+
+    #[test]
+    fn scratch_hardlink_alias_is_rejected() {
+        let sid = current_sid(&token().unwrap()).unwrap();
+        let scratch = Scratch::new(&sid);
+        let file = scratch.0.join("original");
+        let alias = scratch.0.join("alias");
+        std::fs::write(&file, b"owned fixture").unwrap();
+        std::fs::hard_link(&file, &alias).unwrap();
+        assert!(open(&file, false, true).is_err());
+        assert!(open(&alias, false, true).is_err());
+    }
+
+    #[test]
+    fn scratch_junction_is_rejected_without_following_target() {
+        let sid = current_sid(&token().unwrap()).unwrap();
+        let scratch = Scratch::new(&sid);
+        let target = scratch.0.join("target");
+        let junction = scratch.0.join("junction");
+        std::fs::create_dir(&target).unwrap();
+        std::fs::write(target.join("sentinel"), b"unchanged").unwrap();
+        let output = std::process::Command::new("cmd.exe")
+            .args(["/d", "/c", "mklink", "/J"])
+            .arg(&junction)
+            .arg(&target)
+            .output()
+            .expect("run owned junction creation");
+        assert!(
+            output.status.success(),
+            "junction regression blocked: status={:?}; stdout={}; stderr={}",
+            output.status.code(),
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let rejected = open(&junction, true, false).is_err();
+        // Remove the junction itself before recursive scratch cleanup.
+        std::fs::remove_dir(&junction).unwrap();
+        assert!(rejected);
+        assert_eq!(
+            std::fs::read(target.join("sentinel")).unwrap(),
+            b"unchanged"
+        );
+    }
 }
