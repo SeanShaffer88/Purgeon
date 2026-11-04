@@ -29,8 +29,14 @@ automatic boot changes or reboot are supplied.
 
 [Antivirus Removal Tool](https://antivirus-removal-tool.com/) is background reference
 for the inventory workflow and stale-WMI caveat, not a bundled dependency or a
-27-vendor support catalog. Full root checks and independent qualification for this
-slice are pending. No AV remover was executed. Live UAC, vendor UI, Safe Mode and
+27-vendor support catalog. Archived local checks passed: 682 JavaScript tests,
+222 native library tests plus 2 manifest tests (2 existing ignored), lint, types,
+build, packed-consumer, formatting and strict x64 Clippy (exit 0 each). The
+[qualification candidate](../coverage/reviews/security-software-removal.json) binds
+all 296 measured files to source commit `a310361985bee098e88995b73047766d7b59ccd4`
+and retains passing manual policy comparisons and the historical floor failure.
+The candidate activates only after independent qualification review, passing
+final-head checks and PR merge. No AV remover was executed. Live UAC, vendor UI, Safe Mode and
 utilities outliving the app require manual vendor-flow testing in a disposable
 Windows VM; source/unit fixtures cannot prove these behaviors. No version tag or
 release is prepared for this slice.
