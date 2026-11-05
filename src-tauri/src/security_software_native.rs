@@ -2204,6 +2204,63 @@ public sealed class FixtureHandler : HttpMessageHandler {
     }
 
     #[test]
+    fn retention_expires_prepared_plan_and_replaces_oldest_terminal_at_capacity() {
+        let mut m = cached();
+        let mut oldest = None;
+        for _ in 0..63 {
+            let op = planned(&mut m);
+            assert!(op.state.lock().unwrap().cancel());
+            oldest.get_or_insert_with(|| op.plan.id.clone());
+        }
+        let oldest = oldest.unwrap();
+        let expired = planned(&mut m).plan.id.clone();
+        let now = Instant::now();
+        Arc::get_mut(m.operations.get_mut(&oldest).unwrap())
+            .unwrap()
+            .created = now - TTL - Duration::from_secs(1);
+        Arc::get_mut(m.operations.get_mut(&expired).unwrap())
+            .unwrap()
+            .created = now - TTL;
+
+        let replacement = planned(&mut m);
+        assert_eq!(m.operations.len(), 64);
+        assert!(!m.operations.contains_key(&oldest));
+        assert_eq!(m.operations[&expired].snapshot().unwrap().phase, "failed");
+        assert_eq!(replacement.snapshot().unwrap().phase, "prepared");
+        assert_eq!(oldest_retirable_plan(&m).as_deref(), Some(expired.as_str()));
+    }
+
+    #[test]
+    fn retention_serves_status_and_cancel_for_a_retained_plan() {
+        struct RemoveFixture(String);
+        impl Drop for RemoveFixture {
+            fn drop(&mut self) {
+                manager().lock().unwrap().operations.remove(&self.0);
+            }
+        }
+
+        let op = planned(&mut cached());
+        let id = &op.plan.id;
+        {
+            let mut global = manager().lock().unwrap();
+            assert!(!global.operations.contains_key(id));
+            global.operations.insert(id.clone(), op.clone());
+        }
+        let _remove = RemoveFixture(id.clone());
+
+        let before = status(id).unwrap();
+        assert_eq!(&before.id, id);
+        assert_eq!(before.phase, "prepared");
+        assert!(!before.cancellation_requested);
+        let result = cancel(id).unwrap();
+        assert!(result.accepted);
+        assert_eq!(result.status.phase, "cancelled");
+        assert!(result.status.cancellation_requested);
+        assert_eq!(status(id).unwrap().phase, "cancelled");
+        assert!(!cancel(id).unwrap().accepted);
+    }
+
+    #[test]
     fn retention_protects_active_review_and_lookup_records_at_capacity() {
         let fixture = AdapterFixture::new();
         let mut m = cached();
