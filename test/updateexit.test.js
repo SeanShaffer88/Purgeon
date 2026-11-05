@@ -56,3 +56,62 @@ test('the watcher checks immediately and uses the existing cadence without a dup
   t.mock.timers.tick(1);
   assert.deepEqual(calls, [['consume'], ['consume']]);
 });
+
+test('the desktop marker adapter sends no path and flushes through IPC before quitting', async (t) => {
+  const { createTauriSys } = await import('../src/backend/tauri-sys.js');
+  for (const key of ['window', '__APP_VERSION__']) {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, key);
+    t.after(() => {
+      if (previous) Object.defineProperty(globalThis, key, previous);
+      else delete globalThis[key];
+    });
+  }
+
+  const calls = [];
+  const root = 'C:\\DesktopMarkerLogFixture';
+  let observation = false;
+  globalThis.__APP_VERSION__ = '1.6.1';
+  globalThis.window = {
+    __TAURI_INTERNALS__: {
+      async invoke(command, args) {
+        calls.push([command, args]);
+        switch (command) {
+          case 'sys_info':
+            return { exe: 'C:\\UntrustedRendererValue\\Purgeon.exe', env: {} };
+          case 'make_dir':
+          case 'append_text':
+          case 'quit':
+            return undefined;
+          case 'read_dir':
+            return [];
+          case 'consume_update_exit_marker':
+            if (observation instanceof Error) throw observation;
+            return observation;
+          default:
+            throw Error(`Unexpected IPC command ${command}`);
+        }
+      },
+    },
+  };
+
+  setSys(await createTauriSys());
+  await setLogRoot(root);
+  assert.deepEqual(calls.splice(0), [
+    ['sys_info', {}], ['make_dir', { path: root }], ['read_dir', { path: root }],
+  ]);
+
+  for (const value of [false, 'true', Error('inert IPC rejection')]) {
+    observation = value;
+    assert.equal(await checkExitMarker(), false);
+    assert.deepEqual(calls.splice(0), [['consume_update_exit_marker', {}]]);
+  }
+
+  observation = true;
+  writeLog('pending desktop IPC fixture');
+  assert.equal(await checkExitMarker(), true);
+  assert.deepEqual(calls.map(([command]) => command), ['consume_update_exit_marker', 'append_text', 'quit']);
+  assert.deepEqual(calls[0][1], {});
+  assert.match(calls[1][1].path, /^C:\\DesktopMarkerLogFixture\\\d{4}-\d{2}-\d{2}\.log$/);
+  assert.match(calls[1][1].contents, /pending desktop IPC fixture/);
+  assert.deepEqual(calls[2][1], { code: 0 });
+});
