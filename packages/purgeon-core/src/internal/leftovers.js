@@ -5,7 +5,7 @@ import * as path from './winpath.js';
 import { runPSJson, psq } from './shell.js';
 import { fileRoots, shortcutRoots, GENERIC, isProtected, isProtectedKey } from './paths.js';
 import { scanDeep } from './deepscan.js';
-import { installerItems, stillPresent } from './installers.js';
+import { installerItems, isMsiFile, stillPresent } from './installers.js';
 
 const norm = (s) => (s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 
@@ -249,13 +249,15 @@ async function scan(program, shortcutTargets) {
   // Each folder and file remembers when it last changed, so a removal can skip anything that
   // changed after the scan (a program writing to it means it is in use).
   const items = merge([...registry, ...deep, ...files, ...fromInstaller]);
-  await Promise.all(
-    items.filter((i) => i.kind === 'dir' || i.kind === 'file').map(async (i) => {
+  const observed = await Promise.all(
+    items.map(async (i) => {
+      if (i.kind !== 'dir' && i.kind !== 'file') return true;
       const s = await sys.stat(i.path).catch(() => null);
       if (s) i.seen = s.modified;
+      return !isMsiFile(i) || s?.dir === false;
     })
   );
-  return items;
+  return items.filter((_, i) => observed[i]);
 }
 
 // Processes running from inside the install folder, so they can be closed before deletion.
