@@ -531,6 +531,11 @@ mutex is released during the helper, preserving existing operation lock order.
 Previous products remain private for stable IDs. Replacement products become
 eligible only after validation and recovery discovery succeed; failures leave
 eligibility empty. Previously prepared operations and held reviews are retained.
+Launch admission checks the prepared plan's exact product and utility against
+the published inventory under the same lock that guards refresh invalidation.
+If inventory is unavailable or no longer matches, the attempted plan becomes
+failed before native setup. Refresh inventory and prepare a new plan to retry.
+A launch already admitted can continue if a refresh starts afterward.
 Published release notes and earlier evidence remain historical. Inert regression
 tests force the admission interleaving using bounded channels and cover overlap,
 poisoning, panic, helper/validation/recovery failures and stable IDs. This does not
