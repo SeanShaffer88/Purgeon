@@ -1,6 +1,6 @@
 {
   "name": "purgeon-core",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Reusable Purgeon features with an explicitly injected Windows host",
   "type": "module",
   "license": "MIT",

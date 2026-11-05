@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 1.6.1 - 2026-11-05
+
+### Fixed
+- Remove AV refuses stale plans before download and rechecks the exact product and vendor tool after verification. A concurrent inventory refresh can stop the launch before Purgeon records the launch checkpoint.
+- Finished Remove AV plans make room for new requests at capacity. Purgeon retains active plans, unresolved reviews, checkpoints, and vendor files.
+
 ## 1.4.3 - 2026-11-03
 
 ### Removed
