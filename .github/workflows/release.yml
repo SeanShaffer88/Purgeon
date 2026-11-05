@@ -112,6 +112,9 @@ jobs:
           CODE_SIGN_CERT: ${{ secrets.CODE_SIGN_CERT }}
           CODE_SIGN_PASSWORD: ${{ secrets.CODE_SIGN_PASSWORD }}
         run: npm run dist:windows
+      - name: Shared NSIS child launch and trace contracts (disposable runner only)
+        shell: pwsh
+        run: ./scripts/test-nsis-webview-launch.ps1
       - name: Package verification failure tests
         run: ./scripts/test-package-verifier.ps1 -Directory release -Manifest release-manifest.json
       - name: Fetch pinned prior installer and verify before execution

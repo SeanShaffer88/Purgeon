@@ -112,6 +112,30 @@ try {
     if (!$SkipBuild) {
         New-Item -ItemType Directory -Path $evidencePath | Out-Null
         Copy-Item -LiteralPath "$captureDirectory/purgeon.exe" -Destination "$evidencePath/purgeon.exe"
+        # Capture only the known generated NSIS directory and installed Tauri cache.
+        $nsisEvidence = (New-Item -ItemType Directory -Path (Join-Path $evidencePath 'nsis')).FullName
+        $generated = Join-Path $x64 'nsis/x64'
+        $nsisInputs = [ordered]@{
+            'installer.nsi' = Join-Path $generated 'installer.nsi'
+            'utils.nsh' = Join-Path $generated 'utils.nsh'
+            'FileAssociation.nsh' = Join-Path $generated 'FileAssociation.nsh'
+            'hooks.nsh' = Join-Path $root 'src-tauri/windows/hooks.nsh'
+            'template.nsi' = Join-Path $root 'src-tauri/windows/installer.nsi'
+            'nsis_tauri_utils.dll' = Join-Path $generated 'Plugins/x86-unicode/nsis_tauri_utils.dll'
+            'makensis.exe' = Join-Path $env:LOCALAPPDATA 'tauri/NSIS/makensis.exe'
+        }
+        $nsisRows = foreach ($name in $nsisInputs.Keys) {
+            $path = $nsisInputs[$name]
+            if (Test-Path -LiteralPath $path -PathType Leaf) {
+                $item = Get-Item -LiteralPath $path
+                if ($item.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "NSIS evidence is a reparse point: $name" }
+                if ($name -match '\.(nsi|nsh)$') { Copy-Item -LiteralPath $path -Destination (Join-Path $nsisEvidence $name) }
+                @{ name = $name; path = $item.FullName; status = 'captured'; sha256 = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash; byteLength = $item.Length }
+            } else { @{ name = $name; path = $path; status = 'missing'; sha256 = $null } }
+        }
+        @{ installerSha256 = $hashes['Purgeon-Setup-x64.exe']; buildId = $buildId; inputs = @($nsisRows); scope = 'Post-build generated files and known Tauri cache; missing inputs remain unknown. Compiler invocation was not intercepted.' } |
+            ConvertTo-Json -Depth 6 | Set-Content -LiteralPath (Join-Path $nsisEvidence 'inputs.json')
+
         @{ schemaVersion = 2; buildId = $buildId; version = $version; target = 'x86_64-pc-windows-msvc'; signing = $signing; inputs = $inputs; mainBinary = $mainBinary; setupBinary = $setup64;
             payload = $capture.payload; portable = (Get-PackageFileIdentity $mainBinary); installer = (Get-PackageFileIdentity $setup64); assets = $hashes } |
             ConvertTo-Json -Depth 6 | Set-Content -LiteralPath "$evidencePath/receipt.json" -Encoding utf8

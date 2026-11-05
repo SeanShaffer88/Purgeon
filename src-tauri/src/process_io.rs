@@ -282,6 +282,60 @@ mod tests {
             .creation_flags(0x08000000);
         command
     }
+    struct OriginalProcess(std::os::windows::io::OwnedHandle);
+    impl OriginalProcess {
+        fn finish(&self) -> Result<(), String> {
+            use std::os::windows::io::AsRawHandle;
+            #[link(name = "kernel32")]
+            extern "system" {
+                fn TerminateProcess(handle: *mut std::ffi::c_void, code: u32) -> i32;
+                fn WaitForSingleObject(handle: *mut std::ffi::c_void, milliseconds: u32) -> u32;
+            }
+            let handle = self.0.as_raw_handle();
+            if unsafe { WaitForSingleObject(handle, 0) } == 0 {
+                return Ok(());
+            }
+            let terminated = unsafe { TerminateProcess(handle, 1) };
+            let error = (terminated == 0).then(io::Error::last_os_error);
+            let wait = unsafe { WaitForSingleObject(handle, 5000) };
+            if wait == 0 {
+                Ok(())
+            } else {
+                Err(format!(
+                    "fixture cleanup wait={wait}; termination={error:?}"
+                ))
+            }
+        }
+    }
+    impl Drop for OriginalProcess {
+        fn drop(&mut self) {
+            let _ = self.finish();
+        }
+    }
+    #[test]
+    fn fixture_panic_terminates_original_process() {
+        use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut std::ffi::c_void;
+            fn WaitForSingleObject(handle: *mut std::ffi::c_void, milliseconds: u32) -> u32;
+        }
+        let mut child = child("Start-Sleep -Seconds 60").spawn().unwrap();
+        let handle = unsafe { OpenProcess(0x00100001, 0, child.id()) };
+        assert!(!handle.is_null());
+        let handle = unsafe { OwnedHandle::from_raw_handle(handle) };
+        let observer = handle.try_clone().unwrap();
+        let panic = std::panic::catch_unwind(|| {
+            let _guard = OriginalProcess(handle);
+            panic!("forced fixture panic");
+        });
+        let wait = unsafe { WaitForSingleObject(observer.as_raw_handle(), 0) };
+        // Always reap the owned original, including the RED run.
+        OriginalProcess(observer).finish().unwrap();
+        child.wait().unwrap();
+        assert!(panic.is_err());
+        assert_eq!(wait, 0, "fixture panic leaked its original child");
+    }
     #[test]
     fn owned_downloader_cancellation_terminates_and_drains_before_return() {
         let mut command = child("$null=[Console]::In.ReadToEnd();Start-Sleep -Seconds 30");
@@ -313,7 +367,6 @@ mod tests {
         extern "system" {
             fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut std::ffi::c_void;
             fn WaitForSingleObject(handle: *mut std::ffi::c_void, milliseconds: u32) -> u32;
-            fn TerminateProcess(handle: *mut std::ffi::c_void, code: u32) -> i32;
             fn DuplicateHandle(
                 source: *mut std::ffi::c_void,
                 handle: *mut std::ffi::c_void,
@@ -327,16 +380,12 @@ mod tests {
         }
         struct Fixture {
             directory: std::path::PathBuf,
-            handles: Vec<OwnedHandle>,
+            handles: Vec<OriginalProcess>,
         }
         impl Drop for Fixture {
             fn drop(&mut self) {
-                // Kill only retained original handles, including on assertion failure.
                 for handle in &self.handles {
-                    unsafe {
-                        TerminateProcess(handle.as_raw_handle(), 1);
-                        assert_eq!(WaitForSingleObject(handle.as_raw_handle(), 5000), 0);
-                    }
+                    let _ = handle.finish();
                 }
                 let _ = std::fs::remove_dir_all(&self.directory);
             }
@@ -380,9 +429,9 @@ mod tests {
                 "OpenProcess: {}",
                 io::Error::last_os_error()
             );
-            let handle = unsafe { OwnedHandle::from_raw_handle(handle) };
+            let handle = OriginalProcess(unsafe { OwnedHandle::from_raw_handle(handle) });
             assert_eq!(
-                unsafe { WaitForSingleObject(handle.as_raw_handle(), 0) },
+                unsafe { WaitForSingleObject(handle.0.as_raw_handle(), 0) },
                 258
             );
             ready_tx.send(handle).unwrap();
@@ -400,10 +449,9 @@ mod tests {
                     },
                     0
                 );
-                captured
-                    .borrow_mut()
-                    .handles
-                    .push(unsafe { OwnedHandle::from_raw_handle(root_handle) });
+                captured.borrow_mut().handles.push(OriginalProcess(unsafe {
+                    OwnedHandle::from_raw_handle(root_handle)
+                }));
                 let deadline = Instant::now() + Duration::from_secs(20);
                 while !captured.borrow().directory.join("pid-ready").exists()
                     && !captured.borrow().directory.join("worker-ready").exists()
@@ -466,13 +514,16 @@ mod tests {
         let handles = fixture.borrow();
         assert_eq!(handles.handles.len(), 2);
         assert_eq!(
-            unsafe { WaitForSingleObject(handles.handles[0].as_raw_handle(), 0) },
+            unsafe { WaitForSingleObject(handles.handles[0].0.as_raw_handle(), 0) },
             0
         );
         // Termination is asynchronous: allow a bounded wait for the positive
         // case, while the old-launch control must still be alive immediately.
-        assert_eq!(unsafe { WaitForSingleObject(handles.handles[1].as_raw_handle(), if ordinary { 5000 } else { 0 }) }, if ordinary { 0 } else { 258 },
+        assert_eq!(unsafe { WaitForSingleObject(handles.handles[1].0.as_raw_handle(), if ordinary { 5000 } else { 0 }) }, if ordinary { 0 } else { 258 },
             "original descendant escaped the executor's specific owned job after pre-assignment dispatch");
+        for handle in &handles.handles {
+            handle.finish().unwrap();
+        }
     }
     #[test]
     fn ordinary_contract_preserves_unicode_input_environment_directory_and_spawn_errors() {
@@ -720,11 +771,15 @@ mod tests {
             "$ErrorActionPreference='Stop';$deadline=[DateTime]::UtcNow.AddSeconds(15);while(-not [IO.File]::Exists('{admission}')){{if([DateTime]::UtcNow -ge $deadline){{throw 'admission timeout'}};Start-Sleep -Milliseconds 10}};$s=New-Object Diagnostics.ProcessStartInfo;$s.FileName=([Environment]::SystemDirectory+'\\WindowsPowerShell\\v1.0\\powershell.exe');$s.Arguments='-NoProfile -NonInteractive -Command \"Start-Sleep -Seconds 60\"';$s.UseShellExecute=$false;$s.CreateNoWindow=$true;$p=[Diagnostics.Process]::Start($s);[IO.File]::WriteAllText('{pid}',[string]$p.Id);[IO.File]::Open('{pid_ready}',[IO.FileMode]::CreateNew).Dispose();$deadline=[DateTime]::UtcNow.AddSeconds(15);while(-not [IO.File]::Exists('{release}')){{if([DateTime]::UtcNow -ge $deadline){{throw 'release timeout'}};Start-Sleep -Milliseconds 10}}"
         ));
         let mut descendant = None;
-        let result = execute_authorized(
+        let job = crate::security::ProcessJob::create(None).unwrap();
+        let start = Instant::now();
+        let mut ready_at = None;
+        let result = execute_in_job(
             &mut command,
             None,
             Duration::from_secs(40),
             OUTPUT_LIMIT,
+            Some(&job),
             |_| {
                 std::fs::File::create_new(markers.0.join("admission"))
                     .map_err(|error| format!("admission write: {error}"))?;
@@ -741,16 +796,21 @@ mod tests {
                     .map_err(|error| format!("descendant PID parse: {error}"))?;
                 // Capture the original descendant before allowing root exit.
                 // Reopening its PID after cleanup can observe a different process.
-                let handle = unsafe { OpenProcess(0x00100000, 0, pid) };
+                let handle = unsafe { OpenProcess(0x00101001, 0, pid) };
                 if handle.is_null() {
                     return Err(format!(
                         "descendant OpenProcess: {}",
                         io::Error::last_os_error()
                     ));
                 }
-                let handle = unsafe { OwnedHandle::from_raw_handle(handle) };
+                descendant = Some(OriginalProcess(unsafe {
+                    OwnedHandle::from_raw_handle(handle)
+                }));
+                let handle = &descendant.as_ref().unwrap().0;
+                job.confirm_member(handle)?;
                 let wait = unsafe { WaitForSingleObject(handle.as_raw_handle(), 0) };
-                descendant = Some(handle);
+                ready_at = Some(start.elapsed());
+                eprintln!("root-exit ready=true exact_job_member=true before_release_wait={wait} ready_elapsed={:?}", ready_at);
                 if wait != 258 {
                     return Err(format!(
                         "descendant was not live before root release: {wait}"
@@ -761,13 +821,27 @@ mod tests {
                     .map_err(|error| format!("release write: {error}"))
             },
         );
+        let wait = descendant
+            .as_ref()
+            .map(|process| unsafe { WaitForSingleObject(process.0.as_raw_handle(), 0) });
+        eprintln!(
+            "root-exit executor={:?} elapsed={:?} ready_elapsed={ready_at:?}",
+            result.as_ref().map(|output| output.status),
+            start.elapsed()
+        );
         let descendant = descendant
             .unwrap_or_else(|| panic!("original descendant handle was not captured: {result:?}"));
+        let wait = wait.unwrap();
+        eprintln!(
+            "root-exit original_wait={wait} post_release_elapsed={:?}",
+            ready_at.map(|ready| start.elapsed() - ready)
+        );
         assert_eq!(
-            unsafe { WaitForSingleObject(descendant.as_raw_handle(), 0) },
+            wait,
             0, // WAIT_OBJECT_0
             "original descendant remained alive after executor returned"
         );
+        descendant.finish().unwrap();
         let result = result.unwrap();
         assert!(result.status.success());
     }

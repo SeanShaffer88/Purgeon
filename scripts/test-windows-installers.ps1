@@ -35,9 +35,16 @@ $registries = @('HKLM:\Software\Microsoft\Windows\CurrentVersion\Uninstall\Purge
 $stages = [Collections.Generic.List[object]]::new()
 $evidence = [ordered]@{ status = 'failed'; priorVersion = "$PriorVersion"; candidateVersion = $package.version; priorSha256 = $PriorSha256; installPath = $install; dataPath = $data; stages = $stages; scope = 'Inert preservation fixtures; no GUI launch, no real backup/restore or running-instance upgrade.' }
 function Invoke-Installer([string] $File, [string] $Arguments, [string] $Stage) {
-    $row = [ordered]@{ stage = $Stage; executableSha256 = (Get-FileHash -LiteralPath $File).Hash; status = 'failed' }
+    $row = [ordered]@{ stage = $Stage; executableSha256 = (Get-FileHash -LiteralPath $File -Algorithm SHA256).Hash; status = 'failed'; traceStatus = 'unavailable' }
+    $token = "$Stage-$([guid]::NewGuid().ToString('N'))"
+    $row.stdout = Join-Path $out "$token.stdout.jsonl"
+    $row.stderr = Join-Path $out "$token.stderr.log"
+    if ($Stage -in @('upgrade-candidate', 'reinstall-candidate')) {
+        $Arguments = '/LOGPURGEON ' + $Arguments
+        $row.traceStatus = 'requested'
+    }
     $stages.Add($row)
-    $process = Start-Process -FilePath $File -ArgumentList $Arguments -PassThru -WindowStyle Hidden
+    $process = Start-Process -FilePath $File -ArgumentList $Arguments -PassThru -WindowStyle Hidden -RedirectStandardOutput $row.stdout -RedirectStandardError $row.stderr
     try {
         if (!$process.WaitForExit(180000)) {
             $process.Kill($true)
@@ -45,6 +52,9 @@ function Invoke-Installer([string] $File, [string] $Arguments, [string] $Stage) 
             throw "Installer timeout: $Stage"
         }
         $row.exitCode = $process.ExitCode
+        if ($row.traceStatus -eq 'requested') {
+            $row.traceStatus = if ((Test-Path -LiteralPath $row.stdout) -and (Get-Item -LiteralPath $row.stdout).Length) { 'captured' } else { 'unavailable' }
+        }
         if ($process.ExitCode -notin @(0, 3010)) { throw "Installer failed ($($process.ExitCode)): $Stage" }
         $row.status = 'passed'
     } finally { $process.Dispose() }
@@ -138,6 +148,20 @@ try {
 } catch {
     $evidence.error = $_.Exception.Message
     $evidence.diagnosticErrors = [Collections.Generic.List[string]]::new()
+    # Capture the failure state before any later runner cleanup or uninstall.
+    $evidence.failureSnapshot = [ordered]@{ executable = $null; registry = @(); sentinels = @() }
+    try {
+        if (Test-Path -LiteralPath $exe -PathType Leaf) {
+            $evidence.failureSnapshot.executable = @{ sha256 = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash; byteLength = (Get-Item -LiteralPath $exe).Length; version = [Diagnostics.FileVersionInfo]::GetVersionInfo($exe).ProductVersion }
+        }
+        $evidence.failureSnapshot.registry = @($registries | Where-Object { Test-Path -LiteralPath $_ } | ForEach-Object {
+            $identity = Get-ItemProperty -LiteralPath $_
+            @{ path = $_; DisplayVersion = $identity.DisplayVersion; InstallLocation = $identity.InstallLocation }
+        })
+        $evidence.failureSnapshot.sentinels = @($sentinels.Keys | ForEach-Object {
+            @{ path = $_; expectedSha256 = $sentinels[$_]; actualSha256 = $(if (Test-Path -LiteralPath $_ -PathType Leaf) { (Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash } else { $null }) }
+        })
+    } catch { $evidence.diagnosticErrors.Add($_.Exception.Message) }
     try {
         $diagnostics = (New-Item -ItemType Directory -Path (Join-Path $out 'diagnostics') -ErrorAction Stop).FullName
         $inputs = [ordered]@{
@@ -149,6 +173,10 @@ try {
         $internalEvidence = if ($EvidenceDirectory) { $EvidenceDirectory } else { "$((Resolve-Path -LiteralPath $Directory).Path)-evidence" }
         $inputs['captured-installer-payload.exe'] = Join-Path $internalEvidence 'purgeon.exe'
         $inputs['package-receipt.json'] = Join-Path $internalEvidence 'receipt.json'
+        foreach ($name in @('installer.nsi', 'utils.nsh', 'FileAssociation.nsh', 'hooks.nsh', 'template.nsi', 'inputs.json')) {
+            $inputs["build-$name"] = Join-Path $internalEvidence "nsis/$name"
+        }
+
         if ($stages | Where-Object { $_.stage -in @('upgrade-candidate', 'reinstall-candidate') }) { $inputs['installed-candidate.exe'] = $exe }
         foreach ($name in $inputs.Keys) {
             try {
@@ -156,7 +184,7 @@ try {
                     $inputFile = Get-Item -LiteralPath $inputs[$name] -ErrorAction Stop
                     if ($inputFile.Attributes -band [IO.FileAttributes]::ReparsePoint) { throw "Diagnostic input is a reparse point: $name" }
                     Copy-Item -LiteralPath $inputFile.FullName -Destination (Join-Path $diagnostics $name) -ErrorAction Stop
-                } elseif ($name -ne 'installer.nsi') { throw "Diagnostic input missing: $name" }
+                } else { throw "Diagnostic input missing: $name" }
             } catch { $evidence.diagnosticErrors.Add($_.Exception.Message) }
         }
     } catch { $evidence.diagnosticErrors.Add($_.Exception.Message) }
