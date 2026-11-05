@@ -2193,7 +2193,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
                 if let Some(admission) = admission {
                     assert_eq!(setup_calls, 0);
                     assert!(effects.calls.is_empty());
-                    let detail = admission.err().expect("stale launch was admitted");
+                    let detail = admission.expect_err("stale launch was admitted");
                     let status = op.snapshot().unwrap();
                     assert_eq!(status.phase, "failed");
                     assert_eq!(status.detail, detail);
