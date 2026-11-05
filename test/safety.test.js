@@ -438,14 +438,15 @@ test('installer technology and silent switches are recognised', () => {
   assert.equal(uninstallerExe('C:\\Program Files\\Foo\\uninst.exe /x'), 'C:\\Program Files\\Foo\\uninst.exe');
 });
 
-test('installer records become safe, collapsed removal items', () => {
+test('MSI records stay exact while Inno records keep their directory grouping', () => {
   const items = msiItems(['C:\\Program Files\\Foo\\foo.exe', 'C:\\Program Files\\Foo\\bin\\a.dll', 'C:\\Windows\\System32\\foo.sys', 'C:\\Users\\x\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo\\', '02:\\SOFTWARE\\Foo\\Installed', '01:\\Software\\Classes\\.foo\\']);
   const show = items.map((i) => `${i.kind}:${i.path}${i.name !== undefined ? `|${i.name}` : ''}`);
-  assert.ok(show.includes('dir:C:\\Program Files\\Foo'));
-  assert.ok(!show.some((s) => s.includes('bin')), 'nested folders collapse into their parent');
+  assert.ok(show.includes('file:C:\\Program Files\\Foo\\foo.exe'));
+  assert.ok(show.includes('file:C:\\Program Files\\Foo\\bin\\a.dll'));
   assert.ok(!show.some((s) => s.includes('System32')), 'system folders are never offered');
-  assert.ok(show.includes('dir:C:\\Users\\x\\AppData\\Roaming\\Microsoft\\Windows\\Start Menu\\Programs\\Foo'));
+  assert.ok(!show.some((s) => s.startsWith('dir:')), 'MSI directory key paths are not recursive evidence');
   assert.ok(show.includes('value:HKEY_LOCAL_MACHINE\\SOFTWARE\\Foo|Installed'));
+  assert.equal(show.length, 3, 'protected registry values are never offered');
   const inno = innoItems(['FC:\\Program Files\\Foo', 'FC:\\Program Files\\Foo\\a.dll', 'KSoftware\\Foo', 'KSoftware\\Foo\\Sub'], new Map([
     ['c:\\program files\\foo', 'dir'],
     ['c:\\program files\\foo\\a.dll', 'file'],

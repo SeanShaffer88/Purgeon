@@ -114,6 +114,7 @@ The menu bar is also the window’s title bar: drag its empty middle to move the
 - services, scheduled tasks and firewall rules;
 - Explorer right-click entries, shell extensions, file types and URL handlers;
 - data and cache folders named after the program's own executables.
+- files and registry values listed by Windows Installer. An MSI component path identifies the recorded file or value, so folder cleanup needs separate evidence.
 
 **Choosing what to remove**
 - Every item shows its **ownership evidence**. Name-only matches and unattributed snapshot changes start unchecked. Internal ranking scores are selection heuristics, not measured probabilities.

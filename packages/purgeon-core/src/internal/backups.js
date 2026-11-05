@@ -11,6 +11,7 @@ import { regAddArgs } from './snapshots.js';
 import { isJunkPath, installedFamilies } from './junk.js';
 import { readState, guardReason } from './safety.js';
 import { readSettings } from './settings.js';
+import { isLegacyMsiDirectory, isMsiFile } from './installers.js';
 
 let backupRoot = '';
 const setRoot = async (dir) => {
@@ -268,6 +269,10 @@ async function changedSinceScan(item) {
   return !!s && s.modified > item.seen + 2000;
 }
 
+const legacyMsiDirectoryDetail = 'MSI record does not identify this folder for removal. Run a fresh leftover scan.';
+const msiFileDetail = 'MSI-recorded path could not be confirmed as a file. Run a fresh leftover scan.';
+const confirmedFile = async (target) => (await sys.stat(target).catch(() => null))?.dir === false;
+
 async function guardFor(items, owners, state) {
   const guarded = items.some((i) => ['dir', 'file', 'key'].includes(i.kind));
   const live = guarded ? state || (await readState().catch(() => null)) : null;
@@ -309,8 +314,10 @@ async function planRemoval({ items, owners = [], state }) {
   for (const item of items.filter((i) => i.kind === 'createkey')) log(item, true, (await reg(['query', item.path])).ok ? 'Already exists' : 'Would recreate the key');
   for (const item of items.filter((i) => i.kind === 'setvalue')) log(item, !!regAddArgs(item.path, item.name, item.valueType, item.data), regAddArgs(item.path, item.name, item.valueType, item.data) ? 'Would put back the earlier value' : 'This value type cannot be written back');
   for (const item of items.filter((i) => i.kind === 'dir' || i.kind === 'file')) {
-    if (isProtected(item.path)) log(item, false, 'Protected location, would be skipped');
+    if (isLegacyMsiDirectory(item)) log(item, false, legacyMsiDirectoryDetail);
+    else if (isProtected(item.path)) log(item, false, 'Protected location, would be skipped');
     else if (!(await sys.exists(item.path))) log(item, true, 'Already gone');
+    else if (isMsiFile(item) && !(await confirmedFile(item.path))) log(item, false, msiFileDetail);
     else if (blocked(item)) log(item, false, `${blocked(item)}, would be skipped`);
     else if (await changedSinceScan(item)) log(item, false, 'Changed since the scan, would be skipped');
     else log(item, true, 'Would move to the Recycle Bin');
@@ -540,12 +547,21 @@ async function removeItemsLocked(leaseToken, { title, items, owners = [], state,
 
   for (const item of items.filter((i) => i.kind === 'dir' || i.kind === 'file')) {
     if (stopNow()) break;
+    if (isLegacyMsiDirectory(item)) {
+      log(item, false, legacyMsiDirectoryDetail);
+      continue;
+    }
     if (isProtected(item.path)) {
       log(item, false, 'Protected location, skipped');
       continue;
     }
     if (!(await sys.exists(item.path))) {
       log(item, true, 'Already gone');
+      continue;
+    }
+    const msiFile = isMsiFile(item);
+    if (msiFile && !(await confirmedFile(item.path))) {
+      log(item, false, msiFileDetail);
       continue;
     }
     const why = blocked(item) || ((await changedSinceScan(item)) && 'Changed since the scan; scan again to include it');
@@ -555,6 +571,11 @@ async function removeItemsLocked(leaseToken, { title, items, owners = [], state,
     }
     try {
       await intent({ kind: item.kind, path: item.path, recycled: true });
+      if (msiFile && !(await confirmedFile(item.path))) {
+        await unchanged();
+        log(item, false, msiFileDetail);
+        continue;
+      }
       await trashItem(item.path);
       await record({ kind: item.kind, path: item.path, recycled: true });
       log(item, true, 'Moved to Recycle Bin');

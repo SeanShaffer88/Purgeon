@@ -73,31 +73,28 @@ while ($rec = Call $view 'Fetch' 'InvokeMethod' @()) {
 `;
 
 const HIVE = { '0': 'HKEY_CLASSES_ROOT', '1': 'HKEY_CURRENT_USER', '2': 'HKEY_LOCAL_MACHINE', '3': 'HKEY_USERS' };
+const MSI_RECORD = 'Listed by its Windows Installer package';
 
-// Turns Windows Installer key paths into removal items: files (grouped into their top folders)
-// and registry values.
+export const isMsiFile = (item) => item.kind === 'file' && item.reason === MSI_RECORD;
+export const isLegacyMsiDirectory = (item) => item.kind === 'dir' && item.reason === MSI_RECORD;
+
+// A Windows Installer component key path is evidence for that file or value only.
 export function msiItems(keyPaths) {
   const files = [];
   const items = [];
-  const folderKeys = []; // components whose key path is a folder (ends with "\")
   for (const raw of keyPaths) {
-    if (/^[a-z]:\\.+\\$/i.test(raw)) {
-      folderKeys.push(String(raw).replace(/\\$/, ''));
-      continue;
-    }
-    const reg = String(raw).match(/^[02]?([0-3]):\\(.+)$/);
+    if (typeof raw !== 'string') continue;
+    const reg = raw.match(/^[02]?([0-3]):\\(.+)$/);
     if (reg) {
       const parts = reg[2].replace(/\\$/, '').split('\\');
       const name = parts.pop();
       const key = `${HIVE[reg[1]]}\\${parts.join('\\')}`;
-      if (parts.length && !isProtectedKey(key)) items.push({ kind: 'value', path: key, name, score: 90, reason: 'Listed by its Windows Installer package' });
-    } else if (/^[a-z]:\\/i.test(raw)) files.push(String(raw).replace(/\\$/, ''));
+      if (parts.length && !isProtectedKey(key)) items.push({ kind: 'value', path: key, name, score: 90, reason: MSI_RECORD });
+    } else if (/^[a-z]:\\/i.test(raw) && !/[\\/]$/.test(raw) && !isProtected(raw)) {
+      files.push({ kind: 'file', path: raw, score: 100, reason: MSI_RECORD });
+    }
   }
-  // A folder the package put files in stands for those files, unless it is a shared or system folder.
-  const folders = topMost([...new Set([...files.map((f) => path.dirname(f)), ...folderKeys])].filter((d) => !isProtected(d)));
-  for (const d of folders) items.push({ kind: 'dir', path: d, score: 100, reason: 'Listed by its Windows Installer package' });
-  for (const f of files) if (!folders.some((d) => under(f, d)) && !isProtected(f)) items.push({ kind: 'file', path: f, score: 100, reason: 'Listed by its Windows Installer package' });
-  return items;
+  return [...items, ...files];
 }
 
 // Strings in an Inno Setup uninstall log (unins000.dat) that name files, folders or registry keys.
@@ -187,6 +184,7 @@ export async function installerItems(p) {
 
 // Of items read before an uninstall, the ones still present afterwards.
 export async function stillPresent(items) {
+  items = items.filter((item) => !isLegacyMsiDirectory(item));
   if (!items.length) return [];
   const flags = await runPSJson(
     `$in = [Console]::In.ReadToEnd() | ConvertFrom-Json
