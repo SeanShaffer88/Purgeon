@@ -1,5 +1,25 @@
 # Quality and release gate
 
+## 2026-11-04: 1.5.0-beta.1 release preparation (validation pending)
+
+Metadata and consumption examples now target `1.5.0-beta.1`. Controller-supplied
+GitHub records for PR91–96 show MERGED and SUCCESS for both Windows test jobs and
+the build job at each final head; publish was SKIPPED. PR91's merge activates the
+independently audited manual baseline under CONSTRAINTS.md. Later qualification
+records remain historical candidates in their original files; merge/check evidence
+does not replace independent review or exact measured-source identity proof.
+
+Fresh beta npm/native gates, independent release review, packaging, final-head CI
+and downloaded artifact verification remain pending. No new coverage run or pass
+is claimed. Reuse requires exact unchanged proof for all 296 measured files against
+the current v2 manifest. This metadata-only preparation has 0/0 changed executable
+lines per language (not applicable); controller verification must confirm identity.
+
+This is an unsigned beta with live vendor/UAC/Safe Mode/outliving-app behavior
+UNVERIFIED. Disposable CI installer checks do not qualify AV removal. The known
+refresh-admission stale-eligibility race remains for the next slice. See
+[release notes](RELEASE_NOTES.md) for limits and data-preserving 1.4.3 rollback.
+Earlier alpha/canceled-beta statements below are historical, not current status.
 ## 2026-11-04: manual coverage policy, merge-gated adoption
 
 The owner-approved replacement in [CONSTRAINTS.md](CONSTRAINTS.md) requires exact

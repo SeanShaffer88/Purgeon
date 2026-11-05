@@ -2,7 +2,7 @@
 
 Dependency-free ESM extraction of [SeanShaffer88/Purgeon](https://github.com/SeanShaffer88/Purgeon), MIT, copyright Sean Shaffer. The app composes the same canonical implementations through private repository wrappers. No npm registry publication is configured or performed.
 
-Install a locally produced tarball with `npm install --offline --ignore-scripts ./purgeon-core-1.5.0-alpha.1.tgz`. Produce it with `npm pack ./packages/purgeon-core --ignore-scripts`. See [CAPABILITIES.md](./CAPABILITIES.md) for every named operation, channel, dependency and app-only boundary. Package exports are explicit; arbitrary dispatch and raw system access are unsupported. The export map is an API boundary, not a security sandbox against reading installed private files or malicious host adapters.
+Install a locally produced tarball with `npm install --offline --ignore-scripts ./purgeon-core-1.5.0-beta.1.tgz`. Produce it with `npm pack ./packages/purgeon-core --ignore-scripts`. See [CAPABILITIES.md](./CAPABILITIES.md) for every named operation, channel, dependency and app-only boundary. Package exports are explicit; arbitrary dispatch and raw system access are unsupported. The export map is an API boundary, not a security sandbox against reading installed private files or malicious host adapters.
 
 ```js
 import { registerRuntime, initializeRuntime } from 'purgeon-core/runtime';

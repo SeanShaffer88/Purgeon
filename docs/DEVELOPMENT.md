@@ -1,5 +1,23 @@
 # Development record
 
+## 2026-11-04: beta preparation and deferred Remove AV race
+
+Current metadata and package consumption examples target `1.5.0-beta.1`.
+PR91–96 merged with successful final-head Windows tests/builds (publish skipped),
+as shown by the controller's captured GitHub records. PR91's independently audited
+manual coverage baseline is activated by its merge; subsequent review records
+retain their historical wording and require their own independent review evidence.
+Fresh beta gates and exact identity proof for all 296 measured files remain pending;
+no fresh coverage result, installer qualification or publication is claimed here.
+
+The refresh-completion invalidation described below does not cover refresh admission:
+a concurrent plan can still use the previous inventory while its replacement helper
+runs. That stale-eligibility race is the next implementation slice, without a fix in
+this preparation. Live vendor execution, UAC, Safe Mode and utilities outliving the
+app remain UNVERIFIED; disposable CI installer tests do not qualify those AV flows.
+See [release notes](../RELEASE_NOTES.md) for unsigned-beta limits and rollback to
+1.4.3 while retaining data/backups/checkpoints/reviews. Earlier version, candidate,
+no-release and canceled-beta records remain historical.
 ## 2026-11-04: Remove AV implementation and qualification limits
 
 The current Remove AV slice adds a dedicated inventory and vendor-utility workflow;
