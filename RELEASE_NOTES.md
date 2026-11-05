@@ -1,3 +1,25 @@
+# Purgeon 1.6.1
+
+Windows x64 patch release focused on Remove AV reliability.
+
+- Remove AV checks the confirmed product and vendor tool against the published inventory before downloading. A refresh clears that eligibility while it collects updated inventory.
+- The plan queue makes room by retiring finished plans that no longer need review. Active plans, unresolved reviews, checkpoints, and retained vendor files remain protected.
+- After download and verification, Remove AV checks the exact product ID and vendor tool again before committing the launch. If inventory is refreshing or the confirmed pair has changed, Purgeon stops before writing the launch checkpoint or opening the vendor tool.
+
+## Qualification limits
+
+This release is unsigned. Windows may display a publisher warning. Live vendor removal, UAC, Safe Mode, and vendor utilities outliving Purgeon remain unverified. Launch status reports the vendor handoff and does not confirm removal or provide undo.
+
+## Downloads and rollback
+
+Choose `Purgeon-Setup-x64.exe` to install or `Purgeon-Portable-x64.zip` for the portable edition. The ZIP includes the portable executable, LICENSE, and PORTABLE.txt.
+
+Before returning to a previous verified release, close Purgeon and any vendor utility. Keep a copy of your data, backups, and unresolved removal checkpoints. Review unresolved vendor attempts before trying another removal. Downgrading does not reverse a vendor removal, and reading 1.6.1 data with an older build has not been qualified.
+
+---
+
+The following 1.6.0 and beta notes are historical and retain their original scope.
+
 # Purgeon 1.6.0
 
 Unsigned Windows x64 stable release with the qualification limits below.
