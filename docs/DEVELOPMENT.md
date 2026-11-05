@@ -495,3 +495,19 @@ merge before activation. The historical 1aa0 record was approved by
 004324Z-525484df699e; the fixture-only 760873d source fix was approved by
 011014Z-186a154506f4. Neither approval activates this candidate. Beta testing is
 canceled; this evidence qualifies no release or tag.
+
+## RemoveAV refresh admission follow-up
+
+The published beta.1 refresh invalidation fix cleared eligibility only after the
+inventory helper returned; concurrent preparation could still use the old cache.
+This follow-up clears eligibility at refresh admission, before invoking the helper.
+A private refresh mutex rejects overlapping refreshes and poisoned admission;
+its guard spans helper execution, validation and recovery discovery. The manager
+mutex is released during the helper, preserving existing operation lock order.
+Previous products remain private for stable IDs. Replacement products become
+eligible only after validation and recovery discovery succeed; failures leave
+eligibility empty. Previously prepared operations and held reviews are retained.
+Published release notes and earlier evidence remain historical. Inert regression
+tests force the admission interleaving using bounded channels and cover overlap,
+poisoning, panic, helper/validation/recovery failures and stable IDs. This does not
+qualify actual antivirus removal or vendor utilities.

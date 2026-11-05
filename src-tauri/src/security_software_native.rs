@@ -549,21 +549,37 @@ fn manager() -> &'static Mutex<Manager> {
     VALUE.get_or_init(|| Mutex::new(Manager::default()))
 }
 pub fn inventory() -> Result<Inventory, String> {
-    let raw = script(
-        include_str!("security_software/inventory.ps1"),
-        serde_json::json!({}),
-        Duration::from_secs(40),
-        &AtomicBool::new(false),
-    );
-    finalize_inventory(manager(), raw, |m| discover_reviews(&native_root()?, m))
+    static REFRESH: Mutex<()> = Mutex::new(());
+    inventory_with(
+        manager(),
+        &REFRESH,
+        || {
+            script(
+                include_str!("security_software/inventory.ps1"),
+                serde_json::json!({}),
+                Duration::from_secs(40),
+                &AtomicBool::new(false),
+            )
+        },
+        |m| discover_reviews(&native_root()?, m),
+    )
 }
-fn finalize_inventory(
+fn inventory_with(
     manager: &Mutex<Manager>,
-    raw: Result<Vec<u8>, String>,
+    gate: &Mutex<()>,
+    helper: impl FnOnce() -> Result<Vec<u8>, String>,
     discover: impl FnOnce(&mut Manager) -> Result<Vec<RemovalReview>, String>,
 ) -> Result<Inventory, String> {
+    let _refresh = gate.try_lock().map_err(|error| match error {
+        std::sync::TryLockError::WouldBlock => "Inventory refresh already in progress",
+        std::sync::TryLockError::Poisoned(_) => "Inventory unavailable",
+    })?;
+    let previous = {
+        let mut m = manager.lock().map_err(|_| "Inventory unavailable")?;
+        std::mem::take(&mut m.products)
+    };
+    let raw = helper();
     let mut m = manager.lock().map_err(|_| "Inventory unavailable")?;
-    let previous = std::mem::take(&mut m.products);
     let mut result = match raw {
         Ok(bytes) => normalize(
             serde_json::from_slice(&bytes).map_err(|_| "Invalid inventory helper response")?,
@@ -1737,6 +1753,75 @@ public sealed class FixtureHandler : HttpMessageHandler {
         let plan = prepare_cached(m, PrepareRequest { product_id: id }).unwrap();
         m.operations.get(&plan.id).unwrap().clone()
     }
+    fn finalize_inventory(
+        manager: &Mutex<Manager>,
+        raw: Result<Vec<u8>, String>,
+        discover: impl FnOnce(&mut Manager) -> Result<Vec<RemovalReview>, String>,
+    ) -> Result<Inventory, String> {
+        let gate = Mutex::new(());
+        let result = inventory_with(manager, &gate, || raw, discover);
+        assert!(
+            gate.try_lock().is_ok(),
+            "completed refresh retained its gate"
+        );
+        result
+    }
+
+    #[test]
+    fn inventory_refresh_admission_blocks_stale_preparation() {
+        let mutex = Mutex::new(cached());
+        let gate = Mutex::new(());
+        let product_id = mutex.lock().unwrap().products[0].id.clone();
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        std::thread::scope(|scope| {
+            let manager = &mutex;
+            let refresh_gate = &gate;
+            let refresh = scope.spawn(move || {
+                inventory_with(
+                    manager,
+                    refresh_gate,
+                    || {
+                        entered_tx.send(()).unwrap();
+                        release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+                        Ok(inventory_bytes(
+                            vec![record(
+                                "AVG AntiVirus FREE",
+                                "AVG Technologies",
+                                SOURCE_IDS[3],
+                            )],
+                            "ok",
+                        ))
+                    },
+                    |_| Ok(vec![]),
+                )
+            });
+            entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+            let preparation = prepare_cached(
+                &mut mutex.try_lock().unwrap(),
+                PrepareRequest {
+                    product_id: product_id.clone(),
+                },
+            );
+            let overlap = inventory_with(
+                &mutex,
+                &gate,
+                || panic!("overlapping helper ran"),
+                |_| panic!("overlapping discovery ran"),
+            );
+            release_tx.send(()).unwrap();
+            let result = refresh.join().unwrap().unwrap();
+            assert!(
+                preparation.is_err(),
+                "refresh admitted stale product preparation"
+            );
+            assert_eq!(
+                overlap.unwrap_err(),
+                "Inventory refresh already in progress"
+            );
+            assert_eq!(result.products[0].id, product_id);
+        });
+    }
     #[test]
     fn inventory_refresh_public_entry() {
         let job = crate::security::ProcessJob::create(None).unwrap();
@@ -1875,6 +1960,111 @@ public sealed class FixtureHandler : HttpMessageHandler {
     }
 
     #[test]
+    fn inventory_refresh_poisoned_gate_rejects_before_helper() {
+        let mutex = Mutex::new(cached());
+        let gate = Mutex::new(());
+        let _ = std::panic::catch_unwind(|| {
+            let _guard = gate.lock().unwrap();
+            panic!("poison fixture");
+        });
+        assert_eq!(
+            inventory_with(
+                &mutex,
+                &gate,
+                || panic!("poisoned gate ran helper"),
+                |_| panic!("poisoned gate ran discovery")
+            )
+            .unwrap_err(),
+            "Inventory unavailable"
+        );
+    }
+
+    #[test]
+    fn inventory_refresh_helper_panic_keeps_cache_ineligible_and_gate_closed() {
+        let mutex = Mutex::new(cached());
+        let gate = Mutex::new(());
+        let mut m = mutex.lock().unwrap();
+        let op = planned(&mut m);
+        let product_id = m.products[0].id.clone();
+        drop(m);
+        assert!(std::panic::catch_unwind(|| inventory_with(
+            &mutex,
+            &gate,
+            || panic!("helper fixture panic"),
+            |_| panic!("panic reached discovery")
+        ))
+        .is_err());
+        let mut m = mutex.try_lock().unwrap();
+        assert!(m.products.is_empty());
+        assert!(prepare_cached(&mut m, PrepareRequest { product_id }).is_err());
+        assert!(Arc::ptr_eq(&m.operations[&op.plan.id], &op));
+        assert_eq!(op.snapshot().unwrap().phase, "prepared");
+        op.state.lock().unwrap().cancel();
+        assert_eq!(op.snapshot().unwrap().phase, "cancelled");
+        drop(m);
+        assert!(gate.is_poisoned());
+        assert_eq!(
+            inventory_with(
+                &mutex,
+                &gate,
+                || panic!("poisoned gate retried helper"),
+                |_| Ok(vec![])
+            )
+            .unwrap_err(),
+            "Inventory unavailable"
+        );
+    }
+
+    #[test]
+    fn inventory_refresh_manager_poisoned_during_helper_rejects_publication() {
+        let mutex = Mutex::new(cached());
+        let gate = Mutex::new(());
+        let result = inventory_with(
+            &mutex,
+            &gate,
+            || {
+                let _ = std::panic::catch_unwind(|| {
+                    let m = mutex.lock().unwrap();
+                    assert!(m.products.is_empty());
+                    panic!("manager fixture panic");
+                });
+                Ok(inventory_bytes(vec![], "ok"))
+            },
+            |_| panic!("poisoned manager reached discovery"),
+        );
+        assert_eq!(result.unwrap_err(), "Inventory unavailable");
+        assert!(!gate.is_poisoned());
+        assert!(gate.try_lock().is_ok());
+    }
+
+    #[test]
+    fn inventory_refresh_discovery_panic_rejects_future_refresh() {
+        let mutex = Mutex::new(cached());
+        let gate = Mutex::new(());
+        assert!(std::panic::catch_unwind(|| inventory_with(
+            &mutex,
+            &gate,
+            || Ok(inventory_bytes(vec![], "ok")),
+            |m| {
+                assert!(m.products.is_empty());
+                panic!("discovery fixture panic");
+            }
+        ))
+        .is_err());
+        assert!(mutex.is_poisoned());
+        assert!(gate.is_poisoned());
+        assert_eq!(
+            inventory_with(
+                &mutex,
+                &gate,
+                || panic!("poisoned refresh ran helper"),
+                |_| Ok(vec![])
+            )
+            .unwrap_err(),
+            "Inventory unavailable"
+        );
+    }
+    #[test]
     fn inventory_refresh_poisoned_manager_rejects_before_discovery() {
         let mutex = Mutex::new(cached());
         let _ = std::panic::catch_unwind(|| {
@@ -1882,9 +2072,12 @@ public sealed class FixtureHandler : HttpMessageHandler {
             panic!("poison fixture");
         });
         assert_eq!(
-            finalize_inventory(&mutex, Ok(inventory_bytes(vec![], "ok")), |_| {
-                panic!("poisoned manager reached discovery")
-            })
+            inventory_with(
+                &mutex,
+                &Mutex::new(()),
+                || panic!("poisoned manager reached helper"),
+                |_| { panic!("poisoned manager reached discovery") }
+            )
             .unwrap_err(),
             "Inventory unavailable"
         );
