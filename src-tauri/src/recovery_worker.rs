@@ -1,6 +1,6 @@
 //! Private, inert child. Only an authenticated instance of this executable can
 //! authorize dispatch, after assigning the child to its kill-on-close job.
-use crate::{broker, process_io, recovery_lease};
+use crate::{broker, pe_worker, process_io, recovery_lease};
 use serde::{Deserialize, Serialize};
 use std::os::windows::{io::AsRawHandle, process::CommandExt};
 use std::process::{Command, Output};
@@ -52,8 +52,7 @@ pub(crate) fn execute_ordinary(
     // Chunk the ordinary request rather than imposing recovery's 256 KiB
     // frame ceiling on the previously supported command environment.
     let data = serde_json::to_vec(&frame).map_err(|e| e.to_string())?;
-    let name = format!("{PREFIX}{}-{}", std::process::id(), broker::random_id()?);
-    let pipe = broker::server_pipe(&name)?;
+    let (name, pipe) = new_worker_pipe()?;
     let deadline = std::time::Instant::now() + timeout;
     #[cfg(test)]
     let mut worker = worker_command(&name)?;
@@ -127,8 +126,7 @@ pub(crate) fn execute(
     if serde_json::to_vec(&frame).map_err(|e| e.to_string())?.len() > 256 * 1024 {
         return Err("Recovery command frame exceeds limit".into());
     }
-    let name = format!("{PREFIX}{}-{}", std::process::id(), broker::random_id()?);
-    let pipe = broker::server_pipe(&name)?;
+    let (name, pipe) = new_worker_pipe()?;
     let job_name = crate::security::ProcessJob::recovery_name()?;
     let job = crate::security::ProcessJob::create(Some(&job_name))?;
     let deadline = std::time::Instant::now() + timeout;
@@ -163,22 +161,44 @@ pub(crate) fn execute(
 }
 
 fn worker_command(name: &str) -> Result<Command, String> {
+    worker_for_mode(name, MODE)
+}
+
+fn worker_for_mode(name: &str, mode: &str) -> Result<Command, String> {
     let mut worker = Command::new(std::env::current_exe().map_err(|e| e.to_string())?);
     #[cfg(not(test))]
-    worker.args([MODE, name]);
+    worker.args([mode, name]);
     #[cfg(test)]
-    worker
-        .args([
-            "--exact",
-            "recovery_worker::tests::inert_entry",
-            "--nocapture",
-        ])
-        .env("PURGEON_TEST_RECOVERY_PIPE", name);
+    {
+        worker
+            .args([
+                "--exact",
+                "recovery_worker::tests::inert_entry",
+                "--nocapture",
+            ])
+            .env("PURGEON_TEST_RECOVERY_PIPE", name);
+        if mode == pe_worker::MODE {
+            worker.env("PURGEON_TEST_PE_WORKER", "1");
+        }
+    }
     worker.creation_flags(0x08000000);
     Ok(worker)
 }
 
-fn authenticate_worker(pipe: broker::Handle, child: &std::process::Child) -> Result<(), String> {
+pub(crate) fn new_worker_pipe() -> Result<(String, broker::Owned), String> {
+    let name = format!("{PREFIX}{}-{}", std::process::id(), broker::random_id()?);
+    let pipe = broker::server_pipe(&name)?;
+    Ok((name, pipe))
+}
+
+pub(crate) fn pe_worker_command(name: &str) -> Result<Command, String> {
+    worker_for_mode(name, pe_worker::MODE)
+}
+
+pub(crate) fn authenticate_worker(
+    pipe: broker::Handle,
+    child: &std::process::Child,
+) -> Result<(), String> {
     #[link(name = "kernel32")]
     extern "system" {
         fn GetNamedPipeClientProcessId(pipe: broker::Handle, pid: *mut u32) -> i32;
@@ -201,12 +221,22 @@ fn authenticate_worker(pipe: broker::Handle, child: &std::process::Child) -> Res
 
 pub(crate) fn private_mode() -> Result<bool, String> {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    if !matches!(args.first().map(String::as_str), Some(MODE | ORDINARY_MODE)) {
+    private_mode_for_args(&args)
+}
+
+fn private_mode_for_args(args: &[String]) -> Result<bool, String> {
+    if !matches!(
+        args.first().map(String::as_str),
+        Some(MODE | ORDINARY_MODE | pe_worker::MODE)
+    ) {
         return Ok(false);
     }
-    let [_, name] = args.as_slice() else {
+    let [_, name] = args else {
         return Err("Invalid recovery worker arguments".into());
     };
+    if args[0] == pe_worker::MODE {
+        return run_pe_worker(name).map_err(|_| pe_worker::FAILURE.into());
+    }
     run_worker_mode(name, args[0] == ORDINARY_MODE)
 }
 
@@ -215,7 +245,7 @@ fn run_worker(name: &str) -> Result<bool, String> {
     run_worker_mode(name, false)
 }
 
-fn run_worker_mode(name: &str, ordinary: bool) -> Result<bool, String> {
+fn authenticated_pipe(name: &str) -> Result<(broker::Owned, u32), String> {
     let rest = name.strip_prefix(PREFIX).ok_or("Invalid recovery pipe")?;
     let (pid, nonce) = rest.split_once('-').ok_or("Invalid recovery pipe")?;
     if nonce.len() != 32 || !nonce.bytes().all(|b| b.is_ascii_hexdigit()) {
@@ -223,7 +253,17 @@ fn run_worker_mode(name: &str, ordinary: bool) -> Result<bool, String> {
     }
     let pid = pid.parse::<u32>().map_err(|e| e.to_string())?;
     // client_pipe verifies server PID and its executable image against our own.
-    let pipe = broker::client_pipe(name, pid)?;
+    Ok((broker::client_pipe(name, pid)?, pid))
+}
+
+fn run_pe_worker(name: &str) -> Result<bool, String> {
+    let (pipe, pid) = authenticated_pipe(name)?;
+    pe_worker::serve(pipe.0, pid)?;
+    Ok(true)
+}
+
+fn run_worker_mode(name: &str, ordinary: bool) -> Result<bool, String> {
+    let (pipe, pid) = authenticated_pipe(name)?;
     #[cfg(test)]
     if let Some(path) = std::env::var_os("PURGEON_TEST_WORKER_READY") {
         std::fs::File::create_new(path).map_err(|e| e.to_string())?;
@@ -308,7 +348,12 @@ static TEST_WORKER_ENTRY: extern "C" fn() = {
     extern "C" fn enter() {
         if let Ok(name) = std::env::var("PURGEON_TEST_RECOVERY_PIPE") {
             let ordinary = std::env::var_os("PURGEON_TEST_ORDINARY_WORKER").is_some();
-            match run_worker_mode(&name, ordinary) {
+            let result = if std::env::var_os("PURGEON_TEST_PE_WORKER").is_some() {
+                private_mode_for_args(&[pe_worker::MODE.into(), name])
+            } else {
+                run_worker_mode(&name, ordinary)
+            };
+            match result {
                 Ok(_) => unsafe { test_exit(0) },
                 Err(_) => unsafe { test_exit(2) },
             }
@@ -436,6 +481,20 @@ mod tests {
             }
             let _ = std::fs::remove_dir_all(&self.root);
         }
+    }
+
+    #[test]
+    fn pe_private_entry_refuses_invalid_arguments_without_dispatch() {
+        assert!(!private_mode_for_args(&[]).unwrap());
+        assert!(!private_mode_for_args(&["--user-arg".into()]).unwrap());
+        assert!(private_mode_for_args(&[pe_worker::MODE.into()]).is_err());
+        assert_eq!(
+            private_mode_for_args(&[pe_worker::MODE.into(), "private-path".into()]).unwrap_err(),
+            pe_worker::FAILURE
+        );
+        assert!(
+            private_mode_for_args(&[pe_worker::MODE.into(), "one".into(), "two".into()]).is_err()
+        );
     }
 
     #[test]

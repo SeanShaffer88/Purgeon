@@ -21,6 +21,7 @@ mod driver_native;
 mod eventlogs_native;
 mod launch_args;
 mod native_operations;
+mod pe_worker;
 mod process_io;
 mod protected_artifacts;
 mod protected_driver_package;
@@ -1352,34 +1353,26 @@ async fn wait_process(pid: u32, timeout_ms: u32) -> bool {
 /// The processor each program file is built for, from its PE header: "x64", "x86", "arm64",
 /// "arm", or "" when the file can't be read.
 #[tauri::command]
-fn exe_arch(paths: Vec<String>) -> Vec<String> {
-    fn machine(p: &str) -> Option<&'static str> {
-        use std::io::{Read, Seek, SeekFrom};
-        let mut f = std::fs::File::open(p).ok()?;
-        let mut dos = [0u8; 64];
-        f.read_exact(&mut dos).ok()?;
-        if &dos[0..2] != b"MZ" {
-            return None;
-        }
-        let pe_at = u32::from_le_bytes([dos[60], dos[61], dos[62], dos[63]]) as u64;
-        f.seek(SeekFrom::Start(pe_at)).ok()?;
-        let mut pe = [0u8; 6];
-        f.read_exact(&mut pe).ok()?;
-        if &pe[0..4] != b"PE\0\0" {
-            return None;
-        }
-        Some(match u16::from_le_bytes([pe[4], pe[5]]) {
-            0x8664 => "x64",
-            0x014c => "x86",
-            0xaa64 => "arm64",
-            0x01c4 => "arm",
-            _ => "",
-        })
-    }
-    paths
-        .iter()
-        .map(|p| machine(p).unwrap_or("").to_string())
-        .collect()
+async fn exe_arch(paths: Vec<String>) -> Result<Vec<String>, String> {
+    tauri::async_runtime::spawn_blocking(move || pe_worker::read(paths))
+        .await
+        .map_err(|_| pe_worker::FAILURE.to_string())?
+}
+
+#[cfg(test)]
+#[test]
+fn exe_arch_command_preserves_the_worker_result_order() {
+    let executable = std::env::current_exe().unwrap();
+    let path = executable.to_str().unwrap();
+    let missing = executable.with_extension("nonexistent-fixture");
+    assert_eq!(
+        tauri::async_runtime::block_on(exe_arch(vec![
+            missing.to_str().unwrap().to_owned(),
+            path.to_owned()
+        ]))
+        .unwrap(),
+        ["", "x64"]
+    );
 }
 
 #[derive(Serialize)]
@@ -2234,6 +2227,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    pe_worker::qualification_entry();
     match recovery_worker::private_mode() {
         Ok(true) => return,
         Ok(false) => {}

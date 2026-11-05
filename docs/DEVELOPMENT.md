@@ -1,5 +1,19 @@
 # Development record
 
+## 2026-11-05: Isolated PE architecture reads
+
+Program Insights and Explore use the same native architecture command. A bounded
+batch goes to an inert current-executable worker through an authenticated named
+pipe. The parent assigns its kill-on-close job before sending a versioned request.
+Only read-only PE header inspection is supported. A file that cannot be read
+returns an unknown entry in place. A worker failure returns a redacted diagnostic
+and leaves the batch uncached so the next ordinary request can retry.
+
+The separate release-profile `packaged-panic-probe` fixture injects a panic only
+after worker authentication. Its headless parent checks the authenticated marker,
+Windows abort status and confirmed worker termination, then reads its own x64
+header through the same adapter. Default packages refuse the fixture command.
+
 ## 2026-11-05: Remove AV plan retention
 
 The native manager retains up to 64 in-memory plans. When a valid plan is ready

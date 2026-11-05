@@ -14,7 +14,7 @@ import { inboundRules } from './running.js';
 import * as installers from './installers.js';
 import { dependencyInfo } from './safety.js';
 import { processesIn } from './leftovers.js';
-import { programExe } from './insights.js';
+import { programExe, readArchitectures } from './insights.js';
 
 const norm = (s) => String(s || '').toLowerCase().replace(/[^a-z0-9]/g, '');
 const clean = (p) => String(p || '').replace(/^"|"$/g, '').trim().replace(/\\+$/, '');
@@ -144,7 +144,7 @@ export async function analyze(program) {
     dependencyInfo(program).catch(() => ({})),
     /^[a-z]:\\./i.test(loc) ? processesIn(loc).catch(() => []) : [],
     lastRun(program, exe).catch(() => ({ unknown: 'Could not be read.' })),
-    exe && sys.exeArch ? sys.exeArch([exe]).then((a) => a[0] || '', () => '') : '',
+    exe && sys.exeArch ? readArchitectures([exe]).then((a) => a?.[0] || '') : '',
   ]);
   return {
     exe,

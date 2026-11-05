@@ -37,3 +37,74 @@ test('one program-insights request shares signature/architecture stamps and late
   await insights.programInsights(rows);assert.equal(reads.length,1);
   await insights.programInsights(rows);assert.equal(reads.length,2);
 });
+
+test('failed architecture batches leave no cached unknown and retry with the same file stamp', async () => {
+  const files = new Map(), batches = [], logs = [];
+  const exe = 'C:\\ArchRetry\\main.exe';
+  const missing = 'C:\\ArchRetry\\other.exe';
+  const rows = [
+    { key: 'arch-a', name: 'Architecture A', icon: exe },
+    { key: 'arch-b', name: 'Architecture B', icon: missing },
+  ];
+  const { setRoot: setLogRoot, flushNow } = await import('../src/backend/log.js');
+  setSys({
+    makeDir: async () => {},
+    readDir: async () => [],
+    readText: async (file) => files.get(file) || '{}',
+    writeTextAtomic: async (file, value) => files.set(file, value),
+    appendText: async (_file, value) => logs.push(value),
+    stat: async () => ({ modified: 1, size: 2 }),
+    runPS: async () => '[]',
+    exeArch: async (paths) => {
+      batches.push(paths);
+      if (batches.length === 1) throw Error('fixture private path C:\\private\\payload.exe');
+      if (batches.length === 2) return ['x64'];
+      return paths.map((file) => file === exe ? 'x64' : '');
+    },
+  });
+  await setLogRoot('C:\\ArchitectureLog');
+  await insights.setRoot('C:\\ArchitectureCache');
+  const first = await insights.programInsights(rows);
+  assert.equal(first['arch-a']?.arch, undefined);
+  const second = await insights.programInsights(rows);
+  assert.equal(second['arch-a']?.arch, undefined);
+  const third = await insights.programInsights(rows);
+  assert.equal(third['arch-a']?.arch, 'x64');
+  assert.equal(third['arch-b']?.arch, undefined);
+  await insights.programInsights(rows);
+  assert.equal(batches.length, 3);
+  for (const batch of batches) assert.deepEqual(new Set(batch), new Set([exe, missing]));
+  await flushNow();
+  assert.equal(logs.join('').match(/PE architecture worker unavailable/g)?.length, 2);
+  assert.doesNotMatch(logs.join(''), /private|payload\.exe/);
+});
+
+test('Explore reports a redacted architecture worker failure and can retry', async () => {
+  const logs = [];
+  let calls = 0;
+  const exe = 'C:\\ArchExplore\\main.exe';
+  const { setRoot: setLogRoot, flushNow } = await import('../src/backend/log.js');
+  const { analyze } = await import('../src/backend/explore.js');
+  setSys({
+    info: { env: {} },
+    makeDir: async () => {},
+    readDir: async () => [],
+    stat: async () => null,
+    appendText: async (_file, value) => logs.push(value),
+    runPS: async () => '[]',
+    exeArch: async (paths) => {
+      assert.deepEqual(paths, [exe]);
+      if (++calls === 1) throw Error('private fixture path C:\\secret.exe');
+      return ['arm64'];
+    },
+  });
+  await setLogRoot('C:\\ArchitectureLog');
+  const row = { key: 'explore-arch', name: 'Fixture', icon: exe };
+  assert.equal((await analyze(row)).arch, '');
+  assert.equal((await analyze(row)).arch, 'arm64');
+  assert.equal((await analyze({ name: 'Missing executable' })).arch, '');
+  assert.equal(calls, 2);
+  await flushNow();
+  assert.equal(logs.join('').match(/PE architecture worker unavailable/g)?.length, 1);
+  assert.doesNotMatch(logs.join(''), /private|secret\.exe/);
+});
