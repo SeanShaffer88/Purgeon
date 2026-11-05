@@ -64,6 +64,38 @@ jobs:
             verification-focused/
           if-no-files-found: error
 
+  packaged-panic:
+    name: Packaged PE worker panic
+    runs-on: windows-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: 24
+          cache: npm
+      - uses: dtolnay/rust-toolchain@b725eda525362e7cf34af9a7243cac1e3f01a7ec # stable
+        with:
+          targets: x86_64-pc-windows-msvc
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2
+        with:
+          workspaces: src-tauri
+          key: windows-x64-panic-probe
+      - run: npm ci
+      # This feature build and its scratch portable ZIP are private to this job.
+      - name: Build release-profile panic fixture
+        run: npm run dist -- --target x86_64-pc-windows-msvc --features packaged-panic-probe --no-bundle --ci -- --locked
+      - name: Qualify a panicking PE worker in a portable package
+        shell: pwsh
+        run: ./scripts/test-packaged-pe-worker.ps1 -ProbeExecutable src-tauri/target/x86_64-pc-windows-msvc/release/purgeon.exe -OutputFile verification/pe-worker-panic.json
+      - name: Upload sanitized panic evidence
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
+        with:
+          name: packaged-pe-worker-panic
+          path: verification/pe-worker-panic.json
+          if-no-files-found: warn
+
   # Builds the app and installer on the newest supported Windows, then publishes a release on tags.
   build:
     needs: test
@@ -112,6 +144,9 @@ jobs:
           CODE_SIGN_CERT: ${{ secrets.CODE_SIGN_CERT }}
           CODE_SIGN_PASSWORD: ${{ secrets.CODE_SIGN_PASSWORD }}
         run: npm run dist:windows
+      - name: Verify the release portable rejects panic qualification
+        shell: pwsh
+        run: ./scripts/test-packaged-pe-worker.ps1 -Directory release -Manifest release-manifest.json -OutputFile verification/pe-worker-release-refusal.json
       - name: Shared NSIS child launch and trace contracts (disposable runner only)
         shell: pwsh
         run: ./scripts/test-nsis-webview-launch.ps1
@@ -166,7 +201,7 @@ jobs:
 
   publish:
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: build
+    needs: [build, packaged-panic]
     runs-on: windows-latest
     permissions:
       contents: write
