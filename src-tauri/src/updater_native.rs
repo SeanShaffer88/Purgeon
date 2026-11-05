@@ -10,7 +10,7 @@ use std::{
     os::windows::{fs::OpenOptionsExt, io::AsRawHandle},
     path::{Path, PathBuf},
     sync::{Mutex, OnceLock},
-    time::{Duration, Instant},
+    time::{Duration, Instant, SystemTime},
 };
 const ATTR: u32 = 0x80;
 const DELETE: u32 = 0x10000;
@@ -18,6 +18,9 @@ const OPEN_REPARSE: u32 = 0x00200000;
 const DIRECTORY: u32 = 0x02000000;
 const TTL: Duration = Duration::from_secs(900);
 const MAX_BYTES: u64 = 512 * 1024 * 1024;
+const EXIT_MARKER: &str = "exit-for-update";
+const GENERIC_READ: u32 = 0x80000000;
+const SHARE_READ: u32 = 1;
 #[derive(Clone, Deserialize)]
 #[serde(deny_unknown_fields, rename_all = "camelCase")]
 pub struct Expected {
@@ -148,12 +151,25 @@ impl Pin {
         access: u32,
         sharing: u32,
     ) -> Result<Self, String> {
-        let file = OpenOptions::new()
+        let file =
+            Self::open_handle(path, directory, access, sharing).map_err(|e| e.to_string())?;
+        Self::from_handle(file, path, directory)
+    }
+
+    fn open_handle(
+        path: &Path,
+        directory: bool,
+        access: u32,
+        sharing: u32,
+    ) -> std::io::Result<File> {
+        OpenOptions::new()
             .access_mode(access)
             .share_mode(sharing)
             .custom_flags(OPEN_REPARSE | if directory { DIRECTORY } else { 0 })
             .open(path)
-            .map_err(|e| e.to_string())?;
+    }
+
+    fn from_handle(file: File, path: &Path, directory: bool) -> Result<Self, String> {
         let identity = info(&file, directory)?;
         let resolved = handle_path(&file)?;
         if !same_path(&resolved, path) {
@@ -235,6 +251,98 @@ impl Pin {
         mark_delete(&current.file)
     }
 }
+fn marker_for_executable(executable: &Path) -> Option<PathBuf> {
+    let text = executable.to_str()?;
+    let path = Path::new(text.strip_prefix(r"\\?\").unwrap_or(text));
+    match path.components().next()? {
+        std::path::Component::Prefix(prefix)
+            if path.is_absolute() && matches!(prefix.kind(), std::path::Prefix::Disk(_)) =>
+        {
+            Some(path.parent()?.join(EXIT_MARKER))
+        }
+        _ => None,
+    }
+}
+
+pub(crate) fn exit_marker_path() -> Option<PathBuf> {
+    marker_for_executable(&std::env::current_exe().ok()?)
+}
+
+fn marker_is_fresh(modified: SystemTime, now: SystemTime) -> bool {
+    match now.duration_since(modified) {
+        Ok(age) => age <= Duration::from_secs(120),
+        Err(ahead) => ahead.duration() <= Duration::from_secs(5),
+    }
+}
+
+struct ExitMarker {
+    file: Pin,
+    ancestors: Vec<Pin>,
+    can_delete: bool,
+}
+
+impl ExitMarker {
+    fn open(path: &Path) -> Result<Self, String> {
+        // The idle poll attempts just this no-follow leaf open when no marker
+        // exists. Open failures can allow read-only observation, but validation
+        // failures on an opened handle never fall back to another identity.
+        let (handle, can_delete) =
+            match Pin::open_handle(path, false, GENERIC_READ | DELETE, SHARE_READ) {
+                Ok(handle) => (handle, true),
+                Err(error) if matches!(error.raw_os_error(), Some(5 | 32)) => (
+                    Pin::open_handle(path, false, GENERIC_READ, SHARE_READ)
+                        .map_err(|e| e.to_string())?,
+                    false,
+                ),
+                Err(error) => return Err(error.to_string()),
+            };
+        let file = Pin::from_handle(handle, path, false)?;
+        let parent = path.parent().ok_or("Update marker has no parent")?;
+        let mut ancestors = Vec::new();
+        for ancestor in parent.ancestors().collect::<Vec<_>>().into_iter().rev() {
+            // Real directory read access makes the omitted write and delete
+            // sharing effective for the entire inspection and retirement.
+            ancestors.push(Pin::open(ancestor, true, GENERIC_READ, SHARE_READ)?);
+        }
+        Ok(Self {
+            file,
+            ancestors,
+            can_delete,
+        })
+    }
+
+    fn consume(self, now: SystemTime) -> Result<bool, String> {
+        for ancestor in &self.ancestors {
+            ancestor.verify(true)?;
+        }
+        self.file.verify(false)?;
+        let modified = self
+            .file
+            .file
+            .metadata()
+            .and_then(|metadata| metadata.modified())
+            .map_err(|e| e.to_string())?;
+        let fresh = marker_is_fresh(modified, now);
+        self.file.verify(false)?;
+        if self.can_delete {
+            // A read-only installation or a failed retirement can still
+            // acknowledge a verified fresh marker, but never by reopening it.
+            let _ = mark_delete(&self.file.file);
+        }
+        Ok(fresh)
+    }
+}
+
+fn consume_exit_marker_at(path: &Path, now: SystemTime) -> bool {
+    ExitMarker::open(path)
+        .and_then(|marker| marker.consume(now))
+        .unwrap_or(false)
+}
+
+pub(crate) fn consume_exit_marker() -> bool {
+    exit_marker_path().is_some_and(|path| consume_exit_marker_at(&path, SystemTime::now()))
+}
+
 pub(crate) fn canonical_temp(root: &Path) -> Result<PathBuf, String> {
     // Inspect the supplied spelling first: canonicalization must not hide a junction.
     for p in root.ancestors() {
@@ -683,6 +791,168 @@ mod tests {
         fs::create_dir(&root).unwrap();
         root
     }
+    fn write_marker(path: &Path, modified: SystemTime) {
+        let mut file = File::create(path).unwrap();
+        file.write_all(b"inert exit marker fixture").unwrap();
+        file.set_modified(modified).unwrap();
+    }
+
+    #[test]
+    fn exit_marker_derivation_accepts_local_executable_spelling_only() {
+        let expected = PathBuf::from(r"C:\Program Files\Purgeon\exit-for-update");
+        for path in [
+            r"C:\Program Files\Purgeon\Purgeon.exe",
+            r"\\?\C:\Program Files\Purgeon\Purgeon.exe",
+        ] {
+            assert_eq!(
+                marker_for_executable(Path::new(path)),
+                Some(expected.clone())
+            );
+        }
+        for path in [
+            "Purgeon.exe",
+            r"C:Purgeon.exe",
+            r"\\server\share\Purgeon.exe",
+            r"\\?\UNC\server\share\Purgeon.exe",
+            r"\\.\C:\Purgeon.exe",
+        ] {
+            assert_eq!(marker_for_executable(Path::new(path)), None, "{path}");
+        }
+        assert_eq!(
+            exit_marker_path(),
+            marker_for_executable(&std::env::current_exe().unwrap())
+        );
+    }
+
+    #[test]
+    fn exit_marker_cleans_stale_files_and_keeps_exact_freshness_window() {
+        let root = canonical_temp(&scratch()).unwrap();
+        let path = root.join(EXIT_MARKER);
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1_760_000_000);
+        assert!(!consume_exit_marker_at(&path, now));
+        for (age_ms, fresh) in [
+            (120_001, false),
+            (120_000, true),
+            (0, true),
+            (-5_000, true),
+            (-5_001, false),
+        ] {
+            let age = Duration::from_millis(i32::unsigned_abs(age_ms).into());
+            let modified = if age_ms >= 0 { now - age } else { now + age };
+            write_marker(&path, modified);
+            assert_eq!(consume_exit_marker_at(&path, now), fresh, "{age_ms}");
+            assert!(!path.exists(), "valid marker remains at age {age_ms}");
+        }
+        fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn exit_marker_read_only_fallback_observes_without_deleting() {
+        let root = canonical_temp(&scratch()).unwrap();
+        let path = root.join(EXIT_MARKER);
+        let now = SystemTime::UNIX_EPOCH + Duration::from_secs(1_760_000_000);
+        write_marker(&path, now);
+        let observer = OpenOptions::new()
+            .read(true)
+            .share_mode(SHARE_READ)
+            .open(&path)
+            .unwrap();
+        let marker = ExitMarker::open(&path).unwrap();
+        assert!(!marker.can_delete);
+        assert!(marker.consume(now).unwrap());
+        assert!(path.is_file());
+        assert!(!consume_exit_marker_at(
+            &path,
+            now + Duration::from_secs(121)
+        ));
+        assert!(path.is_file());
+        drop(observer);
+        assert!(consume_exit_marker_at(&path, now));
+        assert!(!path.exists());
+        fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn exit_marker_holds_file_and_ancestors_through_retirement() {
+        let root = canonical_temp(&scratch()).unwrap();
+        let directory = root.join("install");
+        fs::create_dir(&directory).unwrap();
+        let path = directory.join(EXIT_MARKER);
+        let replacement = root.join("replacement");
+        let now = SystemTime::now();
+        write_marker(&path, now);
+        fs::write(&replacement, b"replacement bytes").unwrap();
+        let marker = ExitMarker::open(&path).unwrap();
+        assert!(marker.can_delete);
+        assert!(OpenOptions::new().write(true).open(&path).is_err());
+        assert!(fs::remove_file(&path).is_err());
+        assert!(fs::rename(&path, directory.join("renamed")).is_err());
+        assert!(fs::rename(&replacement, &path).is_err());
+        assert!(fs::rename(&directory, root.join("moved")).is_err());
+        assert!(Pin::open_handle(&directory, true, GENERIC_READ | DELETE, 7).is_err());
+        assert_eq!(fs::read(&replacement).unwrap(), b"replacement bytes");
+        assert!(marker.consume(now).unwrap());
+        assert!(!path.exists());
+        fs::remove_file(replacement).unwrap();
+        fs::remove_dir(directory).unwrap();
+        fs::remove_dir(root).unwrap();
+    }
+
+    #[test]
+    fn exit_marker_refuses_directory_hardlink_and_junction_paths() {
+        let root = canonical_temp(&scratch()).unwrap();
+        let path = root.join(EXIT_MARKER);
+        let now = SystemTime::now();
+        fs::create_dir(&path).unwrap();
+        let child = path.join("untouched");
+        fs::write(&child, b"directory sentinel").unwrap();
+        assert!(!consume_exit_marker_at(&path, now));
+        assert_eq!(fs::read(&child).unwrap(), b"directory sentinel");
+        fs::remove_file(child).unwrap();
+        fs::remove_dir(&path).unwrap();
+
+        let hardlink_target = root.join("existing");
+        write_marker(&hardlink_target, now);
+        fs::hard_link(&hardlink_target, &path).unwrap();
+        assert!(!consume_exit_marker_at(&path, now));
+        assert_eq!(
+            fs::read(&hardlink_target).unwrap(),
+            fs::read(&path).unwrap()
+        );
+        fs::remove_file(hardlink_target).unwrap();
+        fs::remove_file(&path).unwrap();
+
+        let real = root.join("real");
+        fs::create_dir(&real).unwrap();
+        write_marker(&real.join(EXIT_MARKER), now);
+        let junction = root.join("junction");
+        let script = format!(
+            "$ErrorActionPreference='Stop'; foreach ($path in @('{}', '{}')) {{ New-Item -ItemType Junction -Path $path -Target '{}' | Out-Null }}",
+            path.display().to_string().replace('\'', "''"),
+            junction.display().to_string().replace('\'', "''"),
+            real.display().to_string().replace('\'', "''")
+        );
+        let mut command = std::process::Command::new(
+            crate::windows_tools::system_file("powershell.exe").unwrap(),
+        );
+        command.args(["-NoProfile", "-NonInteractive", "-Command", &script]);
+        let result =
+            crate::process_io::execute(&mut command, None, Duration::from_secs(15)).unwrap();
+        assert!(
+            result.status.success(),
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        assert!(!consume_exit_marker_at(&path, now));
+        assert!(!consume_exit_marker_at(&junction.join(EXIT_MARKER), now));
+        assert!(real.join(EXIT_MARKER).is_file());
+        fs::remove_dir(junction).unwrap();
+        fs::remove_dir(path).unwrap();
+        fs::remove_file(real.join(EXIT_MARKER)).unwrap();
+        fs::remove_dir(real).unwrap();
+        fs::remove_dir(root).unwrap();
+    }
+
     fn reservation(root: &Path) -> Reservation {
         let r = Reservation::create(root, expected()).unwrap();
         fs::write(&r.path, DATA).unwrap();

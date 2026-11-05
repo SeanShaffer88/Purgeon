@@ -71,6 +71,7 @@ export async function createTauriSys() {
     reserveUpdateDownload: (expected) => invoke('reserve_update_download', { expected }),
     cancelUpdateDownload: (id) => invoke('cancel_update_download', { id }),
     launchVerifiedUpdate: (id) => invoke('launch_verified_update', { id }),
+    consumeUpdateExitMarker: () => invoke('consume_update_exit_marker'),
     readDir: (path) => invoke('read_dir', { path }),
     stat: (path) => invoke('stat', { path }),
     exists: (path) => invoke('exists', { path }),

@@ -182,6 +182,13 @@ async fn launch_verified_update(id: String) -> Result<(), String> {
 }
 
 #[tauri::command]
+async fn consume_update_exit_marker() -> bool {
+    tauri::async_runtime::spawn_blocking(updater_native::consume_exit_marker)
+        .await
+        .unwrap_or(false)
+}
+
+#[tauri::command]
 async fn task_inventory(cursor: Option<String>) -> Result<task_native::Page, String> {
     tauri::async_runtime::spawn_blocking(move || task_native::query(cursor))
         .await
@@ -758,7 +765,6 @@ fn make_dir(path: String) -> Result<(), String> {
 #[tauri::command]
 fn remove_path(app: tauri::AppHandle, path: String) -> Result<(), String> {
     security::checked_path(&path)?;
-    let normalized = path.trim_end_matches('\\').to_lowercase();
     let mut roots = Vec::new();
     if let Ok(data) = app.path().app_data_dir() {
         roots.push(data);
@@ -766,18 +772,35 @@ fn remove_path(app: tauri::AppHandle, path: String) -> Result<(), String> {
     if let Some(data) = portable_dir() {
         roots.push(data);
     }
-    let owned = roots.iter().any(|root| {
-        normalized
-            .starts_with(&(root.to_string_lossy().trim_end_matches('\\').to_lowercase() + "\\"))
-    });
-    let update_marker = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(|d| d.join("exit-for-update")))
-        .is_some_and(|p| p.to_string_lossy().eq_ignore_ascii_case(&path));
-    if !owned && !update_marker {
+    remove_owned_path(&path, &roots, updater_native::exit_marker_path().as_deref())
+}
+
+fn remove_owned_path(path: &str, roots: &[PathBuf], marker: Option<&Path>) -> Result<(), String> {
+    let owned = |target: &str| {
+        let target = target.trim_end_matches('\\').to_lowercase();
+        roots.iter().any(|root| {
+            target
+                .starts_with(&(root.to_string_lossy().trim_end_matches('\\').to_lowercase() + "\\"))
+        })
+    };
+    let p = Path::new(path);
+    if !owned(path) {
         return Err("Permanent deletion is restricted to Purgeon's own state. User files must go to the Recycle Bin.".into());
     }
-    let p = Path::new(&path);
+    if marker.is_some_and(|marker| {
+        let contains_marker = |candidate: &str| {
+            marker
+                .ancestors()
+                .any(|ancestor| candidate.eq_ignore_ascii_case(&ancestor.to_string_lossy()))
+        };
+        contains_marker(path)
+            || (owned(&marker.to_string_lossy())
+                && fs::canonicalize(p).is_ok_and(|resolved| {
+                    contains_marker(resolved.to_string_lossy().trim_start_matches(r"\\?\"))
+                }))
+    }) {
+        return Err("The installer exit marker is reserved for the native updater.".into());
+    }
     if !p.exists() {
         return Ok(());
     }
@@ -787,6 +810,51 @@ fn remove_path(app: tauri::AppHandle, path: String) -> Result<(), String> {
         fs::remove_file(p)
     }
     .map_err(|e| e.to_string())
+}
+
+#[cfg(test)]
+#[test]
+fn update_exit_marker_is_not_generically_removable_even_under_owned_state() {
+    let root = std::env::temp_dir().join(format!(
+        "purgeon-marker-policy-{}",
+        broker::random_id().unwrap()
+    ));
+    fs::create_dir(&root).unwrap();
+    let owned = root.join("state");
+    fs::create_dir(&owned).unwrap();
+    let install = owned.join("install");
+    fs::create_dir(&install).unwrap();
+    let marker = install.join("exit-for-update");
+    let child = marker.join("untouched");
+    fs::create_dir(&marker).unwrap();
+    fs::write(&child, b"sentinel").unwrap();
+    let roots = [owned];
+    assert!(
+        remove_owned_path(marker.to_str().unwrap(), &roots, Some(&marker))
+            .unwrap_err()
+            .contains("reserved for the native updater")
+    );
+    assert!(remove_owned_path(marker.to_str().unwrap(), &[], Some(&marker)).is_err());
+    assert!(
+        remove_owned_path(install.to_str().unwrap(), &roots, Some(&marker))
+            .unwrap_err()
+            .contains("reserved for the native updater")
+    );
+    assert_eq!(fs::read(&child).unwrap(), b"sentinel");
+    let ordinary = roots[0].join("ordinary");
+    let file = roots[0].join("file");
+    fs::create_dir(&ordinary).unwrap();
+    fs::write(ordinary.join("nested"), b"ordinary").unwrap();
+    fs::write(&file, b"ordinary").unwrap();
+    for target in [&file, &ordinary, &file] {
+        remove_owned_path(target.to_str().unwrap(), &roots, Some(&marker)).unwrap();
+        assert!(!target.exists());
+    }
+    fs::remove_file(child).unwrap();
+    fs::remove_dir(marker).unwrap();
+    fs::remove_dir(install).unwrap();
+    fs::remove_dir(&roots[0]).unwrap();
+    fs::remove_dir(root).unwrap();
 }
 
 /// Moves a leftover file or folder to the Recycle Bin, without any Windows dialogs.
@@ -2418,6 +2486,7 @@ pub fn run() {
             reserve_update_download,
             cancel_update_download,
             launch_verified_update,
+            consume_update_exit_marker,
             read_dir,
             stat,
             exists,
