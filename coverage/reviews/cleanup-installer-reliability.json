@@ -1,8 +1,8 @@
 {
   "schemaVersion": 1,
   "metricVersion": "purgeon-coverage-v2",
-  "status": "GLOBAL CANDIDATE; latest test delta and combined record independent C review pending; activates only after current C approval, passing final-head CI and PR merge; PR not yet created; never activated",
-  "sourceCommit": "1aa0b65fa82aa9baf1439aa4547403149af2f70e",
+  "status": "GLOBAL CANDIDATE; PR96 exists; current combined qualification independent C review, NEW passing final-head CI and PR merge pending; never activated",
+  "sourceCommit": "760873d6103218ae77d45ef60c9fbd18b4b4271f",
   "sourceTreeHash": "3087ef0a85e00f923ee239651eebd7f30a02a3d77a43e6d769794de8471a8fc5",
   "instrumentationId": "2e4ffcb6e5daac69142a683e704464f956c2772c70bf7dcff98f6d2d510a2a1d",
   "reference": "coverage/reviews/security-software-inventory-refresh.json (LAST reviewed active PR95; base ce2038917aec0eab9e77211ca6e74baa17cd0cd8; original baseline/policy/collectors immutable)",
@@ -120,7 +120,7 @@
     "qualification": "Historical blanket 85% core / 70% overall reporter remains exit 1 below-floor; replacement-policy PASS does not claim those floors pass."
   },
   "checkoutProof": {
-    "sourceCommit": "1aa0b65fa82aa9baf1439aa4547403149af2f70e",
+    "sourceCommit": "760873d6103218ae77d45ef60c9fbd18b4b4271f",
     "sourceTreeHash": "3087ef0a85e00f923ee239651eebd7f30a02a3d77a43e6d769794de8471a8fc5",
     "filesChecked": 296,
     "byteIdentical": 13,
@@ -128,8 +128,8 @@
     "unexplained": 0
   },
   "changedSourceProof": {
-    "sourceCommit": "1aa0b65fa82aa9baf1439aa4547403149af2f70e",
-    "method": "Current raw bytes compared with Git 1aa0; identity or CRLF-to-LF only. Separate source binding, not coverage credit.",
+    "sourceCommit": "760873d6103218ae77d45ef60c9fbd18b4b4271f",
+    "method": "Current raw bytes compared with Git 760873d; identity or CRLF-to-LF only. Separate source binding, not coverage credit.",
     "filesChecked": 8,
     "unexplained": 0,
     "files": [
@@ -147,8 +147,8 @@
       },
       {
         "path": "scripts/test-nsis-webview-launch.ps1",
-        "sourceSHA256": "63314ecc742048dfd56d8cea71bdbbfcf5cbc05c6035e21aa1fc2660afc2e350",
-        "gitCanonicalBlobSHA256": "dd55268137c615c36fa5b3b54580af5fba0f6e741c5152a876afe4b882734591",
+        "sourceSHA256": "fe61ac261c4df385baaf32a67af0f4e4e207384248ba8942b5e365f6ade6a6c9",
+        "gitCanonicalBlobSHA256": "7138801a17131567b032f703b597894f98ac88febbea797a490bf003a284eefc",
         "transformation": "checkout-crlf-to-lf"
       },
       {
@@ -177,17 +177,17 @@
       },
       {
         "path": "test/verification-automation.test.js",
-        "sourceSHA256": "018e776806b27628e4c22d2d88943a2cc608ae1082b3f73e552d995f6f8c21fe",
-        "gitCanonicalBlobSHA256": "07f766d918f1310944116242baf7b1e0ab0ad4458372e5c3194a3690cb12ee34",
+        "sourceSHA256": "b1ff667a74c9dd1df517e3f3480adf27b6528bc374ac15c32c91d9e61cb8227e",
+        "gitCanonicalBlobSHA256": "b01981bb1c10c3657e1299905410070f62d00f1663d884ab36eeefc263d580db",
         "transformation": "checkout-crlf-to-lf"
       }
     ]
   },
   "powerShellSourceProof": {
-    "sourceCommit": "1aa0b65fa82aa9baf1439aa4547403149af2f70e",
+    "sourceCommit": "760873d6103218ae77d45ef60c9fbd18b4b4271f",
     "priorScriptsUnchanged": true,
     "unexplained": 0,
-    "method": "Frozen raw SHA256 equals current raw SHA256; Git 1aa0 comparison permits identity or CRLF-to-LF only. Outside executable denominator.",
+    "method": "Frozen raw SHA256 equals current raw SHA256; Git 760873d comparison permits identity or CRLF-to-LF only. Outside executable denominator.",
     "files": [
       {
         "path": "src-tauri/src/security_software/download.ps1",
@@ -287,7 +287,7 @@
         "runDirectory": "C:\\Users\\Sean Shaffer\\Documents\\DevTools\\runs\\20261105T002514970Z-dc0c73b76f2f4c7ca48702b232d7cf98"
       }
     ],
-    "nodePassCount": 687,
+    "nodePassCount": 688,
     "nativeLibraryPassCount": 236,
     "nativeManifestPassCount": 2,
     "nativePassCount": 238,
@@ -815,8 +815,8 @@
     },
     "localUnsignedPackage": {
       "schemaVersion": 1,
-      "startedUtc": "2026-11-05T00:26:17.6656333Z",
-      "finishedUtc": "2026-11-05T00:28:54.0008783Z",
+      "startedUtc": "2026-11-05T01:10:34.6343002Z",
+      "finishedUtc": "2026-11-05T01:13:07.9252057Z",
       "projectPath": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\Purgeon",
       "executable": "C:\\Program Files\\WindowsApps\\OpenAI.CodexPrimaryRuntime.v26-1103-91-0_26.1103.91.0_x64__3k8sg7r9htsxt\\dependencies\\native\\powershell\\pwsh.exe",
       "argumentCount": 5,
@@ -826,127 +826,128 @@
       "error": null,
       "artifacts": [
         {
-          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-2\\Purgeon-Setup-x64.exe",
+          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3\\Purgeon-Setup-x64.exe",
           "status": "Hashed",
-          "sizeBytes": 4222040,
-          "sha256": "48DDE0F3E1ED5D73D227DEEFE28FA6A70C3EE2DAE5666888490003705F0ACDB1"
+          "sizeBytes": 4221285,
+          "sha256": "F595472D417968B28137AD3B3FCFDF4416A8CF21872E6924349A1BC0247BE2C9"
         },
         {
-          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-2\\Purgeon-Portable-x64.zip",
+          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3\\Purgeon-Portable-x64.zip",
           "status": "Hashed",
-          "sizeBytes": 3076086,
-          "sha256": "60D9DF99FBDCDE0319C795D5E69787066D7C4A52706E99FB5C815E653F556318"
+          "sizeBytes": 3076084,
+          "sha256": "711C0966366E4A3A1E178200FBF658034AD7590E61F2036C1B10F759C21D1A7D"
         },
         {
-          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-2-manifest.json",
+          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3-manifest.json",
           "status": "Hashed",
           "sizeBytes": 889,
-          "sha256": "D7D94B4630C71B634D9AD60813E6BC868A6A6CA5BC670722037ECAD0F5B6FCFF"
+          "sha256": "FE499DC37A622F516E4A6993848F3F51D696849DE4E7EB3C6B1D50AF4D295396"
         },
         {
-          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-2-evidence\\receipt.json",
+          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3-evidence\\receipt.json",
           "status": "Hashed",
           "sizeBytes": 38403,
-          "sha256": "0317F0D24E22E5E0A94D965591566526C5E05BEE994FF245B76486102B9442E5"
+          "sha256": "5B69CCAB2BA7F527E5ACA8E03B963CF4B2AB31FD43E0BC741F1E383E7B07D34A"
         }
       ],
-      "runDirectory": "C:\\Users\\Sean Shaffer\\Documents\\DevTools\\runs\\20261105T002617658Z-de2a9b02bba14799beadf702ae2fe386",
-      "sourceCommit": "1aa0b65fa82aa9baf1439aa4547403149af2f70e",
+      "runDirectory": "C:\\Users\\Sean Shaffer\\Documents\\DevTools\\runs\\20261105T011034613Z-6fcf7fe2b3ec465e98a8b3e7db0e32b9",
+      "sourceCommit": "760873d6103218ae77d45ef60c9fbd18b4b4271f",
       "postBuildNsisSources": [
         {
-          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-2-evidence\\nsis\\FileAssociation.nsh",
+          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3-evidence\\nsis\\FileAssociation.nsh",
           "sha256": "e933990b06dceac358fc1a4e71cb55c7dc9783ad4df8fc2c6248118a7ad4d348"
         },
         {
-          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-2-evidence\\nsis\\hooks.nsh",
+          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3-evidence\\nsis\\hooks.nsh",
           "sha256": "8032191a9d39772db3cc4cd5ad94be09de035773ba873289ee6a748cb6d657ac"
         },
         {
-          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-2-evidence\\nsis\\inputs.json",
-          "sha256": "95bd565827064e16bccb67aa1889c420de8afd4c5bb38281eeea3b63907e7097"
+          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3-evidence\\nsis\\inputs.json",
+          "sha256": "4ac0f8dcb0024a0ca3b04cb7cf0b584df4642fa96e1a90a27b6d3123d9d929d0"
         },
         {
-          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-2-evidence\\nsis\\installer.nsi",
-          "sha256": "a0c4b6138abde3236c1c38e66b1f59e743c3331edf2e8801a34f56f02c10ed50"
+          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3-evidence\\nsis\\installer.nsi",
+          "sha256": "b425674a8cf3a2d53050f326da38b032d9dfb7e904af414122481af19e73dfe7"
         },
         {
-          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-2-evidence\\nsis\\template.nsi",
+          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3-evidence\\nsis\\template.nsi",
           "sha256": "11eb3a7caf1328b900b635db946156505d3b1840457cacc39290ebde6481fc3e"
         },
         {
-          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-2-evidence\\nsis\\utils.nsh",
+          "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3-evidence\\nsis\\utils.nsh",
           "sha256": "72cae7532ea22bd39b5433dfd8ac47975844defa916fc113880479dedfee54f6"
         }
       ],
       "compilerProvenance": {
-        "buildId": "ef7d150e46374af4b966340972b2d7cb",
+        "scope": "Post-build generated files and known Tauri cache; missing inputs remain unknown. Compiler invocation was not intercepted.",
         "inputs": [
           {
-            "status": "captured",
-            "sha256": "A0C4B6138ABDE3236C1C38E66B1F59E743C3331EDF2E8801A34F56F02C10ED50",
             "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\Purgeon\\src-tauri\\target\\x86_64-pc-windows-msvc\\release\\nsis\\x64\\installer.nsi",
+            "sha256": "B425674A8CF3A2D53050F326DA38B032D9DFB7E904AF414122481AF19E73DFE7",
+            "status": "captured",
             "byteLength": 39638,
             "name": "installer.nsi"
           },
           {
-            "status": "captured",
-            "sha256": "72CAE7532EA22BD39B5433DFD8AC47975844DEFA916FC113880479DEDFEE54F6",
             "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\Purgeon\\src-tauri\\target\\x86_64-pc-windows-msvc\\release\\nsis\\x64\\utils.nsh",
+            "sha256": "72CAE7532EA22BD39B5433DFD8AC47975844DEFA916FC113880479DEDFEE54F6",
+            "status": "captured",
             "byteLength": 6753,
             "name": "utils.nsh"
           },
           {
-            "status": "captured",
-            "sha256": "E933990B06DCEAC358FC1A4E71CB55C7DC9783AD4DF8FC2C6248118A7AD4D348",
             "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\Purgeon\\src-tauri\\target\\x86_64-pc-windows-msvc\\release\\nsis\\x64\\FileAssociation.nsh",
+            "sha256": "E933990B06DCEAC358FC1A4E71CB55C7DC9783AD4DF8FC2C6248118A7AD4D348",
+            "status": "captured",
             "byteLength": 5517,
             "name": "FileAssociation.nsh"
           },
           {
-            "status": "captured",
-            "sha256": "8032191A9D39772DB3CC4CD5AD94BE09DE035773BA873289EE6A748CB6D657AC",
             "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\Purgeon\\src-tauri\\windows\\hooks.nsh",
+            "sha256": "8032191A9D39772DB3CC4CD5AD94BE09DE035773BA873289EE6A748CB6D657AC",
+            "status": "captured",
             "byteLength": 2637,
             "name": "hooks.nsh"
           },
           {
-            "status": "captured",
-            "sha256": "11EB3A7CAF1328B900B635DB946156505D3B1840457CACC39290EBDE6481FC3E",
             "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\Purgeon\\src-tauri\\windows\\installer.nsi",
+            "sha256": "11EB3A7CAF1328B900B635DB946156505D3B1840457CACC39290EBDE6481FC3E",
+            "status": "captured",
             "byteLength": 40980,
             "name": "template.nsi"
           },
           {
-            "status": "missing",
-            "sha256": null,
             "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\Purgeon\\src-tauri\\target\\x86_64-pc-windows-msvc\\release\\nsis\\x64\\Plugins\\x86-unicode\\nsis_tauri_utils.dll",
+            "sha256": null,
+            "status": "missing",
             "name": "nsis_tauri_utils.dll"
           },
           {
-            "status": "captured",
-            "sha256": "4EC390D0F96F9728507FBC2F4E91311DD90BFC6C8DDFE2159357B3651AE151C0",
             "path": "C:\\Users\\Sean Shaffer\\AppData\\Local\\tauri\\NSIS\\makensis.exe",
+            "sha256": "4EC390D0F96F9728507FBC2F4E91311DD90BFC6C8DDFE2159357B3651AE151C0",
+            "status": "captured",
             "byteLength": 2560,
             "name": "makensis.exe"
           }
         ],
-        "scope": "Post-build generated files and known Tauri cache; missing inputs remain unknown. Compiler invocation was not intercepted.",
-        "installerSha256": "48DDE0F3E1ED5D73D227DEEFE28FA6A70C3EE2DAE5666888490003705F0ACDB1"
+        "installerSha256": "F595472D417968B28137AD3B3FCFDF4416A8CF21872E6924349A1BC0247BE2C9",
+        "buildId": "645e77fdff5d45c1bf9f40df876eabd5"
       },
-      "qualification": "Fresh unsigned compilation at 1aa0; process/runner exit 0. Current raw package input hashes bind documented post-build source captures and receipt. No host installer execution. Post-build provenance is not compiler interception; missing plugin provenance remains UNKNOWN.",
+      "qualification": "Fresh unsigned package-3 compilation and project verification process/runner exit 0 at 760873d. No host installer execution. Post-build capture is not compiler interception; missing plugin provenance remains UNKNOWN.",
       "receiptInputValidation": {
         "filesChecked": 346,
         "mismatches": 0,
-        "method": "Current raw source SHA256 compared with package-2 receipt inputs; documented post-build NSIS captures separately hashed."
+        "method": "Current raw SHA256 compared with package-3 receipt inputs; post-build NSIS captures separately hashed."
       }
     },
-    "qualification": "Fresh current-source native and Node coverage only; separate replay profiles never merged. Historical b098 JavaScript gates reused with unchanged JS/config/tool inputs; npm ci unchanged, dependencies unchanged. Old native exports/reports are immutable historical data, not current binary binding.",
+    "qualification": "Fresh Node-4 full 688-pass collection and combined-4; native-3 evidence reused with unchanged native inputs and all 296 v2 source bytes unchanged. Separate replay profiles never merged. Historical JS-2 lint/types/build/packed gates reused for unchanged production JS/config/tool inputs.",
     "staticChecksReuse": {
       "sourceCommit": "b0989d2c2d150a0254d3040737d7ebdbcf062736",
-      "currentSourceCommit": "1aa0b65fa82aa9baf1439aa4547403149af2f70e",
-      "qualification": "Full 687-test/lint/types/build/packed gates exit 0 at b098. Successor changes only native test module; JavaScript/config/tool inputs unchanged. Full Node collector reran 687 tests at current raw source.",
+      "currentSourceCommit": "760873d6103218ae77d45ef60c9fbd18b4b4271f",
+      "qualification": "Historical b098 JS-2 lint/types/build/packed gates exit 0 reused: production JavaScript/config/tool inputs unchanged. Full Node-4 collector freshly ran 688 tests, zero failures at current raw source. Native-3 fmt/clippy/tests and coverage reused with identical native source/config inputs; no new native rerun claimed.",
       "verifiedSuccessorChangedFiles": [
-        "src-tauri/src/process_io.rs"
+        "scripts/test-nsis-webview-launch.ps1",
+        "test/verification-automation.test.js"
       ]
     },
     "originalPathReplays": {
@@ -962,12 +963,12 @@
       "validatedInstrumentedLogPairs": 30
     },
     "nodeCurrentCollection": {
-      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-3\\execution.json",
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\execution.json",
       "exitCode": 0,
-      "tests": 687,
-      "passed": 687,
+      "tests": 688,
+      "passed": 688,
       "failed": 0,
-      "durationMs": 51493.6601
+      "durationMs": 40811.3399
     }
   },
   "failurePaths": [
@@ -1001,7 +1002,7 @@
     {
       "category": "installer quoting and launch error",
       "status": "CONTRACT FIX CONFIRMED; RUNTIME UNRUN",
-      "qualification": "Static regression RED 1 to GREEN 0; corrected flag collision, cleanup ordering, bounded structured schema and compiler timeout; focused 13/full 687 pass; 15 strict compile/preprocess fixtures exit 0."
+      "qualification": "Static RED 1; focused 14/full 688 pass with exit 0; 18 strict compile/preprocess variants exit 0 and PowerShell parse exit 0. Post-fix runtime cases UNRUN pending NEW final-head disposable CI."
     },
     {
       "category": "historical CI installer exit 2",
@@ -1010,7 +1011,7 @@
     },
     {
       "category": "shared production NSIS fixtures and installer lifecycle",
-      "status": "UNRUN LOCALLY; FUTURE CI",
+      "status": "POST-FIX RUNTIME UNRUN; NEW FINAL-HEAD CI REQUIRED",
       "cases": [
         "spaces",
         "missing child",
@@ -1021,12 +1022,12 @@
         "real FileFunc flag order in both orders",
         "normal install/upgrade/uninstall"
       ],
-      "qualification": "15 compiled variants are static evidence only. Same-artifact hashes are captured per invocation; disposable CI runtime remains required."
+      "qualification": "18 compiled/preprocessed variants are static evidence only; post-fix runtime and installer lifecycle remain UNRUN. Prior CI success case passed; missing-child guard fired correctly but harness exit assertion failed."
     }
   ],
   "independentSourceAudit": {
-    "status": "LATEST TEST DELTA AND COMBINED QUALIFICATION REVIEW PENDING",
-    "qualification": "Unchanged installer source approved by 000116Z-e261669037c9; prior b098 metadata approved by 001421Z-91bf0a4c86fc but never activated. Architect 001817Z-9d648e00e762 approved restoration specification; implementer 002057Z-b09f8b6d0f26 restored original internally owned None path plus separate supplied Some exact-membership proof. Latest test delta and this refreshed record await independent C review; no current combined approval claimed."
+    "status": "SOURCE FIX APPROVED; CURRENT COMBINED QUALIFICATION REVIEW PENDING",
+    "qualification": "Historical 1aa0 record approved by 004324Z-525484df699e but never activated; PR96 CI did not pass. Architect 010322Z-f54c8340404f confirmed primary NSIS semantics; implementer 010611Z-4a84eb66b422 corrected fixture contamination; source fix at 760873d approved by 011014Z-186a154506f4. Current combined record still requires independent audit, NEW passing final-head CI and PR96 merge."
   },
   "assessor": {
     "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\Assess-CleanupInstaller-Coverage.cjs",
@@ -1036,15 +1037,15 @@
     "qualification": "Selftest/substitution proof archived; numeric gate only."
   },
   "limits": [
-    "All 296 file records use exactly eight fields; counts regenerated from combined-3 report, raw hashes and canonical Git 1aa0 blobs verified. Raw line arrays remain only in hashed external report.",
+    "All 296 eight-field file records are unchanged, verified against source-proof-4 and current raw bytes; combined-4 retains identical counts, sourceTreeHash and instrumentationId. Current Git source binding is 760873d; raw line arrays remain in hashed external reports.",
     "NSIS and PowerShell are outside v2 coverage metric. Static/future CI evidence tracked separately; no artificial coverage credit.",
     "Default behavior held; no system protection or AV vendor flow changed. /LOGPURGEON is candidate-only, opt-in inherited stdout; no automatic telemetry or log filepath. Phase bounds and actual child result recorded; unavailable native error remains UNKNOWN.",
     "Actual AV, vendor GUI, UAC, Safe Mode and live installer lifecycle remain unverified. No host installer execution.",
     "Original 32/40 failing assessment retained; final actual FFI-boundary tests yield 38/40 PASS.",
     "Baseline, policy, collectors and dependencies unchanged. Original one-off failures are not claimed fixed or attributed.",
     "Raw profiles have no binary IDs; none invented. Export hashes bind actual objects/profiles and mappings; post-build provenance is not compiler interception.",
-    "Evidence paths are local archives; CI and independent qualification review pending. Beta canceled; no tags/releases.",
-    "Historical combined-2/native-2/package-1 evidence is immutable historical data only; overwritten shared native binary paths do not establish old object binding. Current nativeExports use fresh native-3 provenance."
+    "Local archives; PR96 exists, current independent qualification audit and NEW final-head CI/merge pending. Candidate never activated. Beta canceled; no tags/releases.",
+    "Historical combined-2/native-2/package-1 evidence is immutable historical data only; overwritten shared native binary paths do not establish old object binding. Current nativeExports use fresh native-3 provenance. Package-2 is historical only; current unsigned package binding uses package-3."
   ],
   "artifacts": [
     {
@@ -2002,6 +2003,914 @@
     {
       "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-internal-job-instrumented-30\\run-9.stdout.log",
       "sha256": "b28666e48a0e935e3c88b2a9c19dd8f3e50b3a99fe076157a4bb0310e4e61e2e"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-source-proof-4.json",
+      "sha256": "5cc5295feedf58aac17aa6396db57718df222a53387f866bf24c14005ec689a6"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-assessment-4.json",
+      "sha256": "8a4108c576baa2d36d840ab1fbd3c890ed9e0458e7eeed8468106f38ee651280"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-result-3.json",
+      "sha256": "c98301516dfbc115dd9d0a30fb0097f38db9efc79f759ed41e371bb4cab0df09"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3-manifest.json",
+      "sha256": "fe499dc37a622f516e4a6993848f3f51d696849de4e7eb3c6b1d50af4d295396"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\fixture-contamination-compile\\result.json",
+      "sha256": "73ffc57270d64bbc0397a52bd256074c6068a8c8f5b8c705bb89590b151a2581"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\fixture-contamination-node-full.log",
+      "sha256": "91eb37fd673c5ad1846ee9cde8589d92dab4085241e4daa4c669c7fc6e76a204"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-ci-attempt-1.zip",
+      "sha256": "a7762e81983cac0269faf116b4a5aede0a7b7870c952b4a0fbd92416d1b9c8b9"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-ci-failed-1.log",
+      "sha256": "14037f514244b282c9f9b73674aef6faeb8843bb008b1b37e2e4682085729edc"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-combined-4\\evidence.json",
+      "sha256": "db703452950849bafdb8b0d1754e0670d0e86f35e0ba1494852f9378f05d0513"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-combined-4\\execution.json",
+      "sha256": "e7d263669fd28d2f4d707af54e64651629bb5cc6f914c314ff883787fede3666"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-combined-4\\manifest.json",
+      "sha256": "e408117885a201b36dfd3e48db14fb3ea48bbe0c8f5896192803d38f563dfd51"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-combined-4\\merge-inputs.json",
+      "sha256": "12446f757afa8634e823cc5e9d98743dbc5c92f1869568bcf389edcb0e597fa2"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-combined-4\\report.json",
+      "sha256": "822718ead6d32262f701c8208b56e4b8e7175c313eacef833776d7db122334c4"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-combined-4\\report.stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-combined-4\\report.stdout.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\artifact-hashes.json",
+      "sha256": "1dd859b7359416c7a99bb4a7b40b1aa0ca0a4c0184cc60d15871c07427e428e9"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\evidence.json",
+      "sha256": "58360e00097c3c37e72ae62ccf0d8f9c8d66a965d7e7da42b8c5acb40fec2c83"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\execution.json",
+      "sha256": "91ed95a45cb1d60e3e8acf1574fc1108342fdc189a5c007d7af14020a3d8ee3a"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\manifest.json",
+      "sha256": "dae908efc46af731a586677fab1195a6c9b170257df7fe730613967f93d3cbf7"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-10084-1793841043501-0.json",
+      "sha256": "0b9777465afffc936f5c55906bb662ec7421c8cb08b42fe9e76419c4e3d40584"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-10392-1793841065964-0.json",
+      "sha256": "7d06177b934a89aba5d3c10e8fa23ca874f1021a4bb3a4a4c7cff9556aee1cbc"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-10424-1793841042264-0.json",
+      "sha256": "53599997671521fbf93d01f6285bf11dd0dbaf1297ae3083ebad45a66348e666"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-11172-1793841027935-0.json",
+      "sha256": "4a739b87239af41fc6a6598b1f16aa5c1ad2ce9df06be4866aa6513f5d5db811"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-11212-1793841028714-0.json",
+      "sha256": "a41f80b26ff77a4c104dbecf2c9c3a646747bdbf5d4d0a01f0fecd455fe47430"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-11316-1793841025993-0.json",
+      "sha256": "278a92584d20b0f8f7f3b2541747dab977a195ce03cc405954e17899f9c9823c"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-11692-1793841025629-0.json",
+      "sha256": "592f5c287cf5b13b96e4a2fcc8807f5881ec31869de7e27c7870b7e6c0b33d74"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-11700-1793841044884-0.json",
+      "sha256": "b6930bc66051d8a6c1b0520a6c7ea1caf9d8bd6c04e96ec5b42a10b91e833be3"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-11760-1793841025629-0.json",
+      "sha256": "3078dc790452a24e5f982117ef22ad41ad6cf54072fdc7fa449bd932557472b1"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-11920-1793841034965-0.json",
+      "sha256": "e132ff0685dba764fa9839095441090a5423c2dee572183c98824d2eff410640"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-12304-1793841032351-0.json",
+      "sha256": "a3d09468f2a2b058ec1aa167b1f15de9c3d603bc5ed782fa973df72de21942da"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-12652-1793841026743-0.json",
+      "sha256": "1d8ec2c38256b70fc96d181a332d330c1f5da1286efe45730cbd3ba29d3827a7"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-12712-1793841026510-0.json",
+      "sha256": "aa8b47953e1472ac1e1475e11517e5f29168a8a20fc1cb6afa3fb976d83557d1"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-12716-1793841030974-0.json",
+      "sha256": "6bdf16f6ae86441f97bdc147af79c3fec4505ff12487801a87e6cd5d1ecd20b1"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-12792-1793841041247-0.json",
+      "sha256": "7547b9e25a255b00a67160e0a209a556bdbe9a4b7545437033f0147cf2747ae9"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-13200-1793841027070-0.json",
+      "sha256": "68d7b81eecccb5af9f5b31bd35e928f5b0150333637894de34a2984225f4b2fa"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-13216-1793841029360-0.json",
+      "sha256": "fdf94b0b97050bd12f4a5a549992fdcad0cace20ac01fd2ef85921b71bc4b37b"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-13244-1793841026240-0.json",
+      "sha256": "c87b50215c30663db80d895191bbc22ee5d95e1b72a9cd0c203baa2b1aee101d"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-13328-1793841037872-0.json",
+      "sha256": "929250ef972458d1a7212890b515cf640e53a08b6d32f865f7dfa64e8fa3d9d1"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-13332-1793841037993-0.json",
+      "sha256": "0d6403556eed36c3df8eb68036a62284e1f6514bf7d06f46ea66f682b8ee9835"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-13516-1793841042435-0.json",
+      "sha256": "96a26443431c35d1309578ebf858802e1cf1215b15c6bb74391389ce753dd5e0"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-13680-1793841044325-0.json",
+      "sha256": "7fe056e194c1a59deb03b42639f4e43badde6d5bb3ec6c4ba2bcf75fe4631e48"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-13780-1793841044024-0.json",
+      "sha256": "a02aceea18aedcf4e0ff417e39f81efdc22c763d2f9c2f157dbffa6953f706a9"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-13836-1793841035561-0.json",
+      "sha256": "d07879a519c74c7d68dd12e6145065596cd8865d09d262e89916ba078f6fdd30"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-14516-1793841025617-0.json",
+      "sha256": "aa0a9e6b6c9643f496d53772da476005011336099d571983ad7685941d93ad6b"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-14528-1793841042789-0.json",
+      "sha256": "5147a7f9f0f7f48534602c5096387da37aa3402128e97da1035842e17bf43cc5"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-14552-1793841044216-0.json",
+      "sha256": "2d615a93d15af5f732c0c4b3412269621704e56ed725e55b6759e7acbc2d36d6"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-14700-1793841035889-0.json",
+      "sha256": "f8febadd113a15efe3b3230234886d7ec2a8a3b42820e18ed23044aaffabdd56"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-14964-1793841037302-0.json",
+      "sha256": "3b6aca6c87be9a0ba7b3f839010736e4e89c775e1dd9bd3fcfad4ecc7da47e64"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-15168-1793841029828-0.json",
+      "sha256": "c0c717dbb5aac2e6567f1b5e5411344261add9f7d350df7be147a7654588753d"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-15168-1793841038920-0.json",
+      "sha256": "58694ace5884f9ae8ce975ead257f5857c1ef7ed328f8be8e04111f6694cb624"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-15356-1793841038365-0.json",
+      "sha256": "1f5ce0726160e48a20c060ad36ad65121a071007d5994e59fb025346ba7585f2"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-15440-1793841041898-0.json",
+      "sha256": "592c8b6a4d5a36d34a2917de46a18621028d1647d9ed10d295868c605efff051"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-15724-1793841029013-0.json",
+      "sha256": "82ee834321c5b00f35808bbe4c78d2eab188ecb7693eeaf3a854d5172f67c8b1"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-15740-1793841035289-0.json",
+      "sha256": "d4064ecb9d2d6aa4814d853fb7f716191d0d9831f830edaaeae439a2b372512b"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-15796-1793841028291-0.json",
+      "sha256": "328e6b4826381b4a3d8e1bed43e9f5f9f8077b43d0b5d112355eb0f1e0eb9fa4"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-15796-1793841046238-0.json",
+      "sha256": "a99d88542dca1a33ffb86014406aa45ba4984a1ae1ba762082c4b5f4dd397503"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-15852-1793841030053-0.json",
+      "sha256": "0a7e1e288e89618208c8aa2a2011e3902cb5b4f277c342f154fa0ebe47d343de"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-15856-1793841039639-0.json",
+      "sha256": "58e72a0b0db4bd385cb3bc6bbce10a97761944c971c3f418e9cf2fac14659e8f"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-1592-1793841034680-0.json",
+      "sha256": "fc87f09680069f3dbaa50e44eb3a409f1a690bbee2eeda3edf17e3f7b9e01954"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-16084-1793841025959-0.json",
+      "sha256": "9b72ff56ca27bc6038cf9c025e6c5ef4913c15662badd092028a95825eaf3af5"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-16480-1793841046326-0.json",
+      "sha256": "c91de70ad59950237ab2b9c46f92cdd96822bd5afc350131c7c16a9b5e343626"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-16496-1793841029126-0.json",
+      "sha256": "707507a630ad9adb677d54a0e97164faa69d3aa2504b8f1b0361c5b42591c435"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-16524-1793841033430-0.json",
+      "sha256": "c00b6356a24f742aefad22920aa6f386ed55d1b6409f1e4fe74a6923d7fc8178"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-16544-1793841034408-0.json",
+      "sha256": "1ca35a625de8ad08d704b042575f4200d2c427f874c166d85b8d04ee4f6ff1fc"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-16584-1793841039517-0.json",
+      "sha256": "0c06fca6597a82237394c678789dce4088cefcff9bd13f5a3b2cc736a0926b39"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-16760-1793841037525-0.json",
+      "sha256": "592737d8ada152aabdbcaea1fe5e23fa8af212ceb37297e896c58c50b5d471f6"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-16772-1793841036237-0.json",
+      "sha256": "3db0a8ddd4b610398c824b2bbf833da45f83960b9ac81c573b502c37839b2e7b"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-16904-1793841025976-0.json",
+      "sha256": "8fbc4a32ce5cb4f8723ccbfdcab5ea0d4998c6cce5821f88ead24f6f635966b6"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-17088-1793841029670-0.json",
+      "sha256": "cef01453fa9aadd20c4d50e741b1ad40d6936155ecca059a1ce0136a58442ab1"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-17164-1793841025956-0.json",
+      "sha256": "54f5f014106e5f57afb3fee963bedc0e50bc3b2f97f72e6fb3c93d352daeae08"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-17332-1793841043214-0.json",
+      "sha256": "fe0279a8290d11ded20b33f11767b5ea4a8319b0d9998df328dd60a44661ede5"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-17424-1793841042068-0.json",
+      "sha256": "a4a764638712f4e411750d3a21165e1078146bcbbf7d80e3ff706c752699189b"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-1744-1793841044494-0.json",
+      "sha256": "43ba02580cfd2da01c29e6b5744a358edfa4b5bbbd6f1a1ca995f7cc09923703"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-17452-1793841028366-0.json",
+      "sha256": "d4300823f8f37490adebc9bf12974676c8ef0d94d1170e8312b7c1a0ab6334a4"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-17584-1793841026521-0.json",
+      "sha256": "71f3cc51f2a7d90a649a3291f07962ba2e2f1cd3ae2e6c0e0983c2123559f2ab"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-17776-1793841026384-0.json",
+      "sha256": "25d74d59e55d9a2bf1bb84bfa4cfe85bd463a29148e7ecc9933053cde2fe037a"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-18200-1793841025807-0.json",
+      "sha256": "869ab8203be81b40c91499478ed4d619abe267206eb2383bcb5b52475432a5d2"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-18312-1793841027920-0.json",
+      "sha256": "7eefc6ff46994ee3f060b04c58d3ab9342f68752a89367aebe6e04c0c8e5e3b0"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-18464-1793841037421-0.json",
+      "sha256": "678a805d9725970f301562c38f628bff39a21f7d8746fd4ef9c414ac0212ec6a"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-18596-1793841026661-0.json",
+      "sha256": "dfbd32e5d015a5fb0ee0a03e13e26d8de4813b2688c6287d6532b68a19c8e420"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-18768-1793841028592-0.json",
+      "sha256": "8aa4b3cdba5090c30bff438047a841a5a669fca0b93a7ac7fc9dc58d206bb407"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-18912-1793841028812-0.json",
+      "sha256": "f8c003f15e9fc7f729a55fe03f37d8aa78ff6b0e9bdf18ede66d2cfda71dc063"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-19296-1793841040337-0.json",
+      "sha256": "6d18ba36d0d25f3aa6ac89d9291fc288ac7a40a3744867ef66e56e19896b2e2e"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-19364-1793841026647-0.json",
+      "sha256": "9547479513b528339ff62f1f78d5b85335c04e561e89ed48002dc0e97625c538"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-19376-1793841042161-0.json",
+      "sha256": "169e27f4acec8a3bcc29a7f5eb541617a07c36a9bf4260247f6d6c7d80034ee1"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-19504-1793841042528-0.json",
+      "sha256": "7bcbb1024e2348026efe854f0319fc6361cb4a5e2ffb7f5e89a4bf9487338eee"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-19588-1793841033664-0.json",
+      "sha256": "f1856abeafdf1c32dec7f5d30401f23f8db5bdaa667a330c1be4ff55ebfcb452"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-19632-1793841046500-0.json",
+      "sha256": "b687afcc4a932a5ce7e69fb472fceb19ffa194e2f09683d058a62d8ff04c0c51"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-19640-1793841036827-0.json",
+      "sha256": "f51b219691ee0f9ec72f0d970dc77571c70c7f344f7452288ec9ff841ea1743e"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-19640-1793841039955-0.json",
+      "sha256": "13f4e23de96d67ca35379a685c814b783e9793c8a4c2425923ad24470d449e70"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-19676-1793841038723-0.json",
+      "sha256": "852b9d724e4e9ad62247ae4e65955e3bbe356ab26120cf165b1897440753bf7e"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-19692-1793841044737-0.json",
+      "sha256": "b40e62139ec5a697f622b21a6bceea3395ce89d1629e75eeb1a9450d432188fa"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-19712-1793841025497-0.json",
+      "sha256": "852be8f9025043785e414124a55f5126bb63051ce41d6d1b352cfca6792ad16a"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-19728-1793841041726-0.json",
+      "sha256": "c44d4a29ce0d1a59cdef5d927a1d08a87016a73fbd7c013b26e39e20ca447ceb"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-19792-1793841034808-0.json",
+      "sha256": "0616e4b05cc9abb4cb2ba76f387fd723b3614d1d0a0382fbfdb5989df1d67cc2"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-19792-1793841037646-0.json",
+      "sha256": "b0e252b780e2d1fd4add85bb21df162f8f7fa8ffe96bd445e0c535dd02fb890f"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-19828-1793841034287-0.json",
+      "sha256": "a003574780afe3aa221743211e9a0b75cff523597994fb3e302e1ddde580ccda"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-19872-1793841034513-0.json",
+      "sha256": "c13f7c3270dc81b7b961f75a3c70ae8e0bb3e3d3d64b59dbebda4768cf3f3c34"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-19912-1793841027436-0.json",
+      "sha256": "65c52b39521f248fca05a7e89368b60eb4893fb3ca953afba0dd395e81864f5a"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-19988-1793841025493-0.json",
+      "sha256": "addca6848ba7e0a15dae2de86f09de23b136d8ce696076aeafcc3d1e7af38606"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20196-1793841026131-0.json",
+      "sha256": "e3261a83a8f5850b5d699ed4fced3dd37a7554742ce4a444e5a82698d3481751"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20236-1793841043643-0.json",
+      "sha256": "a52e88c5af5a6b20c87c10f299adc2f857771897e8567fd5cba3aea21f70ca6c"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20368-1793841025323-0.json",
+      "sha256": "1af7ac1448ed29b077ef88b2d5b927bb56eeb1e79155ae176730d60602ce0981"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20520-1793841026001-0.json",
+      "sha256": "8d1a87472c64706289fe575abb0a451f69118be86c829ee66f1d5056c4f8a81a"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20556-1793841037765-0.json",
+      "sha256": "326c82e534718967981a400857d787b6df8fe959e75fad7150d184b0947161b2"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20616-1793841025507-0.json",
+      "sha256": "8168a3db9c0451efa4b75b199e13f959dec46024fc763d1653c7b048577876b9"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20616-1793841031669-0.json",
+      "sha256": "d2e24e0a76cb70c21889aa7cdcff39222fe34f54f2d6aee3b68b5ffca5075d16"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20692-1793841038519-0.json",
+      "sha256": "678ea44a2f1fc4395c95626212188d3141fdffd1bbdc3c79c0253363cc1e0201"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20712-1793841030527-0.json",
+      "sha256": "53d6f0c9a4a94c2f81a7c1ef0e4ec53a42631841216522b2731f69ad4c9b1f11"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20736-1793841026124-0.json",
+      "sha256": "d35bfcf027caee5f57122c325b238252a23d0e0c467de0367ecc1b5f0b265402"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20772-1793841036518-0.json",
+      "sha256": "3c2a327f7e38bfc331179fae57cc785fa864690a31712b02765dfa81983cc97b"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20852-1793841027434-0.json",
+      "sha256": "a2d6b39d64d5c12d99b775ba0ad19be934e4f8b376a160998d6d5fea3ee071d3"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20852-1793841045321-0.json",
+      "sha256": "5b74cc91e598e9cdead72d8c56bc81ac6554c9e13443782f493ef3f2428f9289"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20860-1793841025912-0.json",
+      "sha256": "f07812ef701b934063f8dd22f57606471043cc076c48ff8ade78e820e6f3b5a4"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20876-1793841026789-0.json",
+      "sha256": "f42116c2cb9329b0832f4c22b778239bcdd3c146799324c9d179c368bd74bee3"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20876-1793841029246-0.json",
+      "sha256": "88e393384d66363fb1ea8f3c44249d7c420f9b0c74e10026fcb8c757aee770f2"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20968-1793841029006-0.json",
+      "sha256": "68d9871a1e7650323a463f8f608cf9fa992b01fa467ff8299b73b8f0613d6901"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20968-1793841035755-0.json",
+      "sha256": "962ea4057ff1a7ff95b8c4cf297bfe2097631c060efa3dc2be9f7daa4169db2e"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-20992-1793841041549-0.json",
+      "sha256": "273dbe996ed08405845fbed4da6eb6cf4b3c89fd35f8e8fe050e7f9732225aba"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-21056-1793841032032-0.json",
+      "sha256": "4d489fe0b9b8da884d472b8115378f2a7fff3686db13c651fdd80b3cc5ab52d1"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-21284-1793841029869-0.json",
+      "sha256": "1e534f4286c190fccb9c26ebdde82d23b03de0fded1b5e8e3a3135795886a1ea"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-21340-1793841045036-0.json",
+      "sha256": "b9b7a47dc382b70216a01dfdd88cac6be495f75c82b9efbf9c465f1af620a586"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-21460-1793841029108-0.json",
+      "sha256": "6b146094a9059ca985b4fac91009557f6dae91e8d70cb4ad2f7c725b7624d53a"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-21480-1793841026047-0.json",
+      "sha256": "f126e6fff2b91f4aef03a8f9bfd81bdbe900f17e39a3b1be201919ea9fd87d69"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-21572-1793841025565-0.json",
+      "sha256": "35c3f4cfa2f9453df9ad62290c85d0fc88569c9ea75310115a5d3bd0ea9d66ba"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-21604-1793841039779-0.json",
+      "sha256": "58d75e6c1f2552e0b3fc6bb3e7a0814a978a937d2bb4cf2e04c218c14314036e"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-21604-1793841043929-0.json",
+      "sha256": "a7edd0589839d5579308d1c716aa1f8062aa80cd952f8535ab0295921193f3ad"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-21612-1793841043353-0.json",
+      "sha256": "6b8580303e8d0ffa236b99b09079445dbc3c1d953163120bd93b94a2dfbcfbba"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-21668-1793841040698-0.json",
+      "sha256": "3df0e332b86a7ce45e604d5e94b79c58b60d902a97ca28b9c252d8038d59fc22"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-21908-1793841039453-0.json",
+      "sha256": "79627bfd8a2aba4f6b9146847d96515058e4dd64fcba343cb601ec153ed7d802"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-21940-1793841036885-0.json",
+      "sha256": "8261545880abc13e970020ec131e023ea49675392f8267cad8c0f0fb0d1d105f"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-21980-1793841039267-0.json",
+      "sha256": "80851e1b0ddf6221515b1dd6d94aabf8b74a90c279ba5acc36c03561911a2ce5"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-22056-1793841031201-0.json",
+      "sha256": "392480e5dec1b78f915977b24f8aa544bb3f4d812f96af987f70b6e87cfb8c17"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-22104-1793841041080-0.json",
+      "sha256": "8d892570e7f7fdb8fe19897f17735a0a3e0ab4e4961bb0e47e41e403fc73c688"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-22368-1793841028733-0.json",
+      "sha256": "48c0023f5083237d61bb80857f3f995614007a7e73d9746c1251e5f459345a4f"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-22464-1793841036063-0.json",
+      "sha256": "01944d4b88ee22c4b050558445d31e0173bb7a3a3158579821f2ccc5ae467e65"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-22476-1793841037095-0.json",
+      "sha256": "602794ce999a225a4f9c7f15ce7cd6a2068afd81e6d0dbde791c3d54083438d9"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-22512-1793841035127-0.json",
+      "sha256": "ee65a9f9db33930eeda82b31543fc19808a25b46173a9419a9c784d4058f164f"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-22544-1793841042623-0.json",
+      "sha256": "7e96553d1f9fbcfdfdaec531b2b1bcf08dde5c146ca595af4d47a73b54fd6d83"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-22888-1793841026076-0.json",
+      "sha256": "b5caf281bcd80c7d39dbe2be4ffa8222b157b1c5e105a1bc2ca801d0e721860e"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-22928-1793841028369-0.json",
+      "sha256": "e968f46ffc511ed30c318cb892ba845218f5cfb342f6710570c6a92398492127"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-22976-1793841028394-0.json",
+      "sha256": "bef4ab7dd74e118b6417b9d6b0b428e93a47dcafe3161e898cf25f23d2080878"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23012-1793841042711-0.json",
+      "sha256": "50aaf47ff56c01f49350705ff5716c5504e61e030b5d1d38e49086124217be67"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23064-1793841029624-0.json",
+      "sha256": "1a6d50473e7956fff8f899757c36192c5c4abf91305c51803194fd52be3b355b"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23100-1793841025506-0.json",
+      "sha256": "a1670333fd3d3b927f68906b89425441673adc7ae0d519ab14eba33608c0a104"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23100-1793841027352-0.json",
+      "sha256": "5399dadf3629e180bf2a5c068eaadc2130daff715fcbec15be67da96baddbbfa"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23148-1793841026464-0.json",
+      "sha256": "e7f2f0006e5714a95425ff820d74f50e42da88338f401c46cc70aec3fb121fb2"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23152-1793841029980-0.json",
+      "sha256": "f8814ed56469411d86bafbb9a46816fbc90c2ee2fc4f8ef08e71e9001b52d81d"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23196-1793841032841-0.json",
+      "sha256": "3c6fae504dd2a76efbce255f7165319ca14227df22368120cef9a0fd60b59f79"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23328-1793841033851-0.json",
+      "sha256": "6f9f7a968295bf20fab1dd3ea94bcd858cf639714d3f799ccf20dfde56baaed2"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23468-1793841025355-0.json",
+      "sha256": "0058f654d91dd3f99da3ba4b1efd0a5eb2bded39373dbac447923b518b9de728"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23504-1793841028076-0.json",
+      "sha256": "53d282a7a2f39e28b838a541858d0e0a15193cb61ca60fe7cccc14f7b56a1def"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23540-1793841055451-0.json",
+      "sha256": "149f42064336cda9616281f038ee2d55398284f9180da1e7552565464bb95933"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23572-1793841025955-0.json",
+      "sha256": "769262c3f40815927e7febee6a4738b7214eb2147fd7331309d74662f2cc6d3e"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23572-1793841028323-0.json",
+      "sha256": "87e769a32de3e5237ef98a2411ffff2c561379764ba92d9cd2bb32573fae22b4"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23572-1793841030510-0.json",
+      "sha256": "13eb6e7957f2fef7a82cda0f122f875c8baaf086dad0d1545513804af974a6eb"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23652-1793841042344-0.json",
+      "sha256": "20e34bb57586c611361b1918334e1a00d5eee4f551d7d1869240d9dafced362c"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23680-1793841033638-0.json",
+      "sha256": "0e7fdc41d6bf20f1f8c75b26f7109d84639be2cf0b5a54f88966613049e9edc0"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23776-1793841026806-0.json",
+      "sha256": "a339ba4827fffe83389ae5e166ef1fd8c1ee1568bf4a58f9149cbe00c85cddbf"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23804-1793841026721-0.json",
+      "sha256": "c60e200f6e55758726f2df8362f889d1ee827cf23321edb87ace6b1d6fa826f4"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23872-1793841027748-0.json",
+      "sha256": "317f08d669a7106f0faa4325282ce19271d9531fb61cbfa6fa393d2a37a3e147"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23908-1793841041403-0.json",
+      "sha256": "c3719fa622837f201a504a010362edb383460e79649c6f80ac7f3c530439b918"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23916-1793841043088-0.json",
+      "sha256": "c7489b2aeb456b5d52d58e1c835081b5eb769a7e379708784e3cfb7cc1018201"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23956-1793841036692-0.json",
+      "sha256": "39bf6eafc63ce4e253dd9533d8801558938ab92ccb6800f2aef5f147071c8329"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23960-1793841025321-0.json",
+      "sha256": "444e3c20d19afb0a93b9f016f77d17cef7f9e6618096ce5c89f794691a59ad17"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-23988-1793841040217-0.json",
+      "sha256": "60dcbd265ac7d356712f55b621f307e91f60be3c2db2c75aa85a482af52ff4d7"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-240-1793841031694-0.json",
+      "sha256": "031725e3b6e2d290ea0f31444504595435c016c00eb5b452e74b6ce2812dd539"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-24012-1793841025390-0.json",
+      "sha256": "2c4bfb6e2236149cfe89e94cc4796a78330425473b15971934272e85703dfaea"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-24040-1793841025812-0.json",
+      "sha256": "27f651d714663e174bcbfc7bff3a4ac9ebef8cd2c8d7754bd58c936bbb176b0c"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-24068-1793841046432-0.json",
+      "sha256": "947864c488257df2ba054555596e7a5cea832c1a0f6b0b7bfa3aac298e046e6c"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-24220-1793841034822-0.json",
+      "sha256": "1a720ba86957158c4a285c20160209ec2b68a3b919ce218548291c4ee3b0d46b"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-24280-1793841026769-0.json",
+      "sha256": "bd30fd61308f7fa5a4dddf385c294387cdfc30e8335f9d1cd66d04bd9b91c32b"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-24456-1793841040445-0.json",
+      "sha256": "a26b2ce9ef7f02a61d3607d9026e52ceb444130fd0a09cb67b321d7e5b4cbe4e"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-24456-1793841044413-0.json",
+      "sha256": "cdea5268190bfe4c962b686607cada15a1e4945416811aac88870598322a60fc"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-24472-1793841026329-0.json",
+      "sha256": "1813fcbda3ac134e1662cdeffd48df3714ca3767ba1dbb5a418c9859c16be7da"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-24524-1793841032599-0.json",
+      "sha256": "c8a475e0ae153be3c2d9fc3cfe84c1defeed351df900deec7efa41fbc432658e"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-2556-1793841045173-0.json",
+      "sha256": "48291d561de72b0faa4989a571a242c80c97314f4d06b0af4840fe60e3de21bd"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-2616-1793841026246-0.json",
+      "sha256": "c8db1e96372ca03ae06e15341e28614e0738eb10feb258e7b02ccb269595fa4c"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-3424-1793841040917-0.json",
+      "sha256": "142e1086e0cf7a80086279000b6f3520e27991c8102ee87e4060de7386703594"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-3488-1793841025548-0.json",
+      "sha256": "3cdd74dea9c5b05b79b8a31eabd1e301d14fe95ab3307e015c3300bb1c907310"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-3840-1793841026385-0.json",
+      "sha256": "a22d6ba2b707df00cce685ff6f325089c9ee5382dab637c785520f919f404f66"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-3848-1793841025764-0.json",
+      "sha256": "44ca05c80b1864e466b02e32ae603eb5b6a1404791e2ddd97ecba5194802d299"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-396-1793841025698-0.json",
+      "sha256": "e1946d206f04b535348cb4d0ab4503741470ed230671ea9f52e8d42cd52c1873"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-4280-1793841025341-0.json",
+      "sha256": "9cbca7ca69a6ce77478e335cac3aacf5d6bd5f6570a2ee090e654b2658a2ddba"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-4396-1793841026420-0.json",
+      "sha256": "1471d710fecf2c7d7a717d8055543a34a340fea19c3e49f8b40fe7ba94909ad2"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-4396-1793841039854-0.json",
+      "sha256": "93fbb256c6ff97cb12b9c99ef66d7ed9f26ae27bd92cb9ac4cacfe7e424133a6"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-4576-1793841025768-0.json",
+      "sha256": "24a399ac0d481b4436a9dcd1be5a063610f6deb174981f75e193e6af4879cba0"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-4628-1793841040799-0.json",
+      "sha256": "2d9c7e3f3b2ec1999b0d1a80d1605d37397bfa8967369630cd279d798c89398b"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-4916-1793841038114-0.json",
+      "sha256": "2adb563ce0d35dd725086d2128bdb26412d77f473b1085fb8ab4ca649cefa813"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-5100-1793841027245-0.json",
+      "sha256": "321de6eb4bfb5e1b4f3726698d1095d33a37baac6639ad627a476d997c1b46fb"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-5336-1793841042929-0.json",
+      "sha256": "bb474439ebe48e9758d3d659a4358359d734124a91a364e1cb6c81e66b80248f"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-5476-1793841025788-0.json",
+      "sha256": "b39a93ef9fd93f908247a22e9ee4f1b81efc42af36ad0d3715779c19bf9530a9"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-5476-1793841043841-0.json",
+      "sha256": "880d2c36b9fd20c52651cdd7cfc5df641373bb2518a61457f4b12e13a65ccd2a"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-5504-1793841039751-0.json",
+      "sha256": "3b669ceb329c49a93ae8341fa9e6cd4939e1f2b228163fa65fceaa2d6763c2b0"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-6300-1793841033181-0.json",
+      "sha256": "44db425d2216f52a16b0be820e1edf283c63ba858ec6ff3cb85b526fa4ae8aed"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-6440-1793841030140-0.json",
+      "sha256": "1b4e75f6ceb77ebc108b45c89429840e27822aa4a67356e9d7bb163d361e42d3"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-7240-1793841047955-0.json",
+      "sha256": "73cb654954d57d98401b901a45361ca20df02d257639891c17c3c1b1b2a42363"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-7304-1793841026268-0.json",
+      "sha256": "a7426922fed3e5d48b2280ce837baaede4f60a1088f690b74b39e1beafa49977"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-7304-1793841028653-0.json",
+      "sha256": "5123403a6adf5a13a2cd63c845a0568f2e2534be8eb2c07b2b13aacd8e130d84"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-7308-1793841043740-0.json",
+      "sha256": "ee61b351bb2e8a7b4e41afa7163f703b025fb28e692377aeeee5eb6c214cf6c4"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-7468-1793841025927-0.json",
+      "sha256": "5491f709f12329e7c8b0acfbc27029367c1670fcb661dd09579d359478fa57dd"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-7560-1793841030236-0.json",
+      "sha256": "e6d16dd430fbff0fd17837f045b3ae203a231265b4496744fb445e663e3c7d14"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-7664-1793841034312-0.json",
+      "sha256": "b040238e5b1f04339677541b08939a5a456ad00de974b75680868aebc0c0558e"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-7716-1793841027144-0.json",
+      "sha256": "8977fd935a9160a91fdf1bf18d2586cb1ffe01afbefb49c7dfe0ddbea91f4711"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-9020-1793841040089-0.json",
+      "sha256": "c306a5cc679ba4ed1ce8c8cab7e813b2aeec26b67cb9d6bf04ef8449bfd23554"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-9072-1793841030183-0.json",
+      "sha256": "b74b7fd20e8ac3afd3ad95a8140e0565ec7d878b81f3b70112030e550cdfcb42"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-9076-1793841038234-0.json",
+      "sha256": "56324d8b0818f58c408aef30286713b3f9e5d4242d93525bdd4bf08b0c731ea6"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-9192-1793841041987-0.json",
+      "sha256": "0b9ff864b770cfb4e23563bc36a58289f48c1616de67e7da449a373eca6bf34f"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-9464-1793841039098-0.json",
+      "sha256": "abf61fad4677041c9dec191750b15d3832d17e542d5967ee754309443840a237"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-9884-1793841044592-0.json",
+      "sha256": "dbfac7ff6eb521760be13d5a622c947845b4aca4952196bf9eb93dbfcb85943a"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-9928-1793841044112-0.json",
+      "sha256": "691b15dce35ac9bed33fa0536af22e8c937fbca14f3ec9689ec66e094bc73879"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw\\coverage-9952-1793841035431-0.json",
+      "sha256": "2c4f77fee87658b5b8e5164bc31d341b0c80d608299c9f598f1dcd21b54d2b1c"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\raw-hashes.json",
+      "sha256": "15eee747582b770c823304949109682b4817f232f50b0d53af513594e11ea869"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\report.json",
+      "sha256": "49c12e7ba242187a1a1e45f9b4179c39d6636d1f0e780173d7edbcd42adbae83"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\stderr.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\stdout.log",
+      "sha256": "baa2aa3d194c065c6e5bc3aac05e5bc83a83262a71d7d1fb3c7b20e202e8f2b0"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-node-4\\workload-inputs.json",
+      "sha256": "49dda910297d305f378cbf4dfa511c82effa9e5e72c85e50c3c46bf4afa3c3d0"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3\\Purgeon-Portable-x64.zip",
+      "sha256": "711c0966366e4a3a1e178200fbf658034ad7590e61f2036c1b10f759c21d1a7d"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3\\Purgeon-Setup-x64.exe",
+      "sha256": "f595472d417968b28137ad3b3fcfdf4416a8cf21872e6924349a1bc0247be2c9"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3-evidence\\nsis\\FileAssociation.nsh",
+      "sha256": "e933990b06dceac358fc1a4e71cb55c7dc9783ad4df8fc2c6248118a7ad4d348"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3-evidence\\nsis\\hooks.nsh",
+      "sha256": "8032191a9d39772db3cc4cd5ad94be09de035773ba873289ee6a748cb6d657ac"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3-evidence\\nsis\\inputs.json",
+      "sha256": "4ac0f8dcb0024a0ca3b04cb7cf0b584df4642fa96e1a90a27b6d3123d9d929d0"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3-evidence\\nsis\\installer.nsi",
+      "sha256": "b425674a8cf3a2d53050f326da38b032d9dfb7e904af414122481af19e73dfe7"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3-evidence\\nsis\\template.nsi",
+      "sha256": "11eb3a7caf1328b900b635db946156505d3b1840457cacc39290ebde6481fc3e"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3-evidence\\nsis\\utils.nsh",
+      "sha256": "72cae7532ea22bd39b5433dfd8ac47975844defa916fc113880479dedfee54f6"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3-evidence\\purgeon.exe",
+      "sha256": "d96a6afe0065baf346a081278701c0699c174c5211f112649de19dd5f42ac07e"
+    },
+    {
+      "path": "C:\\Users\\Sean Shaffer\\Documents\\Codex\\2026-11-03\\ana\\work\\analysis-logs\\cleanup-installer-local-package-3-evidence\\receipt.json",
+      "sha256": "5b69ccab2ba7f527e5aca8e03b963cf4b2ab31fd43e0bc741f1e383e7b07d34a"
     }
   ],
   "files": [
@@ -4978,6 +5887,10 @@
     {
       "failure": "Independent installer audit rejected four contract gaps",
       "resolution": "Flag collision, pre-enumeration root cleanup guard, bounded seven-field schema and bounded compiler corrected; final source independently approved; runtime remains UNRUN."
+    },
+    {
+      "failure": "CI run 41943654918 at 6b650f2: both Windows matrix jobs and package build passed, shared NSIS missing-child case returned 0 instead of strict expected 2.",
+      "resolution": "Trace webview.launch.failed/null with no exit-consumed event proves production guard fired. Fixture SetErrorLevel 73 then 0 contaminated default Abort exit 2. Removed setters from ordinary paths; added three explicit preservation cases expecting 73; all assertion failures use distinct 74 then Quit. Ordinary 0/2 expectations unchanged; no negative SetErrorLevel reset. Source fix approved; 18 post-fix runtime cases remain UNRUN. Historical 1.4.2 installer exit 2 remains unattributed."
     }
   ]
 }

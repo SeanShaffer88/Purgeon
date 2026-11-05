@@ -429,7 +429,7 @@ included in the change.
 ### Cleanup and installer reliability qualification
 
 `coverage/reviews/cleanup-installer-reliability.json` binds candidate evidence to source
-`1aa0b65fa82aa9baf1439aa4547403149af2f70e` and the LAST reviewed PR95
+`760873d6103218ae77d45ef60c9fbd18b4b4271f` and the LAST reviewed PR95
 inventory-refresh baseline. Panic cleanup has confirmed RED 1 / GREEN 0 evidence
 and a nonpanicking guard correction. The final tests preserve the original
 `execute_authorized` internally owned `None` job path, with a separate supplied
@@ -439,29 +439,41 @@ original-path probes pass; replay profiles are separate from qualifying coverage
 The historical ten-suite/ten supplied-job probes remain historical evidence.
 The original timing cause remains UNKNOWN; no proven OS race fix is claimed.
 
-Fresh local evidence records 687 JavaScript and 238 native passes (236 library,
-two manifest; two existing ignored), six instrumented objects and complete
-native-3 coverage. The b098 JavaScript lint/types/build/packed gates are reused:
-JavaScript, configuration and tool inputs are unchanged by the native test-only
-successor; the full Node collector reran at current raw source. Replacement
+Fresh Node-4 evidence records 688 JavaScript passes. Native-3 evidence is reused:
+238 native passes (236 library, two manifest; two existing ignored), six
+instrumented objects and complete coverage, with identical native inputs. No new
+native rerun is claimed. Historical b098 JS-2 lint/types/build/packed gates are
+reused for unchanged production JavaScript/config/tool inputs. The current source
+changes only two fixture inputs from 6b650f2. Replacement
 coverage passes Rust changed-critical 38/40; historical blanket reporting remains
 exit 1. All 296 measured files have eight-field records and Git proof (13 byte
 identical, 283 CRLF normalizations, zero unexplained); eight changed files and
 three frozen AV PowerShell scripts have current source proof. Baseline, policy
 and collectors remain unchanged; NSIS/PowerShell receive no v2 coverage credit.
 
-The fresh unsigned package-2 compiled at this source with process/runner exit 0,
+The fresh unsigned package-3 compiled at this source with process/runner exit 0,
 hashed assets, receipt and documented post-build NSIS input captures. Missing
-plugin provenance remains UNKNOWN; no host installer ran. Package-1 and old
+plugin provenance remains UNKNOWN; no host installer ran. Package-1/package-2 and old
 native/report evidence are historical, with no current binary binding claimed.
-Fifteen strict shared-production NSIS fixtures compile; runtime assertions and
+Eighteen strict shared-production NSIS fixtures compile/preprocess; post-fix runtime assertions and
 installer lifecycle remain UNRUN pending disposable CI. The unchanged installer
 source has prior independent approval; the historical CI exit 2 remains
 UNATTRIBUTED, with different installer hashes. Actual AV/protection, vendor GUI,
 UAC and Safe Mode behavior remain unverified.
 
-This record remains CANDIDATE. The latest native test delta and refreshed combined
-record await independent C review, then passing final-head CI and PR merge before
-activation. The previously approved b098 metadata never activated. No PR exists
-at record creation. Beta testing is canceled; this evidence qualifies no release
-or tag.
+CI run 41943654918 at 6b650f2 passed both Windows matrix jobs and package build,
+but the shared missing-child fixture returned 0 instead of strict expected 2.
+The launch-failed/null trace, with no exit-consumed event, confirms the production
+guard worked. Fixture SetErrorLevel 73 then 0 contaminated default Abort behavior.
+The approved fixture-only correction removes setters from ordinary paths, adds
+three explicit preservation cases expecting 73, and uses 74 then Quit for every
+assertion failure. Ordinary 0/2 expectations remain strict. Static RED 1, focused
+14/full 688 passes and 18 compile/preprocess successes do not prove post-fix runtime.
+The historical installer exit 2 and original timing cause remain unattributed.
+
+This record remains CANDIDATE and has never activated. PR96 exists; current
+combined qualification awaits independent C review, NEW passing final-head CI and
+merge before activation. The historical 1aa0 record was approved by
+004324Z-525484df699e; the fixture-only 760873d source fix was approved by
+011014Z-186a154506f4. Neither approval activates this candidate. Beta testing is
+canceled; this evidence qualifies no release or tag.
