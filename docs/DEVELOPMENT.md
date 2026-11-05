@@ -1,5 +1,16 @@
 # Development record
 
+## 2026-11-05: Remove AV plan retention
+
+The native manager retains up to 64 in-memory plans. When a valid plan is ready
+to publish at capacity, it replaces the oldest failed, cancelled or acknowledged
+plan that has no held review or in-flight reference. Active plans and plans
+requiring review still block publication. Recent retained plans remain available
+for status; retired IDs cannot launch again. Retirement leaves checkpoints and
+payloads untouched, and status for an evicted ID uses the existing checkpoint
+fallback. The launch reference stays live until native effect handles close so
+cleanup cannot overlap retirement of its plan.
+
 ## 2026-11-04: 1.6.0 checkpoint ownership
 
 `NativeEffects` owns the exclusive launch-intent file immediately after creation,
