@@ -1129,9 +1129,9 @@ fn run_with_setup<E: Effects, G>(
     })
 }
 pub fn launch(id: &str) -> Result<LaunchResult, String> {
-    let op = admit_cached(manager(), id)?;
-    run_with_setup(
-        &op,
+    launch_with(
+        manager(),
+        id,
         &mut NativeEffects {
             root: PathBuf::new(),
             payload: None,
@@ -1143,6 +1143,15 @@ pub fn launch(id: &str) -> Result<LaunchResult, String> {
             Ok(pins)
         },
     )
+}
+fn launch_with<E: Effects, G>(
+    manager: &Mutex<Manager>,
+    id: &str,
+    effects: &mut E,
+    setup: impl FnOnce(&mut E) -> Result<G, String>,
+) -> Result<LaunchResult, String> {
+    let op = admit_cached(manager, id)?;
+    run_with_setup(&op, effects, setup)
 }
 fn admit_cached(manager: &Mutex<Manager>, id: &str) -> Result<Arc<Operation>, String> {
     if !valid_id(id) {
@@ -2171,10 +2180,19 @@ public sealed class FixtureHandler : HttpMessageHandler {
                     )
                 });
                 entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
-                let admission = (!launch_first).then(|| admit_cached(&mutex, &op.plan.id));
+                let mut effects = Fake::default();
+                let mut setup_calls = 0;
+                let admission = (!launch_first).then(|| {
+                    launch_with(&mutex, &op.plan.id, &mut effects, |_| {
+                        setup_calls += 1;
+                        Ok(())
+                    })
+                });
                 release_tx.send(()).unwrap();
                 refresh.join().unwrap().unwrap();
                 if let Some(admission) = admission {
+                    assert_eq!(setup_calls, 0);
+                    assert!(effects.calls.is_empty());
                     let detail = admission.err().expect("stale launch was admitted");
                     let status = op.snapshot().unwrap();
                     assert_eq!(status.phase, "failed");
