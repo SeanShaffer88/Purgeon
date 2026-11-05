@@ -15,10 +15,36 @@ LangString webview2InstallError 1033 "child launch failed"
 LangString webview2AbortError 1033 "child launch aborted"
 @CONTRACT@
 Var PassiveMode
+Var FixtureInitialExitLevel
+Function AssertionFailed
+  SetErrorLevel 74
+  Quit
+FunctionEnd
+!macro AssertTraceState
+  StrCmp $0 "register-zero" +2
+    Call AssertionFailed
+  StrCmp $1 "register-one" +2
+    Call AssertionFailed
+  StrCmp $2 "register-two" +2
+    Call AssertionFailed
+  StrCmp $3 "register-three" +2
+    Call AssertionFailed
+  StrCmp $4 "register-four" +2
+    Call AssertionFailed
+  StrCmp $5 "register-five" +2
+    Call AssertionFailed
+  Pop $9
+  StrCmp $9 "stack-sentinel" +2
+    Call AssertionFailed
+  Push "stack-sentinel"
+  GetErrorLevel $9
+  StrCmp $9 $FixtureInitialExitLevel +2
+    Call AssertionFailed
+!macroend
 Function .onInit
   @PASSIVE@
   StrCmp $PassiveMode @PASSIVE_EXPECTED@ +2
-    Abort "passive mode mismatch"
+    Call AssertionFailed
   @INVALID_STDOUT@
   StrCpy $0 "register-zero"
   StrCpy $1 "register-one"
@@ -27,34 +53,20 @@ Function .onInit
   StrCpy $4 "register-four"
   StrCpy $5 "register-five"
   Push "stack-sentinel"
-  SetErrorLevel 73
+  @EXIT_STATE_SET@
+  GetErrorLevel $FixtureInitialExitLevel
   SetErrors
   !insertmacro PurgeonTrace "fixture.error"
   IfErrors +2
-    Abort "lost error flag"
+    Call AssertionFailed
+  !insertmacro AssertTraceState
   ClearErrors
   !insertmacro PurgeonTrace "fixture.clear"
   IfErrors 0 +2
-    Abort "introduced error flag"
-  StrCmp $0 "register-zero" +2
-    Abort "clobbered zero"
-  StrCmp $1 "register-one" +2
-    Abort "clobbered one"
-  StrCmp $2 "register-two" +2
-    Abort "clobbered two"
-  StrCmp $3 "register-three" +2
-    Abort "clobbered three"
-  StrCmp $4 "register-four" +2
-    Abort "clobbered four"
-  StrCmp $5 "register-five" +2
-    Abort "clobbered five"
+    Call AssertionFailed
+  !insertmacro AssertTraceState
   Pop $9
-  StrCmp $9 "stack-sentinel" +2
-    Abort "clobbered stack"
-  GetErrorLevel $9
-  StrCmp $9 73 +2
-    Abort "clobbered exit state"
-  SetErrorLevel 0
+  @EXIT_STATE_QUIT@
 FunctionEnd
 Section
   !insertmacro PurgeonExecWait '"@CHILD@" /d /c exit @EXIT@' $1
@@ -64,7 +76,7 @@ Section
   ${EndIf}
 SectionEnd
 '@
-    return $body.Replace('@CONTRACT@', $Contract).Replace('@CHILD@', $Child).Replace('@EXIT@', "$ChildExit").Replace('@PASSIVE@', $script:passiveBlock).Replace('@PASSIVE_EXPECTED@', $(if ($Case -like 'flag-passive*') { '1' } else { '""' })).Replace('@INVALID_STDOUT@', $(if ($Case.EndsWith('invalid-stdout')) { "System::Call 'kernel32::SetStdHandle(i -11, p 0)'" } else { '' }))
+    return $body.Replace('@CONTRACT@', $Contract).Replace('@EXIT_STATE_SET@', $(if ($Case -like 'exit-state*') { 'SetErrorLevel 73' } else { '' })).Replace('@EXIT_STATE_QUIT@', $(if ($Case -like 'exit-state*') { 'Quit' } else { '' })).Replace('@CHILD@', $Child).Replace('@EXIT@', "$ChildExit").Replace('@PASSIVE@', $script:passiveBlock).Replace('@PASSIVE_EXPECTED@', $(if ($Case -like 'flag-passive*') { '1' } else { '""' })).Replace('@INVALID_STDOUT@', $(if ($Case.EndsWith('invalid-stdout')) { "System::Call 'kernel32::SetStdHandle(i -11, p 0)'" } else { '' }))
 }
 if (Test-Path -LiteralPath $OutputDirectory) { throw 'Fixture evidence directory must be new.' }
 $out = (New-Item -ItemType Directory -Path $OutputDirectory).FullName
@@ -86,7 +98,7 @@ try {
     $child = Join-Path $root 'child with spaces/cmd.exe'
     Copy-Item -LiteralPath (Join-Path $env:SystemRoot 'System32/cmd.exe') -Destination $child
     $report.childSha256 = (Get-FileHash -LiteralPath $child).Hash
-    foreach ($case in @('success', 'missing', 'nonzero', 'disabled', 'invalid-stdout', 'missing-disabled', 'missing-invalid-stdout', 'nonzero-disabled', 'nonzero-invalid-stdout', 'flag-alone', 'flag-passive-first', 'flag-passive-last', 'flag-silent', 'flag-update', 'flag-noshortcut')) {
+    foreach ($case in @('success', 'missing', 'nonzero', 'disabled', 'invalid-stdout', 'missing-disabled', 'missing-invalid-stdout', 'nonzero-disabled', 'nonzero-invalid-stdout', 'flag-alone', 'flag-passive-first', 'flag-passive-last', 'flag-silent', 'flag-update', 'flag-noshortcut', 'exit-state', 'exit-state-disabled', 'exit-state-invalid-stdout')) {
         $caseRoot = (New-Item -ItemType Directory -Path (Join-Path $root $case)).FullName
         $text = New-ContractFixture $contract $(if ($case -like 'missing*') { Join-Path $caseRoot 'missing child.exe' } else { $child }) $(if ($case -like 'nonzero*') { 7 } else { 0 }) $case
         $inputPath = Join-Path $caseRoot 'fixture.nsi'
@@ -134,7 +146,7 @@ try {
             $childrenConfirmed = $true
             $row.exitCode = $process.ExitCode
         } finally { $process.Dispose() }
-        $expected = if ($case -match '^(missing|nonzero)') { 2 } else { 0 }
+        $expected = if ($case -like 'exit-state*') { 73 } elseif ($case -match '^(missing|nonzero)') { 2 } else { 0 }
         if ($row.exitCode -ne $expected) { throw "Unexpected fixture exit $($row.exitCode), expected $expected : $case" }
         $trace = @(Get-Content -LiteralPath $stdout | Where-Object { $_ } | ForEach-Object { $_ | ConvertFrom-Json })
         if ($case.EndsWith('disabled') -or $case.EndsWith('invalid-stdout')) {
@@ -146,6 +158,11 @@ try {
                 if ((($record.PSObject.Properties.Name | Sort-Object) -join ',') -ne 'event,nativeError,operation,phase,result,schemaVersion,sequence' -or $record.schemaVersion -ne 1 -or $record.sequence -ne ($i + 1) -or $null -ne $record.nativeError) { throw 'Invalid trace schema or sequence.' }
             }
             $launch = @($trace | Where-Object operation -eq 'ExecWait')
+            if ($case -like 'exit-state*') {
+                if ($launch.Count -ne 0) { throw 'Exit-state fixture launched a child.' }
+                $row.status = 'passed'
+                continue
+            }
             if ($launch.Count -ne 1) { throw 'Expected one launch record.' }
             if ($case -like 'missing*') {
                 if ($null -ne $launch[0].result) { throw 'Launch error invented child exit.' }

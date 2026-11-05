@@ -272,6 +272,26 @@ test('NSIS fixture refuses local runtime before creating output', { skip: proces
   assert.match(result.stderr, /restricted to disposable GitHub-hosted runners/);
 });
 
+test('NSIS fixtures separate default launch exits from explicit exit-state preservation', () => {
+  const fixture = readFileSync(new URL('../scripts/test-nsis-webview-launch.ps1', import.meta.url), 'utf8');
+  const cases = fixture.match(/foreach \(\$case in @\(([^\r\n]+)\)\)/)[1].match(/'[^']+'/g).map(name => name.slice(1, -1));
+  assert.deepEqual(cases, ['success', 'missing', 'nonzero', 'disabled', 'invalid-stdout', 'missing-disabled', 'missing-invalid-stdout', 'nonzero-disabled', 'nonzero-invalid-stdout', 'flag-alone', 'flag-passive-first', 'flag-passive-last', 'flag-silent', 'flag-update', 'flag-noshortcut', 'exit-state', 'exit-state-disabled', 'exit-state-invalid-stdout']);
+  assert.match(fixture, /Var FixtureInitialExitLevel/);
+  assert.match(fixture, /GetErrorLevel \$FixtureInitialExitLevel/);
+  assert.match(fixture, /StrCmp \$9 \$FixtureInitialExitLevel \+2/);
+  assert.match(fixture, /Function AssertionFailed\r?\n  SetErrorLevel 74\r?\n  Quit\r?\nFunctionEnd/);
+  assert.deepEqual([...fixture.matchAll(/SetErrorLevel (-?\d+)/g)].map(match => match[1]), ['74', '73']);
+  assert.doesNotMatch(fixture, /Abort "(passive|lost|introduced|clobbered)/);
+  assert.match(fixture, /if \(\$Case -like 'exit-state\*'\) \{ 'SetErrorLevel 73' \} else \{ '' \}/);
+  assert.match(fixture, /if \(\$Case -like 'exit-state\*'\) \{ 'Quit' \} else \{ '' \}/);
+  assert.equal((fixture.match(/!insertmacro AssertTraceState/g) || []).length, 2);
+  assert.match(fixture, /\$expected = if \(\$case -like 'exit-state\*'\) \{ 73 \} elseif \(\$case -match '\^\(missing\|nonzero\)'\) \{ 2 \} else \{ 0 \}/);
+  assert.match(fixture, /if \(\$row.exitCode -ne \$expected\)/);
+  assert.match(fixture, /if \(\$case -like 'exit-state\*'\) \{\r?\n\s+if \(\$launch.Count -ne 0\)/);
+  assert.match(fixture, /\$blocks.Count -ne 1/);
+  assert.match(fixture, /\[regex\]::Matches\(\$source, '\(\?s\); PURGEON_CONTRACT_BEGIN/);
+});
+
 test('lifecycle redirects every invocation and enables diagnostics only for candidate installers', () => {
   const command = `
 $tokens = $null; $errors = $null
