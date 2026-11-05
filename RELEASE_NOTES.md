@@ -1,3 +1,28 @@
+# Purgeon 1.6.0
+
+Unsigned Windows x64 stable release with the qualification limits below.
+
+- Remove AV keeps its launch checkpoint protected from another Purgeon instance until the originating operation has finished launch, cleanup and status finalization. An active checkpoint cannot be acknowledged or deleted by another instance.
+- After the owner finishes or exits, a valid checkpoint still requires explicit review acknowledgment. Partial or invalid checkpoint contents remain blocked for manual review; there is no automatic retry or deletion. Retained vendor payloads are preserved.
+- Includes the refresh-admission fix from PR98: new plans cannot use cached eligibility while inventory refresh is running.
+- App and reusable `purgeon-core` metadata and consumption examples target `1.6.0`.
+
+## Qualification limits
+
+This release is unsigned. Windows may display publisher/trust warnings. Live vendor removal, UAC, Safe Mode and vendor utilities outliving Purgeon remain **UNVERIFIED**. Existing Windows CI and disposable installer lifecycle checks validate their own contracts; they do not qualify vendor removal. Launch status does not mean removal completed and provides no undo. No silent/forced-removal, boot-mode or reboot changes are introduced.
+
+Dependency audits: full `npm audit` exited 1 with four moderate ESLint/minimatch development findings; production `npm audit --omit=dev` exited 0 with zero advisories. `cargo audit` exited 0 with zero vulnerabilities and informational unmaintained, unsound and yanked-package warnings. These results do not establish that all security concerns are cleared.
+
+## Assets and rollback
+
+The Windows release contains exactly `Purgeon-Setup-x64.exe` and `Purgeon-Portable-x64.zip`. The ZIP contains `Purgeon-Portable-x64.exe`, LICENSE and PORTABLE.txt. The core tarball is a separate development artifact; no npm registry publication is configured.
+
+To roll back, close Purgeon and any vendor utility, retain a copy of existing data, backups, checkpoints and retained reviews, then use a previously verified distribution. Do not delete or reset data to downgrade. Review unresolved vendor attempts before further changes. Downgrading does not undo vendor removal; interpretation of newer records and rollback with 1.6.0-created data have not been qualified.
+
+---
+
+The following beta notes are historical and retain their original scope.
+
 # Purgeon 1.5.0-beta.1
 
 Windows x64 beta with the qualification limits described below.

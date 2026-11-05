@@ -1,5 +1,29 @@
 # Development record
 
+## 2026-11-04: 1.6.0 checkpoint ownership
+
+`NativeEffects` owns the exclusive launch-intent file immediately after creation,
+including write/sync failures. Windows `FILE_SHARE_READ` permits reading while denying
+writes and DELETE-capable review pins through launch and cleanup/status finalization.
+The public launch call's bounded effects lifetime releases the handle; process exit
+also releases it. The marker is never automatically removed or retried. Valid metadata
+becomes explicitly acknowledgeable after release; physically partial/invalid JSON
+remains unreadable and requires manual review. Existing manager-to-state lock order
+and native/core/UI boundaries are unchanged; a separate lock module is unnecessary.
+
+Regressions use inert payloads, an independent manager, bounded owner coordination
+and an owned child process; no utility, installer, UAC or VM is executed. Partial-write
+coverage simulates truncation after actual native persistence, rather than claiming
+an OS write/sync failure was induced. Post-release ancestor validation requires the
+controller context because this worker's sandbox denies user-profile ancestor pins.
+
+Metadata and package examples target stable `1.6.0`; PR98's refresh-admission fix is
+already included. Full gates, fresh manual coverage review, independent audit and
+release artifact verification remain controller work. Live vendor removal, UAC,
+Safe Mode and utilities outliving Purgeon remain **UNVERIFIED**. Existing Windows CI
+and installer checks do not qualify those flows. Earlier beta/alpha and canceled-work
+records below remain historical. See [release notes](../RELEASE_NOTES.md).
+
 ## 2026-11-04: beta preparation and deferred Remove AV race
 
 Current metadata and package consumption examples target `1.5.0-beta.1`.

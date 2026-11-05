@@ -1,5 +1,29 @@
 # Quality and release gate
 
+## 2026-11-04: 1.6.0 checkpoint reliability and release preparation
+
+Current metadata targets `1.6.0`. Native checkpoint ownership now spans launch and
+cleanup/status finalization, preventing cross-process retirement while the owner is
+active. Valid records require explicit acknowledgment after owner release; invalid
+partial records remain unreadable and retained. PR98 already fixed refresh admission;
+the beta-preparation race statements below are historical.
+
+Focused native tests exercise the real checkpoint and inert payloads, cancellation,
+exclusive-create failure, simulated partial persistence, launch/cleanup failure,
+owner panic and owned-child termination. Worker sandbox ancestor pin denial prevents
+post-release discovery/acknowledgment qualification here; no gate is waived. Full
+controller checks, fresh coverage comparisons, independent audit, final-head Windows
+CI, packaging and public artifact verification remain required before publication.
+Preserve PR98 exact baselines, including touched native file `773/846`, and separate
+85% changed-critical Rust coverage; unchanged JS requires explicit `0/0` N/A.
+
+The release remains unsigned. Live vendor/UAC/Safe Mode/outliving-app behavior is
+**UNVERIFIED**; existing Windows CI is not vendor qualification. Supplied audits report
+four moderate npm development findings (exit 1), zero production npm advisories
+(exit 0), and zero Cargo vulnerabilities with informational warnings (exit 0).
+See [release notes](RELEASE_NOTES.md). Published-beta and canceled-work history below
+is preserved; historical pending statements do not describe this current slice.
+
 ## 2026-11-04: 1.5.0-beta.1 release preparation (validation pending)
 
 Metadata and consumption examples now target `1.5.0-beta.1`. Controller-supplied
