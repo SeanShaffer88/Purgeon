@@ -2525,7 +2525,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
                 let admission = (!launch_first).then(|| {
                     launch_with(
                         &mutex,
-                        &gate,
+                        gate,
                         &op.plan.id,
                         || {
                             factory_calls += 1;
