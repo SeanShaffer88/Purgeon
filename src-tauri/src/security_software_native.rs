@@ -1129,10 +1129,9 @@ fn run_with_setup<E: Effects, G>(
     })
 }
 pub fn launch(id: &str) -> Result<LaunchResult, String> {
-    let op = operation(id)?;
-    admit(&op)?;
-    run_with_setup(
-        &op,
+    launch_with(
+        manager(),
+        id,
         &mut NativeEffects {
             root: PathBuf::new(),
             payload: None,
@@ -1144,6 +1143,24 @@ pub fn launch(id: &str) -> Result<LaunchResult, String> {
             Ok(pins)
         },
     )
+}
+fn launch_with<E: Effects, G>(
+    manager: &Mutex<Manager>,
+    id: &str,
+    effects: &mut E,
+    setup: impl FnOnce(&mut E) -> Result<G, String>,
+) -> Result<LaunchResult, String> {
+    let op = admit_cached(manager, id)?;
+    run_with_setup(&op, effects, setup)
+}
+fn admit_cached(manager: &Mutex<Manager>, id: &str) -> Result<Arc<Operation>, String> {
+    if !valid_id(id) {
+        return Err("Invalid native plan ID".into());
+    }
+    let m = manager.lock().map_err(|_| "Removal manager unavailable")?;
+    let op = m.operations.get(id).ok_or("Unknown native plan ID")?;
+    admit(op, &m.products)?;
+    Ok(Arc::clone(op))
 }
 fn launch_root<G>(
     root: impl FnOnce() -> Result<PathBuf, String>,
@@ -1157,18 +1174,25 @@ fn launch_root<G>(
     }
     Ok((root, pins))
 }
-fn admit(op: &Operation) -> Result<(), String> {
-    {
-        let mut state = op.state.lock().map_err(|_| "Operation unavailable")?;
-        if state.phase != "prepared" || state.cancelled {
-            return Err("Plan is cancelled or already consumed".into());
-        }
-        if op.created.elapsed() >= TTL {
-            state.phase = "failed";
-            return Err("Removal plan expired".into());
-        }
-        state.phase = "downloading";
+fn admit(op: &Operation, products: &[Product]) -> Result<(), String> {
+    let mut state = op.state.lock().map_err(|_| "Operation unavailable")?;
+    if state.phase != "prepared" || state.cancelled {
+        return Err("Plan is cancelled or already consumed".into());
     }
+    if op.created.elapsed() >= TTL {
+        state.phase = "failed";
+        return Err("Removal plan expired".into());
+    }
+    if !products.iter().any(|product| {
+        product.id == op.plan.product_id && product.tool_id.as_deref() == Some(&op.plan.tool_id)
+    }) {
+        let detail = "Current inventory no longer confirms this product and utility. Refresh inventory and prepare a new plan.";
+        let mut view = op.view.lock().map_err(|_| "Operation unavailable")?;
+        view.detail = detail.into();
+        state.phase = "failed";
+        return Err(detail.into());
+    }
+    state.phase = "downloading";
     Ok(())
 }
 
@@ -1218,8 +1242,9 @@ mod tests {
                 resumed,
                 launches: 0,
             };
-            let op = planned(&mut cached());
-            admit(&op).unwrap();
+            let mut m = cached();
+            let op = planned(&mut m);
+            admit(&op, &m.products).unwrap();
             let result = run(&op, &mut effects).unwrap();
             assert_eq!(result.outcome, "launched", "{}", result.detail);
             assert_eq!(op.snapshot().unwrap().cleanup, "retained");
@@ -1384,13 +1409,14 @@ mod tests {
             }
         }
         for failure in ["persist", "partial", "cancel", "launch", "cleanup"] {
-            let op = planned(&mut cached());
+            let mut m = cached();
+            let op = planned(&mut m);
             let mut attempt = Attempt {
                 fixture: AdapterFixture::inert(&op),
                 failure,
                 launches: 0,
             };
-            admit(&op).unwrap();
+            admit(&op, &m.products).unwrap();
             let result = run(&op, &mut attempt).unwrap();
             assert_eq!(
                 result.outcome,
@@ -1977,7 +2003,10 @@ public sealed class FixtureHandler : HttpMessageHandler {
         .unwrap();
         assert_eq!(result.outcome, "acknowledged");
         assert_eq!(op.snapshot().unwrap().phase, "acknowledged");
-        assert!(admit(&op).is_err());
+        assert_eq!(
+            admit(&op, &[]).unwrap_err(),
+            "Plan is cancelled or already consumed"
+        );
         assert!(!path.exists());
         assert_eq!(fs::read(&payload).unwrap(), b"retain");
         assert!(acknowledge(AcknowledgeRequest {
@@ -2120,6 +2149,109 @@ public sealed class FixtureHandler : HttpMessageHandler {
             "completed refresh retained its gate"
         );
         result
+    }
+
+    #[test]
+    fn launch_admission_orders_with_inventory_invalidation() {
+        for launch_first in [false, true] {
+            let mutex = Mutex::new(cached());
+            let op = planned(&mut mutex.lock().unwrap());
+            let gate = Mutex::new(());
+            let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+            let (release_tx, release_rx) = std::sync::mpsc::channel();
+            std::thread::scope(|scope| {
+                if launch_first {
+                    assert!(Arc::ptr_eq(
+                        &admit_cached(&mutex, &op.plan.id).unwrap(),
+                        &op
+                    ));
+                }
+                let (manager, gate) = (&mutex, &gate);
+                let refresh = scope.spawn(move || {
+                    inventory_with(
+                        manager,
+                        gate,
+                        || {
+                            entered_tx.send(()).unwrap();
+                            release_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+                            Ok(inventory_bytes(vec![], "ok"))
+                        },
+                        |_| Ok(vec![]),
+                    )
+                });
+                entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
+                let mut effects = Fake::default();
+                let mut setup_calls = 0;
+                let admission = (!launch_first).then(|| {
+                    launch_with(&mutex, &op.plan.id, &mut effects, |_| {
+                        setup_calls += 1;
+                        Ok(())
+                    })
+                });
+                release_tx.send(()).unwrap();
+                refresh.join().unwrap().unwrap();
+                if let Some(admission) = admission {
+                    assert_eq!(setup_calls, 0);
+                    assert!(effects.calls.is_empty());
+                    let detail = admission.expect_err("stale launch was admitted");
+                    let status = op.snapshot().unwrap();
+                    assert_eq!(status.phase, "failed");
+                    assert_eq!(status.detail, detail);
+                    assert!(detail.contains("prepare a new plan"));
+                    assert_eq!(status.cleanup, "none");
+                    assert_eq!(status.bytes_received, 0);
+                } else {
+                    assert_eq!(op.snapshot().unwrap().phase, "downloading");
+                }
+            });
+        }
+    }
+
+    #[test]
+    fn launch_admission_requires_exact_published_product_and_tool() {
+        for (id, tool) in [
+            (Some("replacement"), Some("avg")),
+            (None, Some("avast")),
+            (None, None),
+        ] {
+            let mut m = cached();
+            let op = planned(&mut m);
+            if let Some(id) = id {
+                m.products[0].id = id.into();
+            }
+            m.products[0].tool_id = tool.map(str::to_owned);
+            let mutex = Mutex::new(m);
+            assert!(admit_cached(&mutex, &op.plan.id).is_err());
+            assert_eq!(op.snapshot().unwrap().phase, "failed");
+        }
+        let mutex = Mutex::new(cached());
+        let op = planned(&mut mutex.lock().unwrap());
+        finalize_inventory(&mutex, Ok(inventory_bytes(vec![], "ok")), |_| Ok(vec![])).unwrap();
+        assert!(admit_cached(&mutex, &op.plan.id).is_err());
+        assert_eq!(op.snapshot().unwrap().phase, "failed");
+    }
+
+    #[test]
+    fn launch_admission_accepts_unchanged_complete_or_partial_inventory() {
+        for source_status in ["ok", "error"] {
+            let mutex = Mutex::new(cached());
+            let op = planned(&mut mutex.lock().unwrap());
+            let raw = inventory_bytes(
+                vec![record(
+                    "AVG AntiVirus FREE",
+                    "AVG Technologies",
+                    SOURCE_IDS[3],
+                )],
+                source_status,
+            );
+            let view = finalize_inventory(&mutex, Ok(raw), |_| Ok(vec![])).unwrap();
+            assert_eq!(view.complete, source_status == "ok");
+            assert!(Arc::ptr_eq(
+                &admit_cached(&mutex, &op.plan.id).unwrap(),
+                &op
+            ));
+            assert_eq!(op.snapshot().unwrap().phase, "downloading");
+        }
     }
 
     #[test]
@@ -2655,15 +2787,31 @@ public sealed class FixtureHandler : HttpMessageHandler {
             .unwrap_err(),
             "Invalid inventory helper response"
         );
+        assert_eq!(op.snapshot().unwrap().phase, "prepared");
+        let detail = admit_cached(&mutex, &op.plan.id).err().unwrap();
+        assert_eq!(op.snapshot().unwrap().detail, detail);
         let mut m = mutex.try_lock().unwrap();
         assert_eq!(m.operations.len(), 1);
         assert!(Arc::ptr_eq(&m.operations[&op.plan.id], &op));
-        assert_eq!(op.snapshot().unwrap().phase, "prepared");
+        assert_eq!(op.snapshot().unwrap().phase, "failed");
         assert_eq!(m.reviews.len(), 1);
         let held = m.reviews.get_mut(&review_id).unwrap();
         assert_eq!(held.bytes, b"retained checkpoint");
         assert_eq!(held.pin.read_bounded(4096).unwrap(), b"retained checkpoint");
         assert!(fs::remove_file(&path).is_err());
+        drop(m);
+        let raw = inventory_bytes(
+            vec![record(
+                "AVG AntiVirus FREE",
+                "AVG Technologies",
+                SOURCE_IDS[3],
+            )],
+            "ok",
+        );
+        finalize_inventory(&mutex, Ok(raw), |_| Ok(vec![])).unwrap();
+        let fresh = planned(&mut mutex.lock().unwrap());
+        assert_ne!(fresh.plan.id, op.plan.id);
+        assert!(admit_cached(&mutex, &fresh.plan.id).is_ok());
     }
     #[derive(Default)]
     struct Fake {
@@ -2822,11 +2970,11 @@ public sealed class FixtureHandler : HttpMessageHandler {
             assert_eq!(status.phase, result.outcome);
             assert_eq!(status.cleanup, "retained");
             assert_eq!(effects.calls, ["download", "cleanup"]);
-            assert!(admit(&op).is_err());
+            assert!(admit(&op, &m.products).is_err());
             let next = planned(&mut m);
             assert_ne!(next.plan.id, op.plan.id);
             assert_eq!(next.snapshot().unwrap().phase, "prepared");
-            assert!(admit(&next).is_ok());
+            assert!(admit(&next, &m.products).is_ok());
         }
     }
     #[test]
@@ -3155,7 +3303,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
                 launches: launches.clone(),
             };
             workers.push(std::thread::spawn(move || {
-                admit(&op).unwrap();
+                admit(&op, &m.products).unwrap();
                 let result = run(&op, &mut effects).unwrap();
                 if result.outcome == "launched" {
                     effects.cleanup().unwrap();
@@ -3184,7 +3332,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
             for cancel in [false, true] {
                 let mut m = cached();
                 let op = planned(&mut m);
-                admit(&op).unwrap();
+                admit(&op, &m.products).unwrap();
                 let mut effects = Fake::default();
                 let failure = || -> String {
                     if cancel {
@@ -3225,7 +3373,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
                 assert!(!status.detail.is_empty());
                 assert_eq!(status.cleanup, "removed");
                 assert_eq!(effects.calls, ["cleanup"]);
-                assert!(admit(&op).is_err());
+                assert!(admit(&op, &m.products).is_err());
                 assert!(prepare_cached(
                     &mut m,
                     PrepareRequest {
@@ -3261,14 +3409,21 @@ public sealed class FixtureHandler : HttpMessageHandler {
     }
     #[test]
     fn actual_admission_rejects_expiry_replay_and_cancelled_plans() {
+        assert_eq!(launch("invalid").unwrap_err(), "Invalid native plan ID");
         let mut m = cached();
         let op = planned(&mut m);
-        admit(&op).unwrap();
-        assert!(admit(&op).is_err());
+        assert_eq!(
+            admit_cached(&Mutex::new(Manager::default()), &op.plan.id)
+                .err()
+                .unwrap(),
+            "Unknown native plan ID"
+        );
+        admit(&op, &m.products).unwrap();
+        assert!(admit(&op, &m.products).is_err());
         let mut m = cached();
         let op = planned(&mut m);
         op.state.lock().unwrap().cancel();
-        assert!(admit(&op).is_err());
+        assert!(admit(&op, &m.products).is_err());
         let mut m = cached();
         let op = planned(&mut m);
         let id = op.plan.id.clone();
@@ -3277,7 +3432,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
             .ok()
             .unwrap();
         op.created = Instant::now() - TTL;
-        assert!(admit(&op).is_err());
+        assert!(admit(&op, &m.products).is_err());
         assert_eq!(op.snapshot().unwrap().phase, "failed");
     }
     #[test]
