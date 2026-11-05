@@ -12,6 +12,7 @@ import { publisherKey } from './leftovers.js';
 import { FileCache } from './filecache.js';
 import { createReadContext, forEachRead } from './read-context.js';
 import { readSettings } from './settings.js';
+import { write as writeLog } from './log.js';
 
 let dir = '';
 // Per-file results (signature, processor architecture) keyed by each file's stamp,
@@ -209,6 +210,13 @@ export const programExe = async (p) => {
   }
 };
 
+export async function readArchitectures(paths) {
+  const got = await sys.exeArch(paths).catch(() => null);
+  if (Array.isArray(got) && got.length === paths.length) return got;
+  writeLog('FAIL  PE architecture worker unavailable');
+  return null;
+}
+
 // The processor each file is built for ("x64", "x86", "arm64"), read from its header.
 // Cached per file stamp like signatures; even an unknown ('') result is cached.
 async function architectures(paths, context) {
@@ -232,14 +240,16 @@ async function architectures(paths, context) {
       });
   }
   if (misses.length) {
-    const got = await sys.exeArch(misses).catch(() => []);
-    misses.forEach((p, i) => {
-      const arch = got[i] || '';
-      out.set(p.toLowerCase(), arch);
-      const stamp = stamps.get(p);
-      if (fileCache && stamp) fileCache.put(archKey(p), stamp, arch);
-    });
-    if (fileCache) await fileCache.save();
+    const got = await readArchitectures(misses);
+    if (got) {
+      misses.forEach((p, i) => {
+        const arch = got[i] || '';
+        out.set(p.toLowerCase(), arch);
+        const stamp = stamps.get(p);
+        if (fileCache && stamp) fileCache.put(archKey(p), stamp, arch);
+      });
+      if (fileCache) await fileCache.save();
+    }
   }
   // Every requested path gets an entry, as before ('' when unknown).
   for (const p of paths) if (!out.has(p.toLowerCase())) out.set(p.toLowerCase(), '');
