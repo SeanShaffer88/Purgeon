@@ -190,6 +190,63 @@ try {
   assert.equal(result.status, 0, result.stderr || result.error?.message);
 });
 
+test('inventory retries immediate WebView GUID temp hash denials only with teardown opt-in', { skip: process.platform !== 'win32' }, () => {
+  const source = readFileSync(new URL('../scripts/test-packaged-cli.ps1', import.meta.url), 'utf8');
+  const helper = source.slice(source.indexOf('function Get-QuiescentInventory {'), source.indexOf("if (-not ('PurgeonCliCapture'"));
+  const snapshot = source.slice(source.indexOf('function Get-DataSnapshot {'), source.indexOf('function Get-DataInventory {'));
+  const command = String.raw`
+$ErrorActionPreference = 'Stop'
+${helper}
+${snapshot}
+$data = Join-Path ([IO.Path]::GetTempPath()) ([Guid]::NewGuid().ToString('N'))
+$webview = Join-Path $data 'WebView/EBWebView'
+[void][IO.Directory]::CreateDirectory($webview)
+$stable = Join-Path $data 'stable'
+$guidFile = Join-Path $webview '93616e1c-2904-4158-9f7a-9d31e52dbed8.tmp'
+$ordinaryFile = Join-Path $webview 'settings.tmp'
+$nestedFile = Join-Path $webview ('nested/' + [IO.Path]::GetFileName($guidFile))
+[void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($nestedFile))
+$denied = [UnauthorizedAccessException]::new('injected hash denial')
+function Get-FileHash {
+  param([string] $LiteralPath)
+  if ($LiteralPath -eq $blockedFile) { throw $denied }
+  Microsoft.PowerShell.Utility\Get-FileHash -LiteralPath $LiteralPath
+}
+try {
+  [IO.File]::WriteAllText($stable, 'unchanged')
+  foreach ($case in @(
+    @{ path = $guidFile; optIn = $false; transient = $false },
+    @{ path = $ordinaryFile; optIn = $true; transient = $false },
+    @{ path = $nestedFile; optIn = $true; transient = $false },
+    @{ path = $guidFile; optIn = $true; transient = $true }
+  )) {
+    $blockedFile = $case.path
+    [IO.File]::WriteAllText($blockedFile, 'temporary')
+    $evidence = [Collections.Generic.List[object]]::new()
+    $rejected = $false
+    $options = @{}
+    if ($case.optIn) { $options.AllowWebViewTeardown = $true }
+    try {
+      Get-QuiescentInventory @options -Snapshot { Get-DataSnapshot } -Evidence $evidence -DeadlineMilliseconds 1 -Wait { param($ms) }
+    } catch {
+      if ($_.Exception -ne $denied) { throw }
+      $rejected = $true
+    }
+    if (!$rejected -or $evidence[-1].delayMs -ne 0 -or $evidence[-1].transient -ne $case.transient -or
+        (!$case.transient -and $evidence.Count -ne 1)) { throw 'Hash denial classification or deadline changed' }
+    [IO.File]::Delete($blockedFile)
+  }
+  [IO.File]::WriteAllText($blockedFile, 'temporary')
+  $evidence.Clear()
+  $files = @(Get-QuiescentInventory -AllowWebViewTeardown -Snapshot { Get-DataSnapshot } -Evidence $evidence -Wait { param($ms) [IO.File]::Delete($blockedFile) } | Where-Object { !$_.directory })
+  if ($evidence.Count -ne 2 -or !$evidence[0].transient -or $files.Count -ne 1 -or
+      $files[0].hash -cne (Get-FileHash $stable).Hash) { throw 'WebView retry did not re-enumerate exact hashes' }
+} finally { [IO.Directory]::Delete($data, $true) }
+`;
+  const result = spawnSync('pwsh', ['-NoProfile', '-Command', command], { encoding: 'utf8', timeout: 30000, windowsHide: true });
+  assert.equal(result.status, 0, result.stderr || result.error?.message);
+});
+
 
 test('installed identity persists actual and expected hashes before rejecting mismatch', () => {
   const command = `

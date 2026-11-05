@@ -1,7 +1,7 @@
 {
   "name": "purgeon",
   "productName": "Purgeon",
-  "version": "1.5.0-beta.1",
+  "version": "1.6.0",
   "description": "Windows uninstaller with leftover scanning, install monitoring and backups",
   "author": "Sean Shaffer",
   "license": "MIT",

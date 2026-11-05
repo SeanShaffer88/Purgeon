@@ -5,7 +5,7 @@ use std::{
     collections::HashMap,
     fs::{self, OpenOptions},
     io::Write,
-    os::windows::process::CommandExt,
+    os::windows::{fs::OpenOptionsExt, process::CommandExt},
     path::{Path, PathBuf},
     process::Command,
     sync::{
@@ -962,6 +962,7 @@ trait Effects {
 struct NativeEffects {
     root: PathBuf,
     payload: Option<Payload>,
+    checkpoint: Option<fs::File>,
 }
 impl NativeEffects {
     fn download_with<F>(&mut self, op: &Operation, runner: F) -> Result<u64, String>
@@ -1036,11 +1037,15 @@ impl Effects for NativeEffects {
         let path = self.root.join("launch-intent");
         // Exclusive durable checkpoint is intentionally never automatically removed.
         // Even a partial checkpoint blocks a restart; unknown state never authorizes retry.
-        let mut file = OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .open(path)
-            .map_err(|e| e.to_string())?;
+        self.checkpoint = Some(
+            OpenOptions::new()
+                .write(true)
+                .create_new(true)
+                .share_mode(1) // FILE_SHARE_READ: deny writers and checkpoint retirement.
+                .open(path)
+                .map_err(|e| e.to_string())?,
+        );
+        let file = self.checkpoint.as_mut().unwrap();
         let bytes=serde_json::to_vec(&serde_json::json!({"schemaVersion":1,"id":op.plan.id,"toolId":op.plan.tool_id,"phase":"reviewRequired","detail":"Utility may have started; no automatic retry","payload":payload.path})).map_err(|e|e.to_string())?;
         file.write_all(&bytes)
             .and_then(|()| file.sync_all())
@@ -1131,6 +1136,7 @@ pub fn launch(id: &str) -> Result<LaunchResult, String> {
         &mut NativeEffects {
             root: PathBuf::new(),
             payload: None,
+            checkpoint: None,
         },
         |effects| {
             let (root, pins) = launch_root(native_root, pin_ancestors, has_marker)?;
@@ -1169,11 +1175,139 @@ fn admit(op: &Operation) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    static ACK_TEST: Mutex<()> = Mutex::new(());
+
+    #[test]
+    fn actual_checkpoint_blocks_independent_review_until_owner_finalizes() {
+        let (ready, paused) = std::sync::mpsc::channel();
+        let (resume, resumed) = std::sync::mpsc::channel();
+        let owner = std::thread::spawn(move || {
+            struct PausedOwner {
+                fixture: AdapterFixture,
+                ready: std::sync::mpsc::Sender<PathBuf>,
+                resumed: std::sync::mpsc::Receiver<()>,
+                launches: usize,
+            }
+            impl Effects for PausedOwner {
+                fn download(&mut self, op: &Operation) -> Result<u64, String> {
+                    self.fixture.populate_inert(op);
+                    Ok(5)
+                }
+                fn verify(&mut self, _: &Operation) -> Result<(), String> {
+                    Ok(())
+                }
+                fn persist(&mut self, op: &Operation) -> Result<(), String> {
+                    self.fixture.effects.persist(op)?;
+                    self.ready.send(self.fixture.effects.root.clone()).unwrap();
+                    self.resumed
+                        .recv_timeout(Duration::from_secs(15))
+                        .map_err(|e| e.to_string())
+                }
+                fn launch(&mut self) -> Result<(), String> {
+                    self.launches += 1;
+                    assert!(self.fixture.effects.root.join("launch-intent").exists());
+                    Ok(())
+                }
+                fn cleanup(&mut self) -> Result<(), String> {
+                    self.fixture.effects.cleanup()
+                }
+            }
+            let mut effects = PausedOwner {
+                fixture: AdapterFixture::new(),
+                ready,
+                resumed,
+                launches: 0,
+            };
+            let op = planned(&mut cached());
+            admit(&op).unwrap();
+            let result = run(&op, &mut effects).unwrap();
+            assert_eq!(result.outcome, "launched", "{}", result.detail);
+            assert_eq!(op.snapshot().unwrap().cleanup, "retained");
+            assert_eq!(effects.launches, 1);
+            // Return ownership so the parent can inspect the finalized checkpoint before drop.
+            effects.fixture
+        });
+        let root = paused.recv_timeout(Duration::from_secs(15)).unwrap();
+        let marker = root.join("launch-intent");
+        let bytes = fs::read(&marker).unwrap();
+        let mut independent = Manager::default();
+        let reviews = discover_reviews(&root, &mut independent).unwrap();
+        let protected = !reviews[0].can_acknowledge
+            && independent.reviews.is_empty()
+            && Pin::open(&marker, false, 0x80010000, 1).is_err();
+        drop(independent);
+        resume.send(()).unwrap();
+        let mut fixture = owner.join().unwrap();
+        assert!(
+            protected,
+            "another instance can retire the active owner's checkpoint"
+        );
+        assert!(fs::remove_file(&marker).is_err());
+        assert!(OpenOptions::new().write(true).open(&marker).is_err());
+        assert_eq!(fs::read(&marker).unwrap(), bytes);
+        let payload = fixture.effects.payload.as_ref().unwrap().path.clone();
+        let payload_bytes = fs::read(&payload).unwrap();
+        // Drop the actual owner while retaining this fixture's directory for review.
+        drop(std::mem::replace(
+            &mut fixture.effects,
+            NativeEffects {
+                root: root.clone(),
+                payload: None,
+                checkpoint: None,
+            },
+        ));
+        let mut independent = Manager::default();
+        let review = discover_reviews(&root, &mut independent).unwrap().remove(0);
+        assert!(
+            review.can_acknowledge,
+            "post-release ancestor validation unavailable in this execution context"
+        );
+        let held = independent.reviews.remove(&review.review_id).unwrap();
+        let _ack_guard = ACK_TEST.lock().unwrap();
+        manager()
+            .lock()
+            .unwrap()
+            .reviews
+            .insert(review.review_id.clone(), held);
+        assert_eq!(
+            acknowledge(AcknowledgeRequest {
+                review_id: review.review_id,
+                acknowledgment: Acknowledgment::ReviewedUtilityClosed,
+            })
+            .unwrap()
+            .outcome,
+            "acknowledged"
+        );
+        assert_eq!(fs::read(payload).unwrap(), payload_bytes);
+    }
 
     struct AdapterFixture {
         effects: NativeEffects,
     }
     impl AdapterFixture {
+        fn inert(op: &Operation) -> Self {
+            let mut fixture = Self::new();
+            fixture.populate_inert(op);
+            fixture
+        }
+        fn populate_inert(&mut self, op: &Operation) {
+            let dir = self
+                .effects
+                .root
+                .join(format!("removal-{}", crate::broker::random_id().unwrap()));
+            fs::create_dir(&dir).unwrap();
+            let path = dir.join(policy(&op.plan.tool_id).unwrap().file_name);
+            let original = Pin::create_placeholder(&path).unwrap();
+            fs::write(&path, b"inert").unwrap();
+            let mut payload = Payload {
+                path,
+                pins: vec![Pin::open(&dir, true, 0x80000000, 3).unwrap()],
+                original: Some(original),
+                sealed: None,
+            };
+            payload.seal().unwrap();
+            self.effects.payload = Some(payload);
+        }
         fn new() -> Self {
             let root = std::env::temp_dir().join(format!(
                 "purgeon-adapter-{}",
@@ -1185,6 +1319,7 @@ mod tests {
                 effects: NativeEffects {
                     root,
                     payload: None,
+                    checkpoint: None,
                 },
             }
         }
@@ -1193,8 +1328,227 @@ mod tests {
         fn drop(&mut self) {
             // Release every pin before removing only this fixture's owned root.
             self.effects.payload.take();
+            self.effects.checkpoint.take();
             fs::remove_dir_all(&self.effects.root).unwrap();
         }
+    }
+
+    #[test]
+    fn actual_checkpoint_handle_survives_failure_and_cleanup_finalization() {
+        struct Attempt {
+            fixture: AdapterFixture,
+            failure: &'static str,
+            launches: usize,
+        }
+        impl Effects for Attempt {
+            fn download(&mut self, _: &Operation) -> Result<u64, String> {
+                Ok(5)
+            }
+            fn verify(&mut self, _: &Operation) -> Result<(), String> {
+                Ok(())
+            }
+            fn persist(&mut self, op: &Operation) -> Result<(), String> {
+                self.fixture.effects.persist(op)?;
+                match self.failure {
+                    "persist" => self.fixture.effects.persist(op),
+                    "partial" => {
+                        self.fixture
+                            .effects
+                            .checkpoint
+                            .as_ref()
+                            .unwrap()
+                            .set_len(1)
+                            .unwrap();
+                        Err("simulated interrupted write after checkpoint creation".into())
+                    }
+                    "cancel" | "cleanup" => {
+                        assert!(op.state.lock().unwrap().cancel());
+                        op.cancelled.store(true, Ordering::Release);
+                        Ok(())
+                    }
+                    _ => Ok(()),
+                }
+            }
+            fn launch(&mut self) -> Result<(), String> {
+                self.launches += 1;
+                assert!(fs::remove_file(self.fixture.effects.root.join("launch-intent")).is_err());
+                Err("inert launch failure".into())
+            }
+            fn cleanup(&mut self) -> Result<(), String> {
+                assert!(fs::remove_file(self.fixture.effects.root.join("launch-intent")).is_err());
+                if self.failure == "cleanup" {
+                    Err("inert cleanup failure".into())
+                } else {
+                    self.fixture.effects.cleanup()
+                }
+            }
+        }
+        for failure in ["persist", "partial", "cancel", "launch", "cleanup"] {
+            let op = planned(&mut cached());
+            let mut attempt = Attempt {
+                fixture: AdapterFixture::inert(&op),
+                failure,
+                launches: 0,
+            };
+            admit(&op).unwrap();
+            let result = run(&op, &mut attempt).unwrap();
+            assert_eq!(
+                result.outcome,
+                match failure {
+                    "cancel" | "cleanup" => "cancelled",
+                    "launch" => "reviewRequired",
+                    _ => "failed",
+                }
+            );
+            assert_eq!(attempt.launches, usize::from(failure == "launch"));
+            assert_eq!(
+                op.snapshot().unwrap().cleanup,
+                if ["launch", "cleanup"].contains(&failure) {
+                    "retained"
+                } else {
+                    "removed"
+                }
+            );
+            let marker = attempt.fixture.effects.root.join("launch-intent");
+            let bytes = fs::read(&marker).unwrap();
+            assert!(fs::remove_file(&marker).is_err());
+            assert!(Pin::open(&marker, false, 0x80010000, 1).is_err());
+            attempt.fixture.effects.checkpoint.take();
+            assert_eq!(fs::read(&marker).unwrap(), bytes);
+            let pin = Pin::open(&marker, false, 0x80010000, 1).unwrap();
+            if failure == "partial" {
+                assert!(
+                    validated_checkpoint(&attempt.fixture.effects.root, &marker, &bytes).is_err()
+                );
+                drop(pin);
+                let reviews =
+                    discover_reviews(&attempt.fixture.effects.root, &mut cached()).unwrap();
+                assert!(!reviews[0].can_acknowledge);
+                assert!(has_marker(&attempt.fixture.effects.root).unwrap());
+            } else {
+                assert!(
+                    validated_checkpoint(&attempt.fixture.effects.root, &marker, &bytes).is_ok()
+                );
+                pin.retire_checkpoint(&bytes).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn actual_checkpoint_owner_panic_releases_handle_and_preserves_payload() {
+        let op = planned(&mut cached());
+        let mut fixture = AdapterFixture::inert(&op);
+        fixture.effects.persist(&op).unwrap();
+        let marker = fixture.effects.root.join("launch-intent");
+        let bytes = fs::read(&marker).unwrap();
+        let payload = fixture.effects.payload.as_ref().unwrap().path.clone();
+        let root = fixture.effects.root.clone();
+        let effects = std::mem::replace(
+            &mut fixture.effects,
+            NativeEffects {
+                root,
+                payload: None,
+                checkpoint: None,
+            },
+        );
+        assert!(std::panic::catch_unwind(move || {
+            let _owner = effects;
+            panic!("inert owner panic");
+        })
+        .is_err());
+        assert_eq!(fs::read(&marker).unwrap(), bytes);
+        assert_eq!(fs::read(payload).unwrap(), b"inert");
+        Pin::open(&marker, false, 0x80010000, 1)
+            .unwrap()
+            .retire_checkpoint(&bytes)
+            .unwrap();
+    }
+
+    #[test]
+    fn actual_checkpoint_child_fixture() {
+        let Some(root) = std::env::var_os("PURGEON_CHECKPOINT_CHILD_ROOT") else {
+            return;
+        };
+        let root = PathBuf::from(root);
+        let op = planned(&mut cached());
+        let mut fixture = AdapterFixture {
+            effects: NativeEffects {
+                root: root.clone(),
+                payload: None,
+                checkpoint: None,
+            },
+        };
+        fixture.populate_inert(&op);
+        fixture.effects.persist(&op).unwrap();
+        fs::write(root.join("ready"), b"ready").unwrap();
+        let deadline = Instant::now() + Duration::from_secs(30);
+        while Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        panic!("parent did not terminate its checkpoint fixture within 30 seconds");
+    }
+
+    #[test]
+    fn actual_checkpoint_process_exit_releases_handle_without_changing_bytes() {
+        struct ChildGuard(std::process::Child);
+        impl Drop for ChildGuard {
+            fn drop(&mut self) {
+                let _ = self.0.kill();
+                let deadline = Instant::now() + Duration::from_secs(10);
+                while matches!(self.0.try_wait(), Ok(None)) {
+                    if Instant::now() >= deadline {
+                        eprintln!("owned checkpoint child cleanup timed out");
+                        break;
+                    }
+                    std::thread::sleep(Duration::from_millis(10));
+                }
+            }
+        }
+        let fixture = AdapterFixture::new();
+        let root = &fixture.effects.root;
+        let mut child = ChildGuard(
+            Command::new(std::env::current_exe().unwrap())
+                .args([
+                    "--exact",
+                    "security_software_native::tests::actual_checkpoint_child_fixture",
+                    "--nocapture",
+                ])
+                .env("PURGEON_CHECKPOINT_CHILD_ROOT", root)
+                .stdin(std::process::Stdio::null())
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .spawn()
+                .unwrap(),
+        );
+        let deadline = Instant::now() + Duration::from_secs(15);
+        while !root.join("ready").exists() {
+            assert!(
+                child.0.try_wait().unwrap().is_none(),
+                "checkpoint child exited before readiness"
+            );
+            assert!(
+                Instant::now() < deadline,
+                "checkpoint child readiness timed out"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        let marker = root.join("launch-intent");
+        let bytes = fs::read(&marker).unwrap();
+        assert!(Pin::open(&marker, false, 0x80010000, 1).is_err());
+        assert!(fs::remove_file(&marker).is_err());
+        child.0.kill().unwrap();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while child.0.try_wait().unwrap().is_none() {
+            assert!(
+                Instant::now() < deadline,
+                "owned checkpoint child termination timed out"
+            );
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(fs::read(&marker).unwrap(), bytes);
+        let pin = Pin::open(&marker, false, 0x80010000, 1).unwrap();
+        assert!(validated_checkpoint(root, &marker, &bytes).is_ok());
+        pin.retire_checkpoint(&bytes).unwrap();
     }
 
     #[test]
@@ -1574,6 +1928,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
     }
     #[test]
     fn actual_acknowledgment_retires_consumed_plan_without_touching_payload() {
+        let _ack_guard = ACK_TEST.lock().unwrap();
         let root = std::env::temp_dir().join(format!(
             "purgeon-ack-state-{}",
             crate::broker::random_id().unwrap()
@@ -2723,6 +3078,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
         let mut effects = NativeEffects {
             root: root.clone(),
             payload: Some(payload),
+            checkpoint: None,
         };
         let mut m = cached();
         let op = planned(&mut m);
@@ -2734,6 +3090,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
         assert_eq!(fs::read(&checkpoint).unwrap(), bytes);
         assert_eq!(op.snapshot().unwrap().phase, "prepared");
         effects.cleanup().unwrap();
+        drop(effects);
         fs::remove_file(checkpoint).unwrap();
         fs::remove_dir(root).unwrap();
     }
@@ -2792,6 +3149,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
                 native: NativeEffects {
                     root: root.clone(),
                     payload: Some(payload),
+                    checkpoint: None,
                 },
                 barrier: barrier.clone(),
                 launches: launches.clone(),

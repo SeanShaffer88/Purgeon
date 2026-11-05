@@ -11,6 +11,7 @@ function Get-QuiescentInventory {
     param(
         [Parameter(Mandatory)][scriptblock] $Snapshot,
         [Parameter(Mandatory)][AllowEmptyCollection()][Collections.Generic.List[object]] $Evidence,
+        [switch] $AllowWebViewTeardown,
         [ValidateRange(1,10000)][int] $DeadlineMilliseconds = 10000,
         [scriptblock] $Wait = { param($milliseconds) [void][Threading.Tasks.Task]::Delay($milliseconds).GetAwaiter().GetResult() }
     )
@@ -26,9 +27,12 @@ function Get-QuiescentInventory {
             $failure = $_
             $transient = $false
             for ($exception = $_.Exception; $null -ne $exception; $exception = $exception.InnerException) {
-                # Only sharing/lock violations and paths disappearing during teardown.
                 if (($exception -is [IO.IOException] -and ($exception.HResult -band 0xffff) -in @(2,3,32,33)) -or
                     $exception -is [Management.Automation.ItemNotFoundException]) { $transient = $true }
+                # Reopening a delete-pending WebView temp file can return access denied.
+                if ($AllowWebViewTeardown -and $exception -is [UnauthorizedAccessException] -and
+                    $exception.HResult -eq 0x80070005 -and
+                    $exception.Data['InventoryHashPath'] -match '\AWebView[\\/]EBWebView[\\/][0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}\.tmp\z') { $transient = $true }
             }
             $remaining = $DeadlineMilliseconds - $timer.ElapsedMilliseconds
             $delay = if ($transient -and $remaining -gt 0) { [Math]::Min(100, $remaining) } else { 0 }
@@ -100,12 +104,18 @@ try {
     function Get-DataSnapshot {
         if (!(Test-Path -LiteralPath $data)) { return @() }
         return @(Get-ChildItem -LiteralPath $data -Recurse -Force | ForEach-Object {
-            [ordered]@{ path = [IO.Path]::GetRelativePath($data, $_.FullName); directory = $_.PSIsContainer; hash = if (!$_.PSIsContainer) { (Get-FileHash -LiteralPath $_.FullName).Hash } else { $null } }
+            $relativePath = [IO.Path]::GetRelativePath($data, $_.FullName)
+            $hash = $null
+            if (!$_.PSIsContainer) {
+                try { $hash = (Get-FileHash -LiteralPath $_.FullName).Hash }
+                catch { $_.Exception.Data['InventoryHashPath'] = $relativePath; throw }
+            }
+            [ordered]@{ path = $relativePath; directory = $_.PSIsContainer; hash = $hash }
         } | Sort-Object { $_.path })
     }
     function Get-DataInventory {
-        param([Collections.Generic.List[object]] $Evidence)
-        Get-QuiescentInventory -Snapshot { Get-DataSnapshot } -Evidence $Evidence
+        param([Collections.Generic.List[object]] $Evidence, [switch] $AllowWebViewTeardown)
+        Get-QuiescentInventory -Snapshot { Get-DataSnapshot } -Evidence $Evidence -AllowWebViewTeardown:$AllowWebViewTeardown
     }
     $help = Get-Content -LiteralPath "$PSScriptRoot/../src/cli-help.json" -Raw | ConvertFrom-Json
     $normalize = { param($s) $s.Replace("`r`n", "`n").Trim() }
@@ -138,6 +148,7 @@ try {
         $stdout = $null
         $stderr = $null
         $started = $false
+        $exitAndStreamsConfirmed = $false
         try {
             [void]$p.Start()
             $started = $true
@@ -151,9 +162,10 @@ try {
             $row.exitCode = $p.ExitCode
             $readers = [Threading.Tasks.Task]::WhenAll([Threading.Tasks.Task[]]@($stdout, $stderr))
             if (!$readers.Wait($TimeoutSeconds * 1000)) { throw 'CLI output streams did not close before deadline.' }
+            $exitAndStreamsConfirmed = $true
             $row.stdout = $stdout.GetAwaiter().GetResult()
             $row.stderr = $stderr.GetAwaiter().GetResult()
-            try { $row.after = @(Get-DataInventory -Evidence $row.afterInventoryAttempts) }
+            try { $row.after = @(Get-DataInventory -Evidence $row.afterInventoryAttempts -AllowWebViewTeardown) }
             catch { $row.inventoryError = $_.Exception.Message; throw }
             if ($row.stdout.Length -gt 1048576 -or $row.stderr.Length -gt 1048576) { throw 'CLI output exceeds 1 MiB.' }
             if ($row.exitCode -ne $request.code) { throw "Unexpected exit code: $($row.exitCode)" }
@@ -174,7 +186,7 @@ try {
             try {
                 if ($stdout -and $stdout.IsCompletedSuccessfully) { $row.stdout = $stdout.Result }
                 if ($stderr -and $stderr.IsCompletedSuccessfully) { $row.stderr = $stderr.Result }
-                try { $row.after = @(Get-DataInventory -Evidence $row.afterInventoryAttempts) }
+                try { $row.after = @(Get-DataInventory -Evidence $row.afterInventoryAttempts -AllowWebViewTeardown:$exitAndStreamsConfirmed) }
                 catch {
                     $row.inventoryError = $_.Exception.Message
                     # Evidence capture must not replace the original contract failure.

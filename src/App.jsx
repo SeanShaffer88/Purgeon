@@ -669,7 +669,6 @@ function MenuBar({ onAction, checked = {}, right = null, controls = null, menus 
 }
 
 export default function App() {
-  const [navLabels, setNavLabels] = useState(true);
   const [view, setView] = useState('desktop');
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -2796,11 +2795,11 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       </div>
       <div className="workspace">
       {/* The views, as icons; each one's name and shortcut is in its tooltip. */}
-      <nav className={`view-bar-side ${navLabels ? 'with-labels' : ''}`} aria-label={t('viewsLabel')}>
+      <nav className="view-bar-side" aria-label={t('viewsLabel')}>
         {VIEW_CHIPS.map(([id, label, title]) => (
           <button key={id} className={`view-chip ${view === id ? 'on' : ''}`} onClick={() => (VIEWS[id].button ? toggleView(id) : setView(id))} aria-pressed={view === id} title={`${tx(label)}: ${title}`}>
             <ViewIcon id={id} />
-            <span className={navLabels ? 'nav-label' : 'sr-only'}>{({ desktop: t('viewPrograms'), store: t('viewApps'), monitored: t('viewMonitored'), startup: t('viewStartup'), services: t('viewServices'), debloat: t('viewDebloat'), junk: t('viewJunk'), snapshots: t('viewSnapshots'), timeline: t('viewTimeline'), archive: t('viewArchive') })[id] || label}</span>
+            <span className="sr-only">{({ desktop: t('viewPrograms'), store: t('viewApps'), monitored: t('viewMonitored'), startup: t('viewStartup'), services: t('viewServices'), debloat: t('viewDebloat'), junk: t('viewJunk'), snapshots: t('viewSnapshots'), timeline: t('viewTimeline'), archive: t('viewArchive') })[id] || label}</span>
           </button>
         ))}
       </nav>
@@ -2865,7 +2864,6 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         </span>
         {details.more && <span className="details-more">{tx(details.more)}</span>}
         <div className="group-controls">
-        <button className="nav-label-toggle" aria-label={t('navLabels')} aria-pressed={navLabels} title={navLabels ? tx("Hide navigation labels") : tx("Show navigation labels")} onClick={() => setNavLabels((value) => !value)}>☰</button>
         <select
           className={`group-picker ${groupFilter !== ALL_GROUPS && batchable ? 'active' : ''}`}
           value={groupFilter}
