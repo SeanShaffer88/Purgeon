@@ -425,3 +425,43 @@ included in the change.
 ### Security software inventory refresh qualification
 
 `coverage/reviews/security-software-inventory-refresh.json` records candidate evidence at source commit `521208baeba281dc639804c41660ee2bfc4dd34b`, compared with the LAST reviewed security-software-removal baseline. Manual replacement coverage passes (Rust changed-critical 11/11); historical blanket-floor reporting remains exit 1 below floor. The record preserves the earlier instrumented containment failure, three passing targeted reruns and the fresh full passing run, plus seven synthetic refresh tests and isolated public-entry child confinement. Read-only host CIM/registry discovery does not qualify vendor GUI, UAC, Safe Mode, removal, live downloads or utilities outliving Purgeon. This candidate activates only after independent qualification review, passing final-head PR checks and merge; until those conditions are met it does not replace the reviewed baseline. Original baseline, policy and collectors remain unchanged. Beta testing is canceled; no release or tag is qualified by this record.
+
+### Cleanup and installer reliability qualification
+
+`coverage/reviews/cleanup-installer-reliability.json` binds candidate evidence to source
+`1aa0b65fa82aa9baf1439aa4547403149af2f70e` and the LAST reviewed PR95
+inventory-refresh baseline. Panic cleanup has confirmed RED 1 / GREEN 0 evidence
+and a nonpanicking guard correction. The final tests preserve the original
+`execute_authorized` internally owned `None` job path, with a separate supplied
+`Some` exact-membership proof. Both sample immediate `Wait(0)` before logging or
+cleanup, then assert the captured result. Thirty fresh primary and thirty fresh instrumented
+original-path probes pass; replay profiles are separate from qualifying coverage.
+The historical ten-suite/ten supplied-job probes remain historical evidence.
+The original timing cause remains UNKNOWN; no proven OS race fix is claimed.
+
+Fresh local evidence records 687 JavaScript and 238 native passes (236 library,
+two manifest; two existing ignored), six instrumented objects and complete
+native-3 coverage. The b098 JavaScript lint/types/build/packed gates are reused:
+JavaScript, configuration and tool inputs are unchanged by the native test-only
+successor; the full Node collector reran at current raw source. Replacement
+coverage passes Rust changed-critical 38/40; historical blanket reporting remains
+exit 1. All 296 measured files have eight-field records and Git proof (13 byte
+identical, 283 CRLF normalizations, zero unexplained); eight changed files and
+three frozen AV PowerShell scripts have current source proof. Baseline, policy
+and collectors remain unchanged; NSIS/PowerShell receive no v2 coverage credit.
+
+The fresh unsigned package-2 compiled at this source with process/runner exit 0,
+hashed assets, receipt and documented post-build NSIS input captures. Missing
+plugin provenance remains UNKNOWN; no host installer ran. Package-1 and old
+native/report evidence are historical, with no current binary binding claimed.
+Fifteen strict shared-production NSIS fixtures compile; runtime assertions and
+installer lifecycle remain UNRUN pending disposable CI. The unchanged installer
+source has prior independent approval; the historical CI exit 2 remains
+UNATTRIBUTED, with different installer hashes. Actual AV/protection, vendor GUI,
+UAC and Safe Mode behavior remain unverified.
+
+This record remains CANDIDATE. The latest native test delta and refreshed combined
+record await independent C review, then passing final-head CI and PR merge before
+activation. The previously approved b098 metadata never activated. No PR exists
+at record creation. Beta testing is canceled; this evidence qualifies no release
+or tag.
