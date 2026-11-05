@@ -1,0 +1,3332 @@
+{
+  "schemaVersion": 1,
+  "metricVersion": "purgeon-coverage-v2",
+  "sourceCommit": "d380eb001769d46e778839a7fa763af2933b4089",
+  "sourceTreeHash": "8e3bf950219a522da972c089e55d9daf5e8519129fe7fc6d2460b9079323d2ad",
+  "instrumentationId": "2e4ffcb6e5daac69142a683e704464f956c2772c70bf7dcff98f6d2d510a2a1d",
+  "status": {
+    "active": false,
+    "independentFinalReview": "pending",
+    "exactHeadCI": "pending",
+    "merge": "pending"
+  },
+  "checkoutProof": {
+    "filesChecked": 296,
+    "byteIdentical": 13,
+    "checkoutCrlfToLf": 283,
+    "unexplained": 0
+  },
+  "manualAssessment": {
+    "baseline": {
+      "sourceCommit": "e5cc0b720aab5655dce4adda68ab9a5877fa1fc2",
+      "measuredSourceCommit": "4332fd83deab510e05874ba0c3daa9535a17f421",
+      "review": "coverage/reviews/security-software-plan-retention.json",
+      "reviewSHA256": "e40878e1c7856df81b23e655f2eb7dedb5f8bf91bc752005c30bf156ef356729",
+      "reportSHA256": "89c11d571ec71a0b6287ad75126706b9089ccea2f3852489cdd43a0ae04a30b6",
+      "policySHA256": "ff3f19a6e2c20c3ad3716db70197c3bd93ace9b7812ad19f677216b5e95aae14"
+    },
+    "sourceTreeHash": "8e3bf950219a522da972c089e55d9daf5e8519129fe7fc6d2460b9079323d2ad",
+    "instrumentationId": "2e4ffcb6e5daac69142a683e704464f956c2772c70bf7dcff98f6d2d510a2a1d",
+    "ratios": [
+      {
+        "language": "javascript",
+        "scope": "core",
+        "covered": 4626,
+        "executable": 7220,
+        "before": {
+          "covered": 4626,
+          "executable": 7220
+        },
+        "pass": true
+      },
+      {
+        "language": "javascript",
+        "scope": "overall",
+        "covered": 5012,
+        "executable": 13972,
+        "before": {
+          "covered": 5012,
+          "executable": 13972
+        },
+        "pass": true
+      },
+      {
+        "language": "rust",
+        "scope": "core",
+        "covered": 6720,
+        "executable": 15671,
+        "before": {
+          "covered": 6697,
+          "executable": 15648
+        },
+        "pass": true
+      },
+      {
+        "language": "rust",
+        "scope": "overall",
+        "covered": 6720,
+        "executable": 15684,
+        "before": {
+          "covered": 6697,
+          "executable": 15661
+        },
+        "pass": true
+      }
+    ],
+    "touched": [
+      {
+        "path": "src-tauri/src/security_software_native.rs",
+        "language": "rust",
+        "newFile": false,
+        "covered": 868,
+        "executable": 920,
+        "before": {
+          "covered": 845,
+          "executable": 897
+        },
+        "changedCovered": 37,
+        "changedExecutable": 37,
+        "changedUncovered": [],
+        "pass": true
+      }
+    ],
+    "changedByLanguage": {
+      "javascript": {
+        "covered": 0,
+        "executable": 0,
+        "pass": null,
+        "applicability": "0/0 N/A: no changed executable lines"
+      },
+      "rust": {
+        "covered": 37,
+        "executable": 37,
+        "pass": true
+      }
+    },
+    "pass": true
+  },
+  "changedSourceProof": {
+    "sourceCommit": "d380eb001769d46e778839a7fa763af2933b4089",
+    "files": [
+      {
+        "path": "docs/DEVELOPMENT.md",
+        "sourceSHA256": "c25d0b77218ff62fb52f2d589fb94646e9c46137295cfc37399d53294f953596",
+        "gitCanonicalBlobSHA256": "a843f90b21a95d1665e24e1f355b0af5f97b34f41cc4be621c0e4129ebf96db8",
+        "transformation": "checkout-crlf-to-lf"
+      },
+      {
+        "path": "src-tauri/src/security_software_native.rs",
+        "sourceSHA256": "0f69c927d5591050cf3a538720c22823650462c5e6d53a4961f156abe4f55d34",
+        "gitCanonicalBlobSHA256": "0f69c927d5591050cf3a538720c22823650462c5e6d53a4961f156abe4f55d34",
+        "transformation": "identity"
+      }
+    ]
+  },
+  "reporterHistory": {
+    "combined": {
+      "exitCode": 1,
+      "verdict": "below-floor",
+      "incompleteReasons": []
+    },
+    "historicalFloors": {
+      "corePercent": 85,
+      "overallPercent": 70,
+      "passed": false
+    }
+  },
+  "gates": {
+    "sourceCommit": "d380eb001769d46e778839a7fa763af2933b4089",
+    "checks": [
+      {
+        "name": "ci",
+        "processExitCode": 0,
+        "runnerExitCode": 0,
+        "shellExitCode": 0,
+        "scope": "Local dependency installation for unchanged frontend package inputs.",
+        "stdoutSHA256": "be7f3c9d602c98a31252d7ab8ddbcdbd147b5d5cf7620db065c06cf47601560b"
+      },
+      {
+        "name": "tests",
+        "processExitCode": 0,
+        "runnerExitCode": 0,
+        "shellExitCode": 0,
+        "scope": "Local Node suite; includes source contract tests and does not exercise native Windows launch.",
+        "stdoutSHA256": "e9b98f3238caebe9661d6eb7e10222d1184d2a5e8871bab62103ea41598b331b"
+      },
+      {
+        "name": "lint",
+        "processExitCode": 0,
+        "runnerExitCode": 0,
+        "shellExitCode": 0,
+        "scope": "Local frontend lint; frontend implementation inherited unchanged.",
+        "stdoutSHA256": "1c9329c06190da1f9f7b6f158123a40f299072af80fd97293bd59f715a7e4e0c"
+      },
+      {
+        "name": "types",
+        "processExitCode": 0,
+        "runnerExitCode": 0,
+        "shellExitCode": 0,
+        "scope": "Local frontend type check; frontend implementation inherited unchanged.",
+        "stdoutSHA256": "7a3897179c8f0617209fa3b4c469f5c65fca6174cc1b5fdde0bbdd432e3499ff"
+      },
+      {
+        "name": "build",
+        "processExitCode": 0,
+        "runnerExitCode": 0,
+        "shellExitCode": 0,
+        "scope": "Local frontend production build; frontend implementation inherited unchanged.",
+        "stdoutSHA256": "1b07e6540afe54daa75e22ce52c33c350f195dcc31e86f49dbc0031c546a5d62"
+      },
+      {
+        "name": "packed",
+        "processExitCode": 0,
+        "runnerExitCode": 0,
+        "shellExitCode": 0,
+        "scope": "Local packed core consumption; package inputs inherited unchanged.",
+        "stdoutSHA256": "c7fcc433fe337e7cf68af42ed42a134662819285c6f053e12dd8ae3b36e32851"
+      },
+      {
+        "name": "fmt",
+        "processExitCode": 0,
+        "runnerExitCode": 0,
+        "shellExitCode": 0,
+        "scope": "Local Rust formatting check including the changed native module.",
+        "stdoutSHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "clippy",
+        "processExitCode": 0,
+        "runnerExitCode": 0,
+        "shellExitCode": 0,
+        "scope": "Local Windows MSVC Rust lint of all targets including the changed native module.",
+        "stdoutSHA256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "name": "native",
+        "processExitCode": 0,
+        "runnerExitCode": 0,
+        "shellExitCode": 0,
+        "scope": "Local Windows MSVC Rust suite including focused final eligibility regressions and inherited native fixture tests.",
+        "stdoutSHA256": "976746c3f3d2ac6a1bd15b1817cf0dbd15503050517c1711d19b7ac24f4940a7"
+      }
+    ],
+    "testTotals": {
+      "rust": {
+        "passed": 261,
+        "failed": 0,
+        "ignored": 2
+      }
+    }
+  },
+  "regression": {
+    "redExitCode": 1,
+    "redTest": "security_software_native::tests::launch_final_recheck_rejects_removal_during_download_or_verification",
+    "focusedGreenExitCode": 0,
+    "focusedTests": [
+      "security_software_native::tests::launch_final_recheck_rejects_removal_during_download_or_verification",
+      "security_software_native::tests::launch_final_recheck_rejects_in_flight_refresh",
+      "security_software_native::tests::launch_final_recheck_rejects_changed_tool_or_poisoned_locks",
+      "security_software_native::tests::launch_final_recheck_accepts_exact_refresh_and_reserves_checkpoint"
+    ],
+    "hostTests": [
+      "security_software_native::tests::launch_final_recheck_rejects_removal_during_download_or_verification",
+      "security_software_native::tests::launch_final_recheck_rejects_in_flight_refresh",
+      "security_software_native::tests::launch_final_recheck_rejects_changed_tool_or_poisoned_locks",
+      "security_software_native::tests::launch_final_recheck_accepts_exact_refresh_and_reserves_checkpoint"
+    ]
+  },
+  "failurePaths": [
+    {
+      "category": "policy denial",
+      "qualification": "Inherited admission tests exercise expiry, replay, cancellation and restart-marker denial. Focused tests exercise the final inventory decision after download or verification.",
+      "tests": [
+        "security_software_native::tests::launch_final_recheck_rejects_removal_during_download_or_verification",
+        "security_software_native::tests::launch_final_recheck_rejects_in_flight_refresh",
+        "security_software_native::tests::launch_final_recheck_rejects_changed_tool_or_poisoned_locks",
+        "security_software_native::tests::actual_admission_rejects_expiry_replay_and_cancelled_plans",
+        "security_software_native::tests::restart_marker_any_tool_blocks_all_launches"
+      ],
+      "focusedTests": [
+        "security_software_native::tests::launch_final_recheck_rejects_removal_during_download_or_verification",
+        "security_software_native::tests::launch_final_recheck_rejects_in_flight_refresh",
+        "security_software_native::tests::launch_final_recheck_rejects_changed_tool_or_poisoned_locks"
+      ],
+      "evidence": "focused regression and local native gate"
+    },
+    {
+      "category": "invalid/partial manual input",
+      "qualification": "Inherited tests cover closed requests and malformed checkpoint rejection.",
+      "tests": [
+        "security_software_native::tests::closed_input_denies_unknown_fields_and_non_native_ids",
+        "security_software_native::tests::malformed_global_checkpoint_has_no_vendor_and_blocks_launch"
+      ],
+      "focusedTests": [],
+      "evidence": "unchanged test scope, rerun in local native gate"
+    },
+    {
+      "category": "cancel",
+      "qualification": "Inherited controlled races cover cancellation at the launch boundary and operation finalization.",
+      "tests": [
+        "security_software_native::tests::cancellation_and_launch_forced_thread_interleavings",
+        "security_software_native::tests::admitted_setup_failures_and_cancel_races_always_finalize"
+      ],
+      "focusedTests": [],
+      "evidence": "unchanged test scope, rerun in local native gate"
+    },
+    {
+      "category": "checkpoint retirement denial",
+      "qualification": "Inherited tests cover independent review denial while checkpoint ownership is held and retirement denial for stale bytes.",
+      "tests": [
+        "security_software_native::tests::actual_checkpoint_blocks_independent_review_until_owner_finalizes",
+        "security_software_native::tests::retained_checkpoint_handle_rejects_stale_bytes_and_deletes_only_marker"
+      ],
+      "focusedTests": [],
+      "evidence": "unchanged test scope, rerun in local native gate"
+    },
+    {
+      "category": "launch cleanup failure",
+      "qualification": "Inherited tests cover checkpoint ownership through finalization and retained payload when cleanup fails.",
+      "tests": [
+        "security_software_native::tests::actual_checkpoint_handle_survives_failure_and_cleanup_finalization",
+        "security_software_native::tests::earlier_failure_and_cleanup_failure_retain_payload_without_replaying_plan"
+      ],
+      "focusedTests": [],
+      "evidence": "unchanged test scope, rerun in local native gate"
+    },
+    {
+      "category": "persist failure and persistence errors",
+      "qualification": "Inherited tests cover exclusive durable persistence and withholding later effects after failure. A focused test may also exercise refresh exclusion during checkpoint commit.",
+      "tests": [
+        "security_software_native::tests::launch_final_recheck_accepts_exact_refresh_and_reserves_checkpoint",
+        "security_software_native::tests::injected_failures_prevent_later_effects_and_ambiguous_launch_stays_active",
+        "security_software_native::tests::actual_persist_is_exclusive_durable_and_does_not_launch"
+      ],
+      "focusedTests": [
+        "security_software_native::tests::launch_final_recheck_accepts_exact_refresh_and_reserves_checkpoint"
+      ],
+      "evidence": "focused regression and local native gate"
+    },
+    {
+      "category": "child OS exit/panic",
+      "qualification": "Inherited owned child fixtures cover handle release and checkpoint byte preservation.",
+      "tests": [
+        "security_software_native::tests::actual_checkpoint_process_exit_releases_handle_without_changing_bytes",
+        "security_software_native::tests::actual_checkpoint_owner_panic_releases_handle_and_preserves_payload"
+      ],
+      "focusedTests": [],
+      "evidence": "unchanged test scope, rerun in local native gate"
+    },
+    {
+      "category": "recovery",
+      "qualification": "Inherited tests cover failed refresh publication, preservation of prepared operation and review pins, and review-only restart.",
+      "tests": [
+        "security_software_native::tests::inventory_refresh_failure_preserves_prepared_operation_and_review_pin",
+        "security_software_native::tests::inventory_refresh_recovery_failure_publishes_no_replacement",
+        "security_software_native::tests::restart_status_is_review_only_and_malformed_checkpoint_never_authorizes"
+      ],
+      "focusedTests": [],
+      "evidence": "unchanged test scope, rerun in local native gate"
+    },
+    {
+      "category": "timeout",
+      "qualification": "Inherited shared native process worker evidence confirms a timed-out process joins its pipe workers. This does not exercise timing of a real vendor tool.",
+      "tests": [
+        "process_io::tests::existing_timeout_joins_all_pipe_workers"
+      ],
+      "focusedTests": [],
+      "evidence": "unchanged test scope, rerun in local native gate"
+    },
+    {
+      "category": "partial mutation",
+      "qualification": "An inherited test truncates a real persisted launch checkpoint to simulate an interrupted write and checks conservative finalization.",
+      "tests": [
+        "security_software_native::tests::actual_checkpoint_handle_survives_failure_and_cleanup_finalization"
+      ],
+      "focusedTests": [],
+      "evidence": "unchanged test scope, rerun in local native gate"
+    }
+  ],
+  "evidenceSHA256": {
+    "combinedCoverageReport": "76145ab9457881cc004d75bede8cf14b27bba89aff4a3d5213a48ecd863c6140",
+    "combinedCoverageManifest": "8173dab5ca38727edc4cb767d7f216c4056367acb9e1b340e00ec1a8ab29790b",
+    "combinedEvidence": "aa79bbe7e9dd8a790b015302bbb5ac50f19855c566967fe90b75d7568cb0a51d",
+    "combinedExecution": "c7616a6bb221b4a0f299f29fa534e87a8c75e424db3f918d0300bf1c802695cc",
+    "mergeInputs": "fa1904f0b6740bdfe23ac5a40daf791bc4b35fee994f4bb047f2eecd1ba9731c",
+    "sourceProof": "9c4a50ec9388772e2b6bca1e1979cb6615a7389dd35c89419d209077cab90a60",
+    "numericAssessment": "d7e37909504f6d8d23e3c770dc6c1e20cfcfb1f2db01c4b33a2d9f2c39d573b8",
+    "frontendGateResults": "c94e56774622474798c10134ea24c18806959292719bc5903568746134e1c4d8",
+    "nativeGateResults": "fc119488b2a5b9150513fe202b16ace2833b7f1b9ec8e6874983a329d7acd470",
+    "regressionInput": "9173a04788199f2d1b393ea30f4b438551bb89cdd8e48d8f092840333656c93e",
+    "regressionRedResult": "dd084b3bacea3ba98f1f4d6534c4bd764067b6622c27bf672a0437bdb60dac7a",
+    "regressionRedLog": "6d96e2e141a96a3c15020b592ac580496984d89f2db2c9032328c558252fceb9",
+    "regressionFocusedResult": "99142db09ddfdcd689b75e27fe7761f72130a81671522732e0fc43ee81638306",
+    "regressionFocusedLog": "af5e724866e6499d551308498fff359885bb3cfe2ade3fdbff18e9213babefe6"
+  },
+  "files": [
+    {
+      "path": "packages/purgeon-core/src/features/appdupes.js",
+      "sourceSHA256": "990dc4a05f5d0172aa19ad79157454086ef2cb657d3fcf6c44efb59f77523ea3",
+      "gitCanonicalBlobSHA256": "6e4c97fc63eed14b868bf1702d93dca437b66625911e6ab68ec5bcdce51b9abe",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 1
+    },
+    {
+      "path": "packages/purgeon-core/src/features/archive.js",
+      "sourceSHA256": "4997b2863f8a74181c80e16cb7e9a5ed58e18246c508f137c41781a91803b3f6",
+      "gitCanonicalBlobSHA256": "d68dbad565c5b9822005addffbf5b7b08d09e5d376e9efdda6fc19545ce85ca4",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 5
+    },
+    {
+      "path": "packages/purgeon-core/src/features/associations.js",
+      "sourceSHA256": "5edd568c76056de8680c05ff5cacac2bdd161c7b0de4a449653a86cf05f02e61",
+      "gitCanonicalBlobSHA256": "3d478b363a66bda3ea88351a90d2d5b41d3dbb4439fabf2fd061ca20d22b942d",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 3
+    },
+    {
+      "path": "packages/purgeon-core/src/features/autostart.js",
+      "sourceSHA256": "630b8b397dcd36959278c8dfc8fd171dffe8f9762de04cdfc97cf359c8a3c491",
+      "gitCanonicalBlobSHA256": "2587473434b499eee88aabd8d73446f9dfae6cf66f9ed95c65341fdfc02a462b",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 2
+    },
+    {
+      "path": "packages/purgeon-core/src/features/backups.js",
+      "sourceSHA256": "fb196d1bf6ce121b0e2439d0be40f74c66b6742836e09315eef3134a4517eb26",
+      "gitCanonicalBlobSHA256": "bdd400842ae62b8257bb1f2a5b09ef5dc74ff9ecd47a60bad6bf4298b6d50c42",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 13,
+      "executable": 13
+    },
+    {
+      "path": "packages/purgeon-core/src/features/boot.js",
+      "sourceSHA256": "0be5d3025425d519d0a9e795710da6482182c108c543682309ea0f6a7ee0a7e0",
+      "gitCanonicalBlobSHA256": "cf575f2ff58ada9ba532fee5720395815ecc5df9916799d0020df760b15bcd2e",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 4
+    },
+    {
+      "path": "packages/purgeon-core/src/features/browsers.js",
+      "sourceSHA256": "cd9a91299d8d10036a3cb756f727f6759dda9b199a50396f3b7235d4c3069216",
+      "gitCanonicalBlobSHA256": "da29bf5e72cb3a279ad12861dc751466d0399c5d26738fd2c1d9edda0c6bb2df",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 2
+    },
+    {
+      "path": "packages/purgeon-core/src/features/cookierules.js",
+      "sourceSHA256": "3fbe8c7ff5a87a616fcd3f52f3203d8922bf4c596dd27f2f0ec7779a71914d5b",
+      "gitCanonicalBlobSHA256": "c3bec04791b749f368274fb8d5754606316c8b8e4796e6e4dca51bfc9a240ae1",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 3
+    },
+    {
+      "path": "packages/purgeon-core/src/features/ctxmenu.js",
+      "sourceSHA256": "f1948eb786178855dd738fb7e7be079363a575677cdc8abd6333eda77c4989ab",
+      "gitCanonicalBlobSHA256": "0d79e6ce95adcbd31cbf7c476b13b3bb3d9aaea0e2f707c39bfb476123217ace",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 2
+    },
+    {
+      "path": "packages/purgeon-core/src/features/datadamage.js",
+      "sourceSHA256": "e9ec47ec78ea637a997fdcb332d394a43e5f8469d62b1c82eba336bed11c22f7",
+      "gitCanonicalBlobSHA256": "8249eb8c07d89d08431a9d86938a828b9d28ad78467b7acb363f09b960d01b63",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 1
+    },
+    {
+      "path": "packages/purgeon-core/src/features/debloat.js",
+      "sourceSHA256": "cf8ba5b49c47b838398f6406a68adbbf051b3b7e2083a88284f192a55a8fd685",
+      "gitCanonicalBlobSHA256": "a844f5c088d18c2f16dbf63a1c331aeb92384c66598ba62d7bebd44ac61ba652",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 5
+    },
+    {
+      "path": "packages/purgeon-core/src/features/deepscan.js",
+      "sourceSHA256": "ac287b9b9e512519b5f22f86d5fe8f14a6587fb841cc224f9eb4262521aaefbc",
+      "gitCanonicalBlobSHA256": "b97d89b83059874895934bf5491159d4abfee7f3f088c298133ce892313c55df",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 1
+    },
+    {
+      "path": "packages/purgeon-core/src/features/diskusage.js",
+      "sourceSHA256": "ac5e3c0bf6e62d6b061d3b3afe7444b74a9320f2c4bf5af1090ee8dcb31578f9",
+      "gitCanonicalBlobSHA256": "ecbb4bae07ab1b7ec2a56ba3c60d2eebf3e4f22380026b3faf41481eb422b74c",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 7
+    },
+    {
+      "path": "packages/purgeon-core/src/features/dns.js",
+      "sourceSHA256": "28e2f34d62b4bdc782f408e2be854826cbcd1279689d74913a476257f5bc7551",
+      "gitCanonicalBlobSHA256": "677d01d767fd7ad57b9b77a2ed53d588ec974ba46aebe0016f4247082415c856",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 4
+    },
+    {
+      "path": "packages/purgeon-core/src/features/drivers.js",
+      "sourceSHA256": "34d8964ab48356b8fc2e348b14e2a3a128ececf7f020b0fc1a8c5ee0e420704b",
+      "gitCanonicalBlobSHA256": "7ff39edcb04a87ec583448dd5a8b7d2afd92b3dcfb66dec9e16459285a477c9f",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 5
+    },
+    {
+      "path": "packages/purgeon-core/src/features/duplicates.js",
+      "sourceSHA256": "88b28199e1982d5efb6280a2620cb784401ea157a49129616e55157d92d53cb2",
+      "gitCanonicalBlobSHA256": "801ab71a23dc296713c8c5f16b95c26844f16b4bb81254ee67810f3f7b6a0f90",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 4
+    },
+    {
+      "path": "packages/purgeon-core/src/features/erase.js",
+      "sourceSHA256": "6d910099a653d9216fbf718c4379a7b18b5ff60954a2f8856c418ef3afe9b55c",
+      "gitCanonicalBlobSHA256": "e2eeeb93c45dd544cb2f0749e40d2db803631ddaa407ef2ad66afe3d3f54b463",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 4
+    },
+    {
+      "path": "packages/purgeon-core/src/features/eventlogs.js",
+      "sourceSHA256": "9c4079359809a47e34bbb88d2897f0f46fa7fce9ff5ab95ef93c49a805ca495b",
+      "gitCanonicalBlobSHA256": "f8ceae0af1d8259cda379c9c55b8b611a831f9abe01232fb02d0ae6a7cd85779",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 5
+    },
+    {
+      "path": "packages/purgeon-core/src/features/explore.js",
+      "sourceSHA256": "eb907da0420689774592477959f8ae0050c13386a8c542dfd6da593b6883a0ec",
+      "gitCanonicalBlobSHA256": "c6eebd3ae1db0d01abf2cb96731942d4ba0699c2319974d4519d6037498db6ec",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 4
+    },
+    {
+      "path": "packages/purgeon-core/src/features/games.js",
+      "sourceSHA256": "a67515edffd82881ee4f9512f7baad052dac18702bb0cc2905b49fac69865fff",
+      "gitCanonicalBlobSHA256": "2af45b60334fe5e8b8737e86b96c5952a15aeb721acf85f2698c9821b9fdd1c5",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 3
+    },
+    {
+      "path": "packages/purgeon-core/src/features/graph.js",
+      "sourceSHA256": "2507a0c004ec886204f0ca86f8049be7c903d53ef74a5829000af85544b6ac80",
+      "gitCanonicalBlobSHA256": "7e3ce87b83d886f2a3b7b674b74dd72ed33dc7ff5f1a6418f9ea7a60db59ccd7",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 4
+    },
+    {
+      "path": "packages/purgeon-core/src/features/groups.js",
+      "sourceSHA256": "069846e47761ace013a38d760c4a1afbac33f8ade88568570cb03f63f9a81220",
+      "gitCanonicalBlobSHA256": "185a01f3e8cb458d92287843d596014ea857dc7ed80b0d10d61cbafbb98eeae7",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 3
+    },
+    {
+      "path": "packages/purgeon-core/src/features/health.js",
+      "sourceSHA256": "3e4583fddd84f4250f01d5c6045c31b569d05260e9f942cb087b6cade33eb4a7",
+      "gitCanonicalBlobSHA256": "5f84d2fe405a6c17f225c25096c436db98e1bb45773733df79f4e13ed1a0d90d",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 5
+    },
+    {
+      "path": "packages/purgeon-core/src/features/history.js",
+      "sourceSHA256": "83e3f9d5d69b61a99c0de558c8866ca9ac3f93afacc64f6b19d0145c9083952a",
+      "gitCanonicalBlobSHA256": "dc81b6c0f53eb3109726eb799a5801dc19059613f039b5419122839f8f562b92",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 2,
+      "executable": 2
+    },
+    {
+      "path": "packages/purgeon-core/src/features/i18n.js",
+      "sourceSHA256": "674e8040b6c6cba426d807fcfae8e941749b7fe64271ea7cbf100ce3e6a02575",
+      "gitCanonicalBlobSHA256": "084b5c38e0a179c11b95927c4e28a8b26e5f9d4aab3b777b004c6470c42893f1",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 3
+    },
+    {
+      "path": "packages/purgeon-core/src/features/insights.js",
+      "sourceSHA256": "66ed84f5d2f1fd8fa3abb6de7e80359ed1b8cbafb812d4ba1a58c3d2bdf28b3c",
+      "gitCanonicalBlobSHA256": "7a743b7d5917ac84ecc96719522b83ae0112d3eeb93914db1716a534dbbcf1ad",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 5
+    },
+    {
+      "path": "packages/purgeon-core/src/features/installers.js",
+      "sourceSHA256": "4b0efe79a6bbd3f070d9e0659cd366d7539b01f0bb6be40c4e05fd4b1227e393",
+      "gitCanonicalBlobSHA256": "08e99624f919b0893ed75eb2c3257448ad7e634ee5b2c704793f92d5b10a1fe1",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 2
+    },
+    {
+      "path": "packages/purgeon-core/src/features/installwatch.js",
+      "sourceSHA256": "8e39252de10d8196cfbec0725eef5c3be579f01bcef920776671a8336e0e655d",
+      "gitCanonicalBlobSHA256": "3aa51352ada55df434ef7eb2baf7c9a022cc237cc797a7483c90a9615deda119",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 1
+    },
+    {
+      "path": "packages/purgeon-core/src/features/junk.js",
+      "sourceSHA256": "39de362b8fe33424c5ca323df94fb3571121a093f7970a0930d0c643367cff1d",
+      "gitCanonicalBlobSHA256": "ac7c2dc0e7b1142dcf02e2f658d2211230fe09580b426f66388001a038df7707",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 5
+    },
+    {
+      "path": "packages/purgeon-core/src/features/leftovers.js",
+      "sourceSHA256": "0fefa65e7a402fccde91a4b2548861c1ba8176a9284bd5ab15209f84c154a636",
+      "gitCanonicalBlobSHA256": "dc37efe943fe10e80ab2e3ef6ee86fb7ea24af697c513ddd9139bd91a02d2a83",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 3,
+      "executable": 3
+    },
+    {
+      "path": "packages/purgeon-core/src/features/log.js",
+      "sourceSHA256": "8b3e66feeeda505f7ccda0194f0928a1d691da558d5d8cfb4c0768d1d43ff3fc",
+      "gitCanonicalBlobSHA256": "c22afaaabb237d320af9cf6f49f4e47b524d814bfd616da9bb083500cdc5c412",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 2
+    },
+    {
+      "path": "packages/purgeon-core/src/features/maintenance.js",
+      "sourceSHA256": "dde112bd52eb31eb416d9bfb58cc95771b73e3a90d95f2080b9b530394046883",
+      "gitCanonicalBlobSHA256": "e67e8b01e0ee4faa7d0df01f7731ad716a96e2acfba2554293c42173f8ab3891",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 3
+    },
+    {
+      "path": "packages/purgeon-core/src/features/measure.js",
+      "sourceSHA256": "b2257c570f419a88cd7ab7c3071991dcf9bd6e9e6f29d565a2c4716296809fd7",
+      "gitCanonicalBlobSHA256": "b67a5dd3e33ef3fb04eddb5a52a26651a78d407377dd55fdd0608b9e326758fa",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 3
+    },
+    {
+      "path": "packages/purgeon-core/src/features/monitor.js",
+      "sourceSHA256": "55a0a804f6ee7437fc76cacc8a04b6ff154f318ce5f56010ce07f628820b9de5",
+      "gitCanonicalBlobSHA256": "bed21a32db6bef6dee96fe476b40adaea75f5bc76e8b5851834390f840101abb",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 13
+    },
+    {
+      "path": "packages/purgeon-core/src/features/owners.js",
+      "sourceSHA256": "2ae5c14b0e05e756c0ce6dda972ce74699935a6e2afdfba51a6fbe2c4ed07a20",
+      "gitCanonicalBlobSHA256": "e506b119f388201d796ff6428fbdd5898b49ba470c290d464775c40cb218fe68",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 4
+    },
+    {
+      "path": "packages/purgeon-core/src/features/plugins.js",
+      "sourceSHA256": "2f6fa926d5b8f653efbbefd03789e94b47b461130c908738a3ec45ff11ef1fea",
+      "gitCanonicalBlobSHA256": "36520ea9f5dd513098806b23de2a42b0bc6115f3cf251b4502d4a6eb05faf646",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 4
+    },
+    {
+      "path": "packages/purgeon-core/src/features/policy.js",
+      "sourceSHA256": "a2ccfdaa2bb49396ab697cc67fe6f702bed4602b9104858238590e5fd49fbabd",
+      "gitCanonicalBlobSHA256": "592d3a54f5a1f24081e2a086715cd416816cbaaf15fdcf1aaa8bf3b07269020f",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 1
+    },
+    {
+      "path": "packages/purgeon-core/src/features/portable.js",
+      "sourceSHA256": "7f495f9aaa93c55f6d32c5a909459abe3c2afc2a362fb9da651b7a790a34fa43",
+      "gitCanonicalBlobSHA256": "4ed0c57f7f034f72632f3d02b6b8180c9005aa170d2f4d44d81e11d143913019",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 6
+    },
+    {
+      "path": "packages/purgeon-core/src/features/power.js",
+      "sourceSHA256": "ee73a1070cdf8a48de6f210e96631b38b5449135074daff1b302b9523e64ade8",
+      "gitCanonicalBlobSHA256": "e09d31fbd7f2ac733111ae8b5b4313de409f7400dc7551fe1ecadad9dfb325e2",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 6
+    },
+    {
+      "path": "packages/purgeon-core/src/features/processes.js",
+      "sourceSHA256": "45124b981a1390844bb7bd6038452e8bd6d8425d05363fe6af8d98b5de343b96",
+      "gitCanonicalBlobSHA256": "0a1b037f8517635209ed63fb0fe6040095976ed33868dcbf9c4be69f758b669c",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 9
+    },
+    {
+      "path": "packages/purgeon-core/src/features/profiler.js",
+      "sourceSHA256": "a32621eaf221199c5d69724dd7d669073922b91f94f6917f4f571208eb686725",
+      "gitCanonicalBlobSHA256": "49b2f0d269e5854b3c2884e93465b446eaa391ba52a7a9e249d7f142a814ed3e",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 3
+    },
+    {
+      "path": "packages/purgeon-core/src/features/programs.js",
+      "sourceSHA256": "fdcd1f7162b1b5f4b3660e46caa8fb23fe8942898f1c3b5b30ca633d64a0a383",
+      "gitCanonicalBlobSHA256": "4680c6b80962c7612f455a6e6e295f5d273abba10040e2b6a31016592220873e",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 13
+    },
+    {
+      "path": "packages/purgeon-core/src/features/queue.js",
+      "sourceSHA256": "4275a583a09986184441deaf9322ef0ddf416ea17ab4755b3488f545210da0d7",
+      "gitCanonicalBlobSHA256": "f4bade5d262dbaa4b5502aed59cfc97d0e2f921be6c58055b3a6082a0f76e924",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 9
+    },
+    {
+      "path": "packages/purgeon-core/src/features/report.js",
+      "sourceSHA256": "0b317347eeec9287abc72dfe3ca20dcc3fac6eef1007d52e216abf9eabed5af9",
+      "gitCanonicalBlobSHA256": "f6bc9d08a654f409466e9029cbebbb13197b44d83c803c6dea55db02f24af250",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 1
+    },
+    {
+      "path": "packages/purgeon-core/src/features/restore.js",
+      "sourceSHA256": "184a784b8b303ccc84428d57af3a6a5dd28708a1b0b95aa86591922307a88913",
+      "gitCanonicalBlobSHA256": "66039e177b994d333849c3c010ecd5f952e53d9e4a7db2b6ace9cbc602370f1b",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 1
+    },
+    {
+      "path": "packages/purgeon-core/src/features/restoremgr.js",
+      "sourceSHA256": "9ed22c7c95838390cf5ba622f591774732b1a2277e3890994ab7eb11637d77c0",
+      "gitCanonicalBlobSHA256": "2dc6a8c06dc920be487559a58d890b14ad210e56e7477f204524b01351ad51d7",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 6
+    },
+    {
+      "path": "packages/purgeon-core/src/features/restorepoint.js",
+      "sourceSHA256": "c2d8c886a5d7e5eabd6aeb0ae4d7fe17efede111faab6575cca6ac24091650bf",
+      "gitCanonicalBlobSHA256": "0bb61dcf522f0108786083b51b51f472a33a5e4f70f9516bf53fc270c5a0849c",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 2
+    },
+    {
+      "path": "packages/purgeon-core/src/features/running.js",
+      "sourceSHA256": "c8e8f5312e707bd9d1811d56b4a0b443e8218559d34921b83d5a3bd07b534501",
+      "gitCanonicalBlobSHA256": "a702e48dca2ee45dc2d35bf3e6ec4d756c782fca0c3d6895cd26b1d80943f37d",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 2
+    },
+    {
+      "path": "packages/purgeon-core/src/features/safety.js",
+      "sourceSHA256": "b6db6bb54e92efea36fb20ad8dcc52bf5c69e44c6ddc62be201d26278a28b58c",
+      "gitCanonicalBlobSHA256": "9ffd306a3cffbcda1a5a22b0aef64aefd6b9714a83a95d932c372508825b7342",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 2
+    },
+    {
+      "path": "packages/purgeon-core/src/features/schedule.js",
+      "sourceSHA256": "8fa900afe45eaefa1069cef411db7d94ebdd0f097993fcd54c4589684cc5b01f",
+      "gitCanonicalBlobSHA256": "649a2528c7249a058858e64a29dc3e503b481fe5dab4d2b751299e817a69153d",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 4
+    },
+    {
+      "path": "packages/purgeon-core/src/features/securitySoftware.js",
+      "sourceSHA256": "20fa7c6010e1f0e8837279dfd3f31711cfdad2c407188e18a9eb97d74bff907a",
+      "gitCanonicalBlobSHA256": "505993c634f37dcdcd19302ae1f12eee4b4973916a49148e554cb01972960957",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 6,
+      "executable": 6
+    },
+    {
+      "path": "packages/purgeon-core/src/features/selfhealth.js",
+      "sourceSHA256": "8b95d2bcc92236bdd97842aaf39f09b0dda02413f3de277553ee0dbe2199f5fa",
+      "gitCanonicalBlobSHA256": "262f238257402ced4a093c7fc582aef559cb4e108685fee2c223f9fb822e0f06",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 1
+    },
+    {
+      "path": "packages/purgeon-core/src/features/settings.js",
+      "sourceSHA256": "878de09113302c981fdec40ddd342c8de3042cc2cc5930a67578a667a55f1efd",
+      "gitCanonicalBlobSHA256": "db455d0b93026bfd53b444ac6fd6302ecfc96556949819d089b061b530713fa2",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 2
+    },
+    {
+      "path": "packages/purgeon-core/src/features/shared.js",
+      "sourceSHA256": "b9641975bc775b7605d426d0a820b5a29139be74defecee3d8885c0fec8838ac",
+      "gitCanonicalBlobSHA256": "57ff4c5e8ad2db634e77fe3d9a2f51991314cbf3068e7a7d7b155adeb292b519",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 1
+    },
+    {
+      "path": "packages/purgeon-core/src/features/shellmenu.js",
+      "sourceSHA256": "3079a3e535509c37589d45d9bc20c6c45bd8d03e9f8cfc6a687755e57aaf6891",
+      "gitCanonicalBlobSHA256": "bc407d7c962a7f14435d6e042e48a2a985fae556038fbfafa9c8f5eaf62334be",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 4
+    },
+    {
+      "path": "packages/purgeon-core/src/features/snapshots.js",
+      "sourceSHA256": "f020655bb98bdaea285b83a1460300aa896e074942dbcc52cf1f3a157fb6b432",
+      "gitCanonicalBlobSHA256": "8436b5b1d40249971c525751d12dd7de84ea72333c781b82fb77d425d53dbf85",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 7
+    },
+    {
+      "path": "packages/purgeon-core/src/features/startup.js",
+      "sourceSHA256": "2c672c5c30d97619ce679b2f8fb66d703f1338bd1cddb6a62dabdae4d7da4dc4",
+      "gitCanonicalBlobSHA256": "0ac8be6dcecbb2f454e51a76e0cf3f416796cbd370b938b3c3e67bbba0b954d6",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 6
+    },
+    {
+      "path": "packages/purgeon-core/src/features/sync.js",
+      "sourceSHA256": "194db87d218995f9468ffcc7f5499293300141eefb5582384c4bdf388c1575ed",
+      "gitCanonicalBlobSHA256": "7765781d325fbaa182bfb3317bb5f4ed511c8430fa90a34c2cd5f26ea124564f",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 3
+    },
+    {
+      "path": "packages/purgeon-core/src/features/sysinfo.js",
+      "sourceSHA256": "dfcae428f7e4218802e6e4a546f87b64c11e3b7f4b47290faf85fa051aedc200",
+      "gitCanonicalBlobSHA256": "86a3a9f1dea8a437bf95739287f064850a58dea3715a98cd1347a90bbae50369",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 1
+    },
+    {
+      "path": "packages/purgeon-core/src/features/tasks.js",
+      "sourceSHA256": "760aa3a448653251c869b16790b3b81b9fb6d6a8c637296ddde81aee83b065b8",
+      "gitCanonicalBlobSHA256": "f77f4b839d58080e53071f155bfbd375ac5e423c111697eded6c7ecbb5e583f7",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 8
+    },
+    {
+      "path": "packages/purgeon-core/src/features/transfer.js",
+      "sourceSHA256": "c74a9c89025992078ea3ec595553e7c0499bc5a9504027dc4fcd0dccff69139c",
+      "gitCanonicalBlobSHA256": "181afdaf6951000a4a8147f2603796874b5b7ba7e8d6900bc9ccaddec14a4784",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 9
+    },
+    {
+      "path": "packages/purgeon-core/src/features/trials.js",
+      "sourceSHA256": "7341148e499963192b391883ac26b25ca668f4f5a1f1d7b76a1dc0c2ab37bca7",
+      "gitCanonicalBlobSHA256": "8bb16a6cb326efaae2af02b6ed7d2fa2bca83e43161e0685aecdb43d38911bef",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 5
+    },
+    {
+      "path": "packages/purgeon-core/src/features/trusted.js",
+      "sourceSHA256": "2be6bd0937eac96d2e05287c66a39ad0a987d2fb920c599e99e3af59f7e1be3c",
+      "gitCanonicalBlobSHA256": "a1fad0714d4705b32209cd70b3058f66ac58dd40699c3926b4fdcdb13082ded0",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 5
+    },
+    {
+      "path": "packages/purgeon-core/src/features/updatecheck.js",
+      "sourceSHA256": "fb96ae2894fea8cf89eae60cb8104679935af704370588576903236afbed3567",
+      "gitCanonicalBlobSHA256": "580f070255a9996961be10e72d7effdeb982cf764dd4f4c31689a984c4b392e7",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 4
+    },
+    {
+      "path": "packages/purgeon-core/src/features/winget.js",
+      "sourceSHA256": "e46c8321c192d83309fbaba72467a8299ea91e65fcf5c45b3c148ed05e003ce8",
+      "gitCanonicalBlobSHA256": "dd2367b2a9fcea2477028f1e0f7d29af4f03104278154b2f77c8e603c1241186",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 8
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/api.js",
+      "sourceSHA256": "a8a3c02d18ff9717ffd16ef53269630050fda9315bab13700e6dbf87deae2269",
+      "gitCanonicalBlobSHA256": "329d16518dd522e97a4889e7a93a7888a711f3ff79642232c988c8637b051423",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 191,
+      "executable": 700
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/appdupes.js",
+      "sourceSHA256": "5077435dcfa028b73b8e20163ab320a9eda01a3160a955587ee09a60e2db109e",
+      "gitCanonicalBlobSHA256": "05ce86276d8526b702099559ae790924e79c6f99fd55fcfbe7d7c57078b0117f",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 45,
+      "executable": 47
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/archive.js",
+      "sourceSHA256": "a01ce4f3469089799d319e4dfc29a447dae7684161ef6cc6d194b962f2825579",
+      "gitCanonicalBlobSHA256": "d5bc846497c4172309c95f95f5aedbb5da6dd3f7e84f01792f07de072bb47bd2",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 98,
+      "executable": 98
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/associations.js",
+      "sourceSHA256": "cfe11895419b32cc87f4a7c294a9e3cbd99815918f6ce5675bf5c03bd501e28e",
+      "gitCanonicalBlobSHA256": "f5534d2f6eb9eec3a20b2b5afb9d6e250abf6b288aafb22689efbf6b47bb5df5",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 8
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/autostart.js",
+      "sourceSHA256": "8430582ed31c3219234091d8818827b90a5c4046d5b991da5be4d742dfe7051b",
+      "gitCanonicalBlobSHA256": "2fa5e6e62af82b158b4753e5d4d1cba5d73566b82de9fac72a86897aa54def5e",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 2,
+      "executable": 2
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/backup-scripts.js",
+      "sourceSHA256": "c1791dabc8f29ea33c42684aaa5161d32eace960db70b45d2b9ce990bd7a02a3",
+      "gitCanonicalBlobSHA256": "550c13d82f01ea338ec429bd9a4c90f73dda9de0d5c84cbab9ebd5726d9ddb7f",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 13,
+      "executable": 13
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/backups.js",
+      "sourceSHA256": "a02bb8ceb63b56f9f1594abbe9f41790eaac4aade27b6a301f1661fc78d0f480",
+      "gitCanonicalBlobSHA256": "a02bb8ceb63b56f9f1594abbe9f41790eaac4aade27b6a301f1661fc78d0f480",
+      "transformation": "identity",
+      "language": "javascript",
+      "core": true,
+      "covered": 467,
+      "executable": 653
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/boot.js",
+      "sourceSHA256": "8e70978a402c31de2e7b5af224fdfb4b44e9f1e21ef3a982848ab15752c21e8d",
+      "gitCanonicalBlobSHA256": "47e6aec265713a844840455ec53912edfe9b457402d2c6eaaab916344ec89212",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 25,
+      "executable": 26
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/browsers.js",
+      "sourceSHA256": "b21e7f51e4a1dccb06931fbc00735619d6c00f79528b9628dd0391c8f65de1a4",
+      "gitCanonicalBlobSHA256": "85529bec4ea7aebe564e41343efc507b9c2151259b4cb7c8d6dcdc8454e4348d",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 14,
+      "executable": 87
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/cli-args.js",
+      "sourceSHA256": "ec3bcd144d2ef3a6946b5fb22c1eb94e2ed9aa6010008802c2f56ae63f2a6999",
+      "gitCanonicalBlobSHA256": "8a4126c8bd4f7a8709c995e2c0132644af172aea2310de10c8d5b32132c84bc4",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 37,
+      "executable": 37
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/confirmation-policy.js",
+      "sourceSHA256": "9c45f913ba32873da4d4a89c754d6a0e2e85d23ce7a47f2dcb536bb244336c72",
+      "gitCanonicalBlobSHA256": "4bdea860aa9eba5e89b7769816644fe138d1621b05e6089d14efbc9ad80efc09",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 2,
+      "executable": 2
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/contracts.js",
+      "sourceSHA256": "c287748aa33e3bba249cd4a9196a236035352ea090baf65532dc327bdff1e15d",
+      "gitCanonicalBlobSHA256": "1a60e8b321e65bf8f0533b905ba5cc94be144c33d4d366e207c53a717fc07171",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 8,
+      "executable": 10
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/cookierules.js",
+      "sourceSHA256": "efdf7f4e921ef9021604fd2433f188fe794f02503c586c55571c63d28dc1f724",
+      "gitCanonicalBlobSHA256": "c2868a1f813e54741f2daaa35d75c67236b47a86eb37ea496eae0e718608d51c",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 50,
+      "executable": 60
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/ctxmenu.js",
+      "sourceSHA256": "5032138d89dc4745ac77c0f1faf5da6603c3ef6f5ac103f04cefa2880a862957",
+      "gitCanonicalBlobSHA256": "aa68fd7b613c1deb24cefea7ad5c324bb73f6077b9ebb1f65d635e709df139ba",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 22,
+      "executable": 25
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/datadamage.js",
+      "sourceSHA256": "c82a612ceaa9d1691e85beaacf36089de90c40fa542b6156461eb0fba5923c39",
+      "gitCanonicalBlobSHA256": "7903677db5c0fcd7a9e7ef2acb903935a32d34d691012e4c4ea7512c25138e3f",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 8,
+      "executable": 8
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/debloat.js",
+      "sourceSHA256": "f7acd56ed5013afaf729996d98e2e37b8ce41b8315942bc98859dffbc8ca8c24",
+      "gitCanonicalBlobSHA256": "7398865641816edde1c229bbba3b52fee9ddd8da14976301900641536d6da923",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 15,
+      "executable": 27
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/deepscan.js",
+      "sourceSHA256": "89ee0fe965bd5c593d97b66d14e50f6b180ef5b2c8c54655220c05eeaa587109",
+      "gitCanonicalBlobSHA256": "46143d45bfd918173ef75657d1debccefb629a6e55c4dacd9fa178163c4d4df8",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 24,
+      "executable": 32
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/diskusage.js",
+      "sourceSHA256": "e2f3a5d6ec78cb059ba7ba28262b904f55cdffe4460a1f151a053c97defdc8a0",
+      "gitCanonicalBlobSHA256": "81f9dde1fc500f953d55091dfc1bbe7ac4a90214db7432f11dc629486aa5c2b9",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 77,
+      "executable": 77
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/dns.js",
+      "sourceSHA256": "710aa2f237c2d1e8991092a4aaa7aa9e88a6f44b90d69158d13e6be2b99b1f60",
+      "gitCanonicalBlobSHA256": "5aa34bd6efdc0096f397559bd43cb46a8c2e70419495d94bb5c2abcf6a41ee1f",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 56,
+      "executable": 65
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/drivers.js",
+      "sourceSHA256": "e4aba54e8dc06fe320419f824fd9cc3ea26986f6d18dba920bb5838763dfb5b8",
+      "gitCanonicalBlobSHA256": "71efbd367dd8a19460438c8b39fde94ec1617a8a0286cbd7588326cb4fa47af8",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 39,
+      "executable": 39
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/duplicates.js",
+      "sourceSHA256": "f10d7667582dc878fef30dd3bf3cd7f912370b1761ca9f925f36f37074052d4b",
+      "gitCanonicalBlobSHA256": "580afd84abda8c9ed5729feabc1b7aaccd80de949e9612293b0ea85ee33e6a48",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 107,
+      "executable": 107
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/erase.js",
+      "sourceSHA256": "c2fb4f97d803fe29d80a10dbdb7d6cfc4bd0a662fa89242b07cf21d38af3bd81",
+      "gitCanonicalBlobSHA256": "ad490b96145e70712a7c0be6709d98e691640128b78ce6864d6194138a54f332",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 51,
+      "executable": 58
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/eventlogs.js",
+      "sourceSHA256": "0e6f38b5446495633007df09217c0015be14e4d026eddb2f23386a67aaa56f89",
+      "gitCanonicalBlobSHA256": "96485d582efaa5b6108e030bcb901442e8e286b33afdb4f270c2bdae989a200b",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 49,
+      "executable": 49
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/explore.js",
+      "sourceSHA256": "e108501583e4054aa88e08733e1204cfd64e292d10e324084f676acdb2060bad",
+      "gitCanonicalBlobSHA256": "e26a4d66473a5aff70a05218c90e17bf57751fe181dd9916b7c14d49d85510b4",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 41,
+      "executable": 102
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/filecache.js",
+      "sourceSHA256": "bebc33898a097682b1956a21831b94db197ff7470089ef6a0eaebe6c49c3b957",
+      "gitCanonicalBlobSHA256": "b1e0d80bfe41e9c0ab12c834c486e5b7623647c0c57400d97098bad69fb92d1a",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 33,
+      "executable": 34
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/games.js",
+      "sourceSHA256": "39a03ce70311a3e84b71a1b0c040b878fd43d826fff926e0f18eef3955495110",
+      "gitCanonicalBlobSHA256": "0a64073523fd52b3cd51e0dc647698f4a626c092dd461255838befcd5f38ff96",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 21,
+      "executable": 74
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/graph.js",
+      "sourceSHA256": "2a890fb9ed66777ead2bb41c645a1701497e4b9599f1d628ee6e1ed432a54998",
+      "gitCanonicalBlobSHA256": "8891c4fae51766bee65a66f55f3abd1ef7caaaa9fc2e8598f31682777893f277",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 24,
+      "executable": 36
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/groups.js",
+      "sourceSHA256": "019e7f33e42fda92c8cf6854631b069b755ea063f0d43a22c25330a845d02e97",
+      "gitCanonicalBlobSHA256": "b73ca02e2c9964f8ad75c2bd7560915c3bec376f3deb81ba7e080b3fc8f9a988",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 27,
+      "executable": 27
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/health.js",
+      "sourceSHA256": "015751acd28c8e60dd34b59a671d2236134eb86eefe2815f04021a4f02f3229c",
+      "gitCanonicalBlobSHA256": "b99d98dcbb095e112f39d32d34b24f43ae926311bb20e3fb77f1ee85eab9899d",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 20,
+      "executable": 97
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/history.js",
+      "sourceSHA256": "557bcce15495b983fd211811a1d85dfe73cb46c233bd61133ec40ed11bf438d1",
+      "gitCanonicalBlobSHA256": "5b1aa9992c9aee8dd872a76cc16341b2c8485231ab7002eee2cb1e970c20297c",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 29,
+      "executable": 29
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/i18n.js",
+      "sourceSHA256": "e1b0bc3e516f106937202d6fca6f52fba605d3348d7da517dc999c56decab3fc",
+      "gitCanonicalBlobSHA256": "63946e5b6fa92402a2e82c4dbf86a0ded41f03eca0d147beaba177813e2f1d2c",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 130,
+      "executable": 148
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/impact.js",
+      "sourceSHA256": "20205589a505cfa40cfca8fad87d382353a0c2beebad91c6062e55790b6f99b4",
+      "gitCanonicalBlobSHA256": "8c130653fa2d078b86795c46798e01d237b1460369e16e4fbe1237b8eed94157",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 26,
+      "executable": 26
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/import-policy.js",
+      "sourceSHA256": "5f439e619ea6fa1100a50758a5c81662037b5f62c7751c7f5892a30d1247b5ce",
+      "gitCanonicalBlobSHA256": "e0a78acca2e5f10b7e194bb7cd4c3bc085ae45a5fda713d7091e7c75e837012a",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 27,
+      "executable": 29
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/insights.js",
+      "sourceSHA256": "c5dc6decb23e9e07d7fd7f4669a16b329295328db8a188d1b956d2013cf8480f",
+      "gitCanonicalBlobSHA256": "afd19ebb30abef6619eaedede46e8426bd6a48b06e42b07e3e0a363573c2b9ce",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 170,
+      "executable": 173
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/installers.js",
+      "sourceSHA256": "08aa9efb83fb2d5d52f484902b97818ad86fbf466323f4852e73fecaa1ca5f10",
+      "gitCanonicalBlobSHA256": "b5788ad44f1db7976be68918c08feedc947b84f10d0e743af8eca78521a37b1d",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 57,
+      "executable": 91
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/installwatch.js",
+      "sourceSHA256": "c528f282fcc56aa06226a7df31d4b7a91e311bf0fbaeb2f1c665526fbd73e98f",
+      "gitCanonicalBlobSHA256": "2d484203bbb617294e795e70d40e0d2b1f9cc3c89ff063e8257b01e11bde7fb0",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 8,
+      "executable": 45
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/junk.js",
+      "sourceSHA256": "3ad711932674b35018f1ff4b811f35c3ab3e82cba11d662d119c02140d5cbdcd",
+      "gitCanonicalBlobSHA256": "49569e03c8f81f1f0f2db7fb7655bf0222f8efc869e0672cf425ee557f1ca2c4",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 153,
+      "executable": 194
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/lazy-module.js",
+      "sourceSHA256": "be442942a4da647158226e919db0f98efd43ffdc0c4040a67387bb1b41b79042",
+      "gitCanonicalBlobSHA256": "cfc256a020b65c338390708fea46f66edfff51325ba548665e8551fde609797d",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 24,
+      "executable": 24
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/leftovers.js",
+      "sourceSHA256": "a58187ee3fc3924663ada460a738c81d64d40592fd1428736fb30ae50a80878c",
+      "gitCanonicalBlobSHA256": "8a056474d4d2b4fb03a3a1c07ee94b1c72e71ccbf9f0a6615942b6c4f3d0e213",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 91,
+      "executable": 128
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/log.js",
+      "sourceSHA256": "abf129687a72d4d04f07e1e4663538699b010dc00764b35561fc47220465cc08",
+      "gitCanonicalBlobSHA256": "831431b7fd37287aa5ec874eda72f7d2f1bbf5a8b9b744d05fbf4f5acd4e3226",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 43,
+      "executable": 48
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/maintenance.js",
+      "sourceSHA256": "fc4a662db8b43a0ac52e89c99e3931e53a309860716d0c09289344435fcac6c7",
+      "gitCanonicalBlobSHA256": "45c978e189961af999d7a866a0834fa129ca8347e6e59b4e355398800ccf3a38",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 24,
+      "executable": 43
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/measure.js",
+      "sourceSHA256": "5346e03c60dd21f1d951397f2e447a5840a2d33d8adcaa6b98221c5b613e4efd",
+      "gitCanonicalBlobSHA256": "9b8f7fcf15517bffd56d28643e8e1b220c99ff426d9503db2f7a22012a01121c",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 19,
+      "executable": 38
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/monitor.js",
+      "sourceSHA256": "3c67ca2b80026ccb5ce38213ad5fc8d21d587c4eac36f5c57149c1c5a79d13ec",
+      "gitCanonicalBlobSHA256": "a4f496ec1de556a7e202290f3f08d111e79b0d11ade7f9df4981597e78f28d17",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 165,
+      "executable": 202
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/owners.js",
+      "sourceSHA256": "840bab02100a0535db9a9680fff1c9646a5b4acd3c908fab5d12643fafcd58b4",
+      "gitCanonicalBlobSHA256": "d85fe731fc4b75626d12ffd196af3e3f0425f91f86710c8aa2ef718df31d7b21",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 79,
+      "executable": 108
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/ownership.js",
+      "sourceSHA256": "baf46d3f54809554b850be1696d3da551ebbd59b4471bb33e351d79b9dcb6236",
+      "gitCanonicalBlobSHA256": "fd5dad7382d58a7daca842a2801ada5774f390c52c8ae436dcf0944418a87d3e",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 4,
+      "executable": 4
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/paths.js",
+      "sourceSHA256": "c79506e16b6c5debc4f46cd1528d97461be91762b67d78aa31b7895190bc3bc7",
+      "gitCanonicalBlobSHA256": "0281aad599c41f6a42653b49077569ad5d9b92c75a21d317c2c62beab43ad732",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 76,
+      "executable": 76
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/plugins.js",
+      "sourceSHA256": "d8d110b68e59d636a3f38d0cdb4c9b1198deaf249afe31742f4bdf9c293e70bc",
+      "gitCanonicalBlobSHA256": "09efd4b0dd1108f0cc85b6a5a0e62d1fde032844aa477f553a9da6e21fa18a95",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 6,
+      "executable": 38
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/policy.js",
+      "sourceSHA256": "df7f4c6456e53a1b4834929856ca503cac4e4323049992b8a688309ac84966ce",
+      "gitCanonicalBlobSHA256": "c353dcd535e3984424a6adfa7a6614f31675f01440f13f75d0b51980f9fc5b4b",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 20,
+      "executable": 25
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/portable-classification.js",
+      "sourceSHA256": "1dcf52e80046e130b8edeece335bb5f50c55d6d9f8dd6f15114f3ae938804aa7",
+      "gitCanonicalBlobSHA256": "4d5f081b8cfbe34a6554ea3374844aa4f0c0cb30f483215852e4a205006038f6",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 46,
+      "executable": 47
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/portable.js",
+      "sourceSHA256": "20c18be5bfbab8722ab4b31ac23c0351f5e1072700f94cd337f87ab0ca2384ba",
+      "gitCanonicalBlobSHA256": "15d5754df199d4af309ef44b2fa6ce9ad5f0b7a133a83e519658e46f673059c0",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 46,
+      "executable": 86
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/power.js",
+      "sourceSHA256": "1bb36a57d0e7ed4299a257f4337d17584104905627d8ba9587799c0a717cd281",
+      "gitCanonicalBlobSHA256": "12397608087e6ab0aa11656d45522678a49f2cca07fa20791c8250f86de702f9",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 58,
+      "executable": 92
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/processes.js",
+      "sourceSHA256": "9d9ee8dc0477125993792722a33028e56a0a302934c0ea7063754b13edcb61b6",
+      "gitCanonicalBlobSHA256": "ecf45b0f94b181cf19c5dbae407854070cc9e531673decce8d9a537baa9f061a",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 41,
+      "executable": 103
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/profiler.js",
+      "sourceSHA256": "5f91458667f05a8512f06781dfc6d1b7021f0cd594f80fab430fa86103e8b33f",
+      "gitCanonicalBlobSHA256": "f7b60361967bcc393d798049d6c71f29f5ad00e7a77379b9669b9d1fb2183ffa",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 15,
+      "executable": 56
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/programs.js",
+      "sourceSHA256": "75f97c79878c85c66eff89c7736b6cbf10b05a5904e00f96ec34ae76c1fd1118",
+      "gitCanonicalBlobSHA256": "5821b37064d6c188ca8c4da5126d2f886357c45c869727d80adfefe0bdbb89e0",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 121,
+      "executable": 126
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/queue.js",
+      "sourceSHA256": "f0c5b255265e5053d1df8a05faddc997dc1cc3886ccbe339e0f1388b95ab665b",
+      "gitCanonicalBlobSHA256": "fc380959ceacd671bfb85b0ea16fe2de726faf67419eaeb5a9550ee2f2d1ff48",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 30,
+      "executable": 37
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/read-context.js",
+      "sourceSHA256": "c656ea8d9b915cab07d4a8d29c131272ee32a1d360a0d99f7130c690198f6d70",
+      "gitCanonicalBlobSHA256": "ea36f095cbb1c5b47066abffe075804a37e2ef97170b3fe0497eb3a689d69c07",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 8,
+      "executable": 8
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/report.js",
+      "sourceSHA256": "145bb53541439f371f50e753660788b7d4a3781ddc6de02fbfb6559f2f876f12",
+      "gitCanonicalBlobSHA256": "de7aed0849b2de7bb8a74c335ce9a37c793b47aedc992ba841532c4cf1b83d90",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 27,
+      "executable": 27
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/restore.js",
+      "sourceSHA256": "4dfd8cf29c9e1257e39439b2d10b60e92fea67537b82878eab748adb9b694de6",
+      "gitCanonicalBlobSHA256": "0d2ad66484aa9f5d64486364855f1c287b34282027191c3cf592a804ab308765",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 4,
+      "executable": 9
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/restoremgr.js",
+      "sourceSHA256": "0d4e3950e6d035d6eaa0c99a07bba681b4220ed695d3b114cf9831730a285705",
+      "gitCanonicalBlobSHA256": "a8af23eed1a7e0b21e9651ad374aa3635e495a451dc41435dadc0c75eb810cd3",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 55,
+      "executable": 108
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/restorepoint.js",
+      "sourceSHA256": "cff9f66351145b86d7dba1a71704a747f4501f0627902e68fb72dc21f6d417f4",
+      "gitCanonicalBlobSHA256": "c69eb023ab52929c48757ce7fe09b2bdc662a90a9d0b7d8b946ad7576b221817",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 5,
+      "executable": 8
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/running.js",
+      "sourceSHA256": "f29d8484c899c9ad5981ba8c652fac80ec18ac00832319aa974b314899374c15",
+      "gitCanonicalBlobSHA256": "40de045dc8588384c84d8fc5fe459b1db51fbec61c8821f36247d1d4f7a04cb9",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 24,
+      "executable": 45
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/safety.js",
+      "sourceSHA256": "754f35f4701ae00b388cdb5f73d168bb1df2f1db084c8c053fbd9155784a1a51",
+      "gitCanonicalBlobSHA256": "747eb638ee37b4ff91ef00195c9973d7281c9caa4978e04d365d0e578431e662",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 40,
+      "executable": 47
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/schedule.js",
+      "sourceSHA256": "58a3230400165739f3a622c405aa33b2149c05fedd8584d3f25125bf6fdf03cf",
+      "gitCanonicalBlobSHA256": "b9ef6ff195eb8ad178e3f7bdd2678e28e1a03a3a5e9504693b0ccbf22d5c7465",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 43,
+      "executable": 55
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/security-software.js",
+      "sourceSHA256": "d7e98ee97dfb9930376c2f2a1e5b13986b3ed7fde0db13083d8006f1c6abbcfc",
+      "gitCanonicalBlobSHA256": "8dfe7da87121ef3025cce97d0f03bbfa1507f759f5bd869a2ef2c8f03949daae",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 56,
+      "executable": 56
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/selfhealth.js",
+      "sourceSHA256": "268d6bbd9df56c68650fd19a288501295604345d89deac8612cad45ac93d78f9",
+      "gitCanonicalBlobSHA256": "1d305b5f6fb15d251d21e921fceec486216a771945c3a585d3cb299cd516a3b9",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 19,
+      "executable": 71
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/settings.js",
+      "sourceSHA256": "69e55ef436b1c1ebe8097e0546b10c1b3884678aa3b215cc95741d83f1678b90",
+      "gitCanonicalBlobSHA256": "e677f7a60a712df03bae43e88544205b7e7e3d3d33f34dafa3abd1e532087133",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 89,
+      "executable": 89
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/shared.js",
+      "sourceSHA256": "79b156c9aa6e1cc93466116ff743350f5b0b966ab650286867ae8b45132c61fe",
+      "gitCanonicalBlobSHA256": "d10eda9e2425a064b2f6688cbc1855fc0494dd4dbc22e71b3745181080b81348",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 56,
+      "executable": 57
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/shell.js",
+      "sourceSHA256": "5931d904fb91cf1ca07b78f73ec1753b8df19931f295ce697e71ed36e151a136",
+      "gitCanonicalBlobSHA256": "6f648ca7980805713747d54c4fa50a2c9082c8c7c78a5b61f16b359203c738d7",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 12,
+      "executable": 14
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/shellmenu.js",
+      "sourceSHA256": "aafe3a659509acfbdb95c62d06d874e26c3434137751840bc3fb556a0d2e868b",
+      "gitCanonicalBlobSHA256": "043460a7baaadda37bc0a063f564178338c03ed89055d7002e289e1249d7123f",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 22
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/snapshots.js",
+      "sourceSHA256": "148a1e78925158d1cd6adace2041e4d2862f6c292c8ec370119c23e9d60c650d",
+      "gitCanonicalBlobSHA256": "4867e2a5e7b66d5b460a1b971303c10d7b7c80e4746484c590a79b19d64d3e88",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 65,
+      "executable": 88
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/startup.js",
+      "sourceSHA256": "fb18d20687240bb184bcc354a5535e145e122bd17a36254e26f324a873c58cd0",
+      "gitCanonicalBlobSHA256": "d37ffa3b7b358d467eb1da74707ab742cf9e44b1d2c539c45d97019436deffee",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 54,
+      "executable": 92
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/sync.js",
+      "sourceSHA256": "782763459392a9a1b37010a27de44624d3c001aad5cbe3d129fa949270557ec5",
+      "gitCanonicalBlobSHA256": "52934170c8456567cd73f9e2d3fbed81ef3a50f3ad779d2752c1b4f7fcf8c718",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 63,
+      "executable": 75
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/sys.js",
+      "sourceSHA256": "ef84ea68880be04bf84c05dee8d601f1c8e435905761ee22456c946348427a08",
+      "gitCanonicalBlobSHA256": "1012278a91938853c28fa041ad595f36be20bb7f2267db67865fe633ccaf11ed",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 8,
+      "executable": 8
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/sysinfo.js",
+      "sourceSHA256": "04e0896f72e18674a492c98f40566344bc747878b8be96e6f151027d4bab28e3",
+      "gitCanonicalBlobSHA256": "7d074a1381ea9367f61cf858053c342f28783653cfe904a54744d2439303f457",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 73,
+      "executable": 78
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/tasks.js",
+      "sourceSHA256": "1cd1c1f850b2cd50e902fa19192879b3a74db6b1888b263bd1288110d1e6546e",
+      "gitCanonicalBlobSHA256": "1bab8dc15327748596467508e679354d154893a373b5fff9de3c0e42e93910d4",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 75,
+      "executable": 76
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/transfer.js",
+      "sourceSHA256": "f1480073e8265ff79482ab8db3cb2748ecd18443d42792b94ebd84c550fd12bf",
+      "gitCanonicalBlobSHA256": "47e5e20ada3f1bcd116bcb0094386536504f9fad8f49266effdd5a8f6563829d",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 334,
+      "executable": 389
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/trials.js",
+      "sourceSHA256": "e22608174570e01abfac7b489b8f2a43a31d088368659c244841c4e24b476af0",
+      "gitCanonicalBlobSHA256": "533aeac459f24371baf54324f8e26809b6a62b14b4207521b3239643dca16946",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 28,
+      "executable": 36
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/trusted.js",
+      "sourceSHA256": "ecbacec7f3b7a7b8ed5a871567cb4898c9ecdd55eabab4759a867dfb8274979c",
+      "gitCanonicalBlobSHA256": "a169afbfe07ea9fa8b9d6bee808af9edf3551351d7ba2e94ab4e9b1dd09d7895",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 37,
+      "executable": 37
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/updatecheck.js",
+      "sourceSHA256": "b076ad254510f10560a766d09b91f1d87c9de337199a1e2bb67557f11ab3244a",
+      "gitCanonicalBlobSHA256": "d4d8953b8b743314de84253a916f8d8d33ade8918004b599a7b15fff1c425c41",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 73,
+      "executable": 78
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/winget.js",
+      "sourceSHA256": "debf829718c7af547377519bb62be35aae35afb6de3e72c37a5672bd97441bb4",
+      "gitCanonicalBlobSHA256": "36039d60d186e5b5e2f3121857998f47a1852006d332c2ec53507f84fc1c36ca",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 22,
+      "executable": 49
+    },
+    {
+      "path": "packages/purgeon-core/src/internal/winpath.js",
+      "sourceSHA256": "d39026dc1f9f881fa52ff55a7b55f770967d431ebcbe636d97463ebf474c4a85",
+      "gitCanonicalBlobSHA256": "073435d58bfbcd360b51d549df0b446be8cd39637bf8509521500f7f313872f9",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 23,
+      "executable": 34
+    },
+    {
+      "path": "packages/purgeon-core/src/public-runtime.js",
+      "sourceSHA256": "3873b76e8e8fda9368bf4451fb7e236210e47e5059d1c325a464b9423f02a994",
+      "gitCanonicalBlobSHA256": "8cfc9921ca6836109b7d9cda55633610e7252cbfc8b728c6229ad734f2c743e4",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "packages/purgeon-core/src/runtime.js",
+      "sourceSHA256": "5118c784684f68dc57d444370f797b68754049d55f2a0c043af83759d2bb97d5",
+      "gitCanonicalBlobSHA256": "f22931a6b424cc5edd4c4b8784c1fd67759eca34d213ba34b21dc9e606ac3f6a",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 38,
+      "executable": 42
+    },
+    {
+      "path": "src-tauri/build.rs",
+      "sourceSHA256": "b7d9686f7260c88643b9116035e908a8891ce9b44bcb7a0444fc202bbfb010b2",
+      "gitCanonicalBlobSHA256": "9fd61186a95544c9f5f9b499170f809524de39a0d5617e692f56c8a9e055ee0c",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": false,
+      "covered": 0,
+      "executable": 7
+    },
+    {
+      "path": "src-tauri/build_support.rs",
+      "sourceSHA256": "aaea6f91c060634aaac675632fe5fed6c798bf6c351546107df96c8676e03f3d",
+      "gitCanonicalBlobSHA256": "9ec74da78abd1b7a58fb161494701c23dfe00b0bbcbb346352c35158d72da5df",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": false,
+      "covered": 0,
+      "executable": 3
+    },
+    {
+      "path": "src-tauri/src/atomic_file.rs",
+      "sourceSHA256": "4b3149f5a33b739daa1fb6b2cfa96ba48a8c3649d9519a744e501d019dccb4d0",
+      "gitCanonicalBlobSHA256": "fe9a7ed3793779d68d1d4890a6ef7a1bd3be00b6acba008a3925b95c444e0be5",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 344,
+      "executable": 363
+    },
+    {
+      "path": "src-tauri/src/boot_native.rs",
+      "sourceSHA256": "f7b6dc1808085295dac2958926f92ccad0c3510674f5ecbf389c241c13ef1a01",
+      "gitCanonicalBlobSHA256": "0eba75c5c4444f3fd53a98f1c3eec4a306e24ed2f42583440c201a79a394d593",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 262,
+      "executable": 588
+    },
+    {
+      "path": "src-tauri/src/broker.rs",
+      "sourceSHA256": "c643a8fee10de950a5904aae546278587bf27eae822be90e2295b1b71620e719",
+      "gitCanonicalBlobSHA256": "247581037960341bcd5499d748723d33e0db8ad19a2e7698788e75af58255958",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 418,
+      "executable": 1009
+    },
+    {
+      "path": "src-tauri/src/debloat_native.rs",
+      "sourceSHA256": "3e5fedf885c2dd93366d0a24b423d905406a448b086b5dee3ce8b0d86bf9017e",
+      "gitCanonicalBlobSHA256": "572c4ac9e471b48779f4188a58f38a0b2cb018f0fa8ad2e399a200dc902e4e84",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 83,
+      "executable": 975
+    },
+    {
+      "path": "src-tauri/src/driver_inventory.rs",
+      "sourceSHA256": "e8b90a10b6908633abb5911d6a9fedc21de4f474e73085f341bc14c2f2fef4e6",
+      "gitCanonicalBlobSHA256": "f55c2c2c6d20cca281edd002153af19214b85eed1f3328b9c1ffe911656abca2",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 155,
+      "executable": 397
+    },
+    {
+      "path": "src-tauri/src/driver_native.rs",
+      "sourceSHA256": "44899273dd10e17c5f1f87b0360b3e23d13dbf3cc0511233ae9cd390d6ecfbeb",
+      "gitCanonicalBlobSHA256": "ea7d21aec296047b802c7530021c54c5e37b1c1465a9c9395de016ead088a998",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 233,
+      "executable": 866
+    },
+    {
+      "path": "src-tauri/src/eventlogs_native.rs",
+      "sourceSHA256": "511292cab9fa6fb7be4ae6424c8e570f447c987f8ab7df3284cb444f6c10940f",
+      "gitCanonicalBlobSHA256": "2dea3278b1783f078185409ad7b33db01734e0d3892afaa9664c79144618d0cd",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 85,
+      "executable": 382
+    },
+    {
+      "path": "src-tauri/src/file_mutation_tests.rs",
+      "sourceSHA256": "d5055ac1133a941738abc672ec6c5cd3fa0d03dfbf87583899c2e196232beea3",
+      "gitCanonicalBlobSHA256": "44d44940fa4e8335aeffb40be3e8630c71b0cb8148464247163b177603673e91",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 77,
+      "executable": 79
+    },
+    {
+      "path": "src-tauri/src/launch_args.rs",
+      "sourceSHA256": "5b732ae3a9c0b6580821d4718310839d026b1e2f5d11c01b5f85fb79cad0d1c7",
+      "gitCanonicalBlobSHA256": "f3e4d06b4139dd9ffa21e7b4492f2eed93162402f0cc93224dfc9b43a7f09453",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 27,
+      "executable": 27
+    },
+    {
+      "path": "src-tauri/src/lib.rs",
+      "sourceSHA256": "eae665bf123371aa2de0b9ffdb98c29b9512c7fd1fc04e1f9d24b4e65036f891",
+      "gitCanonicalBlobSHA256": "eae665bf123371aa2de0b9ffdb98c29b9512c7fd1fc04e1f9d24b4e65036f891",
+      "transformation": "identity",
+      "language": "rust",
+      "core": true,
+      "covered": 121,
+      "executable": 1659
+    },
+    {
+      "path": "src-tauri/src/main.rs",
+      "sourceSHA256": "99c9a80b69772aa548afae6858acb22f37ff97d19784f62df9a2b1724ec560b7",
+      "gitCanonicalBlobSHA256": "d57a43da88c586ebcf1b706b0631a1869afa500434696bc844348eb13f38f42f",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": false,
+      "covered": 0,
+      "executable": 3
+    },
+    {
+      "path": "src-tauri/src/native_operations.rs",
+      "sourceSHA256": "88bc45e6fbddda9066bc98e58e1beafe805b27689b69900acb3a3ebd8845b47a",
+      "gitCanonicalBlobSHA256": "88bc45e6fbddda9066bc98e58e1beafe805b27689b69900acb3a3ebd8845b47a",
+      "transformation": "identity",
+      "language": "rust",
+      "core": true,
+      "covered": 377,
+      "executable": 1079
+    },
+    {
+      "path": "src-tauri/src/process_io.rs",
+      "sourceSHA256": "2fac68084dce8550c1112f2ba0727a6104edd1442cecb8e643e0b623918115b2",
+      "gitCanonicalBlobSHA256": "2fac68084dce8550c1112f2ba0727a6104edd1442cecb8e643e0b623918115b2",
+      "transformation": "identity",
+      "language": "rust",
+      "core": true,
+      "covered": 195,
+      "executable": 205
+    },
+    {
+      "path": "src-tauri/src/protected_artifacts.rs",
+      "sourceSHA256": "f3a9045c3fbbf3c29da931f239995fdbefd04f981ea27f5dad8b8f7b481596d6",
+      "gitCanonicalBlobSHA256": "a6cad6b9e106f68091d4cd3312b66d03e9a68f633d96a129135f70fc643b8ddf",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 0,
+      "executable": 92
+    },
+    {
+      "path": "src-tauri/src/protected_driver_package.rs",
+      "sourceSHA256": "eac84313a21a2dce50ffd83f1a9948d79a6c297bfa1200bd73330371574cf92f",
+      "gitCanonicalBlobSHA256": "e6b9b0b6b783b928f0dbecbd1d085d85a2ed32eef82b7af104a97a602e06a40b",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 156,
+      "executable": 381
+    },
+    {
+      "path": "src-tauri/src/recovery_lease.rs",
+      "sourceSHA256": "df5338b4bb9d3526927d886025092873d74044a10c1e2960da16eeff3c952489",
+      "gitCanonicalBlobSHA256": "df5338b4bb9d3526927d886025092873d74044a10c1e2960da16eeff3c952489",
+      "transformation": "identity",
+      "language": "rust",
+      "core": true,
+      "covered": 201,
+      "executable": 210
+    },
+    {
+      "path": "src-tauri/src/recovery_worker.rs",
+      "sourceSHA256": "defbb189d8d99a5c66dfb19ffe8fab98f74348f344227fb661c1d0f32f1503c8",
+      "gitCanonicalBlobSHA256": "defbb189d8d99a5c66dfb19ffe8fab98f74348f344227fb661c1d0f32f1503c8",
+      "transformation": "identity",
+      "language": "rust",
+      "core": true,
+      "covered": 188,
+      "executable": 217
+    },
+    {
+      "path": "src-tauri/src/registry_native.rs",
+      "sourceSHA256": "911aece8aed500f811a6cec25f9da477ff9836fb4fc5de904d80ecb04b7333b3",
+      "gitCanonicalBlobSHA256": "b47347502c1d61273626d636be3e7105f01b5206c9ca8d19701ee640c51c2478",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 0,
+      "executable": 189
+    },
+    {
+      "path": "src-tauri/src/registry_recovery.rs",
+      "sourceSHA256": "2509278d13a5ac92bcc5eedb69c4b6ad060468576b8cb4007b6141d25bb3bec3",
+      "gitCanonicalBlobSHA256": "ed03d7fca95ef5e073b6f20910c94ae26e646ba86be1795edce70d14c59d890b",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 258,
+      "executable": 301
+    },
+    {
+      "path": "src-tauri/src/restore_native.rs",
+      "sourceSHA256": "7ef7bb950da482415190084e7ec9dd525a6b883e842ebd76e781eee18b8aabe7",
+      "gitCanonicalBlobSHA256": "3819af053910127e888b6efdebd45f42a3db46358fa538cff7d28c243565e2c7",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 103,
+      "executable": 490
+    },
+    {
+      "path": "src-tauri/src/security.rs",
+      "sourceSHA256": "63673d40c42aede857b7037ce8820c4eab4d15e198172993eeefdcbade55d97d",
+      "gitCanonicalBlobSHA256": "63673d40c42aede857b7037ce8820c4eab4d15e198172993eeefdcbade55d97d",
+      "transformation": "identity",
+      "language": "rust",
+      "core": true,
+      "covered": 237,
+      "executable": 255
+    },
+    {
+      "path": "src-tauri/src/security_software_native.rs",
+      "sourceSHA256": "0f69c927d5591050cf3a538720c22823650462c5e6d53a4961f156abe4f55d34",
+      "gitCanonicalBlobSHA256": "0f69c927d5591050cf3a538720c22823650462c5e6d53a4961f156abe4f55d34",
+      "transformation": "identity",
+      "language": "rust",
+      "core": true,
+      "covered": 868,
+      "executable": 920
+    },
+    {
+      "path": "src-tauri/src/snapshot.rs",
+      "sourceSHA256": "e7a8f797b553d3a8479a4e1b212aba3bd43a12fd1f4fd0b36998de9d22f22809",
+      "gitCanonicalBlobSHA256": "d4f5888c1ec16d5937beb0652015b5109f91d41e16f5dab1f461376541c34b45",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 212,
+      "executable": 413
+    },
+    {
+      "path": "src-tauri/src/state_store.rs",
+      "sourceSHA256": "dceaa9be1dc8a2b9046b4a980f5c212d821b4eb25584ebd8edda51344285f50a",
+      "gitCanonicalBlobSHA256": "dceaa9be1dc8a2b9046b4a980f5c212d821b4eb25584ebd8edda51344285f50a",
+      "transformation": "identity",
+      "language": "rust",
+      "core": true,
+      "covered": 472,
+      "executable": 1028
+    },
+    {
+      "path": "src-tauri/src/task_native.rs",
+      "sourceSHA256": "c9cbdf08bc47827cab2322080ae0564efde068a30939fa8f7b39651a9372ed63",
+      "gitCanonicalBlobSHA256": "f52d3d9aa9381a2913a21d6cafe4240acc250aa7d44a37913fc75bdb32835f23",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 380,
+      "executable": 998
+    },
+    {
+      "path": "src-tauri/src/task_platform.rs",
+      "sourceSHA256": "9b7475578c51650e0125347a9dda4d7f26d88dd0ee4d6a39e1429cafa8241662",
+      "gitCanonicalBlobSHA256": "d177a7784b777a854a9076473d9be6e38410080aba584f76962c9977969ec791",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 128,
+      "executable": 669
+    },
+    {
+      "path": "src-tauri/src/tracker.rs",
+      "sourceSHA256": "5f7950b3e9faac9ca0da0e4b22b254e2769558f0443ea488c3d179ffd3c00a37",
+      "gitCanonicalBlobSHA256": "6c8c59117837cddf0acf26a03f864df8e8c5c1aad26516a9b33ad29e2f74bdcd",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 29,
+      "executable": 289
+    },
+    {
+      "path": "src-tauri/src/transfer_recovery.rs",
+      "sourceSHA256": "2ac886dd55ec17f927d5851f3ae105add8782885fa7cad36420db87e5f9568be",
+      "gitCanonicalBlobSHA256": "d0007bfe241e36ff64e3f5686dc5e330702f7afefd031ccac8c9d46348edaa35",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 432,
+      "executable": 512
+    },
+    {
+      "path": "src-tauri/src/transfer_undo.rs",
+      "sourceSHA256": "6639beabb2553d27a0d69c43d19c501517ab9a285c6a5e9078d4d0279d80cdb6",
+      "gitCanonicalBlobSHA256": "b2c16be0d218e91f7886ff2957614b2fe34474a9c535c691a262ffec208080ec",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 307,
+      "executable": 536
+    },
+    {
+      "path": "src-tauri/src/updater_native.rs",
+      "sourceSHA256": "f8c443110376cce4df5e8b0021b50eb93defb279371392d42e867f5ab0e3a4c0",
+      "gitCanonicalBlobSHA256": "f8c443110376cce4df5e8b0021b50eb93defb279371392d42e867f5ab0e3a4c0",
+      "transformation": "identity",
+      "language": "rust",
+      "core": true,
+      "covered": 330,
+      "executable": 492
+    },
+    {
+      "path": "src-tauri/src/windows_tools.rs",
+      "sourceSHA256": "856e3707df9f68e5486ed9eed6cf6abc95bc37ce874b3c410831c38d32c60fd9",
+      "gitCanonicalBlobSHA256": "94ae9e14f15d09dda79b7a786b3dc8f5cf0cdf391ae15aa687803d88009e4dcd",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "rust",
+      "core": true,
+      "covered": 42,
+      "executable": 50
+    },
+    {
+      "path": "src/ActionToolbar.jsx",
+      "sourceSHA256": "2cd150e5c87958b09a32577ca92b625e7c3b8548718741250273a9af13b9765c",
+      "gitCanonicalBlobSHA256": "342bbc3028336d69a75b4957690c72f1f92821a5a6efc89e8c16086c2f7267c7",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 8
+    },
+    {
+      "path": "src/App.jsx",
+      "sourceSHA256": "ab18f75cda76ff493f419d0eb0d63e13fa2104a5e756a8f61affdf9e7a857ec2",
+      "gitCanonicalBlobSHA256": "ff617d79c211ad00f970dcf62866848079498a5caf005bbb547f72cafd4be033",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 2576
+    },
+    {
+      "path": "src/ErrorBoundary.jsx",
+      "sourceSHA256": "e54345166acf15a07e6246763148039391f2fb46ac4223e76b7efc142444b66d",
+      "gitCanonicalBlobSHA256": "0c794e9a2612fa4507e958c83699a49289b9cbee752c6fda79e34328e82a524a",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 18
+    },
+    {
+      "path": "src/SettingsSyncDialog.jsx",
+      "sourceSHA256": "3c040b9d9f0fc76b3b2dfc50b061b12a8a280fb27ee0ee1c61089f37c135a30e",
+      "gitCanonicalBlobSHA256": "17d4550e75dbda1ecaf7540eb42318d9d16ee8b7247a0d9e8ec05213b1bcbfc5",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 39
+    },
+    {
+      "path": "src/backend/api.js",
+      "sourceSHA256": "8f7e0b03c8b106d71024af5af1c8f82f61a16f59433f2ba03afbeeb2dc23afac",
+      "gitCanonicalBlobSHA256": "d051c672702c8f100bb94108ad20362a4c9f496b63f1d395735469aafa4ef2cf",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 2,
+      "executable": 2
+    },
+    {
+      "path": "src/backend/appdupes.js",
+      "sourceSHA256": "ecd6af4a7ea1200624a9bd25008fb5e35d5b9531fec2d6657e162897831481bf",
+      "gitCanonicalBlobSHA256": "93a9dd0231311150a0b0cfab631dd3968e62997cb13ec0b41009d6e6b971b04c",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/archive.js",
+      "sourceSHA256": "24675e800915fd5063dd226c99b82aceb3818fd17dd724ed13f88d02da6c5b9e",
+      "gitCanonicalBlobSHA256": "080338ce2fb7549964603bd725bd5e1e668c55c8936ee44593ad9e97eeb6c5a2",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/associations.js",
+      "sourceSHA256": "08027e95d569bf254910b3727d5e1b4ec347d1116cf0c3dc2a4b1d54120af162",
+      "gitCanonicalBlobSHA256": "2f71d6ce5063a3547f161d5ff6fda9da14768be9a464b0534be3047f0252ed0d",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/autostart.js",
+      "sourceSHA256": "4256c1ff996d2d1c16ce90ddabb622bad4fc283400fe59d7fbb1cac2c1860b25",
+      "gitCanonicalBlobSHA256": "297c501582db71b8467fe0d55a1a2ea27db144f87b4bdeca63c092f898209a0d",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/backup-scripts.js",
+      "sourceSHA256": "e0a0c830d4d7791b56e4761e17328eac1df194be93506463d08eb6031dae6180",
+      "gitCanonicalBlobSHA256": "e3c9a9cb9301fd8ecda33b946ce8c904762c33213789508bd4027c2cd54d56a1",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/backups.js",
+      "sourceSHA256": "6baf936871cc72fd42ccc7567fad8c6c70a8784899dcafee4da9ca6d9be308f9",
+      "gitCanonicalBlobSHA256": "6baf936871cc72fd42ccc7567fad8c6c70a8784899dcafee4da9ca6d9be308f9",
+      "transformation": "identity",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/boot.js",
+      "sourceSHA256": "de85b73dfa951ff8f8607f5a59fb5d8fff6f0bd2c2703dd5f311c62e1855c466",
+      "gitCanonicalBlobSHA256": "2dbb27472fd4590bb49bca0f2ba65a508eafecb8316000dd3d4b75266b938ae6",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/browsers.js",
+      "sourceSHA256": "9e0cafba79fcbcfcec930204e32f9bc07169bd0c543ebb1fdf4e13edf6cbd218",
+      "gitCanonicalBlobSHA256": "c4aeba913a5c1a5ae08913641b75f766b5feae84956c9095d0a66d686f223e3a",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/confirmation-policy.js",
+      "sourceSHA256": "66d74c38b6630f40ea4b3ca0141a57f1c5eb265cb218812bc62c414c3d76ed70",
+      "gitCanonicalBlobSHA256": "5d5a7fd8cf16933cd769fd2d3676eaebcc2ec0652ea692fa8623bbe46bfae8c6",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/contracts.js",
+      "sourceSHA256": "b72fe5ce4af97c6391fb29f209dcc487c1793129b8788a8509ed78daca426389",
+      "gitCanonicalBlobSHA256": "66f6803c05b652835bacbc37fecb18cd7867a746f371412bde40a1486ea0a904",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/cookierules.js",
+      "sourceSHA256": "2d7d329ab28d676eb975d5c080eba03d1d9ce39a75778a49e670aac66a41e292",
+      "gitCanonicalBlobSHA256": "ee633f0dea9296f3188419a87902ac0886dcc45f8bc78443f693a54422934493",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/ctxmenu.js",
+      "sourceSHA256": "344d7369211fe752f905e10f663c78ba5ac370fe42b6cda6334f961da9412a24",
+      "gitCanonicalBlobSHA256": "b6cc773f9912fa24a3b067fa872227e23aa03381bebe1154076acce9e1555fdf",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/datadamage.js",
+      "sourceSHA256": "1821c3e20205e43100e8823476b009c31e1c16d84970e53872938e0d1e31e373",
+      "gitCanonicalBlobSHA256": "2188e3df50067aae3b7997f36a8c0d113db25f9f5523ff9dd8b5883cae694f80",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/debloat.js",
+      "sourceSHA256": "b3e31be3706269b948ae4e8ee8b939c52fb3f38523e7777042645e65eeaa7a30",
+      "gitCanonicalBlobSHA256": "48fc8452733afb59d74d729913e1eb6277e31f2cc7f15ad4cbf9524af35150cd",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/deepscan.js",
+      "sourceSHA256": "672e1e83ff43cc3028b08ed83357cb5e815cb3a2c1504b0a611f4b4b894b7ed2",
+      "gitCanonicalBlobSHA256": "fd9524d4a516848ba5966bd1f9b12de323a5a16a5f4b52944700942979889891",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/diskusage.js",
+      "sourceSHA256": "02d1c41b1475363706e14394c55c2c2acee39ceafee505ff5ebca530695b9d90",
+      "gitCanonicalBlobSHA256": "38e7c4d78b87cae860ce0290043e77f5421c35073007140aa1252df6355df7bb",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/dns.js",
+      "sourceSHA256": "6759a4d8f2122e9a556d03cafc2989fd4bc28d17507a4a594ccb18f33b5a22ec",
+      "gitCanonicalBlobSHA256": "9c0f62c701c4c51796299e79d78f27f516166e8feef583d1d72df4aae17bad0d",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/drivers.js",
+      "sourceSHA256": "6940bd343ec5a5fb5ea3d8ea0abfe1013edd9eceb77d2ab96cda093627346c62",
+      "gitCanonicalBlobSHA256": "ed507ce8874ef1eac83d8a5d2095a340d959a2bb43192ff28815443cf651d8c6",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/duplicates.js",
+      "sourceSHA256": "3b3093bb06498e5720608942242441f431dc5fecd2333959f5f57969a3734b64",
+      "gitCanonicalBlobSHA256": "0c0c16447f28976ea30856e6dfcf48672e288d80ce6cb288cc6e2fb1ab892329",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/erase.js",
+      "sourceSHA256": "1b5be467210277120a83cb5b42d066ab35eaeaaf5c9244a1ef49b5a5e8b61ae8",
+      "gitCanonicalBlobSHA256": "bb6ce846b52f3c39ef74c811bc755300c7e1fe2504b9df462cc32fab1fea9567",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/eventlogs.js",
+      "sourceSHA256": "1cb9c5f72bcfb6bfacd987ce2ed4273d86b6c9a61b144f203d47498c6cd64049",
+      "gitCanonicalBlobSHA256": "be8a1508e9c77035afaffd217e3967d535363065783912fd69e1885b81483852",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/explore.js",
+      "sourceSHA256": "45d78f665670ed34884fd24cbb1207934df48be4d55b3b9017d1d7bad3fb1660",
+      "gitCanonicalBlobSHA256": "ea4a0a32809fde3ae0531b0bbba2673e3e15e5fa88f65fa248601d121212eb3b",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/filecache.js",
+      "sourceSHA256": "d8e275deec67a640029ae44dfe001d78540a7c005bbce384280775c32ec8382f",
+      "gitCanonicalBlobSHA256": "6f809fa72e2a913de3146880cd48f65f58279279e0a64a261313c786a48da02a",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/games.js",
+      "sourceSHA256": "45c55dadf278f65c78fae460e5e3dc7ea48869962294f968b84b24f8679d2b80",
+      "gitCanonicalBlobSHA256": "39144783f5e57b40a436fae7ba4a95b609f03bf85118efe93af1a4db5de754a8",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/graph.js",
+      "sourceSHA256": "64ccb75b85329d9fb82fc84940af8c68b5e7ca27bc4f663d333eb6a9adf940c5",
+      "gitCanonicalBlobSHA256": "26c8a5de51232acb6b8b692068646432a158b69835b78266ce3d9522eebad321",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/groups.js",
+      "sourceSHA256": "effae14d1079ec281bb49bd3f2d767c81185f03cf562f5b5e2177d45a8160bd7",
+      "gitCanonicalBlobSHA256": "b6777d598cea78c615f07d7bf44d2dff11fd9bb9e09036b1f7acc7a1bb5604ce",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/health.js",
+      "sourceSHA256": "565e46243625f6ff39f7a80284a01164913da3aed09034a592323451d0e0c846",
+      "gitCanonicalBlobSHA256": "0eafe38532361602b0065478eb3aaf6d7365f81394438d56785daa94a6e98439",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/history.js",
+      "sourceSHA256": "439873e6b72e94f649543a2dec18248d9660e9b0afea0a58f54586d6ec36ef64",
+      "gitCanonicalBlobSHA256": "60daba050f24c27530eb7538f11c1ea8387c114dc66b448080c1822b7a332699",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/i18n.js",
+      "sourceSHA256": "de1d2b11fef3aa6ff6b1535011a11f96a84506e288f99203b8d470855c186705",
+      "gitCanonicalBlobSHA256": "bd339ffc727ca4b00852a44fcc46b4f3b59cbdfba0afabb4f4570e637ed82ab0",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 3
+    },
+    {
+      "path": "src/backend/impact.js",
+      "sourceSHA256": "b88d0c21287fa514dbfd638d53b4dbb88c66d45fc43a043d9dc6bf1ef15d4a0d",
+      "gitCanonicalBlobSHA256": "d073ce291160a847a3c7a1655aadbe25d61071fca174d59b19f7739061c7bd6f",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/import-policy.js",
+      "sourceSHA256": "2e6a7c62b92d4bd69a711e8d165fa3d4f898aaef28d6cf90c433162e79b7c7d0",
+      "gitCanonicalBlobSHA256": "b894d0b3b87e2de131392e07b9f127002f4073f96d9d3886a42613e8d3fd4744",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/insights.js",
+      "sourceSHA256": "cb00475baa9e0570abfc8141c5125f7d8382c45a152b48bbf297d95802f97b6f",
+      "gitCanonicalBlobSHA256": "41443ea04babc69245edfa934f9e6249e6abf2cee6a285e23fd45db8495bdb7d",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/installers.js",
+      "sourceSHA256": "b7c9395937e9e1f4ca17a0dd33ac3791f1d64e613498cb7b297a58a0c379302f",
+      "gitCanonicalBlobSHA256": "6e949c05d85cb1bbcd266f564411154a576c2c0aa74248253e6cd89fd037ec5b",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/installwatch.js",
+      "sourceSHA256": "b2067e653bea4ffaeb7f7710940fef63afa767e046c7f2301808bb09d92ae0b7",
+      "gitCanonicalBlobSHA256": "9be133d235c62b7ee3475371b7b742289c080ab4e821024106aeb2d5bacc84f3",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/junk.js",
+      "sourceSHA256": "b32f4a859fe6433fbf1e0930b71c2f638c96866deece15a7ec8b2cdaa3f25cd1",
+      "gitCanonicalBlobSHA256": "3b9177e9a68c5ba7d6f81d420b0b3cf2e856e0f7287fc80f8b7fe0a0256a8c53",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/lazy-module.js",
+      "sourceSHA256": "0e27cc95ae4afab645e02c31ad1ed941d8393636e9912b7391299f0cdda83217",
+      "gitCanonicalBlobSHA256": "02da1f4ee3ae5047e3a75d44e218139664a4f36c9f69db672c14a5fb6650ed28",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/leftovers.js",
+      "sourceSHA256": "8f1fca8dece50449e7d9fab3ad63fd14b7b7482fc22d4b8e0551dc6f18c0b229",
+      "gitCanonicalBlobSHA256": "2df88611bfe6d17f29233cf936f1b269fdc6a471a6f4ad36eacef870ffcee295",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/log.js",
+      "sourceSHA256": "af9190f8016f4cb0c10a443359cc9059298e242d35a85396159a0a1d2ab0ca0c",
+      "gitCanonicalBlobSHA256": "990eb0db5fa151fd8314f8c0a86a6fd36e6fc3a75b9994e3d19d918fbafb63f9",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/maintenance.js",
+      "sourceSHA256": "6c259009294dddadb17e24f8e7bcc905f650e201d1bff327b73f49db16a57164",
+      "gitCanonicalBlobSHA256": "56de26fb83a4169479e1c296bffca3f4a8d88a57dca040f210b0cacd082519b5",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/measure.js",
+      "sourceSHA256": "7d455aac461b4fe88774a396b4934fc9b4a900cdb1abb5f869346c3d859b135d",
+      "gitCanonicalBlobSHA256": "48060d86716e428ccfc0530edc7d5a519d7fcbf5174cf5d9c9b8f4328dc440a6",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/monitor.js",
+      "sourceSHA256": "1bb5f1f64f5ac811cda2c0047f2aaaf5ae34f9117fa6ea36c8e2d3e1dca361e7",
+      "gitCanonicalBlobSHA256": "8e49b5028945dc3b20c5341ae0d53fd75597dd42b3af1e18c8194aa43cf0e5e2",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/owners.js",
+      "sourceSHA256": "7d9588486620a8b78df2107228f6c8b9949b3737f7000f5afd6e5671d3ddfe93",
+      "gitCanonicalBlobSHA256": "72df7e93287bee64b8207e12bfe066e682800b89499381ea52274a4a5f1f0c6c",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/paths.js",
+      "sourceSHA256": "cb1c2f71a2ab46bada7447759d4b763836124a116bde737a007f2162fed7a7a5",
+      "gitCanonicalBlobSHA256": "b4953031aa15d00c8e702c44b25cfe6c9da3898952f9170aa4a02b2540d3781a",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/plugins.js",
+      "sourceSHA256": "3fe86a69e07863919675804b5ca0d6c9865f2ac4ffb1a5ec0574be06dfb054b3",
+      "gitCanonicalBlobSHA256": "5ce47f5d3c097b24686980e1e9960573b8b3d7e37d03beadad1378b12aec20fb",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/policy.js",
+      "sourceSHA256": "4bd3b5a498b7a21037e39e2900e8fa0c17b952c9f2aab62196c79b8b27d47315",
+      "gitCanonicalBlobSHA256": "7295000be3155b4a41d4d29eb030e03aa296df47df2200fc7391339ea505c1ed",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/portable-classification.js",
+      "sourceSHA256": "536287d0fe1cb7f8a88ee2fa09e091ec899e2fb592c78deeee0eb710e74ff055",
+      "gitCanonicalBlobSHA256": "b473b6c559a42b9b7861ee1cdb32d8657b5e7dd7cd0354cd6cc9caf45d96ffa4",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/portable.js",
+      "sourceSHA256": "f46b9f52776d4f8157a0d07dc0476c779595d53855ca7f510c1feaf914ebc7ed",
+      "gitCanonicalBlobSHA256": "738114a1bcb45b00f5f374cc4ecd5b0b8e80a0ffac2b3e5849cb0f59101f51e9",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/power.js",
+      "sourceSHA256": "5f70ed642e9798c9a02edf358e99c009c072e96f29f9310b471f2c394d4c55bd",
+      "gitCanonicalBlobSHA256": "1145571bae0f6f3d89b2e99288ee1dfb4a826819d2255fc6f1799d266fab2357",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/processes.js",
+      "sourceSHA256": "ce7e7cf341d4a956f3abe34a2a49420f384bbc236932ff669e11aee7a9482ba2",
+      "gitCanonicalBlobSHA256": "bb10723b267a49e915ca5675304370abab0a86010af77bb5b8120660a6642feb",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/profiler.js",
+      "sourceSHA256": "7e25474f96f09f65ab96f8d23db3ef8058056c35956eeb2f8897d1c590cee3a2",
+      "gitCanonicalBlobSHA256": "6bb52fb76761f780b74eea5e03155d2f0b2f947a6f87afb17b4422a4a8427b65",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/programs.js",
+      "sourceSHA256": "079da99b1cfadbe8a58b47ccbeb857f144095d72249f0487c415517e4a260e7f",
+      "gitCanonicalBlobSHA256": "228c52d263acfd2c87c039010eb5e3b5f8a863f4acdf10856e4dbf671d1d9287",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/queue.js",
+      "sourceSHA256": "e5b23fa8d67c486759b9f365c0c2ea29f105f3083807801f22ec792d359ad379",
+      "gitCanonicalBlobSHA256": "d12f516a057e5368db2f2618325512e7f099df50f3be860ef43d7b922a57dcd3",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/read-context.js",
+      "sourceSHA256": "ec7d7608ecc09246b708f5068c028e591c4a5c089fea512cea099dfe62646e2b",
+      "gitCanonicalBlobSHA256": "d25645afd4c486cc7c466d77579a7306412898b899b03f46dd56958657b76794",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/report.js",
+      "sourceSHA256": "73188927036a35b427335ec3d28b68538b4ba77f384bccbd7743965984610991",
+      "gitCanonicalBlobSHA256": "7b3eb91b18112f4679e5a740c1e36a3f671c704d58a10b5a2af56e5bbfda1b0e",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/restore.js",
+      "sourceSHA256": "5463397f64d0183e75d397630c08114a390b13927fe639ef798c229a2766ff74",
+      "gitCanonicalBlobSHA256": "2cb114679b6e40186559970b76f9b342ed465c3eb97451d04b7fb341f344caf1",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/restoremgr.js",
+      "sourceSHA256": "be0b97e8957c136249bd51671ab43d978b2ec98f9099338be4222ce867d4f80b",
+      "gitCanonicalBlobSHA256": "5d304c6b04d3937e5c036aa0773e4dbace6523a604a0ca11e9d812e17348cd7e",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/restorepoint.js",
+      "sourceSHA256": "e456550eddcb0abe5112bdd83f0b7e446e0cb90d33961e0a04b0fbaf9abd14a2",
+      "gitCanonicalBlobSHA256": "9828f90c4a5e1a8a7916d47fd1f0e32694db7bdffa3be4bbedaec136fdc1fa8c",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/running.js",
+      "sourceSHA256": "423849ebeb15a2fb853b4e8045ddf9231037f4dd0b43ccd63417cc7dce64d395",
+      "gitCanonicalBlobSHA256": "42a4e8de478b4efdff7f3677a0f55f7a0b4d589f2b0447f979b13f4455788d2b",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/safety.js",
+      "sourceSHA256": "adc3cbb037dda5aa1a2cd526d03a40a5327e6827b258200d248a027e06155fed",
+      "gitCanonicalBlobSHA256": "be4350ab83df757314cdc9ed94e5b87cdaf96986df47770c63c82170ea45214e",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/schedule.js",
+      "sourceSHA256": "bdec6e20d90b6ec68b3e7b999b715f19949fdba47c3709846c097294b1f72b06",
+      "gitCanonicalBlobSHA256": "a9555802164d9bd83c5d7280262f88ef51c12f80b7d2662e174e14a0db92f31c",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/security-software.js",
+      "sourceSHA256": "7084b474cafe631420c707562abfb20649d7b5caf765b2ed834b62f35af09566",
+      "gitCanonicalBlobSHA256": "7084b474cafe631420c707562abfb20649d7b5caf765b2ed834b62f35af09566",
+      "transformation": "identity",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/selfhealth.js",
+      "sourceSHA256": "520a7a09e037efeb24f399dbe1220e7dd190c1da75a0235b4284aeb7d1687e47",
+      "gitCanonicalBlobSHA256": "878b8d821f402e04cf76ad505fb8123c8d5f1f62d5c4954e5e77ba73e2b1b4dd",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/settings.js",
+      "sourceSHA256": "f415b804e4e24ef15bdf7ff8ba664c080899a75ed68bdf04deb31c416957f5f0",
+      "gitCanonicalBlobSHA256": "6acc7d3deb48a4708d70272570561ff41105f2baf81b7a4779ccf7f65e5e75dc",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/shared.js",
+      "sourceSHA256": "77ebfd2eb952ef98c9ad6e76b2800e001c9e2f7d8838e6e8d8d970d19d044503",
+      "gitCanonicalBlobSHA256": "9a1d3b05767a8b03e9f01ddd46e405ccb7cceb3dbbf45d0277b77e7e74f6cca2",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/shell.js",
+      "sourceSHA256": "d24179d8c0f92f37e9783c6fcef096fe503c9eeb08848c2cedcc4c8150d47e0f",
+      "gitCanonicalBlobSHA256": "c80c55686d47611c4c9ab4c5ce1e8e670133808211c398b8a9111f0bc5559851",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/shellmenu.js",
+      "sourceSHA256": "cdc31d9a0b9bb7a553b499de0458c50263b2ac87ab7bc103b7d3a9cafd6724cf",
+      "gitCanonicalBlobSHA256": "20be56eddad14df3405a4703e50927f447711474c2ce116fb5518a5a38dab2bb",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/snapshots.js",
+      "sourceSHA256": "f980e2efd2681f6d204a953089a57420593f82e45e57d1fd6eef1d47b2da79c0",
+      "gitCanonicalBlobSHA256": "9fd47e131dba2f532713141fd3815b3efb4849f1da475ee1399e8da2320839bb",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/startup.js",
+      "sourceSHA256": "f9e57367f0395a7993932e63f79f712680d909d83e14596dc806201243efa433",
+      "gitCanonicalBlobSHA256": "c42959e971d5507f29b322cc75c569dc4d65802e3598a45d8fbccc403162c64e",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/sync.js",
+      "sourceSHA256": "a63430cc207f4f3c31a52f5e1c18efffd424188846b6d5ba250d3591ad8e7af3",
+      "gitCanonicalBlobSHA256": "a6a5af82b50ca2d007c4644f296da57715d65ccbd666ad4f1e5f01b8167164c3",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/sys.js",
+      "sourceSHA256": "0a3aa030b7f68b96442c9a2fefa3010148655b55a04e2b62b512426d6bb5078e",
+      "gitCanonicalBlobSHA256": "0a3aa030b7f68b96442c9a2fefa3010148655b55a04e2b62b512426d6bb5078e",
+      "transformation": "identity",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/sysinfo.js",
+      "sourceSHA256": "f44fb2114b70358e0b0e13e829fc0274039b312bc4f21f87db452ed249cc4db6",
+      "gitCanonicalBlobSHA256": "a10647d3a1fe3e2c60e9fda2822520d20b4d9511ed13ba84d7e0f96bbfee809a",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/tasks.js",
+      "sourceSHA256": "c76c165d78a530c5acf7519d6fb937ba1ec2e0d659da0bd1adaf99570062937a",
+      "gitCanonicalBlobSHA256": "f74ef1227ba6fe2ed4ae6bae24c490e92b777c85e487aba76dbd904a3d3e6b25",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/tauri-sys.js",
+      "sourceSHA256": "f4b5053204964a230a777fb741acb5d15f89c0edb566b0adf8f9e4e258f57763",
+      "gitCanonicalBlobSHA256": "7307931aac974dec5d94e852ddf83eaf7017b971765229cebe2841de15191c50",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 7,
+      "executable": 110
+    },
+    {
+      "path": "src/backend/transfer.js",
+      "sourceSHA256": "9ea9cfa3e1e130e40c152e12dda3ded2d271c8596839b7f44d63c53c4844f0cb",
+      "gitCanonicalBlobSHA256": "3161f223859aa53000449e9a32f2a5baa6f3241dccdf1815a8a7a221ad4542bc",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/trials.js",
+      "sourceSHA256": "126e45d65477b88b782151a44154b378e4118e02f05955c00c1e4b0c2a690830",
+      "gitCanonicalBlobSHA256": "ffaf1ba2dfd336070bb982604d4b5c28bbd46ee3368453f7d984bcf452f32ebc",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/trusted.js",
+      "sourceSHA256": "d196aaf1e8bf44db9fc3238612d5d70f4f657dbbf1dbdaae8ff7666f3ce162a2",
+      "gitCanonicalBlobSHA256": "77d4d66af406a1e2eb33689f41ab66eb2cb274d9b4e69cf5a1e73fabbe612533",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/updatecheck.js",
+      "sourceSHA256": "267f203064dcd95e356d08ae9318b97a65b858a15e5a5b84d32a22d37135ea51",
+      "gitCanonicalBlobSHA256": "1521680a73d1d9d670b2ff46a7fb7371ebdfcd190a23627ff1e11049d4dd7c4a",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/updateexit.js",
+      "sourceSHA256": "5a9599ddb9784a39336b18f3dad38c6423a8ec3b952d52168f19f7ffee6eb327",
+      "gitCanonicalBlobSHA256": "ba9e6ac3022141d0c7da41c55f2fd8b9626681a2a1f1224e9bd123ace417cec9",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 20,
+      "executable": 20
+    },
+    {
+      "path": "src/backend/winget.js",
+      "sourceSHA256": "beb28608eb4a780b7d5298582313313e6cefa22578f51b6db02a314a0bd05f15",
+      "gitCanonicalBlobSHA256": "5b1c3fcdebb2a95f54b2f052c027e81978d3893aa9f5de122cf330affdf90296",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/backend/winpath.js",
+      "sourceSHA256": "bcc2eb3dbbbd7565d88517d1eab25c2b2825bb31914ed9d3a8743aacbf3e68d3",
+      "gitCanonicalBlobSHA256": "32c284bac433a55e88e8014dd3a7779af56aa05a50d35298e8fb1c0ee139a835",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/builtins.js",
+      "sourceSHA256": "fcd2903832e35f792be000f5c078a34b4e4bb4072a4f5015775b4a9774b8c6dd",
+      "gitCanonicalBlobSHA256": "0f4f1347b63ce4abb6d9d483a3d45e5195c3b35bfc72b49a6c2d6af779cb16af",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 12,
+      "executable": 12
+    },
+    {
+      "path": "src/cli-args.js",
+      "sourceSHA256": "c6abf9ee74e2358747e2e92d9ef8a68126ca16dc333f2f56737be644f8597c83",
+      "gitCanonicalBlobSHA256": "1fdc7cc281fe5e34727bddeae5502d63f3a80fd4161b694a763e1405ab0fc0f5",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 0,
+      "executable": 0
+    },
+    {
+      "path": "src/cli.js",
+      "sourceSHA256": "0a567fb9fe1f000e69908e6172df453326e523401c922ccf1896ed6d38c909d5",
+      "gitCanonicalBlobSHA256": "5ec138088cefb574262f0f1e13d321c2afd3cccda4907cc751e51f9ff8db8b0f",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": true,
+      "covered": 168,
+      "executable": 496
+    },
+    {
+      "path": "src/command-dialogs.jsx",
+      "sourceSHA256": "0b553fb1b723f977f5f87dd633ae6b0863aff82f5dcee41c1b4b354864e4a4d0",
+      "gitCanonicalBlobSHA256": "e9c2159ad05a4811f401e6f435cccf7d37b832d9190cbf3b4a70f09ebb5de148",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 78
+    },
+    {
+      "path": "src/core-dialog.jsx",
+      "sourceSHA256": "fbe7db36f34558894dc2d4e6fef7dfd9249d30d09123ade52b3ff1f2ebba0ad7",
+      "gitCanonicalBlobSHA256": "52a86daa2892b12c84f55ca3a1781e97d49357fa4366d48054b1e379540c5afe",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 143
+    },
+    {
+      "path": "src/debloat.jsx",
+      "sourceSHA256": "f2e251ca0bde2d20c12ab4a3d3456db200061e0ea0ab5a0c914e8730186656a8",
+      "gitCanonicalBlobSHA256": "f085d991782205c8f0f52afa06b772f74b94af6b87223753be9896fb4091a19b",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 229
+    },
+    {
+      "path": "src/dialog-shared.jsx",
+      "sourceSHA256": "64fd4fcedb50ef9959b380656874025b99106077899023e973852a5edd06e479",
+      "gitCanonicalBlobSHA256": "c3ab653b6c09fd92c9ed238c0d7f3b28ee728d610f3b02da8816ab25aea0576a",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 40
+    },
+    {
+      "path": "src/dialogs.jsx",
+      "sourceSHA256": "39c649d563e208d4024bf301e452d3f40db5f5743f26abfbcd15d64cae59458c",
+      "gitCanonicalBlobSHA256": "c3a589394c6ce5fddbdb1dbab904cf19907c3a1c488c9051f3313834d362f3e2",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 1099
+    },
+    {
+      "path": "src/disk.jsx",
+      "sourceSHA256": "90f2ed92036548565b62d57008204dbb4969ca5b2b49adb0eab61033e230a783",
+      "gitCanonicalBlobSHA256": "b5990e5eb9586bf98e6d9b6bac7b6673d390a2d783bee91faa5a1d7a3b5f26d1",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 112
+    },
+    {
+      "path": "src/format.js",
+      "sourceSHA256": "8b723d481d09f786dfbde49043352b1f379fa64e8fa543847e61eb80af4ecec3",
+      "gitCanonicalBlobSHA256": "125b70813b5128fbc4255a3c4c4ffa2cac5826acd4cfbc666ee756365c5ec61a",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 6
+    },
+    {
+      "path": "src/groups.jsx",
+      "sourceSHA256": "699845acc35fab66628236b4404028427c5ab97159068e4ceca022bf459e8d13",
+      "gitCanonicalBlobSHA256": "d60636838d1e0afa79fa3c3b095d0c220d2beb308ada635f58e0b520d51e0da9",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 22
+    },
+    {
+      "path": "src/icon-loader.js",
+      "sourceSHA256": "4dce5012b3352f7d233b707ed423555c975859267fcdf9ff8ae284aaa4a13ec2",
+      "gitCanonicalBlobSHA256": "f01c64ab2f6272998635b3d1bcee25407260b5a45ee28dc9f183a1e02c4a7d9b",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 22,
+      "executable": 22
+    },
+    {
+      "path": "src/junk.jsx",
+      "sourceSHA256": "214112970613b591f3bac9f317fdb7ce63b50599a22eaf987ae0db7d88328a07",
+      "gitCanonicalBlobSHA256": "65b26536c4464563c67731c8dcbbba525ad9bb42f65eb5160308a022885405bf",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 124
+    },
+    {
+      "path": "src/leftover-sections.js",
+      "sourceSHA256": "6097881331b18cdbea54d92f875d852a940762ede761a081d32fe0f492f91612",
+      "gitCanonicalBlobSHA256": "6532395224c851a1170c40646d63bf35b34824d5d57d0ada58d7afd2343b38e3",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 14,
+      "executable": 14
+    },
+    {
+      "path": "src/main.jsx",
+      "sourceSHA256": "caa7a01a01e530a00c75c38f8c845447494d09ea628656a5cc0af08b088dc1ca",
+      "gitCanonicalBlobSHA256": "304848285994da6d948d03e03909122b3fa1b06d087e94608b368985f49cb12a",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 19
+    },
+    {
+      "path": "src/more.jsx",
+      "sourceSHA256": "b4f417da212a1914aaefb3adc4851c8d3362c3997c950b4351b583c8ca7adfd8",
+      "gitCanonicalBlobSHA256": "37e699024ca08f947fb255ad06c10e1e0061cad35d30f2ae6ab36e4ac03a8fe9",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 827
+    },
+    {
+      "path": "src/onboarding.jsx",
+      "sourceSHA256": "93148dec52d866b41160ecf3f5aac5363da7024795a707dc6642fc3ffcfe2d28",
+      "gitCanonicalBlobSHA256": "30cf93a380ce60dd4666f394abeea9f95831f4a31d903bda6347f214cd34ccb8",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 222
+    },
+    {
+      "path": "src/optional-dialog.jsx",
+      "sourceSHA256": "ffe44913ec4802f74265349401ec0012c1f03408717aac723cf0cb29d78ce1f1",
+      "gitCanonicalBlobSHA256": "140204a3e545c1dbaa2ff35ac496e293766bf46f02bba309be6c5ab3ad1b80e8",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 17
+    },
+    {
+      "path": "src/processes.jsx",
+      "sourceSHA256": "2cdc9d4015de71c4f807d8b5dd870fe17059f32a2f6bbed7a26d7ccc55054bdd",
+      "gitCanonicalBlobSHA256": "f6006e8557785af64e69851e138736ddcb47e053fee77b3412e2d9200ffa12f2",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 119
+    },
+    {
+      "path": "src/refresh-gate.js",
+      "sourceSHA256": "437b0b32795cd37b051db598c05ff5acf9292a3609e78a16dc7e9c0080913584",
+      "gitCanonicalBlobSHA256": "32cfea95bc9f672acd2bbeb600046d9320d758e2ac32a4e46350960cd7180978",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 13,
+      "executable": 13
+    },
+    {
+      "path": "src/security-software-controller.js",
+      "sourceSHA256": "1d508e7bde7cc25716db2f8db5e3113b603a947d124c1c84d1a8e4f9b61070de",
+      "gitCanonicalBlobSHA256": "e12e0144c1a908021c208e3020fd32c74fd426a0f53598daf3eac5c96a0bbfaf",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 99,
+      "executable": 99
+    },
+    {
+      "path": "src/security-software.jsx",
+      "sourceSHA256": "e1c49271d7c41d253bb55fbb6f685b84e8e457d890df60afbffb2dbdf5e68db8",
+      "gitCanonicalBlobSHA256": "d8fd6250d7d842d6f0e897e5d76bb7d335602d0d9ba44246613f9bb17db1dd5c",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 52
+    },
+    {
+      "path": "src/snapshot-timeline.jsx",
+      "sourceSHA256": "d0802da9acd4323f40a294fd0741b9d7e52945a7f57f4ee4644fa077d9969757",
+      "gitCanonicalBlobSHA256": "22532a0644bf841ba923f7657c1b834765e9dd08d997ff48dcbd38a06c177e28",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 31
+    },
+    {
+      "path": "src/snapshots.jsx",
+      "sourceSHA256": "0621675e4596755f0fd9f88a94f47beedaf3752b5cf0a7f768f8dc7e9f1569a5",
+      "gitCanonicalBlobSHA256": "72ec2bc65662dbe2370e5682560a578666f25b08b7f3775559c2512df54830d9",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 134
+    },
+    {
+      "path": "src/startup.jsx",
+      "sourceSHA256": "fdecedef70daaff073956dd5ff537bd0ec35e81db7f4ac9991d74db05f607295",
+      "gitCanonicalBlobSHA256": "a00e5bb817747586854c85c40dbe0d68eb915f33f44fd748188191c47cf81b97",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 207
+    },
+    {
+      "path": "src/tips.js",
+      "sourceSHA256": "42269bd351ea059b55f8283093d09ae5cd761502c4e38afd3c801a015e7c8532",
+      "gitCanonicalBlobSHA256": "596a973787798476c12a3991b3fee3248cefcec4f094ced202f47a5bf4b2a10c",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 226,
+      "executable": 226
+    },
+    {
+      "path": "src/tools.jsx",
+      "sourceSHA256": "4442f0c6d90c0b1711df715fa2e3a761d04b2d34d3b8186d55b5c3f0e2630018",
+      "gitCanonicalBlobSHA256": "8169b29fdd1fca807eb3aa07dffbe13bc48ccdf70c23c153c8577177ccd50dc6",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 108
+    },
+    {
+      "path": "src/transfer.jsx",
+      "sourceSHA256": "a5ac3afd16dec9f4095502fa439dbc12411950548b12c8c20c2132c09e881a4a",
+      "gitCanonicalBlobSHA256": "fb5c459641c128db6e569f78270ca9eecc105e8add4ceb3ec7ddeb6f5c931b5e",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 82
+    },
+    {
+      "path": "src/useWindowedRows.js",
+      "sourceSHA256": "0ab8952db1c786074abf5d25f5932f59828d45d6832da63a39841417b6b861ec",
+      "gitCanonicalBlobSHA256": "635729f350b40d08ddf6cba5af6b220f75ea851505a05dd3820b6d9f1d50cf05",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 41
+    },
+    {
+      "path": "src/zoom.js",
+      "sourceSHA256": "35898b5c637b887cf7270e948eafd32d2b78a77bc7a160ee3b969dcee01d3c6c",
+      "gitCanonicalBlobSHA256": "942a972a2df29e11a444430ee1b9173260338f5ca75de27784470c894e487e57",
+      "transformation": "checkout-crlf-to-lf",
+      "language": "javascript",
+      "core": false,
+      "covered": 0,
+      "executable": 13
+    }
+  ],
+  "limits": [
+    "Local gate evidence and manual coverage policy do not establish exact-head CI or release readiness.",
+    "Final eligibility evidence comes from local Rust tests and inherited host fixtures. Live vendor, VM, installer lifecycle and application runtime checks are outside this record.",
+    "Coverage counts describe measured lines; they do not estimate statistical release confidence."
+  ]
+}

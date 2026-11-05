@@ -10,13 +10,16 @@ use std::{
     process::Command,
     sync::{
         atomic::{AtomicBool, Ordering},
-        Arc, Mutex, OnceLock,
+        Arc, Mutex, MutexGuard, OnceLock,
     },
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
 const TTL: Duration = Duration::from_secs(300);
 const RECOVERY: &str = "Purgeon cannot undo vendor removal. The utility may request a restart.";
+const STALE_INVENTORY: &str =
+    "Current inventory no longer confirms this product and utility. Refresh inventory and prepare a new plan.";
+static REFRESH: Mutex<()> = Mutex::new(());
 const SOURCE_IDS: [&str; 7] = [
     "SecurityCenter2/AntiVirusProduct",
     "SecurityCenter2/AntiSpywareProduct",
@@ -549,7 +552,6 @@ fn manager() -> &'static Mutex<Manager> {
     VALUE.get_or_init(|| Mutex::new(Manager::default()))
 }
 pub fn inventory() -> Result<Inventory, String> {
-    static REFRESH: Mutex<()> = Mutex::new(());
     inventory_with(
         manager(),
         &REFRESH,
@@ -1088,12 +1090,13 @@ impl Effects for NativeEffects {
 }
 #[cfg(test)]
 fn run(op: &Operation, effects: &mut impl Effects) -> Result<LaunchResult, String> {
-    run_with_setup(op, effects, |_| Ok(()))
+    run_with_setup(op, effects, |_| Ok(()), || Ok(()))
 }
-fn run_with_setup<E: Effects, G>(
+fn run_with_setup<E: Effects, G, R>(
     op: &Operation,
     effects: &mut E,
     setup: impl FnOnce(&mut E) -> Result<G, String>,
+    reserve_launch: impl FnOnce() -> Result<R, String>,
 ) -> Result<LaunchResult, String> {
     let result = (|| {
         let _guard = setup(effects)?;
@@ -1105,11 +1108,15 @@ fn run_with_setup<E: Effects, G>(
             .bytes_received = bytes;
         op.stage("verifying")?;
         effects.verify(op)?;
-        effects.persist(op)?;
-        op.state
-            .lock()
-            .map_err(|_| "Operation unavailable")?
-            .begin_launch()?;
+        {
+            // Keep the inventory stable through the durable checkpoint and launch boundary.
+            let _refresh = reserve_launch()?;
+            effects.persist(op)?;
+            op.state
+                .lock()
+                .map_err(|_| "Operation unavailable")?
+                .begin_launch()?;
+        }
         // No cancellation and no downloader job applies after this boundary.
         effects.launch()
     })();
@@ -1152,6 +1159,7 @@ fn run_with_setup<E: Effects, G>(
 pub fn launch(id: &str) -> Result<LaunchResult, String> {
     launch_with(
         manager(),
+        &REFRESH,
         id,
         || NativeEffects {
             root: PathBuf::new(),
@@ -1167,6 +1175,7 @@ pub fn launch(id: &str) -> Result<LaunchResult, String> {
 }
 fn launch_with<E: Effects, G>(
     manager: &Mutex<Manager>,
+    refresh: &Mutex<()>,
     id: &str,
     effects: impl FnOnce() -> E,
     setup: impl FnOnce(&mut E) -> Result<G, String>,
@@ -1174,7 +1183,32 @@ fn launch_with<E: Effects, G>(
     let op = admit_cached(manager, id)?;
     // Drop effects (including any checkpoint pin) before releasing the operation.
     let mut effects = effects();
-    run_with_setup(&op, &mut effects, setup)
+    run_with_setup(&op, &mut effects, setup, || {
+        reserve_final_launch(manager, refresh, &op.plan)
+    })
+}
+fn reserve_final_launch<'a>(
+    manager: &Mutex<Manager>,
+    refresh: &'a Mutex<()>,
+    plan: &Plan,
+) -> Result<MutexGuard<'a, ()>, String> {
+    let guard = refresh.try_lock().map_err(|error| match error {
+        std::sync::TryLockError::WouldBlock => {
+            "Inventory refresh is in progress. Wait for it to finish and prepare a new plan."
+        }
+        std::sync::TryLockError::Poisoned(_) => "Inventory unavailable",
+    })?;
+    let m = manager.lock().map_err(|_| "Removal manager unavailable")?;
+    if !inventory_confirms_plan(&m.products, plan) {
+        return Err(STALE_INVENTORY.into());
+    }
+    Ok(guard)
+}
+
+fn inventory_confirms_plan(products: &[Product], plan: &Plan) -> bool {
+    products.iter().any(|product| {
+        product.id == plan.product_id && product.tool_id.as_deref() == Some(&plan.tool_id)
+    })
 }
 fn admit_cached(manager: &Mutex<Manager>, id: &str) -> Result<Arc<Operation>, String> {
     if !valid_id(id) {
@@ -1206,14 +1240,11 @@ fn admit(op: &Operation, products: &[Product]) -> Result<(), String> {
         state.phase = "failed";
         return Err("Removal plan expired".into());
     }
-    if !products.iter().any(|product| {
-        product.id == op.plan.product_id && product.tool_id.as_deref() == Some(&op.plan.tool_id)
-    }) {
-        let detail = "Current inventory no longer confirms this product and utility. Refresh inventory and prepare a new plan.";
+    if !inventory_confirms_plan(products, &op.plan) {
         let mut view = op.view.lock().map_err(|_| "Operation unavailable")?;
-        view.detail = detail.into();
+        view.detail = STALE_INVENTORY.into();
         state.phase = "failed";
-        return Err(detail.into());
+        return Err(STALE_INVENTORY.into());
     }
     state.phase = "downloading";
     Ok(())
@@ -2172,6 +2203,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
                 assert_eq!(
                     launch_with(
                         &mutex,
+                        &Mutex::new(()),
                         &op.plan.id,
                         || Fake {
                             fail: "download",
@@ -2361,6 +2393,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
         };
         let result = launch_with(
             &manager,
+            &Mutex::new(()),
             &id,
             || {
                 let (cleanup_manager, cleanup_id, cleanup_request) =
@@ -2492,6 +2525,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
                 let admission = (!launch_first).then(|| {
                     launch_with(
                         &mutex,
+                        gate,
                         &op.plan.id,
                         || {
                             factory_calls += 1;
@@ -2567,6 +2601,204 @@ public sealed class FixtureHandler : HttpMessageHandler {
             ));
             assert_eq!(op.snapshot().unwrap().phase, "downloading");
         }
+    }
+
+    fn launch_probe(
+        manager: &Mutex<Manager>,
+        gate: &Mutex<()>,
+        op: &Operation,
+        mut on_step: impl FnMut(&'static str) + 'static,
+    ) -> (LaunchResult, Vec<&'static str>) {
+        let calls = std::rc::Rc::new(std::cell::RefCell::new(Vec::new()));
+        let result = launch_with(
+            manager,
+            gate,
+            &op.plan.id,
+            || {
+                let calls = calls.clone();
+                Fake {
+                    on_step: Some(Box::new(move |step| {
+                        calls.borrow_mut().push(step);
+                        on_step(step);
+                    })),
+                    ..Fake::default()
+                }
+            },
+            |_| Ok(()),
+        )
+        .unwrap();
+        (result, calls.take())
+    }
+
+    fn assert_final_recheck_failed(
+        op: &Operation,
+        (result, calls): (LaunchResult, Vec<&'static str>),
+        detail: &str,
+    ) {
+        assert_eq!(result.outcome, "failed");
+        assert!(result.detail.contains(detail), "{}", result.detail);
+        assert_eq!(calls, ["download", "verify", "cleanup"]);
+        let status = op.snapshot().unwrap();
+        assert_eq!(status.phase, "failed");
+        assert_eq!(status.cleanup, "removed");
+        assert_eq!(status.detail, result.detail);
+    }
+
+    #[test]
+    fn launch_final_recheck_rejects_removal_during_download_or_verification() {
+        for (refresh_at, replaced) in [
+            ("download", false),
+            ("verify", false),
+            ("download", true),
+            ("verify", true),
+        ] {
+            let mutex = Arc::new(Mutex::new(cached()));
+            let op = planned(&mut mutex.lock().unwrap());
+            let gate = Arc::new(Mutex::new(()));
+            let (manager, refresh, operation) = (mutex.clone(), gate.clone(), op.clone());
+            let result = launch_probe(&mutex, &gate, &op, move |step| {
+                if step == refresh_at {
+                    let mut records = Vec::new();
+                    if replaced {
+                        let mut product =
+                            record("AVG AntiVirus FREE", "AVG Technologies", SOURCE_IDS[3]);
+                        product.version = "2.0".into();
+                        records.push(product);
+                    }
+                    let view = inventory_with(
+                        &manager,
+                        &refresh,
+                        || Ok(inventory_bytes(records, "ok")),
+                        |_| Ok(vec![]),
+                    )
+                    .unwrap();
+                    if replaced {
+                        let product = &view.products[0];
+                        assert_ne!(product.id, operation.plan.product_id);
+                        assert_eq!(
+                            product.tool_id.as_deref(),
+                            Some(operation.plan.tool_id.as_str())
+                        );
+                    }
+                }
+            });
+            assert_final_recheck_failed(&op, result, "prepare a new plan");
+        }
+    }
+
+    #[test]
+    fn launch_final_recheck_rejects_in_flight_refresh() {
+        let mutex = Arc::new(Mutex::new(cached()));
+        let op = planned(&mut mutex.lock().unwrap());
+        let gate = Arc::new(Mutex::new(()));
+        let (start_tx, start_rx) = std::sync::mpsc::channel();
+        let (entered_tx, entered_rx) = std::sync::mpsc::channel();
+        let (release_tx, release_rx) = std::sync::mpsc::channel();
+        let timeout = Duration::from_secs(5);
+        std::thread::scope(|scope| {
+            let (manager, refresh) = (mutex.clone(), gate.clone());
+            let worker = scope.spawn(move || {
+                start_rx.recv_timeout(timeout).unwrap();
+                inventory_with(
+                    &manager,
+                    &refresh,
+                    || {
+                        entered_tx.send(()).unwrap();
+                        release_rx.recv_timeout(timeout).unwrap();
+                        Ok(inventory_bytes(vec![], "ok"))
+                    },
+                    |_| Ok(vec![]),
+                )
+            });
+            let result = launch_probe(&mutex, &gate, &op, move |step| {
+                if step == "verify" {
+                    start_tx.send(()).unwrap();
+                    entered_rx.recv_timeout(timeout).unwrap();
+                }
+            });
+            release_tx.send(()).unwrap();
+            worker.join().unwrap().unwrap();
+            assert_final_recheck_failed(&op, result, "refresh is in progress");
+        });
+    }
+
+    #[test]
+    fn launch_final_recheck_rejects_changed_tool_or_poisoned_locks() {
+        for (failure, detail) in [
+            ("tool", STALE_INVENTORY),
+            ("gate", "Inventory unavailable"),
+            ("manager", "Removal manager unavailable"),
+        ] {
+            let mutex = Arc::new(Mutex::new(cached()));
+            let op = planned(&mut mutex.lock().unwrap());
+            let gate = Arc::new(Mutex::new(()));
+            let (manager, refresh) = (mutex.clone(), gate.clone());
+            let result = launch_probe(&mutex, &gate, &op, move |step| {
+                if step != "verify" {
+                    return;
+                }
+                if failure == "tool" {
+                    manager.lock().unwrap().products[0].tool_id = Some("avast".into());
+                } else {
+                    let poisoned = std::panic::catch_unwind(|| {
+                        if failure == "gate" {
+                            let _guard = refresh.lock().unwrap();
+                            panic!("force poisoned refresh gate");
+                        }
+                        let _guard = manager.lock().unwrap();
+                        panic!("force poisoned removal manager");
+                    });
+                    assert!(poisoned.is_err());
+                }
+            });
+            assert_final_recheck_failed(&op, result, detail);
+        }
+    }
+
+    #[test]
+    fn launch_final_recheck_accepts_exact_refresh_and_reserves_checkpoint() {
+        let mutex = Arc::new(Mutex::new(cached()));
+        let op = planned(&mut mutex.lock().unwrap());
+        let gate = Arc::new(Mutex::new(()));
+        let (manager, refresh, operation) = (mutex.clone(), gate.clone(), op.clone());
+        let (result, calls) = launch_probe(&mutex, &gate, &op, move |step| match step {
+            "verify" => {
+                inventory_with(
+                    &manager,
+                    &refresh,
+                    || {
+                        Ok(inventory_bytes(
+                            vec![record(
+                                "AVG AntiVirus FREE",
+                                "AVG Technologies",
+                                SOURCE_IDS[3],
+                            )],
+                            "ok",
+                        ))
+                    },
+                    |_| Ok(vec![]),
+                )
+                .unwrap();
+            }
+            "persist" => {
+                assert!(manager.try_lock().is_ok());
+                let error = inventory_with(
+                    &manager,
+                    &refresh,
+                    || panic!("refresh entered during checkpoint"),
+                    |_| Ok(vec![]),
+                )
+                .unwrap_err();
+                assert_eq!(error, "Inventory refresh already in progress");
+            }
+            "launch" => {
+                assert!(refresh.try_lock().is_ok());
+                assert_eq!(operation.snapshot().unwrap().phase, "launching");
+            }
+            _ => {}
+        });
+        assert_eq!(result.outcome, "launched");
+        assert_eq!(calls, ["download", "verify", "persist", "launch"]);
     }
 
     #[test]
@@ -3138,6 +3370,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
     struct Fake {
         _on_drop: Option<OnEffectsDrop>,
         on_cleanup: Option<Box<dyn FnMut()>>,
+        on_step: Option<Box<dyn FnMut(&'static str)>>,
         fail: &'static str,
         cleanup_fails: bool,
         cancel_at: &'static str,
@@ -3146,6 +3379,9 @@ public sealed class FixtureHandler : HttpMessageHandler {
     impl Fake {
         fn effect(&mut self, step: &'static str, op: Option<&Operation>) -> Result<(), String> {
             self.calls.push(step);
+            if let Some(on_step) = &mut self.on_step {
+                on_step(step);
+            }
             if step == self.cancel_at {
                 let op = op.unwrap();
                 assert!(op.state.lock().unwrap().cancel());
@@ -3667,31 +3903,36 @@ public sealed class FixtureHandler : HttpMessageHandler {
                     }
                     format!("forced {failing} failure")
                 };
-                let result = run_with_setup(&op, &mut effects, |_| {
-                    launch_root(
-                        || {
-                            if failing == "root" {
-                                Err(failure())
-                            } else {
-                                Ok(PathBuf::from("owned-root"))
-                            }
-                        },
-                        |_| {
-                            if failing == "pin" {
-                                Err(failure())
-                            } else {
-                                Ok(())
-                            }
-                        },
-                        |_| {
-                            if failing == "marker" {
-                                Err(failure())
-                            } else {
-                                Ok(false)
-                            }
-                        },
-                    )
-                })
+                let result = run_with_setup(
+                    &op,
+                    &mut effects,
+                    |_| {
+                        launch_root(
+                            || {
+                                if failing == "root" {
+                                    Err(failure())
+                                } else {
+                                    Ok(PathBuf::from("owned-root"))
+                                }
+                            },
+                            |_| {
+                                if failing == "pin" {
+                                    Err(failure())
+                                } else {
+                                    Ok(())
+                                }
+                            },
+                            |_| {
+                                if failing == "marker" {
+                                    Err(failure())
+                                } else {
+                                    Ok(false)
+                                }
+                            },
+                        )
+                    },
+                    || Ok(()),
+                )
                 .unwrap();
                 assert_eq!(result.outcome, if cancel { "cancelled" } else { "failed" });
                 let status = op.snapshot().unwrap();
