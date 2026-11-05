@@ -744,6 +744,13 @@ mod tests {
     }
     #[test]
     fn root_exit_confirms_descendant_termination_before_return() {
+        root_exit_confirms_descendant_termination(false);
+    }
+    #[test]
+    fn root_exit_confirms_descendant_termination_in_supplied_job_before_return() {
+        root_exit_confirms_descendant_termination(true);
+    }
+    fn root_exit_confirms_descendant_termination(supplied_job: bool) {
         use std::os::windows::io::{AsRawHandle, FromRawHandle, OwnedHandle};
         #[link(name = "kernel32")]
         extern "system" {
@@ -771,56 +778,69 @@ mod tests {
             "$ErrorActionPreference='Stop';$deadline=[DateTime]::UtcNow.AddSeconds(15);while(-not [IO.File]::Exists('{admission}')){{if([DateTime]::UtcNow -ge $deadline){{throw 'admission timeout'}};Start-Sleep -Milliseconds 10}};$s=New-Object Diagnostics.ProcessStartInfo;$s.FileName=([Environment]::SystemDirectory+'\\WindowsPowerShell\\v1.0\\powershell.exe');$s.Arguments='-NoProfile -NonInteractive -Command \"Start-Sleep -Seconds 60\"';$s.UseShellExecute=$false;$s.CreateNoWindow=$true;$p=[Diagnostics.Process]::Start($s);[IO.File]::WriteAllText('{pid}',[string]$p.Id);[IO.File]::Open('{pid_ready}',[IO.FileMode]::CreateNew).Dispose();$deadline=[DateTime]::UtcNow.AddSeconds(15);while(-not [IO.File]::Exists('{release}')){{if([DateTime]::UtcNow -ge $deadline){{throw 'release timeout'}};Start-Sleep -Milliseconds 10}}"
         ));
         let mut descendant = None;
-        let job = crate::security::ProcessJob::create(None).unwrap();
+        let job = supplied_job.then(|| crate::security::ProcessJob::create(None).unwrap());
         let start = Instant::now();
         let mut ready_at = None;
-        let result = execute_in_job(
-            &mut command,
-            None,
-            Duration::from_secs(40),
-            OUTPUT_LIMIT,
-            Some(&job),
-            |_| {
-                std::fs::File::create_new(markers.0.join("admission"))
-                    .map_err(|error| format!("admission write: {error}"))?;
-                let deadline = Instant::now() + Duration::from_secs(15);
-                while !markers.0.join("pid-ready").exists() {
-                    if Instant::now() >= deadline {
-                        return Err("descendant PID publication timeout".into());
-                    }
-                    std::thread::sleep(Duration::from_millis(10));
+        let authorize = |_: &std::process::Child| {
+            std::fs::File::create_new(markers.0.join("admission"))
+                .map_err(|error| format!("admission write: {error}"))?;
+            let deadline = Instant::now() + Duration::from_secs(15);
+            while !markers.0.join("pid-ready").exists() {
+                if Instant::now() >= deadline {
+                    return Err("descendant PID publication timeout".into());
                 }
-                let pid = std::fs::read_to_string(markers.0.join("pid"))
-                    .map_err(|error| format!("descendant PID read: {error}"))?
-                    .parse::<u32>()
-                    .map_err(|error| format!("descendant PID parse: {error}"))?;
-                // Capture the original descendant before allowing root exit.
-                // Reopening its PID after cleanup can observe a different process.
-                let handle = unsafe { OpenProcess(0x00101001, 0, pid) };
-                if handle.is_null() {
-                    return Err(format!(
-                        "descendant OpenProcess: {}",
-                        io::Error::last_os_error()
-                    ));
-                }
-                descendant = Some(OriginalProcess(unsafe {
-                    OwnedHandle::from_raw_handle(handle)
-                }));
-                let handle = &descendant.as_ref().unwrap().0;
+                std::thread::sleep(Duration::from_millis(10));
+            }
+            let pid = std::fs::read_to_string(markers.0.join("pid"))
+                .map_err(|error| format!("descendant PID read: {error}"))?
+                .parse::<u32>()
+                .map_err(|error| format!("descendant PID parse: {error}"))?;
+            // Capture the original descendant before allowing root exit.
+            // Reopening its PID after cleanup can observe a different process.
+            let handle = unsafe { OpenProcess(0x00101001, 0, pid) };
+            if handle.is_null() {
+                return Err(format!(
+                    "descendant OpenProcess: {}",
+                    io::Error::last_os_error()
+                ));
+            }
+            descendant = Some(OriginalProcess(unsafe {
+                OwnedHandle::from_raw_handle(handle)
+            }));
+            let handle = &descendant.as_ref().unwrap().0;
+            if let Some(job) = &job {
                 job.confirm_member(handle)?;
-                let wait = unsafe { WaitForSingleObject(handle.as_raw_handle(), 0) };
-                ready_at = Some(start.elapsed());
-                eprintln!("root-exit ready=true exact_job_member=true before_release_wait={wait} ready_elapsed={:?}", ready_at);
-                if wait != 258 {
-                    return Err(format!(
-                        "descendant was not live before root release: {wait}"
-                    ));
-                }
-                std::fs::File::create_new(markers.0.join("release"))
-                    .map(|_| ())
-                    .map_err(|error| format!("release write: {error}"))
-            },
-        );
+            }
+            let wait = unsafe { WaitForSingleObject(handle.as_raw_handle(), 0) };
+            ready_at = Some(start.elapsed());
+            eprintln!("root-exit ready=true exact_job_member={} before_release_wait={wait} ready_elapsed={:?}", if supplied_job { "true" } else { "unavailable" }, ready_at);
+            if wait != 258 {
+                return Err(format!(
+                    "descendant was not live before root release: {wait}"
+                ));
+            }
+            std::fs::File::create_new(markers.0.join("release"))
+                .map(|_| ())
+                .map_err(|error| format!("release write: {error}"))
+        };
+        let result = if let Some(job) = &job {
+            execute_in_job(
+                &mut command,
+                None,
+                Duration::from_secs(40),
+                OUTPUT_LIMIT,
+                Some(job),
+                authorize,
+            )
+        } else {
+            execute_authorized(
+                &mut command,
+                None,
+                Duration::from_secs(40),
+                OUTPUT_LIMIT,
+                authorize,
+            )
+        };
         let wait = descendant
             .as_ref()
             .map(|process| unsafe { WaitForSingleObject(process.0.as_raw_handle(), 0) });
