@@ -326,6 +326,24 @@
       ],
       "focusedTests": [],
       "evidence": "unchanged test scope, rerun in local native gate"
+    },
+    {
+      "category": "timeout",
+      "qualification": "Inherited shared native process worker evidence confirms a timed-out process joins its pipe workers. This does not exercise timing of a real vendor tool.",
+      "tests": [
+        "process_io::tests::existing_timeout_joins_all_pipe_workers"
+      ],
+      "focusedTests": [],
+      "evidence": "unchanged test scope, rerun in local native gate"
+    },
+    {
+      "category": "partial mutation",
+      "qualification": "An inherited test truncates a real persisted launch checkpoint to simulate an interrupted write and checks conservative finalization.",
+      "tests": [
+        "security_software_native::tests::actual_checkpoint_handle_survives_failure_and_cleanup_finalization"
+      ],
+      "focusedTests": [],
+      "evidence": "unchanged test scope, rerun in local native gate"
     }
   ],
   "evidenceSHA256": {
