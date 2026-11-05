@@ -1144,6 +1144,9 @@ button:focus-visible, input:focus-visible, select:focus-visible, summary:focus-v
   .list-panel { min-height: 160px; }
   .security-software { flex-shrink: 0; }
   .menubar { flex-wrap: wrap; height: auto; min-height: 32px; }
+  .statusbar, .status-right { flex-wrap: wrap; }
+  .statusbar, .pc-specs { white-space: normal; overflow-wrap: anywhere; }
+  .status-right { overflow: visible; }
 }
 @media (prefers-reduced-motion: reduce) {
   .view-chip, .security-software *, .progress-bar { animation: none; transition: none; }
