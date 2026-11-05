@@ -787,9 +787,6 @@ fn prepare_cached(m: &mut Manager, request: PrepareRequest) -> Result<Plan, Stri
             return Err("A removal operation is already active or requires review".into());
         }
     }
-    if m.operations.len() >= 64 {
-        return Err("Removal plan session limit reached".into());
-    }
     let product = m
         .products
         .iter()
@@ -809,6 +806,9 @@ fn prepare_cached(m: &mut Manager, request: PrepareRequest) -> Result<Plan, Stri
         recovery_limits: RECOVERY.into(),
         expires_at: timestamp(now()?.checked_add(300).ok_or("Expiry overflow")?)?,
     };
+    if m.operations.contains_key(&plan.id) {
+        return Err("Native plan ID collision".into());
+    }
     let op = Operation {
         plan: plan.clone(),
         created: Instant::now(),
@@ -823,8 +823,29 @@ fn prepare_cached(m: &mut Manager, request: PrepareRequest) -> Result<Plan, Stri
             detail: RECOVERY.into(),
         }),
     };
+    if m.operations.len() >= 64 {
+        let oldest = oldest_retirable_plan(m).ok_or("Removal plan session limit reached")?;
+        m.operations.remove(&oldest);
+    }
     m.operations.insert(plan.id.clone(), Arc::new(op));
     Ok(plan)
+}
+fn oldest_retirable_plan(m: &Manager) -> Option<String> {
+    m.operations
+        .iter()
+        .filter(|(id, op)| {
+            Arc::strong_count(op) == 1
+                && op
+                    .state
+                    .lock()
+                    .is_ok_and(|s| matches!(s.phase, "failed" | "cancelled" | "acknowledged"))
+                && !m
+                    .reviews
+                    .values()
+                    .any(|r| r.dto.plan_id.as_ref() == Some(id))
+        })
+        .min_by_key(|(id, op)| (op.created, *id))
+        .map(|(id, _)| id.clone())
 }
 fn operation(id: &str) -> Result<Arc<Operation>, String> {
     if !valid_id(id) {
@@ -1132,7 +1153,7 @@ pub fn launch(id: &str) -> Result<LaunchResult, String> {
     launch_with(
         manager(),
         id,
-        &mut NativeEffects {
+        || NativeEffects {
             root: PathBuf::new(),
             payload: None,
             checkpoint: None,
@@ -1147,11 +1168,13 @@ pub fn launch(id: &str) -> Result<LaunchResult, String> {
 fn launch_with<E: Effects, G>(
     manager: &Mutex<Manager>,
     id: &str,
-    effects: &mut E,
+    effects: impl FnOnce() -> E,
     setup: impl FnOnce(&mut E) -> Result<G, String>,
 ) -> Result<LaunchResult, String> {
     let op = admit_cached(manager, id)?;
-    run_with_setup(&op, effects, setup)
+    // Drop effects (including any checkpoint pin) before releasing the operation.
+    let mut effects = effects();
+    run_with_setup(&op, &mut effects, setup)
 }
 fn admit_cached(manager: &Mutex<Manager>, id: &str) -> Result<Arc<Operation>, String> {
     if !valid_id(id) {
@@ -2137,6 +2160,215 @@ public sealed class FixtureHandler : HttpMessageHandler {
         let plan = prepare_cached(m, PrepareRequest { product_id: id }).unwrap();
         m.operations.get(&plan.id).unwrap().clone()
     }
+    #[test]
+    fn retention_reclaims_oldest_finalized_plans_after_64_cycles() {
+        let mutex = Mutex::new(cached());
+        let mut ids = Vec::new();
+        for cycle in 0..66 {
+            let op = planned(&mut mutex.lock().unwrap());
+            if cycle % 2 == 0 {
+                assert!(op.state.lock().unwrap().cancel());
+            } else {
+                assert_eq!(
+                    launch_with(
+                        &mutex,
+                        &op.plan.id,
+                        || Fake {
+                            fail: "download",
+                            ..Fake::default()
+                        },
+                        |_| Ok(()),
+                    )
+                    .unwrap()
+                    .outcome,
+                    "failed"
+                );
+            }
+            assert_eq!(
+                admit_cached(&mutex, &op.plan.id).err().as_deref(),
+                Some("Plan is cancelled or already consumed")
+            );
+            ids.push(op.plan.id.clone());
+        }
+        let m = mutex.lock().unwrap();
+        assert_eq!(m.operations.len(), 64);
+        assert_eq!(m.operations[&ids[2]].snapshot().unwrap().phase, "cancelled");
+        assert_eq!(m.operations[&ids[65]].snapshot().unwrap().phase, "failed");
+        drop(m);
+        for id in &ids[..2] {
+            assert_eq!(
+                admit_cached(&mutex, id).err().as_deref(),
+                Some("Unknown native plan ID")
+            );
+        }
+    }
+
+    #[test]
+    fn retention_protects_active_review_and_lookup_records_at_capacity() {
+        let mut m = cached();
+        let request = PrepareRequest {
+            product_id: m.products[0].id.clone(),
+        };
+        let mut held = Vec::new();
+        for _ in 0..64 {
+            let op = planned(&mut m);
+            assert!(op.state.lock().unwrap().cancel());
+            held.push(op);
+        }
+        let oldest = held.remove(0).plan.id.clone();
+        assert!(prepare_cached(
+            &mut m,
+            PrepareRequest {
+                product_id: "bad".into()
+            }
+        )
+        .is_err());
+        assert!(prepare_cached(
+            &mut m,
+            PrepareRequest {
+                product_id: "f".repeat(32)
+            }
+        )
+        .is_err());
+        let tool = m.products[0].tool_id.take();
+        assert!(prepare_cached(&mut m, request.clone()).is_err());
+        m.products[0].tool_id = tool;
+        assert!(m.operations.contains_key(&oldest));
+
+        for phase in ["downloading", "launched", "reviewRequired"] {
+            held[0].state.lock().unwrap().phase = phase;
+            assert_eq!(
+                prepare_cached(&mut m, request.clone()).err().as_deref(),
+                Some("A removal operation is already active or requires review")
+            );
+            assert!(m.operations.contains_key(&oldest));
+        }
+        held[0].state.lock().unwrap().phase = "cancelled";
+        let path = std::env::temp_dir().join(crate::broker::random_id().unwrap());
+        fs::write(&path, b"inert review").unwrap();
+        m.reviews.insert(
+            "review".into(),
+            HeldReview {
+                dto: RemovalReview {
+                    review_id: "review".into(),
+                    tool_id: None,
+                    plan_id: Some(oldest.clone()),
+                    state: "reviewRequired".into(),
+                    detail: RECOVERY.into(),
+                    can_acknowledge: true,
+                },
+                pin: Pin::open(&path, false, 0x80000000, 1).unwrap(),
+                bytes: b"inert review".to_vec(),
+                _parents: vec![],
+            },
+        );
+        assert_eq!(
+            prepare_cached(&mut m, request.clone()).err().as_deref(),
+            Some("Removal plan session limit reached")
+        );
+        let lookup = held.remove(0);
+        let next = lookup.plan.id.clone();
+        drop(lookup);
+        let replacement = prepare_cached(&mut m, request.clone()).unwrap();
+        assert!(m.operations.contains_key(&oldest));
+        assert!(!m.operations.contains_key(&next));
+        assert_eq!(m.operations.len(), 64);
+
+        assert!(m.operations[&replacement.id].state.lock().unwrap().cancel());
+        m.reviews.remove("review");
+        m.operations[&oldest].state.lock().unwrap().phase = "acknowledged";
+        prepare_cached(&mut m, request).unwrap();
+        assert!(!m.operations.contains_key(&oldest));
+        assert_eq!(fs::read(&path).unwrap(), b"inert review");
+        fs::remove_file(path).unwrap();
+    }
+
+    #[test]
+    fn retention_holds_launch_reference_through_effects_drop() {
+        let manager = Arc::new(Mutex::new(cached()));
+        let mut held = Vec::new();
+        let id = {
+            let mut m = manager.lock().unwrap();
+            for _ in 0..63 {
+                let op = planned(&mut m);
+                assert!(op.state.lock().unwrap().cancel());
+                held.push(op);
+            }
+            planned(&mut m).plan.id.clone()
+        };
+        let request = PrepareRequest {
+            product_id: manager.lock().unwrap().products[0].id.clone(),
+        };
+        let result = launch_with(
+            &manager,
+            &id,
+            || {
+                let (manager, id, request) = (manager.clone(), id.clone(), request.clone());
+                Fake {
+                    fail: "download",
+                    _on_drop: Some(OnEffectsDrop(Box::new(move || {
+                        let mut m = manager.lock().unwrap();
+                        let status = m.operations[&id].snapshot().unwrap();
+                        assert_eq!(status.phase, "failed");
+                        assert_eq!(status.cleanup, "removed");
+                        assert_eq!(
+                            prepare_cached(&mut m, request.clone()).err().as_deref(),
+                            Some("Removal plan session limit reached")
+                        );
+                    }))),
+                    ..Fake::default()
+                }
+            },
+            |_| Ok(()),
+        )
+        .unwrap();
+        assert_eq!(result.outcome, "failed");
+        let mut m = manager.lock().unwrap();
+        prepare_cached(&mut m, request).unwrap();
+        assert!(!m.operations.contains_key(&id));
+        assert_eq!(m.operations.len(), 64);
+    }
+
+    #[test]
+    fn retention_serializes_publishers_and_breaks_age_ties_by_id() {
+        let mut m = cached();
+        let request = PrepareRequest {
+            product_id: m.products[0].id.clone(),
+        };
+        let mut ids = Vec::new();
+        let created = Instant::now();
+        for _ in 0..64 {
+            let op = planned(&mut m);
+            assert!(op.state.lock().unwrap().cancel());
+            let id = op.plan.id.clone();
+            drop(op);
+            Arc::get_mut(m.operations.get_mut(&id).unwrap())
+                .unwrap()
+                .created = created;
+            ids.push(id);
+        }
+        ids.sort_unstable();
+        let manager = Mutex::new(m);
+        let start = std::sync::Barrier::new(2);
+        std::thread::scope(|scope| {
+            let publish = || {
+                start.wait();
+                prepare_cached(&mut manager.lock().unwrap(), request.clone())
+            };
+            let first = scope.spawn(publish);
+            let second = publish();
+            let first = first.join().unwrap();
+            assert_ne!(first.is_ok(), second.is_ok());
+            assert_eq!(
+                first.err().or_else(|| second.err()).as_deref(),
+                Some("A removal operation is already active or requires review")
+            );
+        });
+        let m = manager.lock().unwrap();
+        assert_eq!(m.operations.len(), 64);
+        assert!(!m.operations.contains_key(&ids[0]));
+        assert!(ids[1..].iter().all(|id| m.operations.contains_key(id)));
+    }
     fn finalize_inventory(
         manager: &Mutex<Manager>,
         raw: Result<Vec<u8>, String>,
@@ -2180,19 +2412,27 @@ public sealed class FixtureHandler : HttpMessageHandler {
                     )
                 });
                 entered_rx.recv_timeout(Duration::from_secs(5)).unwrap();
-                let mut effects = Fake::default();
+                let mut factory_calls = 0;
                 let mut setup_calls = 0;
                 let admission = (!launch_first).then(|| {
-                    launch_with(&mutex, &op.plan.id, &mut effects, |_| {
-                        setup_calls += 1;
-                        Ok(())
-                    })
+                    launch_with(
+                        &mutex,
+                        &op.plan.id,
+                        || {
+                            factory_calls += 1;
+                            Fake::default()
+                        },
+                        |_| {
+                            setup_calls += 1;
+                            Ok(())
+                        },
+                    )
                 });
                 release_tx.send(()).unwrap();
                 refresh.join().unwrap().unwrap();
                 if let Some(admission) = admission {
                     assert_eq!(setup_calls, 0);
-                    assert!(effects.calls.is_empty());
+                    assert_eq!(factory_calls, 0);
                     let detail = admission.expect_err("stale launch was admitted");
                     let status = op.snapshot().unwrap();
                     assert_eq!(status.phase, "failed");
@@ -2813,8 +3053,15 @@ public sealed class FixtureHandler : HttpMessageHandler {
         assert_ne!(fresh.plan.id, op.plan.id);
         assert!(admit_cached(&mutex, &fresh.plan.id).is_ok());
     }
+    struct OnEffectsDrop(Box<dyn FnMut()>);
+    impl Drop for OnEffectsDrop {
+        fn drop(&mut self) {
+            (self.0)();
+        }
+    }
     #[derive(Default)]
     struct Fake {
+        _on_drop: Option<OnEffectsDrop>,
         fail: &'static str,
         cleanup_fails: bool,
         cancel_at: &'static str,
