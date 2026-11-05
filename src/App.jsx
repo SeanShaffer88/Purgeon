@@ -897,9 +897,9 @@ const [reducedMotion, setReducedMotion] = useState(false);
       const i = launch.findIndex((a) => a.toLowerCase() === name);
       return i >= 0 ? launch[i + 1] || '' : null;
     };
-    if (launch.some((a) => a.toLowerCase() === '--resume-queue')) setTimeout(() => openQueue(), 1500);
+    if (launch.some((a) => a.toLowerCase() === '--resume-queue')) setTimeout(() => openQueue(true), 1500);
     else
-      api.invoke('queue:get').then((q) => q?.restartNeeded && q.programs.some((p) => p.status === 'pending') && setModal({ type: 'queue', queue: q })).catch(() => {});
+      api.invoke('queue:get').then((q) => (q?.intent || q?.restartNeeded) && setModal({ type: 'queue', queue: q })).catch(() => {});
     if (arg('--who-owns')) setModal({ type: 'whoOwns', target: arg('--who-owns') });
     if (arg('--uninstall-target')) setTimeout(() => uninstallTarget(arg('--uninstall-target')), 2500);
     // The page is alive and about to listen for the close question: from here on the
@@ -1169,7 +1169,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
   };
 
   // `owners`: uninstall keys of the programs being removed; anything another installed program still uses is skipped.
-  const removeWithBackup = async (title, items, location, owners = []) => {
+  const removeWithBackup = async (title, items, location, owners = [], queueRevision) => {
     setModal(null);
     const locations = [].concat(location || []).filter(Boolean);
     if (locations.length) {
@@ -1185,13 +1185,17 @@ const [reducedMotion, setReducedMotion] = useState(false);
     }
     setBusy({ message: tx("Backing up and removing selected items…"), canCancel: true, onCancel: () => api.invoke('items:removeCancel').catch(() => {}) });
     try {
-      const { results, backupId } = await api.invoke('items:remove', { title, items, owners });
+      const { results, backupId, queueRetirementUnconfirmed } = queueRevision === undefined
+        ? await api.invoke('items:remove', { title, items, owners })
+        : await api.invoke('queue:removeLeftovers', { revision: queueRevision, items });
       if (backupId && owners.length) api.invoke('archive:attachBackup', { keys: owners, backupId }).catch(() => {});
       setModal({
         type: 'results',
         title: tx("Removal Report"),
         results,
-        note: tx("Recovery records were saved. Undo can restore supported changes while their backup payloads and Recycle Bin copies remain available."),
+        note: queueRetirementUnconfirmed
+          ? tx("The removal report is available, but the queue update was not confirmed. Reopen the queue and review remaining items before trying again.")
+          : tx("Recovery records were saved. Undo can restore supported changes while their backup payloads and Recycle Bin copies remain available."),
         ...(backupId && { onUndo: () => undoRemoval(backupId) }),
       });
       return true;
@@ -1596,66 +1600,95 @@ const [reducedMotion, setReducedMotion] = useState(false);
 
   // ---- 1. uninstall queue --------------------------------------------------------------------
 
-  const openQueue = async () => setModal({ type: 'queue', queue: await api.invoke('queue:get') });
+  const openQueue = async (resume = false) => {
+    try {
+      let q = await api.invoke('queue:get');
+      if (resume) q = await api.invoke('queue:acknowledgeRestart', q?.restartToken ?? null);
+      setModal({ type: 'queue', queue: q });
+    } catch (error) {
+      setError(error.message);
+    }
+  };
   const queueAdd = async (list) => {
     const q = await api.invoke('queue:add', list.filter((p) => !p.store));
     setNotice({ tone: 'ok', text: tx("{p0} added to the uninstall queue ({p1} waiting). Tools › Uninstall Queue starts it.", { p0: (list.length === 1 ? list[0].name : `${list.length} programs`), p1: (q.programs.filter((p) => p.status === 'pending').length) }) });
   };
-  // Runs every waiting program; stops for a restart when an uninstaller asks for one.
+  const showQueueLeftovers = (q) => setModal({
+    type: 'leftovers',
+    title: tx("Uninstall Queue – {p0} programs", { p0: q.programs.length }),
+    heading: tx("{p0} of {p1} uninstalled. {p2} leftover items found.", { p0: q.programs.filter((p) => p.status === 'done').length, p1: q.programs.length, p2: q.leftovers.length }),
+    items: q.leftovers,
+    owners: q.programs.map((p) => p.key),
+    onRemove: (sel) => removeWithBackup('Uninstall queue', sel, q.programs.map((p) => p.location), q.programs.map((p) => p.key), q.revision ?? 0),
+  });
+  const promptQueueRestart = async (q, name = 'The uninstall queue') => {
+    await api.invoke('queue:armRestart', q.restartToken ?? null);
+    setBusy('');
+    setBusyStop(null);
+    const now = await api.invoke('dialog:confirm', { confirmId: 'queueRestart', message: `${name} needs a restart to finish.`, detail: 'Restart now? Purgeon continues the queue after you sign back in. Choose No to restart later yourself.' });
+    if (now) await api.invoke('queue:restartNow');
+    else setNotice({ tone: 'warn', text: tx("The uninstall queue continues after your next restart.") });
+  };
+  // Each launch and its result are written before the next effect. A resumed
+  // cleanup handles only the current item and cannot start another uninstaller.
   const runQueue = async () => {
     setModal(null);
-    let q = await api.invoke('queue:get');
-    if (!q) return;
-    const go = await confirmWithRestore(`Uninstall ${q.programs.filter((p) => p.status === 'pending').length} programs from the queue?`, 'They run one after another, silently where possible. If one needs a restart, Purgeon asks, then continues after you sign back in. Leftovers are shown at the end.', 'confirmQueueUninstall');
-    if (!go.ok) return;
-    if (go.checked) await makeRestorePoint('Purgeon: before the uninstall queue', 'uninstall');
-    stopBatch.current = false;
-    setBusyStop(() => () => {
-      stopBatch.current = true;
-    });
     try {
-      const pending = q.programs.filter((x) => x.status === 'pending');
+      let q = await api.invoke('queue:get');
+      if (!q) return;
+      if (q.restartNeeded) return await promptQueueRestart(q);
+      if (q.intent) {
+        const { token, key } = q.intent;
+        const name = q.programs.find((p) => p.key === key)?.name || key;
+        if (!q.intent.outcome) {
+          const reviewed = await api.invoke('dialog:confirm', {
+            message: tx("Has the interrupted uninstaller finished?"),
+            detail: tx("Check whether the uninstaller is still running and verify the program in Windows Settings. Continue only when no uninstaller is running. Purgeon will scan for leftovers without launching it again or counting it as uninstalled."),
+          });
+          if (!reviewed) return setModal({ type: 'queue', queue: q });
+          q = await api.invoke('queue:reviewInterrupted', token);
+        }
+        const restart = q.intent.outcome.restartNeeded;
+        setBusy(tx("Scanning for leftovers of {p0}", { p0: name }));
+        q = await api.invoke('queue:scanStep', token);
+        if (restart) return await promptQueueRestart(q, name);
+        if (q.programs.some((p) => p.status === 'pending')) return setModal({ type: 'queue', queue: q });
+        await api.invoke('queue:disarm');
+        return showQueueLeftovers(q);
+      }
+      const pending = q.programs.filter((p) => p.status === 'pending');
+      if (!pending.length) return showQueueLeftovers(q);
+      const go = await confirmWithRestore(`Uninstall ${pending.length} programs from the queue?`, 'They run one after another, silently where possible. If one needs a restart, Purgeon asks, then continues after you sign back in. Leftovers are shown at the end.', 'confirmQueueUninstall');
+      if (!go.ok) return setModal({ type: 'queue', queue: q });
+      if (go.checked) await makeRestorePoint('Purgeon: before the uninstall queue', 'uninstall');
+      stopBatch.current = false;
+      const stop = () => { stopBatch.current = true; };
+      setBusyStop(() => stop);
       for (const [i, p] of pending.entries()) {
         if (stopBatch.current) break;
-        setBusy({ message: tx("Uninstalling {p0}", { p0: (p.name) }), current: i + 1, total: pending.length, canCancel: true, onCancel: () => { stopBatch.current = true; } });
-        const [info] = await Promise.all([api.invoke('program:prepare', p).catch(() => null)]);
-        const r = await api.invoke('program:runUninstaller', p).catch((e) => ({ ok: false, error: e.message }));
-        setBusy({ message: tx("Scanning for leftovers of {p0}", { p0: (p.name) }), current: i + 1, total: pending.length, canCancel: true, onCancel: () => { stopBatch.current = true; } });
-        const found = await api.invoke('program:scan', { ...p, installerItems: info?.installerItems || [] }).catch(() => []);
-        p.status = r.ok || (r.code === 3010 || r.code === 1641) ? 'done' : 'failed';
-        p.detail = r.error || (r.ok ? '' : `exit code ${r.code}`);
-        q.leftovers.push(...found.map((i) => ({ ...i, program: p.name })));
-        q = await api.invoke('queue:save', q);
-        if (r.code === 3010 || r.code === 1641 || (await api.invoke('queue:restartPending'))) {
-          q.restartNeeded = true;
-          await api.invoke('queue:save', q);
-          await api.invoke('queue:arm');
-          setBusy('');
-          setBusyStop(null);
-          const now = await api.invoke('dialog:confirm', { confirmId: 'queueRestart', message: `${p.name} needs a restart to finish.`, detail: 'Restart now? Purgeon continues the queue after you sign back in. Choose No to restart later yourself.' });
-          if (now) await api.invoke('queue:restartNow');
-          else setNotice({ tone: 'warn', text: tx("The uninstall queue continues after your next restart.") });
-          return;
-        }
+        const progress = { current: i + 1, total: pending.length, canCancel: true, onCancel: stop };
+        setBusy({ ...progress, message: tx("Uninstalling {p0}", { p0: p.name }) });
+        const info = await api.invoke('program:prepare', p).catch(() => null);
+        if (stopBatch.current) break;
+        q = await api.invoke('queue:runStep', { key: p.key, revision: q.revision ?? 0, installerItems: info?.installerItems || [] });
+        const { token, outcome } = q.intent;
+        setBusy({ ...progress, message: tx("Scanning for leftovers of {p0}", { p0: p.name }) });
+        q = await api.invoke('queue:scanStep', token);
+        if (outcome.restartNeeded) return await promptQueueRestart(q, p.name);
       }
+      q = await api.invoke('queue:get');
+      if (!q || q.intent || q.programs.some((p) => p.status === 'pending')) return setModal({ type: 'queue', queue: q });
+      await api.invoke('queue:disarm');
+      showQueueLeftovers(q);
+    } catch (error) {
+      setError(error.message);
+      const q = await api.invoke('queue:get').catch(() => null);
+      if (q) setModal({ type: 'queue', queue: q });
     } finally {
       setBusy('');
       setBusyStop(null);
       load();
     }
-    q = await api.invoke('queue:get');
-    if (q.programs.some((p) => p.status === 'pending')) return setModal({ type: 'queue', queue: q });
-    await api.invoke('queue:disarm');
-    setModal({
-      type: 'leftovers',
-      title: tx("Uninstall Queue – {p0} programs", { p0: (q.programs.length) }),
-      heading: tx("{p0} of {p1} uninstalled. {p2} leftover items found.", { p0: (q.programs.filter((p) => p.status === 'done').length), p1: (q.programs.length), p2: (q.leftovers.length) }),
-      items: q.leftovers,
-      owners: q.programs.map((p) => p.key),
-      onRemove: async (sel) => {
-        if (await removeWithBackup('Uninstall queue', sel, q.programs.map((p) => p.location), q.programs.map((p) => p.key))) await api.invoke('queue:clear');
-      },
-    });
   };
 
   // ---- 2. removed outside Purgeon ------------------------------------------------------------

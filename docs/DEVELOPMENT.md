@@ -1,5 +1,16 @@
 # Development record
 
+## 2026-11-05: Uninstall queue recovery
+
+The queue writes a per-item launch intent and installer evidence before starting
+an uninstaller. A confirmed result is written before the leftover scan. An
+interrupted launch requires user review and can proceed to a scan only. A failed
+scan can be retried without launching the uninstaller again. Queue writes check
+the current revision. A saved restart requirement blocks subsequent launches
+until the sign-in resume request acknowledges it. Cleanup retires only selected
+items with confirmed
+removal results.
+
 ## 2026-11-05: Updater exit marker identity
 
 The desktop watch uses a no-argument native command to inspect the installer

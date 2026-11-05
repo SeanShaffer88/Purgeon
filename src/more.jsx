@@ -29,10 +29,12 @@ function Picker({ items, chosen, setChosen, render, disabled = () => false }) {
 
 // ---- 1. uninstall queue ---------------------------------------------------------------------
 
-const STATUS = { pending: 'Waiting', done: 'Uninstalled', failed: 'Problem', skipped: 'Skipped' };
+const STATUS = { pending: 'Waiting', launching: 'Review required', cleanupPending: 'Leftover scan pending', done: 'Uninstalled', failed: 'Problem', skipped: 'Skipped' };
 export function QueueDialog({ queue, onStart, onRemove, onClear, onClose }) {
   const programs = queue?.programs || [];
   const pending = programs.filter((p) => p.status === 'pending').length;
+  const intent = queue?.intent;
+  const waitingRestart = queue?.restartNeeded;
   return (
     <Dialog
       title={tx("Uninstall Queue")}
@@ -41,10 +43,12 @@ export function QueueDialog({ queue, onStart, onRemove, onClear, onClose }) {
       buttons={
         <>
           <span className="button-hint">{pending}{tx(" waiting")}</span>
-          <button className="primary" disabled={!pending} onClick={onStart}>
-            {programs.some((p) => p.status !== 'pending') ? tx("Continue") : tx("Start")}
+          <button className="primary" disabled={!waitingRestart && !intent && !pending && !queue?.leftovers?.length} onClick={onStart}>
+            {waitingRestart ? tx("Restart to Continue") : intent ? (intent.outcome ? tx("Retry Leftover Scan") : tx("Review Interrupted Uninstall"))
+              : !pending ? tx("Review Leftovers")
+              : programs.some((p) => p.status !== 'pending') ? tx("Continue") : tx("Start")}
           </button>
-          <button disabled={!programs.length} onClick={onClear}>{tx("Clear Queue")}</button>
+          <button disabled={!!waitingRestart || !!intent || !programs.length} onClick={onClear}>{tx("Clear Queue")}</button>
           <button onClick={onClose}>{tx("Close")}</button>
         </>
       }
@@ -58,10 +62,10 @@ export function QueueDialog({ queue, onStart, onRemove, onClear, onClose }) {
               <b>{p.name}</b> <span className="muted">{p.version}</span>
             </span>
             <span className="muted">
-              {STATUS[p.status]}
+              {STATUS[p.status] ? tx(STATUS[p.status]) : p.status}
               {p.detail ? ` · ${p.detail}` : ''}
             </span>
-            {p.status === 'pending' && (
+            {!waitingRestart && !intent && p.status === 'pending' && (
               <button className="link" onClick={() => onRemove(p.key)}>{tx("Remove")}</button>
             )}
           </div>
