@@ -1,5 +1,15 @@
 # Development record
 
+## 2026-11-05: Updater exit marker identity
+
+The desktop watch uses a no-argument native command to inspect the installer
+marker beside the running executable. Freshness and retirement use the same
+validated regular-file handle, with the directory ancestors pinned. A valid
+fresh marker can still request the normal log flush and quit when the
+installation allows reading but denies deletion. The fallback leaves the file
+in place. Generic state deletion refuses the updater marker, including a
+directory with that name.
+
 ## 2026-11-05: Isolated PE architecture reads
 
 Program Insights and Explore use the same native architecture command. A bounded

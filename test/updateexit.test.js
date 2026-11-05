@@ -1,52 +1,58 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { setSys } from '../src/backend/sys.js';
-import { markerPath, shouldExitForMarker, checkExitMarker } from '../src/backend/updateexit.js';
+import { setRoot as setLogRoot, write as writeLog } from '../src/backend/log.js';
+import { checkExitMarker, watchExitMarker } from '../src/backend/updateexit.js';
 
-const NOW = 1760000000000;
-
-test('markerPath sits next to the program', () => {
-  assert.equal(markerPath('C:\\Program Files\\Purgeon\\Purgeon.exe'), 'C:\\Program Files\\Purgeon\\exit-for-update');
-  assert.equal(markerPath(''), '');
-  assert.equal(markerPath(undefined), '');
-});
-
-test('shouldExitForMarker only accepts fresh files', () => {
-  assert.equal(shouldExitForMarker({ modified: NOW - 30000 }, NOW), true);
-  assert.equal(shouldExitForMarker({ modified: NOW - 119000 }, NOW), true);
-  assert.equal(shouldExitForMarker({ modified: NOW - 121000 }, NOW), false);
-  assert.equal(shouldExitForMarker({ modified: NOW + 3000 }, NOW), true, 'small clock skew is tolerated');
-  assert.equal(shouldExitForMarker({ modified: NOW + 60000 }, NOW), false);
-  assert.equal(shouldExitForMarker(null, NOW), false);
-  assert.equal(shouldExitForMarker({ modified: NOW - 1000, dir: true }, NOW), false);
-});
-
-function fakeSys(stat, calls) {
+function fakeSys(result, calls) {
   setSys({
-    info: { exe: 'C:\\Program Files\\Purgeon\\Purgeon.exe', env: {} },
-    stat: async () => stat,
-    removePath: async (p) => { calls.push(['remove', p]); },
-    quit: async () => { calls.push(['quit']); },
+    info: { exe: 'C:\\RendererValue\\Other.exe', env: {} },
+    stat: async () => { calls.push(['stat']); return { modified: Date.now() }; },
+    removePath: async () => { calls.push(['remove']); },
+    makeDir: async () => {},
+    readDir: async () => [],
+    appendText: async () => { calls.push(['flush']); },
+    consumeUpdateExitMarker: result === undefined ? undefined : async (...args) => {
+      calls.push(['consume', ...args]);
+      if (result instanceof Error) throw result;
+      return result;
+    },
+    quit: async (...args) => { calls.push(['quit', ...args]); },
   });
 }
 
-test('checkExitMarker quits for a fresh marker and removes it', async () => {
+test('a positive no-argument native observation flushes the log before normal quit', async () => {
   const calls = [];
-  fakeSys({ modified: NOW - 5000, size: 4 }, calls);
-  assert.equal(await checkExitMarker(NOW), true);
-  assert.deepEqual(calls.map((c) => c[0]), ['remove', 'quit']);
+  fakeSys(true, calls);
+  await setLogRoot('C:\\ExitMarkerFixture');
+  writeLog('inert pending marker fixture');
+  assert.equal(await checkExitMarker(), true);
+  assert.deepEqual(calls, [['consume'], ['flush'], ['quit']]);
 });
 
-test('checkExitMarker removes a stale marker without quitting', async () => {
-  const calls = [];
-  fakeSys({ modified: NOW - 3600000, size: 4 }, calls);
-  assert.equal(await checkExitMarker(NOW), false);
-  assert.deepEqual(calls.map((c) => c[0]), ['remove']);
-});
+for (const [label, result] of [
+  ['false', false],
+  ['invalid', 'true'],
+  ['rejected', Error('inert native refusal')],
+  ['unsupported', undefined],
+]) {
+  test(`a ${label} native observation never uses generic path operations or quits`, async () => {
+    const calls = [];
+    fakeSys(result, calls);
+    assert.equal(await checkExitMarker(), false);
+    assert.deepEqual(calls, label === 'unsupported' ? [] : [['consume']]);
+  });
+}
 
-test('checkExitMarker does nothing without a marker', async () => {
+test('the watcher checks immediately and uses the existing cadence without a duplicate timer', async (t) => {
+  t.mock.timers.enable({ apis: ['setInterval'] });
   const calls = [];
-  fakeSys(null, calls);
-  assert.equal(await checkExitMarker(NOW), false);
-  assert.deepEqual(calls, []);
+  fakeSys(false, calls);
+  watchExitMarker();
+  watchExitMarker();
+  assert.deepEqual(calls, [['consume']]);
+  t.mock.timers.tick(1999);
+  assert.deepEqual(calls, [['consume']]);
+  t.mock.timers.tick(1);
+  assert.deepEqual(calls, [['consume'], ['consume']]);
 });

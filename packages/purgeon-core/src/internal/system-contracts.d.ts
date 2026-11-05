@@ -72,6 +72,7 @@ export interface SystemAdapter {
   reserveUpdateDownload(expected: {sha256:string;size:number}): Promise<{id:string;path:string}>;
   cancelUpdateDownload(id:string): Promise<{removed:boolean;detail:string}>;
   launchVerifiedUpdate(id:string): Promise<void>;
+  consumeUpdateExitMarker?(): Promise<boolean>;
   bootState(): Promise<{timeout: number | null; safeboot: 'none' | 'minimal' | 'network' | 'other'; entries: Array<{id: string; name: string; isCurrent: boolean; isDefault: boolean}>}>;
   taskInventory(cursor?:string|null):Promise<{rows:Array<{name:string;path:string;state:string;taskId:string|null;enabled:boolean|null;[key:string]:unknown}>;nextCursor:string|null}>;
   taskOwnedStatus(role:'signin'|'maintenance'|'background'):Promise<{registered:boolean;enabled:boolean;owned:boolean;nextRun:string;lastRun:string;lastResult:number|null}>;
