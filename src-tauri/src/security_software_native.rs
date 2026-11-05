@@ -2205,6 +2205,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
 
     #[test]
     fn retention_protects_active_review_and_lookup_records_at_capacity() {
+        let fixture = AdapterFixture::new();
         let mut m = cached();
         let request = PrepareRequest {
             product_id: m.products[0].id.clone(),
@@ -2244,8 +2245,10 @@ public sealed class FixtureHandler : HttpMessageHandler {
             assert!(m.operations.contains_key(&oldest));
         }
         held[0].state.lock().unwrap().phase = "cancelled";
-        let path = std::env::temp_dir().join(crate::broker::random_id().unwrap());
+        let path = fixture.effects.root.join("launch-intent");
+        let payload = fixture.effects.root.join("inert-payload");
         fs::write(&path, b"inert review").unwrap();
+        fs::write(&payload, b"inert payload").unwrap();
         m.reviews.insert(
             "review".into(),
             HeldReview {
@@ -2280,7 +2283,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
         prepare_cached(&mut m, request).unwrap();
         assert!(!m.operations.contains_key(&oldest));
         assert_eq!(fs::read(&path).unwrap(), b"inert review");
-        fs::remove_file(path).unwrap();
+        assert_eq!(fs::read(&payload).unwrap(), b"inert payload");
     }
 
     #[test]
@@ -2303,9 +2306,24 @@ public sealed class FixtureHandler : HttpMessageHandler {
             &manager,
             &id,
             || {
+                let (cleanup_manager, cleanup_id, cleanup_request) =
+                    (manager.clone(), id.clone(), request.clone());
                 let (manager, id, request) = (manager.clone(), id.clone(), request.clone());
                 Fake {
                     fail: "download",
+                    on_cleanup: Some(Box::new(move || {
+                        let mut m = cleanup_manager.lock().unwrap();
+                        let status = m.operations[&cleanup_id].snapshot().unwrap();
+                        assert_eq!(status.phase, "failed");
+                        assert_eq!(status.cleanup, "none");
+                        assert_eq!(
+                            prepare_cached(&mut m, cleanup_request.clone())
+                                .err()
+                                .as_deref(),
+                            Some("Removal plan session limit reached")
+                        );
+                        assert_eq!(Arc::strong_count(&m.operations[&cleanup_id]), 2);
+                    })),
                     _on_drop: Some(OnEffectsDrop(Box::new(move || {
                         let mut m = manager.lock().unwrap();
                         let status = m.operations[&id].snapshot().unwrap();
@@ -3062,6 +3080,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
     #[derive(Default)]
     struct Fake {
         _on_drop: Option<OnEffectsDrop>,
+        on_cleanup: Option<Box<dyn FnMut()>>,
         fail: &'static str,
         cleanup_fails: bool,
         cancel_at: &'static str,
@@ -3097,6 +3116,9 @@ public sealed class FixtureHandler : HttpMessageHandler {
             self.effect("launch", None)
         }
         fn cleanup(&mut self) -> Result<(), String> {
+            if let Some(on_cleanup) = &mut self.on_cleanup {
+                on_cleanup();
+            }
             self.effect("cleanup", None)
         }
     }
