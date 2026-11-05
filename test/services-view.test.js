@@ -57,12 +57,17 @@ test('Services preserves existing administrator and Windows confirmation guards 
   assert.deepEqual(calls, ['dialog:confirm']);
 });
 
-test('App routes one keyed component per Startup/Services mode and moves one existing label toggle beside Groups', () => {
+test('App routes keyed Startup/Services modes and keeps a permanently named icon rail', () => {
   const app = fs.readFileSync(new URL('../src/App.jsx', import.meta.url), 'utf8');
   assert.match(app, /view === 'startup' \|\| view === 'services'/);
   assert.match(app, /key=\{`\$\{view\}:\$\{customKey\}`\}\s+mode=\{view\}/);
   assert.match(app, /\['startup', 'services'\]\.includes\(view\)/);
-  assert.equal((app.match(/className="nav-label-toggle"/g) || []).length, 1);
-  const controls = app.slice(app.indexOf('className="group-controls"'), app.indexOf('className="group-controls"') + 900);
-  assert.ok(/className="group-controls">\s*<button className="nav-label-toggle"[\s\S]*?aria-pressed=\{navLabels\}[\s\S]*?setNavLabels\(\(value\) => !value\)[\s\S]*?>☰<\/button>\s*<select/.test(controls));
+  assert.doesNotMatch(app, /navLabels|setNavLabels|nav-label-toggle|with-labels/);
+  const rail = app.slice(app.indexOf('<nav className="view-bar-side"'), app.indexOf('</nav>', app.indexOf('<nav className="view-bar-side"')));
+  assert.match(rail, /aria-label=\{t\('viewsLabel'\)\}/);
+  assert.match(rail, /aria-pressed=\{view === id\}/);
+  assert.match(rail, /title=\{`\$\{tx\(label\)\}: \$\{title\}`\}/);
+  assert.match(rail, /<ViewIcon id=\{id\} \/>/);
+  assert.match(rail, /<span className="sr-only">\{[\s\S]*?\|\| label\}<\/span>/);
+  assert.match(app, /className="group-controls">\s*<select/);
 });

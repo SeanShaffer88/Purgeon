@@ -6,6 +6,7 @@ Unsigned Windows x64 stable release with the qualification limits below.
 - After the owner finishes or exits, a valid checkpoint still requires explicit review acknowledgment. Partial or invalid checkpoint contents remain blocked for manual review; there is no automatic retry or deletion. Retained vendor payloads are preserved.
 - Includes the refresh-admission fix from PR98: new plans cannot use cached eligibility while inventory refresh is running.
 - App and reusable `purgeon-core` metadata and consumption examples target `1.6.0`.
+- VaporGrid styling adds charcoal compartments, crimson selection edges, a subtle workspace grid and visible focus. The left navigation always uses icons with accessible names and shortcut tooltips. Programs and Remove AV retain their existing actions and review safeguards; light and high-contrast themes remain available.
 
 ## Qualification limits
 
