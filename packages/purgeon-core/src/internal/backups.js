@@ -12,6 +12,8 @@ import { isJunkPath, installedFamilies } from './junk.js';
 import { readState, guardReason } from './safety.js';
 import { readSettings } from './settings.js';
 import { isLegacyMsiDirectory, isMsiFile } from './installers.js';
+import { cleanupImpact, hasImpactPaths } from './cleanup-impact.js';
+import * as startup from './startup.js';
 
 let backupRoot = '';
 const setRoot = async (dir) => {
@@ -275,16 +277,18 @@ const confirmedFile = async (target) => (await sys.stat(target).catch(() => null
 
 async function guardFor(items, owners, state) {
   const guarded = items.some((i) => ['dir', 'file', 'key'].includes(i.kind));
-  const live = guarded ? state || (await readState().catch(() => null)) : null;
+  const live = guarded && state === undefined ? await readState().catch(() => null) : state;
   return (item) => (!guarded ? null : live ? guardReason(item, live, owners) : 'Could not check whether other programs use this, not deleted');
 }
 
 // What a removal would do, without changing anything: { results } like removeItems, where ok
 // means "would be removed or put back".
-async function planRemoval({ items, owners = [], state }) {
+async function planRemoval({ items, owners = [], state, includeImpact = false }) {
   const results = [];
   const log = (item, ok, detail) => results.push({ ...item, ok, detail });
-  const blocked = await guardFor(items, owners, state);
+  const pathsRequested = includeImpact && hasImpactPaths(items);
+  const ownership = pathsRequested && state === undefined ? await readState({ requireEvidence: true }).catch(() => null) : state;
+  const blocked = await guardFor(items, owners, ownership);
   for (const item of items.filter((i) => i.kind === 'service')) {
     const g = await serviceGuard(item.path);
     log(item, g === 'OK', { OK: 'Would back up, stop and delete the service', GONE: 'Already gone', ERR: 'Could not check the service, would not be deleted' }[g] || 'Windows service, would be skipped');
@@ -298,8 +302,8 @@ async function planRemoval({ items, owners = [], state }) {
         { input: JSON.stringify(firewall.map((i) => ({ path: i.path }))) }
       ).catch(() => [])
     : [];
-  if (tasks.length) {
-    const native = await nativeTasks.list();
+  const native = tasks.length ? await nativeTasks.list() : undefined;
+  if (native) {
     for (const item of tasks) { const task = native.find((row) => row.path + row.name === item.path); log(item, /^[a-f0-9]{32}$/i.test(item.taskId || '') && !!task?.taskId && !task.isWindows && task.enabled === false && !(task.instanceGuids?.length), task?.taskId ? 'Native definition/ACL backup and fresh grant checks are required before disabled-task removal' : 'No current supported native task identity; refresh the scan'); }
   }
   firewall.forEach((item, i) => log(item, true, present[i] ? 'Would save and remove the firewall rule' : 'Already gone'));
@@ -323,7 +327,9 @@ async function planRemoval({ items, owners = [], state }) {
     else log(item, true, 'Would move to the Recycle Bin');
   }
   for (const item of items.filter((i) => i.kind === 'junk')) log(item, isJunkPath(item.path), isJunkPath(item.path) ? 'Would move to the Recycle Bin' : 'Not in a junk folder, would be skipped');
-  return { results };
+  if (!includeImpact) return { results };
+  const integrations = pathsRequested ? await startup.referenceInventory(native) : null;
+  return { results, impact: cleanupImpact(results, owners, ownership, integrations, pathsRequested) };
 }
 
 // `owners`: uninstall keys of the programs being removed (see safety.js). `state` replaces the

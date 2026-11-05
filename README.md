@@ -294,7 +294,7 @@ From there, **Uninstall** and **Analyze Leftovers** are one click away.
 - a registry key is only offered next to a leftover folder of the same name;
 - services whose program file no longer exists are offered too.
 
-**Dry Run** shows what a removal would do, item by item, without changing anything:
+**Dry Run** previews the selected cleanup without changing anything. In the leftovers dialog, **Cleanup Impact Lab** shows why an item was selected, observed installed-application and shared-file references, and service, task or startup targets visible in Startup Manager. It also describes the recovery method that would be attempted. Unavailable inventories and omitted matches are marked. Removal checks the current system again, and recovery depends on the recorded backup or Recycle Bin entry.
 
 ![Dry run](docs/screenshots/dry-run.png)
 
@@ -468,7 +468,7 @@ It never uninstalls anything and never runs the permanent Windows clean-ups. Eac
 - **Right before deleting** it checks again, and skips anything another installed program still uses, any file Windows counts as shared, and anything that changed after the scan. If that check can't run, nothing is deleted.
 
 **Seeing and limiting what happens:**
-- **Dry Run** shows exactly what a removal would do, and **Tools › Safe Mode** offers only near-certain matches.
+- **Dry Run** previews the selected removal using current checks. **Tools › Safe Mode** limits selection to items that meet stricter evidence rules.
 - **Restore points:** before an uninstall, a batch or the first Debloat change, the confirmation offers to create one (**Tools › Create Restore Points** sets the default).
 - **Crash-safe removals:** each item is in the backup before the next one is removed. After an interruption, the next start offers recovery review. Valid completed changes can be rolled back or kept; unreadable or uncertain evidence is retained. Automatic Finish is refused: run a fresh scan and preview before deleting more items.
 - **Fingerprinted backups:** backups are sealed with SHA-256 fingerprints, and a changed backup is not restored. **Tools › Backup Settings** can limit backups by age or size, always keeping each program's newest.

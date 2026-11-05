@@ -242,7 +242,7 @@ const handlers = {
   },
   'monitor:revert-test-install': async (items) => monitor.revertTestInstall(items),
   'backups:list': () => backups.list(),
-  'backups:plan': ({ items, owners }) => backups.planRemoval({ items, owners }),
+  'backups:plan': ({ items, owners, includeImpact }) => backups.planRemoval({ items, owners, includeImpact: includeImpact === true }),
   'backups:forecast': ({ items }) => backups.forecastSize(items),
   'backups:interrupted': () => backups.interrupted(),
   'backups:resolveInterrupted': (action) => backups.resolveInterrupted(action),

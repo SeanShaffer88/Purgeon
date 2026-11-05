@@ -9,7 +9,7 @@ test('summarizeImpact counts by kind and formats the forecast size', () => {
   );
   assert.equal(s.count, 5);
   assert.equal(s.needsRestart, false);
-  assert.match(s.text, /^5 selected: 2 files or folders, 2 registry entries, 1 other item · about 1\.5 GB will be freed/);
+  assert.match(s.text, /^5 selected: 2 files or folders, 2 registry entries, 1 other item · about 1\.5 GB of selected data/);
 });
 
 test('summarizeImpact uses MB and KB sizes and singular wording', () => {

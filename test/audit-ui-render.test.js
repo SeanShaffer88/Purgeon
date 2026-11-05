@@ -45,6 +45,28 @@ function componentModule(name) {
 }
 const render = (Component, props) => renderToStaticMarkup(React.createElement(Component, props));
 
+test('Cleanup Impact Lab keeps selector evidence in original plan order and labels incomplete inventory', () => {
+  const { PlanView } = componentModule('dialog-shared.jsx');
+  const results = [
+    { kind: 'file', path: 'approved-file', reason: 'exact record', ok: true, detail: 'Eligible' },
+    { kind: 'file', path: 'blocked-file', reason: 'installed owner', ok: false, detail: 'Protected' },
+  ];
+  const first = { applications: [], sharedFiles: [], services: ['Observed service'], tasks: [], startup: [], recovery: 'Prospective only', pathEvidence: true };
+  const impact = { items: [first, { ...first, services: [] }], sources: { installed: 'unavailable', shared: 'observed', integration: 'partial' }, truncated: true };
+  const props = { results, onBack: noop, onExport: noop };
+  const html = render(PlanView, { ...props, impact });
+  assert.match(html, /Cleanup Impact Lab/);
+  assert.match(html, /<label[^>]*><span>Inspect item<\/span><select/);
+  assert.match(html, /<option[^>]*selected=""[^>]*>approved-file<\/option><option[^>]*>blocked-file<\/option>/);
+  assert.match(html, /Selection evidence<\/dt><dd>exact record<\/dd>/);
+  assert.match(html, /inventory is partial/);
+  assert.match(html, /Inventory unavailable/);
+  assert.match(html, /No observed matches/);
+  assert.match(html, /Observed service/);
+  assert.match(html, /Prospective only/);
+  assert.doesNotMatch(render(PlanView, props), /Cleanup Impact Lab/);
+});
+
 test('React exposes one current onboarding step status and hides decorative progress dots', () => {
   const { WelcomeDialog } = componentModule('onboarding.jsx');
   const html = render(WelcomeDialog, { onClose: noop, onGetStarted: noop });

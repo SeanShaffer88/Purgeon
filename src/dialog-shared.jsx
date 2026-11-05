@@ -1,5 +1,6 @@
 import { tx } from './backend/i18n.js';
 import { failureHint } from './backend/impact.js';
+import { useId, useState } from 'react';
 
 export const itemLabel = (i) =>
   i.kind === 'value'
@@ -19,8 +20,48 @@ export const itemLabel = (i) =>
 // Safe Mode uses internal evidence rules, not calibrated probability estimates.
 export const safeAllowed = (it, safeMode) => !safeMode || ((typeof it.score === 'number' ? it.score : it.confidence === 'high' ? 80 : 40) >= 90 && !['service', 'task', 'firewall'].includes(it.kind));
 
+function CleanupImpactView({ results, impact }) {
+  const id = useId();
+  const [selected, setSelected] = useState(0);
+  const row = impact.items[selected];
+  if (!row) return null;
+  const references = [
+    ['Installed application paths', row.applications, impact.sources.installed],
+    ['Shared-file records', row.sharedFiles.map(({ name, users }) => tx("{p0} ({p1} registered users)", { p0: name, p1: users })), impact.sources.shared],
+    ['Services', row.services, impact.sources.integration],
+    ['Scheduled tasks', row.tasks, impact.sources.integration],
+    ['Startup entries', row.startup, impact.sources.integration],
+  ];
+  return (
+    <section className="cleanup-impact" aria-labelledby={id}>
+      <h3 id={id}>{tx("Cleanup Impact Lab")}</h3>
+      <p className="muted">{tx("References are limited to the inventory Purgeon could read. Removal runs its safety checks again.")}</p>
+      {row.pathEvidence && impact.sources.integration === 'partial' && <p className="muted">{tx("Startup integration inventory is partial.")}</p>}
+      <label className="cleanup-impact-picker">
+        <span>{tx("Inspect item")}</span>
+        <select value={selected} onChange={(event) => setSelected(Number(event.target.value))}>
+          {impact.items.map((_, i) => <option key={i} value={i}>{itemLabel(results[i])}</option>)}
+        </select>
+      </label>
+      <dl>
+        <dt>{tx("Selection evidence")}</dt>
+        <dd>{tx(results[selected].reason || results[selected].evidence || 'No selection evidence was recorded.')}</dd>
+        {row.pathEvidence && references.map(([name, matches, status]) => [
+          <dt key={name}>{tx(name)}</dt>,
+          <dd key={name + '-matches'}>{status === 'unavailable' ? tx("Inventory unavailable") : matches.join(', ') || tx("No observed matches")}</dd>,
+        ])}
+        {!row.pathEvidence && <><dt>{tx("Path references")}</dt><dd>{tx("Path-reference checks do not apply to this item.")}</dd></>}
+        <dt>{tx("Prospective recovery")}</dt>
+        <dd>{tx(row.recovery)}</dd>
+      </dl>
+      {row.truncated && <p className="muted">{tx("Some matches for this item were omitted.")}</p>}
+      {impact.truncated && <p className="muted">{tx("Impact details are shown for the first {p0} results.", { p0: impact.items.length })}</p>}
+    </section>
+  );
+}
+
 // A dry run's results: what would happen to each selected item, with nothing changed.
-export function PlanView({ results, onBack, onExport }) {
+export function PlanView({ results, onBack, onExport, impact }) {
   const skipped = results.filter((r) => !r.ok);
   return (
     <div className="plan">
@@ -34,6 +75,7 @@ export function PlanView({ results, onBack, onExport }) {
           <button onClick={onBack}>{tx("Back to the List")}</button>
         </span>
       </div>
+      {impact && <CleanupImpactView results={results} impact={impact} />}
       <div className="tree">
         {[...skipped, ...results.filter((r) => r.ok)].slice(0, 800).map((r, i) => (
           <div key={i} className={`result ${r.ok ? 'ok' : 'fail'}`}>

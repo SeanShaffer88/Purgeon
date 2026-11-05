@@ -3183,7 +3183,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         <LeftoversDialog
           {...modal}
           safeMode={safeOn}
-          onDryRun={(sel) => api.invoke('backups:plan', { items: sel, owners: modal.owners || [] }).then((r) => r.results)}
+          onDryRun={(sel) => api.invoke('backups:plan', { items: sel, owners: modal.owners || [], includeImpact: true })}
           onExportPlan={(results) => api.invoke('export:html', { title: 'Export Dry Run', fileName: 'dry-run.html', html: planHtml(modal.title, results) })}
           onClose={() => setModal(null)}
         />
