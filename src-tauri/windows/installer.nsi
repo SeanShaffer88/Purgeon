@@ -23,6 +23,7 @@ ManifestDPIAwareness PerMonitorV2
 !addplugindir "{{signed_plugins_path}}"
 {{/if}}
 
+!define MUI_CUSTOMFUNCTION_ABORT PurgeonUserAbort
 !include MUI2.nsh
 !include FileFunc.nsh
 !include x64.nsh
@@ -557,7 +558,69 @@ LangString choowHowToInstall 0 ""
   !include "{{this}}"
 {{/each}}
 
+; PURGEON_CONTRACT_BEGIN
+; Extracted verbatim by the inert CI fixture. Events are compile-time tokens only.
+Var PurgeonTraceCount
+!macro PurgeonTrace EVENT
+  !insertmacro PurgeonTraceResult "installer" "${EVENT}" "state" "null"
+!macroend
+
+!macro PurgeonTraceResult PHASE EVENT OPERATION RESULT
+  Push $0
+  StrCpy $0 '$\"phase$\":$\"${PHASE}$\",$\"event$\":$\"${EVENT}$\",$\"operation$\":$\"${OPERATION}$\",$\"result$\":${RESULT}'
+  Call PurgeonTrace
+  Pop $0
+!macroend
+
+Function PurgeonTrace
+  Push $1
+  StrCpy $1 0
+  IfErrors 0 +2
+    StrCpy $1 1
+  Push $2
+  Push $3
+  Push $4
+  Push $5
+  ${GetOptions} $CMDLINE "/LOGPURGEON" $2
+  IfErrors trace_done
+  StrCmp $2 "" 0 trace_done
+  IntCmp $PurgeonTraceCount 128 trace_done 0 trace_done
+  IntOp $PurgeonTraceCount $PurgeonTraceCount + 1
+  StrCmp $PurgeonTraceCount 128 0 +2
+    StrCpy $0 '$\"phase$\":$\"installer$\",$\"event$\":$\"truncated$\",$\"operation$\":$\"trace$\",$\"result$\":null'
+  StrCpy $2 '{$\"schemaVersion$\":1,$\"sequence$\":$PurgeonTraceCount,$0,$\"nativeError$\":null}$\r$\n'
+  StrLen $4 $2
+  System::Call 'kernel32::GetStdHandle(i -11)p.r3'
+  System::Call 'kernel32::WriteFile(p r3, m r2, i r4, *i .r5, p 0)i.r3'
+trace_done:
+  Pop $5
+  Pop $4
+  Pop $3
+  Pop $2
+  StrCmp $1 0 trace_clear
+  SetErrors
+  Goto trace_restore
+trace_clear:
+  ClearErrors
+trace_restore:
+  Pop $1
+FunctionEnd
+
+; Capture launch failure before any child exit value is read.
+!macro PurgeonExecWait COMMAND RESULT
+  ClearErrors
+  ExecWait '${COMMAND}' ${RESULT}
+  ${If} ${Errors}
+    !insertmacro PurgeonTraceResult "webview" "webview.launch.failed" "ExecWait" "null"
+    DetailPrint "$(webview2InstallError)"
+    Abort "$(webview2AbortError)"
+  ${EndIf}
+  !insertmacro PurgeonTraceResult "webview" "webview.launch.returned" "ExecWait" "${RESULT}"
+!macroend
+; PURGEON_CONTRACT_END
+
 Function .onInit
+  !insertmacro PurgeonTrace "init"
   ${GetOptions} $CMDLINE "/P" $PassiveMode
   ${IfNot} ${Errors}
     StrCpy $PassiveMode 1
@@ -622,6 +685,7 @@ Function .onInit
     Pop $R0
     ; If downgrading
     ${If} $R0 = -1
+      !insertmacro PurgeonTrace "downgrade.blocked"
       ${If} ${Silent}
         System::Call 'kernel32::AttachConsole(i -1)i.r0'
         ${If} $0 <> 0
@@ -639,6 +703,7 @@ Function .onInit
 FunctionEnd
 
 Section WebView2
+  !insertmacro PurgeonTrace "webview.detect.begin"
   ; Check if Webview2 is already installed and skip this section
   ${If} ${RunningX64}
     ReadRegStr $4 HKLM "SOFTWARE\WOW6432Node\Microsoft\EdgeUpdate\Clients\${WEBVIEW2APPGUID}" "pv"
@@ -649,6 +714,7 @@ Section WebView2
     ReadRegStr $4 HKCU "SOFTWARE\Microsoft\EdgeUpdate\Clients\${WEBVIEW2APPGUID}" "pv"
   ${EndIf}
 
+  !insertmacro PurgeonTrace "webview.detect.end"
   ${If} $4 == ""
     ; Webview2 installation
     ;
@@ -663,6 +729,7 @@ Section WebView2
           DetailPrint "$(webview2DownloadSuccess)"
         ${Else}
           DetailPrint "$(webview2DownloadError)"
+          !insertmacro PurgeonTrace "webview.failed"
           Abort "$(webview2AbortError)"
         ${EndIf}
         StrCpy $6 "$TEMP\MicrosoftEdgeWebview2Setup.exe"
@@ -671,7 +738,9 @@ Section WebView2
 
       !if "${INSTALLWEBVIEW2MODE}" == "embedBootstrapper"
         Delete "$TEMP\MicrosoftEdgeWebview2Setup.exe"
+        !insertmacro PurgeonTrace "webview.extract.begin"
         File "/oname=$TEMP\MicrosoftEdgeWebview2Setup.exe" "${WEBVIEW2BOOTSTRAPPERPATH}"
+        !insertmacro PurgeonTrace "webview.extract.end"
         DetailPrint "$(installingWebview2)"
         StrCpy $6 "$TEMP\MicrosoftEdgeWebview2Setup.exe"
         Goto install_webview2
@@ -679,7 +748,9 @@ Section WebView2
 
       !if "${INSTALLWEBVIEW2MODE}" == "offlineInstaller"
         Delete "$TEMP\MicrosoftEdgeWebView2RuntimeInstaller.exe"
+        !insertmacro PurgeonTrace "webview.extract.begin"
         File "/oname=$TEMP\MicrosoftEdgeWebView2RuntimeInstaller.exe" "${WEBVIEW2INSTALLERPATH}"
+        !insertmacro PurgeonTrace "webview.extract.end"
         DetailPrint "$(installingWebview2)"
         StrCpy $6 "$TEMP\MicrosoftEdgeWebView2RuntimeInstaller.exe"
         Goto install_webview2
@@ -690,11 +761,13 @@ Section WebView2
       install_webview2:
         DetailPrint "$(installingWebview2)"
         ; $6 holds the path to the webview2 installer
-        ExecWait "$6 ${WEBVIEW2INSTALLERARGS} /install" $1
+        !insertmacro PurgeonExecWait '"$6" ${WEBVIEW2INSTALLERARGS} /install' $1
         ${If} $1 = 0
+          !insertmacro PurgeonTrace "webview.child.zero"
           DetailPrint "$(webview2InstallSuccess)"
         ${Else}
           DetailPrint "$(webview2InstallError)"
+          !insertmacro PurgeonTrace "webview.failed"
           Abort "$(webview2AbortError)"
         ${EndIf}
       webview2_done:
@@ -716,10 +789,12 @@ Section WebView2
           ${If} $R1 != ""
             ; Chromium updater docs: https://source.chromium.org/chromium/chromium/src/+/main:docs/updater/user_manual.md
             ; Modified from "HKEY_LOCAL_MACHINE\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall\Microsoft EdgeWebView\ModifyPath"
-            ExecWait `"$R1" /install appguid=${WEBVIEW2APPGUID}&needsadmin=true` $1
+            !insertmacro PurgeonExecWait `"$R1" /install appguid=${WEBVIEW2APPGUID}&needsadmin=true` $1
             ${If} $1 = 0
+              !insertmacro PurgeonTrace "webview.child.zero"
               DetailPrint "$(webview2InstallSuccess)"
             ${Else}
+              !insertmacro PurgeonTrace "webview.child.nonzero"
               MessageBox MB_ICONEXCLAMATION|MB_ABORTRETRYIGNORE "$(webview2InstallError)" IDIGNORE ignore IDRETRY update_webview
               Quit
               ignore:
@@ -733,14 +808,20 @@ SectionEnd
 Section Install
   SetOutPath $INSTDIR
 
+  !insertmacro PurgeonTrace "preinstall.begin"
   !ifmacrodef NSIS_HOOK_PREINSTALL
     !insertmacro NSIS_HOOK_PREINSTALL
   !endif
 
+  !insertmacro PurgeonTrace "preinstall.end"
+  !insertmacro PurgeonTrace "running.check.begin"
   !insertmacro CheckIfAppIsRunning "$INSTDIR\${MAINBINARYNAME}.exe" "${PRODUCTNAME}"
+  !insertmacro PurgeonTrace "running.check.end"
 
   ; Copy main executable
+  !insertmacro PurgeonTrace "main.extract.begin"
   File "${MAINBINARYSRCPATH}"
+  !insertmacro PurgeonTrace "main.extract.end"
 
   ; Copy resources
   {{#each resources_dirs}}
@@ -770,6 +851,7 @@ Section Install
     WriteRegStr SHCTX "Software\Classes\\{{protocol}}\shell\open\command" "" "$\"$INSTDIR\${MAINBINARYNAME}.exe$\" $\"%1$\""
   {{/each}}
 
+  !insertmacro PurgeonTrace "registration.begin"
   ; Create uninstaller
   WriteUninstaller "$INSTDIR\uninstall.exe"
 
@@ -825,9 +907,12 @@ Section Install
     Call CreateOrUpdateDesktopShortcut
   ${EndIf}
 
+  !insertmacro PurgeonTrace "registration.end"
+  !insertmacro PurgeonTrace "postinstall.begin"
   !ifmacrodef NSIS_HOOK_POSTINSTALL
     !insertmacro NSIS_HOOK_POSTINSTALL
   !endif
+  !insertmacro PurgeonTrace "postinstall.end"
 
   ; Auto close this page for passive mode
   ${If} $PassiveMode = 1
@@ -835,7 +920,16 @@ Section Install
   ${EndIf}
 SectionEnd
 
+Function .onInstFailed
+  !insertmacro PurgeonTrace "install.failed"
+FunctionEnd
+
+Function PurgeonUserAbort
+  !insertmacro PurgeonTrace "install.aborted"
+FunctionEnd
+
 Function .onInstSuccess
+  !insertmacro PurgeonTrace "install.complete"
   ; Check for `/R` flag only in silent and passive installers because
   ; GUI installer has a toggle for the user to (re)start the app
   ${If} $PassiveMode = 1

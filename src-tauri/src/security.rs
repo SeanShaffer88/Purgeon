@@ -272,58 +272,44 @@ impl ProcessJob {
     /// Keep the handle open until Windows reports every member gone. A root
     /// process exit or successful TerminateJobObject alone is not that evidence.
     pub fn terminate_and_confirm(&self, deadline: std::time::Instant) -> Result<(), String> {
-        #[repr(C)]
-        #[derive(Default)]
-        struct Accounting {
-            user: i64,
-            kernel: i64,
-            period_user: i64,
-            period_kernel: i64,
-            faults: u32,
-            total: u32,
-            active: u32,
-            terminated: u32,
-        }
         #[link(name = "kernel32")]
         extern "system" {
             fn TerminateJobObject(job: *mut std::ffi::c_void, code: u32) -> i32;
-            fn QueryInformationJobObject(
-                job: *mut std::ffi::c_void,
-                class: i32,
-                info: *mut std::ffi::c_void,
-                length: u32,
-                returned: *mut u32,
-            ) -> i32;
         }
-        let terminated = unsafe { TerminateJobObject(self.0, 1) };
-        let failure = (terminated == 0).then(|| std::io::Error::last_os_error().to_string());
+        Self::confirm_termination(
+            || {
+                if unsafe { TerminateJobObject(self.0, 1) } == 0 {
+                    Err(std::io::Error::last_os_error().to_string())
+                } else {
+                    Ok(())
+                }
+            },
+            || self.active(),
+            || std::time::Instant::now() >= deadline,
+            || std::thread::sleep(std::time::Duration::from_millis(10)),
+        )
+    }
+
+    fn confirm_termination(
+        terminate: impl FnOnce() -> Result<(), String>,
+        mut active: impl FnMut() -> Result<u32, String>,
+        mut expired: impl FnMut() -> bool,
+        mut pause: impl FnMut(),
+    ) -> Result<(), String> {
+        let failure = terminate().err();
         loop {
-            let mut accounting = Accounting::default();
-            if unsafe {
-                QueryInformationJobObject(
-                    self.0,
-                    1,
-                    (&mut accounting as *mut Accounting).cast(),
-                    std::mem::size_of::<Accounting>() as u32,
-                    std::ptr::null_mut(),
-                )
-            } == 0
-            {
-                return Err(format!(
-                    "Job accounting failed: {}; termination error: {failure:?}",
-                    std::io::Error::last_os_error()
-                ));
-            }
-            if accounting.active == 0 {
+            let active = active().map_err(|error| {
+                format!("Job accounting failed: {error}; termination error: {failure:?}")
+            })?;
+            if active == 0 {
                 return Ok(());
             }
-            if std::time::Instant::now() >= deadline {
+            if expired() {
                 return Err(format!(
-                    "Job still has {} active processes; termination error: {failure:?}",
-                    accounting.active
+                    "Job still has {active} active processes; termination error: {failure:?}"
                 ));
             }
-            std::thread::sleep(std::time::Duration::from_millis(10));
+            pause();
         }
     }
 
@@ -331,6 +317,33 @@ impl ProcessJob {
         let job = Self::create(None)?;
         job.assign_child(child)?;
         Ok(job)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn confirm_member(
+        &self,
+        process: &std::os::windows::io::OwnedHandle,
+    ) -> Result<(), String> {
+        use std::os::windows::io::AsRawHandle;
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn IsProcessInJob(
+                process: *mut std::ffi::c_void,
+                job: *mut std::ffi::c_void,
+                member: *mut i32,
+            ) -> i32;
+        }
+        let mut member = 0;
+        if unsafe { IsProcessInJob(process.as_raw_handle(), self.0, &mut member) } == 0 {
+            return Err(format!(
+                "descendant job membership query: {}",
+                std::io::Error::last_os_error()
+            ));
+        }
+        if member == 0 {
+            return Err("descendant is outside the exact owned job".into());
+        }
+        Ok(())
     }
 
     pub fn assign_child(&self, child: &std::process::Child) -> Result<(), String> {
@@ -434,6 +447,102 @@ impl Drop for ProcessJob {
 #[cfg(test)]
 mod recovery_job_tests {
     use super::*;
+    #[test]
+    fn file_handle_reports_native_job_termination_and_accounting_errors() {
+        use std::os::windows::io::IntoRawHandle;
+        let file = std::fs::File::open(std::env::current_exe().unwrap()).unwrap();
+        // Transfer sole ownership; Windows rejects this file as a job object.
+        let job = ProcessJob(file.into_raw_handle());
+        let accounting_error = job.active().unwrap_err();
+        let error = job
+            .terminate_and_confirm(std::time::Instant::now())
+            .unwrap_err();
+        assert!(error.starts_with(&format!("Job accounting failed: {accounting_error};")));
+        assert!(error.contains("termination error: Some(\""));
+    }
+
+    #[test]
+    fn membership_rejects_file_handle_and_process_outside_exact_job() {
+        use std::os::windows::io::{FromRawHandle, OwnedHandle};
+        #[link(name = "kernel32")]
+        extern "system" {
+            fn OpenProcess(access: u32, inherit: i32, pid: u32) -> *mut std::ffi::c_void;
+        }
+        let job = ProcessJob::create(None).unwrap();
+        let file: OwnedHandle = std::fs::File::open(std::env::current_exe().unwrap())
+            .unwrap()
+            .into();
+        assert!(job
+            .confirm_member(&file)
+            .unwrap_err()
+            .starts_with("descendant job membership query: "));
+        // QUERY_LIMITED_INFORMATION observes only; never assign or terminate self.
+        let handle = unsafe { OpenProcess(0x1000, 0, std::process::id()) };
+        assert!(!handle.is_null(), "{}", std::io::Error::last_os_error());
+        let process = unsafe { OwnedHandle::from_raw_handle(handle) };
+        assert_eq!(
+            job.confirm_member(&process).unwrap_err(),
+            "descendant is outside the exact owned job"
+        );
+    }
+
+    #[test]
+    fn termination_accounting_failures_and_deadlines_are_bounded() {
+        let query_error = ProcessJob::confirm_termination(
+            || Err("terminate denied".into()),
+            || Err("query denied".into()),
+            || panic!("query failure must return before deadline check"),
+            || panic!("query failure must not wait"),
+        )
+        .unwrap_err();
+        assert_eq!(
+            query_error,
+            "Job accounting failed: query denied; termination error: Some(\"terminate denied\")"
+        );
+        for termination in [Ok(()), Err("terminate denied".into())] {
+            let expected = termination.clone().err();
+            let error = ProcessJob::confirm_termination(
+                || termination,
+                || Ok(2),
+                || true,
+                || panic!("expired deadline must not wait"),
+            )
+            .unwrap_err();
+            assert_eq!(
+                error,
+                format!("Job still has 2 active processes; termination error: {expected:?}")
+            );
+        }
+        assert!(ProcessJob::confirm_termination(
+            || Ok(()),
+            || Ok(0),
+            || panic!("zero accounting must succeed immediately"),
+            || panic!("zero accounting must not wait"),
+        )
+        .is_ok());
+        let mut observations = [Ok(1), Ok(1), Ok(0)].into_iter();
+        let mut pauses = 0;
+        let mut deadlines = 0;
+        assert!(ProcessJob::confirm_termination(
+            || Err("already terminating".into()),
+            || observations
+                .next()
+                .expect("unexpected extra accounting query"),
+            || {
+                deadlines += 1;
+                assert!(deadlines <= 2);
+                false
+            },
+            || {
+                pauses += 1;
+                assert!(pauses <= 2);
+            },
+        )
+        .is_ok());
+        assert_eq!(pauses, 2);
+        assert_eq!(deadlines, 2);
+        assert!(observations.next().is_none());
+    }
     #[test]
     fn missing_denied_collision_and_real_lifetime() {
         assert!(ProcessJob::missing_job(Some(2)).unwrap());

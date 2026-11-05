@@ -4,6 +4,14 @@ import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { runWorkload, workload, scenarios } from '../scripts/benchmark-workload.mjs';
 
+test('WebView child launches quote executable paths and abort before reading an undefined exit code', () => {
+  const source = readFileSync(new URL('../src-tauri/windows/installer.nsi', import.meta.url), 'utf8');
+  assert.ok(source.includes('!insertmacro PurgeonExecWait \'"$6" ${WEBVIEW2INSTALLERARGS} /install\' $1'));
+  assert.ok(source.includes('!insertmacro PurgeonExecWait `"$R1" /install appguid=${WEBVIEW2APPGUID}&needsadmin=true` $1'));
+  assert.match(source, /!macro PurgeonExecWait COMMAND RESULT\s+ClearErrors\s+ExecWait '\$\{COMMAND\}' \$\{RESULT\}\s+\$\{If\} \$\{Errors\}\s+!insertmacro PurgeonTraceResult "webview" "webview.launch.failed" "ExecWait" "null"\s+DetailPrint "\$\(webview2InstallError\)"\s+Abort "\$\(webview2AbortError\)"\s+\$\{EndIf\}\s+!insertmacro PurgeonTraceResult "webview" "webview.launch.returned" "ExecWait" "\$\{RESULT\}"\s+!macroend/);
+  assert.equal((source.match(/\$\{If\} \$1 = 0/g) || []).length, 2);
+});
+
 test('installer versions validate upgrade ordering and preserve exact prerelease identity', () => {
   const command = `
 . ./scripts/windows-package-tools.ps1
@@ -238,4 +246,93 @@ test('installer diagnostic inputs stay explicit and portable runs follow lifecyc
   const workflow = readFileSync(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8');
   assert.ok(workflow.indexOf('Disposable runner install upgrade reinstall uninstall lifecycle') < workflow.indexOf('Packaged portable CLI (ten consecutive runs)'));
   assert.match(workflow, /Upload CLI and lifecycle evidence including failures\r?\n        if: always\(\)/);
+});
+
+
+test('installer trace is opt-in and runner fixture shares production contracts', () => {
+  const source = readFileSync(new URL('../src-tauri/windows/installer.nsi', import.meta.url), 'utf8');
+  assert.match(source, /; PURGEON_CONTRACT_BEGIN/);
+  assert.match(source, /GetStdHandle/);
+  assert.match(source, /WriteFile/);
+  assert.match(source, /LOGPURGEON/);
+  assert.doesNotMatch(source, /FileOpen.*PURGEON/);
+  const fixture = readFileSync(new URL('../scripts/test-nsis-webview-launch.ps1', import.meta.url), 'utf8');
+  assert.match(fixture, /RUNNER_ENVIRONMENT/);
+  assert.match(fixture, /PURGEON_CONTRACT_BEGIN/);
+  assert.match(fixture, /Get-FileHash/);
+  const workflow = readFileSync(new URL('../.github/workflows/release.yml', import.meta.url), 'utf8');
+  assert.ok(workflow.indexOf('test-nsis-webview-launch.ps1') > workflow.indexOf('npm run dist:windows'));
+  assert.ok(workflow.indexOf('test-nsis-webview-launch.ps1') < workflow.indexOf('test-windows-installers.ps1'));
+});
+
+
+test('NSIS fixture refuses local runtime before creating output', { skip: process.platform !== 'win32' || process.env.GITHUB_ACTIONS === 'true' }, () => {
+  const result = spawnSync('pwsh', ['-NoProfile', '-File', 'scripts/test-nsis-webview-launch.ps1'], { encoding: 'utf8', timeout: 30000, windowsHide: true });
+  assert.notEqual(result.status, 0);
+  assert.match(result.stderr, /restricted to disposable GitHub-hosted runners/);
+});
+
+test('NSIS fixtures separate default launch exits from explicit exit-state preservation', () => {
+  const fixture = readFileSync(new URL('../scripts/test-nsis-webview-launch.ps1', import.meta.url), 'utf8');
+  const cases = fixture.match(/foreach \(\$case in @\(([^\r\n]+)\)\)/)[1].match(/'[^']+'/g).map(name => name.slice(1, -1));
+  assert.deepEqual(cases, ['success', 'missing', 'nonzero', 'disabled', 'invalid-stdout', 'missing-disabled', 'missing-invalid-stdout', 'nonzero-disabled', 'nonzero-invalid-stdout', 'flag-alone', 'flag-passive-first', 'flag-passive-last', 'flag-silent', 'flag-update', 'flag-noshortcut', 'exit-state', 'exit-state-disabled', 'exit-state-invalid-stdout']);
+  assert.match(fixture, /Var FixtureInitialExitLevel/);
+  assert.match(fixture, /GetErrorLevel \$FixtureInitialExitLevel/);
+  assert.match(fixture, /StrCmp \$9 \$FixtureInitialExitLevel \+2/);
+  assert.match(fixture, /Function AssertionFailed\r?\n  SetErrorLevel 74\r?\n  Quit\r?\nFunctionEnd/);
+  assert.deepEqual([...fixture.matchAll(/SetErrorLevel (-?\d+)/g)].map(match => match[1]), ['74', '73']);
+  assert.doesNotMatch(fixture, /Abort "(passive|lost|introduced|clobbered)/);
+  assert.match(fixture, /if \(\$Case -like 'exit-state\*'\) \{ 'SetErrorLevel 73' \} else \{ '' \}/);
+  assert.match(fixture, /if \(\$Case -like 'exit-state\*'\) \{ 'Quit' \} else \{ '' \}/);
+  assert.equal((fixture.match(/!insertmacro AssertTraceState/g) || []).length, 2);
+  assert.match(fixture, /\$expected = if \(\$case -like 'exit-state\*'\) \{ 73 \} elseif \(\$case -match '\^\(missing\|nonzero\)'\) \{ 2 \} else \{ 0 \}/);
+  assert.match(fixture, /if \(\$row.exitCode -ne \$expected\)/);
+  assert.match(fixture, /if \(\$case -like 'exit-state\*'\) \{\r?\n\s+if \(\$launch.Count -ne 0\)/);
+  assert.match(fixture, /\$blocks.Count -ne 1/);
+  assert.match(fixture, /\[regex\]::Matches\(\$source, '\(\?s\); PURGEON_CONTRACT_BEGIN/);
+});
+
+test('lifecycle redirects every invocation and enables diagnostics only for candidate installers', () => {
+  const command = `
+$tokens = $null; $errors = $null
+$ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $PWD 'scripts/test-windows-installers.ps1'), [ref]$tokens, [ref]$errors)
+if ($errors.Count) { throw ($errors | Out-String) }
+$function = $ast.Find({ param($n) $n -is [Management.Automation.Language.FunctionDefinitionAst] -and $n.Name -eq 'Invoke-Installer' }, $true)
+Invoke-Expression $function.Extent.Text
+$out = Join-Path $PWD 'inert-mock-output'
+$stages = [Collections.Generic.List[object]]::new()
+$calls = [Collections.Generic.List[object]]::new()
+function Get-FileHash { param($LiteralPath, $Algorithm) return @{ Hash = ('a' * 64) } }
+function Test-Path { param($LiteralPath) return $false }
+function Start-Process {
+  param($FilePath, $ArgumentList, [switch]$PassThru, $WindowStyle, $RedirectStandardOutput, $RedirectStandardError)
+  $calls.Add(@{ arguments = $ArgumentList; stdout = $RedirectStandardOutput; stderr = $RedirectStandardError })
+  $process = [pscustomobject]@{ ExitCode = 0 }
+  $process | Add-Member ScriptMethod WaitForExit { param($timeout) return $true }
+  $process | Add-Member ScriptMethod Dispose { }
+  return $process
+}
+foreach ($stage in @('install-prior', 'upgrade-candidate', 'reinstall-candidate', 'uninstall-candidate')) {
+  Invoke-Installer 'inert-never-executed.exe' '/S /D=inert path' $stage
+}
+if ($calls[0].arguments.Contains('/LOGPURGEON') -or $calls[3].arguments.Contains('/LOGPURGEON')) { throw 'Prior or uninstaller received diagnostics flag' }
+if (!$calls[1].arguments.StartsWith('/LOGPURGEON ') -or !$calls[2].arguments.StartsWith('/LOGPURGEON ')) { throw 'Candidate flag missing' }
+if (@($calls.stdout | Select-Object -Unique).Count -ne 4 -or @($calls.stderr | Select-Object -Unique).Count -ne 4) { throw 'Invocation logs reused' }
+foreach ($row in $stages) {
+  if ($row.executableSha256 -ne ('a' * 64) -or $row.traceStatus -ne 'unavailable') { throw 'Identity or unavailable trace mislabeled' }
+}
+`;
+  const result = spawnSync('pwsh', ['-NoProfile', '-Command', command], { encoding: 'utf8', timeout: 30000, windowsHide: true });
+  assert.equal(result.status, 0, result.stdout + result.stderr);
+});
+
+test('diagnostics flag cannot collide with actual FileFunc passive lookup', () => {
+  const source = readFileSync(new URL('../src-tauri/windows/installer.nsi', import.meta.url), 'utf8');
+  const flag = source.match(/GetOptions} \$CMDLINE "(\/LOGPURGEON)"/)[1];
+  assert.ok(!flag.startsWith('/P'));
+  assert.doesNotMatch(source, /PURGEONDIAGNOSTICS|AndIf} \$PassiveMode == ""/);
+  const fixture = readFileSync(new URL('../scripts/test-nsis-webview-launch.ps1', import.meta.url), 'utf8');
+  for (const name of ['flag-alone', 'flag-passive-first', 'flag-passive-last', 'flag-silent', 'flag-update', 'flag-noshortcut']) assert.ok(fixture.includes(name));
+  assert.ok(fixture.includes('!include FileFunc.nsh'));
+  assert.ok(fixture.includes(".Replace('@PASSIVE@', $script:passiveBlock)"));
 });
