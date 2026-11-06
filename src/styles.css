@@ -856,6 +856,12 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .recording-diff-list li { padding: 4px 8px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
 .safe-note { color: var(--cyan); border-left: 2px solid var(--cyan); padding: 2px 8px; margin-bottom: 6px; }
 .impact-note { color: var(--muted); border-left: 2px solid var(--border); padding: 2px 8px; margin-bottom: 6px; }
+.persistence-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+.trace-row-action { align-self: center; margin: 0 8px; padding: 4px 8px; background: var(--raised); border: 1px solid var(--border); border-radius: 6px; }
+.persistence-trace { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; overflow-wrap: anywhere; }
+.persistence-trace h3, .persistence-trace p, .persistence-trace ul { margin: 0; }
+.persistence-trace-events { list-style: none; }
+.persistence-trace-events li { padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .tree-item.locked { opacity: 0.45; }
 .choices { margin: 6px 0 0 18px; padding: 0; }
 .choices li { margin: 4px 0; }

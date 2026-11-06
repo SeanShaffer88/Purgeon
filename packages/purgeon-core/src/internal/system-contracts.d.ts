@@ -75,6 +75,7 @@ export interface SystemAdapter {
   consumeUpdateExitMarker?(): Promise<boolean>;
   bootState(): Promise<{timeout: number | null; safeboot: 'none' | 'minimal' | 'network' | 'other'; entries: Array<{id: string; name: string; isCurrent: boolean; isDefault: boolean}>}>;
   taskInventory(cursor?:string|null):Promise<{rows:Array<{name:string;path:string;state:string;taskId:string|null;enabled:boolean|null;[key:string]:unknown}>;nextCursor:string|null}>;
+  persistenceTrace?(request:{kind:'run';source:'hkcu-run'|'hklm-run'|'hklm-run32';name:string}|{kind:'task';path:string}):Promise<unknown>;
   taskOwnedStatus(role:'signin'|'maintenance'|'background'):Promise<{registered:boolean;enabled:boolean;owned:boolean;nextRun:string;lastRun:string;lastResult:number|null}>;
   selectTaskProgram():Promise<{id:string;displayPath:string}|null>;
   prepareTask(request:unknown):Promise<{id:string;summary:string;requiresElevation:boolean}>;

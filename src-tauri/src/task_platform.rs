@@ -67,7 +67,7 @@ fn guid(value: &str) -> bool {
             }
         })
 }
-fn task_path(value: &str) -> Result<(), String> {
+pub(crate) fn task_path(value: &str) -> Result<(), String> {
     if value.len() > 512
         || !value.starts_with('\\')
         || value.ends_with('\\')

@@ -50,6 +50,7 @@ export async function createTauriSys() {
     elevateHandoff: () => invoke('elevate_handoff'),
     bootState: () => invoke('boot_state'),
     taskInventory: (cursor = null) => invoke('task_inventory', { cursor }),
+    persistenceTrace: (request) => invoke('persistence_trace', { request }),
     taskOwnedStatus: (role) => invoke('task_owned_status', { role }),
     selectTaskProgram: () => invoke('select_task_program'),
     prepareTask: (request) => invoke('prepare_task_operation', { request }),

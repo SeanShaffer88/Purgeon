@@ -10,6 +10,7 @@ import { summarizeImpact, failureHint } from './backend/impact.js';
 import { t } from './backend/i18n.js';
 import { leftoverSections } from './leftover-sections.js';
 import { SavedPlanReview, useSavedPlanReview } from './saved-plan-review.jsx';
+import { PersistenceTraceDialog, usePersistenceTrace } from './persistence-trace.jsx';
 
 
 const api = window.api;
@@ -1671,8 +1672,12 @@ export function TasksDialog({ onClose }) {
   const [busy, setBusy] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [creating, setCreating] = useState(false);
+  const trace = usePersistenceTrace();
 
-  const load = () => api.invoke('tasks:list').then(setItems).catch((e) => { setItems([]); setErr(e.message); });
+  const load = () => {
+    trace.close();
+    return api.invoke('tasks:list').then(setItems).catch((e) => { setItems([]); setErr(e.message); });
+  };
   useEffect(() => { load(); }, []);
   const run = async (fn) => {
     setBusy(true); setErr('');
@@ -1690,12 +1695,12 @@ export function TasksDialog({ onClose }) {
     </>}>
       <p className="muted" style={{ marginBottom: 10 }}>{tx("Scheduled tasks are listed read-only unless their native identity, current-user principal, executable and permissions are supported. Windows tasks are never deleted.")}</p>
       {err && <p className="error-text" style={{ marginBottom: 10 }}>{err}</p>}
-      <input className="search-input" style={{ marginBottom: 10, width: '100%' }} placeholder={tx("Search tasks…")} title={tx("Type part of a task's name or folder to filter the list")} value={filter} onChange={(e) => { setFilter(e.target.value); setSelected(0); }} />
+      <input className="search-input" style={{ marginBottom: 10, width: '100%' }} placeholder={tx("Search tasks…")} title={tx("Type part of a task's name or folder to filter the list")} value={filter} onChange={(e) => { trace.close(); setFilter(e.target.value); setSelected(0); }} />
       {items === null ? <p className="muted">{tx("Reading the tasks…")}</p> : shown.length === 0 ? <p className="muted">{tx("No tasks match.")}</p> : (
         <div className="recovery-cols">
           <div className="pkg-list">
             {shown.map((t, i) => (
-              <button key={t.path + t.name} className={`pkg-row ${current && t.name === current.name && t.path === current.path ? 'sel' : ''}`} onClick={() => setSelected(i)}>
+              <button key={t.path + t.name} className={`pkg-row ${current && t.name === current.name && t.path === current.path ? 'sel' : ''}`} onClick={() => { trace.close(); setSelected(i); }}>
                 <span className="pkg-name">{t.name}<span className="muted" style={{ display: 'block', fontSize: 11.5 }}>{t.path}</span></span>
                 {t.isWindows ? <span className="pkg-badge warn">{tx("Windows")}</span> : t.state === 'Disabled' ? <span className="pkg-badge warn">{tx("Off")}</span> : null}
               </button>
@@ -1712,6 +1717,7 @@ export function TasksDialog({ onClose }) {
                 <div className="pkg-entry"><span className="muted">{tx("Last result")}</span><span style={{ marginLeft: 'auto' }}>{resultText(current.lastResult)}</span></div>
                 <div className="pkg-entry"><span className="muted">{tx("Next run")}</span><span style={{ marginLeft: 'auto' }}>{fmtWhen(current.nextRun)}</span></div>
                 <div style={{ display: 'flex', gap: 8, marginTop: 12, flexWrap: 'wrap' }}>
+                  <button disabled={busy} onClick={() => trace.open('task', current.path + current.name, { path: current.path + current.name })}>{tx("Trace…")}</button>
                   <button disabled={busy || !current.taskId} title={current.unsupportedReason || tx("Request a task start; completion is not assumed")} onClick={() => run(() => api.invoke('tasks:runNow', { task: current }))}>{tx("Run now")}</button>
                   <button disabled={busy || !current.taskId || !current.instanceGuids?.length} title={current.unsupportedReason || tx("Stop only the captured running task instances")} onClick={() => run(() => api.invoke('tasks:stop', { task: current }))}>{tx("Stop")}</button>
                   <button disabled={busy || !current.taskId} title={current.unsupportedReason || (current.enabled === false ? tx("Let this task run on its schedule again") : tx("Keep the task but stop it running on its schedule"))} onClick={() => run(() => api.invoke('tasks:setEnabled', { task: current, on: current.enabled === false }))}>{current.enabled === false ? tx("Turn on") : tx("Turn off")}</button>
@@ -1732,6 +1738,7 @@ export function TasksDialog({ onClose }) {
         </Dialog>
       )}
       {creating && <TaskCreateDialog onClose={() => setCreating(false)} onDone={() => { setCreating(false); load(); }} />}
+      {trace.view && <PersistenceTraceDialog view={trace.view} onClose={trace.close} />}
     </Dialog>
   );
 }

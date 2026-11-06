@@ -22,6 +22,7 @@ mod eventlogs_native;
 mod launch_args;
 mod native_operations;
 mod pe_worker;
+mod persistence_trace;
 mod process_io;
 mod protected_artifacts;
 mod protected_driver_package;
@@ -42,6 +43,36 @@ mod transfer_undo;
 mod updater_native;
 mod windows_tools;
 static DATA_LOCK: std::sync::OnceLock<fs::File> = std::sync::OnceLock::new();
+
+#[tauri::command]
+async fn persistence_trace(
+    request: persistence_trace::Request,
+) -> Result<persistence_trace::Trace, String> {
+    tauri::async_runtime::spawn_blocking(move || persistence_trace::trace(request))
+        .await
+        .map_err(|_| "Persistence trace is unavailable".into())
+}
+
+#[cfg(test)]
+mod persistence_trace_binding_tests {
+    use super::*;
+
+    #[test]
+    fn invalid_run_name_returns_an_empty_unsupported_trace_through_command() {
+        let request = serde_json::from_value::<persistence_trace::Request>(serde_json::json!({
+            "kind": "run",
+            "source": "hkcu-run",
+            "name": "",
+        }))
+        .unwrap();
+        let trace = tauri::async_runtime::block_on(persistence_trace(request)).unwrap();
+
+        assert_eq!(
+            serde_json::to_value(trace).unwrap(),
+            serde_json::json!({"status": "unsupported", "lookbackDays": 7, "events": []})
+        );
+    }
+}
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
@@ -2441,6 +2472,7 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_notification::init())
         .invoke_handler(tauri::generate_handler![
+            persistence_trace,
             acknowledge_security_software_removal,
             security_software_inventory,
             prepare_security_software_removal,
