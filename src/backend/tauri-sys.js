@@ -13,6 +13,7 @@ export function securitySoftwareAdapter(invokeNative) {
   };
 }
 
+
 /** @returns {Promise<import('./system-contracts').SystemAdapter>} */
 export async function createTauriSys() {
   const info = /** @type {import('./system-contracts').NativeSystemInfo} */ (await invoke('sys_info'));
@@ -58,6 +59,7 @@ export async function createTauriSys() {
     executeTask: (planId) => invoke('execute_task_operation', { planId }),
     taskRecovery: (journalId) => invoke('task_recovery', { journalId }),
     driverInventory: () => invoke('driver_inventory'),
+    driverRetirementAdvisor: () => invoke('driver_retirement_advisor'),
     prepareDriver: (request) => invoke('prepare_driver_operation', { request }),
     executeDriver: (planId) => invoke('execute_driver_operation', { planId }),
     driverRecovery: (journalId) => invoke('driver_recovery', { journalId }),

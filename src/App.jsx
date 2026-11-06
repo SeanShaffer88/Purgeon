@@ -55,6 +55,7 @@ const BootDialog = optionalDialog(() => import('./dialogs.jsx'), 'BootDialog');
 const LogsDialog = optionalDialog(() => import('./dialogs.jsx'), 'LogsDialog');
 const HealthDialog = optionalDialog(() => import('./dialogs.jsx'), 'HealthDialog');
 const TasksDialog = optionalDialog(() => import('./dialogs.jsx'), 'TasksDialog');
+const DriverRetirementAdvisorDialog = optionalDialog(() => import('./driver-retirement-advisor.jsx'), 'DriverRetirementAdvisorDialog');
 const TakeSnapshotDialog = optionalDialog(() => import('./snapshots.jsx'), 'TakeSnapshotDialog');
 const ComparisonDialog = optionalDialog(() => import('./snapshots.jsx'), 'ComparisonDialog');
 const GroupDialog = optionalDialog(() => import('./groups.jsx'), 'GroupDialog');
@@ -463,6 +464,7 @@ const MENUS = [
         ['healthCheck', 'Health Check...'],
         ['selfHealth', 'Purgeon Health...'],
         ['scheduledTasks', 'Scheduled Tasks...'],
+        ['driverRetirementAdvisor', 'Driver Retirement Advisor...'],
       ] },
     ],
   ],
@@ -2411,6 +2413,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     eventLogs: () => setModal({ type: 'logs' }),
     healthCheck: () => setModal({ type: 'health' }),
     scheduledTasks: () => setModal({ type: 'tasks' }),
+    driverRetirementAdvisor: () => setModal({ type: 'driverRetirementAdvisor' }),
     sharedComponents: () => setModal({ type: 'shared' }),
     secureErase: () => setModal({ type: 'erase' }),
     gamesLibrary: () => setModal({ type: 'games' }),
@@ -3243,6 +3246,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {modal?.type === 'logs' && <LogsDialog onClose={() => setModal(null)} />}
       {modal?.type === 'health' && <HealthDialog onClose={() => setModal(null)} />}
       {modal?.type === 'tasks' && <TasksDialog onClose={() => setModal(null)} />}
+      {modal?.type === 'driverRetirementAdvisor' && <DriverRetirementAdvisorDialog onClose={() => setModal(null)} />}
       {modal?.type === 'shared' && <SharedDialog onClose={() => setModal(null)} />}
       {modal?.type === 'erase' && <EraseDialog onClose={() => setModal(null)} />}
       {modal?.type === 'games' && <GamesDialog onClose={() => setModal(null)} />}

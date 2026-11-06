@@ -88,6 +88,7 @@ export interface SystemAdapter {
   executeTask(planId:string):Promise<{ok:boolean;journalId:string;changed:boolean;settled:boolean;recoverable:boolean;detail:string}>;
   taskRecovery(journalId:string):Promise<{journalId:string;completed:boolean;recovered:boolean;recoverable:boolean;deleted:boolean;path:string}>;
   driverInventory(): Promise<Array<{PublishedName:string; OriginalName:string; InfFile:string; Date:string; Version:string; Provider:string; DriverClass:string; driverId:string|null; eligible:boolean; reason:string|null}>>;
+  driverRetirementAdvisor?(): Promise<unknown>;
   prepareDriver(request:{kind:'remove';driverId:string}|{kind:'recover';journalId:string}):Promise<{id:string;summary:string;requiresElevation:boolean}>;
   executeDriver(planId:string):Promise<{ok:boolean;journalId:string;stagedOnly:boolean;detail:string}>;
   driverRecovery(journalId:string):Promise<unknown>;

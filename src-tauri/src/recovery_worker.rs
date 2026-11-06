@@ -1,6 +1,6 @@
 //! Private, inert child. Only an authenticated instance of this executable can
 //! authorize dispatch, after assigning the child to its kill-on-close job.
-use crate::{broker, pe_worker, process_io, recovery_lease};
+use crate::{broker, driver_advisor, pe_worker, process_io, recovery_lease};
 use serde::{Deserialize, Serialize};
 use std::os::windows::{io::AsRawHandle, process::CommandExt};
 use std::process::{Command, Output};
@@ -180,6 +180,9 @@ fn worker_for_mode(name: &str, mode: &str) -> Result<Command, String> {
         if mode == pe_worker::MODE {
             worker.env("PURGEON_TEST_PE_WORKER", "1");
         }
+        if mode == driver_advisor::MODE {
+            worker.env("PURGEON_TEST_DRIVER_ADVISOR_WORKER", "1");
+        }
     }
     worker.creation_flags(0x08000000);
     Ok(worker)
@@ -193,6 +196,10 @@ pub(crate) fn new_worker_pipe() -> Result<(String, broker::Owned), String> {
 
 pub(crate) fn pe_worker_command(name: &str) -> Result<Command, String> {
     worker_for_mode(name, pe_worker::MODE)
+}
+
+pub(crate) fn driver_advisor_command(name: &str) -> Result<Command, String> {
+    worker_for_mode(name, driver_advisor::MODE)
 }
 
 pub(crate) fn authenticate_worker(
@@ -227,7 +234,7 @@ pub(crate) fn private_mode() -> Result<bool, String> {
 fn private_mode_for_args(args: &[String]) -> Result<bool, String> {
     if !matches!(
         args.first().map(String::as_str),
-        Some(MODE | ORDINARY_MODE | pe_worker::MODE)
+        Some(MODE | ORDINARY_MODE | pe_worker::MODE | driver_advisor::MODE)
     ) {
         return Ok(false);
     }
@@ -236,6 +243,9 @@ fn private_mode_for_args(args: &[String]) -> Result<bool, String> {
     };
     if args[0] == pe_worker::MODE {
         return run_pe_worker(name).map_err(|_| pe_worker::FAILURE.into());
+    }
+    if args[0] == driver_advisor::MODE {
+        return run_driver_advisor_worker(name).map_err(|_| driver_advisor::FAILURE.into());
     }
     run_worker_mode(name, args[0] == ORDINARY_MODE)
 }
@@ -259,6 +269,12 @@ fn authenticated_pipe(name: &str) -> Result<(broker::Owned, u32), String> {
 fn run_pe_worker(name: &str) -> Result<bool, String> {
     let (pipe, pid) = authenticated_pipe(name)?;
     pe_worker::serve(pipe.0, pid)?;
+    Ok(true)
+}
+
+fn run_driver_advisor_worker(name: &str) -> Result<bool, String> {
+    let (pipe, pid) = authenticated_pipe(name)?;
+    driver_advisor::serve(pipe.0, pid)?;
     Ok(true)
 }
 
@@ -350,6 +366,8 @@ static TEST_WORKER_ENTRY: extern "C" fn() = {
             let ordinary = std::env::var_os("PURGEON_TEST_ORDINARY_WORKER").is_some();
             let result = if std::env::var_os("PURGEON_TEST_PE_WORKER").is_some() {
                 private_mode_for_args(&[pe_worker::MODE.into(), name])
+            } else if std::env::var_os("PURGEON_TEST_DRIVER_ADVISOR_WORKER").is_some() {
+                private_mode_for_args(&[driver_advisor::MODE.into(), name])
             } else {
                 run_worker_mode(&name, ordinary)
             };
