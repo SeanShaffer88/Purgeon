@@ -844,6 +844,16 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .cleanup-impact-picker select { min-width: 0; max-width: 100%; padding: 4px 8px; background: var(--raised); border: 1px solid var(--border); border-radius: 6px; }
 .cleanup-impact dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 2fr); gap: 4px 8px; }
 .cleanup-impact dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.recording-diff { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+.recording-diff .cleanup-impact-picker select { flex: 1 1 180px; width: 100%; }
+.recording-diff p, .recording-diff h3, .recording-diff dl { margin: 0; }
+.recording-diff-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr)); gap: 8px; }
+.recording-diff-summary { min-width: 0; padding: 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; }
+.recording-diff-summary dl { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 4px 8px; margin: 8px 0; }
+.recording-diff-summary dd { min-width: 0; margin: 0; overflow-wrap: anywhere; }
+.recording-diff-target { overflow-wrap: anywhere; white-space: pre-wrap; }
+.recording-diff-list { list-style: none; margin: 4px 0; }
+.recording-diff-list li { padding: 4px 8px; border-bottom: 1px solid var(--border); overflow-wrap: anywhere; }
 .safe-note { color: var(--cyan); border-left: 2px solid var(--cyan); padding: 2px 8px; margin-bottom: 6px; }
 .impact-note { color: var(--muted); border-left: 2px solid var(--border); padding: 2px 8px; margin-bottom: 6px; }
 .tree-item.locked { opacity: 0.45; }

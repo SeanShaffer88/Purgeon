@@ -19,6 +19,7 @@ import { ActionToolbar } from './ActionToolbar.jsx';
 import { SettingsSyncDialog } from './SettingsSyncDialog.jsx';
 import { t } from './backend/i18n.js';
 import { createIconLoader, iconIdentity } from './icon-loader.js';
+import { recordingIndex } from './backend/installer-version-diff.js';
 
 // The heavy views load only when first opened, keeping first paint light.
 const DebloatView = lazy(() => import('./debloat.jsx').then((m) => ({ default: m.DebloatView })));
@@ -37,6 +38,7 @@ import { CloseDialog } from './command-dialogs.jsx';
 const AboutDialog = optionalDialog(() => import('./dialogs.jsx'), 'AboutDialog');
 const LeftoversDialog = optionalDialog(() => import('./dialogs.jsx'), 'LeftoversDialog');
 const MonitorWizard = optionalDialog(() => import('./dialogs.jsx'), 'MonitorWizard');
+const InstallerVersionDiffDialog = optionalDialog(() => import('./installer-version-diff.jsx'), 'InstallerVersionDiffDialog');
 const PropertiesDialog = optionalDialog(() => import('./dialogs.jsx'), 'PropertiesDialog');
 const ResultsDialog = optionalDialog(() => import('./dialogs.jsx'), 'ResultsDialog');
 const InterruptedDialog = optionalDialog(() => import('./dialogs.jsx'), 'InterruptedDialog');
@@ -219,7 +221,10 @@ const normKey = (k) => (k || '').replace(/^HKEY_LOCAL_MACHINE\\/i, 'HKLM\\').rep
 
 // Shape every view's records into one row type for the list.
 function toRow(view, r) {
-  if (view === 'monitored') return { ...r, key: r.id, sizeText: `${r.items.length} items`, sortSize: r.items.length, date: r.finished.slice(0, 10) };
+  if (view === 'monitored') {
+    const items = Array.isArray(r.items) ? r.items : undefined;
+    return { ...r, items, key: r.id, sizeText: items ? `${items.length} items` : tx("Unknown"), sortSize: items?.length ?? 0, date: typeof r.finished === 'string' ? r.finished.slice(0, 10) : '' };
+  }
   if (view === 'backups') return { ...r, key: r.id, name: r.title, sizeText: `${r.entries.length}`, sortSize: r.entries.length, date: r.created.slice(0, 10) };
   if (view === 'snapshots') {
     const n = r.stats.dirs + r.stats.files + r.stats.keys + r.stats.values;
@@ -1037,6 +1042,9 @@ const [reducedMotion, setReducedMotion] = useState(false);
   const hiddenCount = view === 'desktop' || view === 'store' ? rows.filter((r) => hidden[r.key]).length : 0;
 
   const current = visible.find((r) => r.key === selected) || null;
+  const monitoredIndex = useMemo(() => recordingIndex(view === 'monitored' ? rows : []), [view, rows]);
+  const canCompareRecording = !loading && current && monitoredIndex.get(current.id) === current
+    && [...monitoredIndex].some(([id, item]) => id !== current.id && item);
   const markedRows = visible.filter((r) => marked.has(r.key));
   const batchable = view === 'desktop' || view === 'store';
   // Lists where several rows can be selected: programs (batch uninstall) and snapshots (compare two).
@@ -1237,6 +1245,10 @@ const [reducedMotion, setReducedMotion] = useState(false);
   };
 
   const uninstallMonitored = async (rec) => {
+    if (!Array.isArray(rec.items) || !Array.isArray(rec.uninstallKeys)) {
+      setNotice({ tone: 'warn', text: tx("This recording does not contain the data needed for cleanup.") });
+      return;
+    }
     const keys = new Set(rec.uninstallKeys.map(normKey));
     const registered = desktopCache.current.find((p) => keys.has(normKey(p.key)));
     const run = registered && (await confirmWithRestore(`Run ${registered.name}'s own uninstaller first?`, 'Recommended. Afterwards Purgeon removes everything else the installation created.', 'confirmRunUninstaller'));
@@ -2124,6 +2136,9 @@ const [reducedMotion, setReducedMotion] = useState(false);
       if (r) setError(tx("{p0}: install folder is unknown or missing.", { p0: (p.name) }));
     },
     search: (p) => api.invoke('program:search', p.name),
+    compareRecording: (p) => {
+      if (view === 'monitored' && canCompareRecording) setModal({ type: 'installerVersionDiff', recordId: p.id });
+    },
     properties: async (p) => {
       if (view === 'backups') return setModal({ type: 'results', title: tx("Backup – {p0}", { p0: (p.name) }), results: p.entries.map((e) => ({ ...e, ok: true, detail: e.kind === 'key' ? 'Exported .reg' : e.recycled ? 'In Recycle Bin' : '' })) });
       const sizes = view === 'desktop' ? (await api.invoke('programs:sizeHistory').catch(() => ({})))[p.key] : null;
@@ -2661,7 +2676,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
     : view === 'backups'
       ? [['restore', 'Restore'], ['properties', 'Show Contents'], null, ['deleteBackup', 'Delete Backup']]
       : view === 'monitored'
-        ? [['uninstall', 'Uninstall...'], null, ['properties', 'Recorded Changes'], ['search', 'Search Online']]
+        ? [['uninstall', 'Uninstall...'], null, ['properties', 'Recorded Changes'], ['compareRecording', 'Compare Recording…'], ['search', 'Search Online']]
         : view === 'store'
           ? [['uninstall', 'Uninstall...'], ['setGroup', 'Set Group...', 'Ctrl+G'], null, ['folder', 'Installation Folder'], ['search', 'Search Online'], null, ['properties', 'Properties']]
           : [
@@ -2756,7 +2771,10 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       more: [current.publisher, current.sizeText, view === 'desktop' && archOf(current).text, current.date && `installed ${current.date}`, groups[current.key] && `group ${groups[current.key]}`, hidden[current.key] && 'hidden'].filter(Boolean).join(' · '),
     };
   })();
-  const barReady = (id) => (id === 'sysinfo' || id === 'takeSnapshot' ? true : id === 'compareSelected' ? markedRows.length === 2 : isBatch || !!current);
+  const barReady = (id) => {
+    if (id === 'compareRecording') return !!canCompareRecording;
+    return id === 'sysinfo' || id === 'takeSnapshot' ? true : id === 'compareSelected' ? markedRows.length === 2 : isBatch || !!current;
+  };
 
   // The main window keeps the layout of the README screenshot — menu bar, command bar,
   // selection bar, action bar, list, status bar, and nothing else — so the quick list
@@ -3127,7 +3145,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
         <div className="context-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()} role="menu">
           {contextItems.map((it, i) =>
             it ? (
-              <button key={i} className={i === 0 ? 'bold' : ''} role="menuitem" onClick={() => dispatch(it[0])} title={tx(ACTION_TIPS[it[0]] || '')} aria-label={tx(it[1])}>
+              <button key={i} className={i === 0 ? 'bold' : ''} role="menuitem" disabled={it[0] === 'compareRecording' && !canCompareRecording} onClick={() => dispatch(it[0])} title={tx(ACTION_TIPS[it[0]] || '')} aria-label={tx(it[1])}>
                 <span>{tx(it[1])}</span>
                 <span className="accel">{it[2]}</span>
               </button>
@@ -3269,6 +3287,15 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       )}
       {modal?.type === 'results' && <ResultsDialog {...modal} onClose={() => setModal(null)} />}
       {modal?.type === 'properties' && <PropertiesDialog program={modal.program} onClose={() => setModal(null)} />}
+      {modal?.type === 'installerVersionDiff' && (
+        <InstallerVersionDiffDialog index={monitoredIndex} recordId={modal.recordId} loading={loading} onClose={() => {
+          setModal(null);
+          requestAnimationFrame(() => {
+            const trigger = actionBarRef.current?.querySelector('[data-action="compareRecording"]:not(:disabled)');
+            (trigger || listRef.current)?.focus();
+          });
+        }} />
+      )}
       {modal?.type === 'sysinfo' && <SystemInfoDialog data={modal.data} onClose={() => setModal(null)} />}
       {modal?.type === 'about' && <AboutDialog onClose={() => setModal(null)} />}
       {modal?.type === 'shortcuts' && <ShortcutsDialog onClose={() => setModal(null)} />}
