@@ -6,6 +6,7 @@ import { runCommandLine, reg, runPS, psq } from './shell.js';
 import * as programs from './programs.js';
 import * as leftovers from './leftovers.js';
 import * as backups from './backups.js';
+import { saveCleanupPlan } from './saved-cleanup-plans.js';
 import * as shared from './shared.js';
 import * as erase from './erase.js';
 import * as games from './games.js';
@@ -243,6 +244,7 @@ const handlers = {
   'monitor:revert-test-install': async (items) => monitor.revertTestInstall(items),
   'backups:list': () => backups.list(),
   'backups:plan': ({ items, owners, includeImpact }) => backups.planRemoval({ items, owners, includeImpact: includeImpact === true }),
+  'backups:savePlan': saveCleanupPlan,
   'backups:forecast': ({ items }) => backups.forecastSize(items),
   'backups:interrupted': () => backups.interrupted(),
   'backups:resolveInterrupted': (action) => backups.resolveInterrupted(action),

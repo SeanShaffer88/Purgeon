@@ -9,6 +9,7 @@ import { SettingHelp } from './onboarding.jsx';
 import { summarizeImpact, failureHint } from './backend/impact.js';
 import { t } from './backend/i18n.js';
 import { leftoverSections } from './leftover-sections.js';
+import { SavedPlanReview, useSavedPlanReview } from './saved-plan-review.jsx';
 
 
 const api = window.api;
@@ -23,15 +24,21 @@ const GROUPS = [
 
 
 
-export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDryRun, onExportPlan, safeMode = false }) {
+export function LeftoversDialog({ title, heading, items, owners, onClose, onRemove, onDryRun, onExportPlan, onReviewSavedPlan, onSavePlan, safeMode = false }) {
   const treeId = useId();
   const allowed = (it) => safeAllowed(it, safeMode);
   const [checked, setChecked] = useState(() => new Set(items.map((it, idx) => (it.confidence === 'high' && allowed(it) ? idx : -1)).filter((i) => i >= 0)));
   const [preview, setPreview] = useState(null);
   const dryRunButton = useRef(null);
-  const currentPreview = preview?.checked === checked && preview.items === items && preview.safeMode === safeMode ? preview : null;
+  const currentPreview = preview?.checked === checked && preview.items === items && preview.owners === owners && preview.safeMode === safeMode ? preview : null;
   const planning = currentPreview?.status === 'loading';
   const plan = currentPreview?.plan;
+  const savedReview = useSavedPlanReview(items, owners, safeMode, onReviewSavedPlan);
+  const reviewing = Boolean(savedReview.active);
+  const fileInput = useRef(null);
+  const reviewBack = useRef(null);
+  useEffect(() => { if (reviewing) reviewBack.current?.focus(); }, [reviewing]);
+  const close = () => { savedReview.close(); onClose(); };
   const hidden = items.filter((it) => !allowed(it)).length;
   const [collapsed, setCollapsed] = useState(new Set());
   // Pre-change impact summary for the current selection: what is going, about how
@@ -75,7 +82,7 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
     });
   const selected = () => items.filter((_, i) => checked.has(i));
   const dryRun = async () => {
-    const request = { checked, items, safeMode, status: 'loading' };
+    const request = { checked, items, owners, safeMode, status: 'loading' };
     setPreview(request);
     try {
       const result = await onDryRun(selected());
@@ -88,10 +95,13 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
   return (
     <Dialog
       title={title}
-      onClose={onClose}
+      onClose={close}
       width={680}
       buttons={
-        <>
+        reviewing ? <>
+          <button ref={reviewBack} onClick={savedReview.back}>{tx("Back to Current Selection")}</button>
+          <button onClick={close}>{tx("Close")}</button>
+        </> : <>
           <span className="button-hint">{t('selectionFraction', { selected: checked.size, total: items.length })}</span>
           <button onClick={() => setChecked(new Set(items.map((_, i) => i).filter((i) => allowed(items[i]))))}>{tx("Select All")}</button>
           <button onClick={() => setChecked(new Set())}>{tx("Select None")}</button>
@@ -101,12 +111,24 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
             </button>
           )}
           <button className="primary" disabled={!checked.size} onClick={() => onRemove(selected())}>{tx("Delete Selected")}</button>
-          <button onClick={onClose}>{tx("Close")}</button>
+          <button onClick={close}>{tx("Close")}</button>
         </>
       }
     >
-
+      {reviewing ? <SavedPlanReview state={savedReview.active} /> : <>
       <p className="heading">{tx(heading)}</p>
+      {onReviewSavedPlan && !plan && (
+        <div className="saved-plan-open">
+          <button ref={savedReview.opener} onClick={() => fileInput.current?.click()}>{tx("Open Saved Plan…")}</button>
+          <input ref={fileInput} type="file" accept=".json,application/json" hidden onChange={(event) => {
+            const file = event.currentTarget.files?.[0];
+            event.currentTarget.value = '';
+            if (!file) return;
+            setPreview(null);
+            void savedReview.inspect(file);
+          }} />
+        </div>
+      )}
       {safeMode && hidden > 0 && <div className="safe-note">{tx("Safe mode: ")}{hidden}{tx(" lower-confidence item")}{hidden === 1 ? tx(" is") : tx("s are")}{tx(" shown but can’t be selected. Turn it off in Tools › Safe Mode.")}</div>}
       {impact && (
         <div className="impact-note">
@@ -121,7 +143,7 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
         <PlanView results={plan.results} impact={plan.impact} onBack={() => {
           setPreview(null);
           dryRunButton.current?.focus();
-        }} onExport={() => onExportPlan(plan.results)} />
+        }} onExport={() => onExportPlan(plan.results)} onSave={onSavePlan && (() => onSavePlan(plan.results))} />
       ) : items.length === 0 ? (
         <div className="empty-box">{tx("No leftovers found. Everything was removed cleanly.")}</div>
       ) : (
@@ -185,6 +207,7 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
         </div>
       )}
       <p className="footnote">{tx("Cleanup records and available registry exports are kept in Tools › Backups. File recovery requires the original Recycle Bin copies. Some actions cannot be undone.")}</p>
+      </>}
     </Dialog>
   );
 }

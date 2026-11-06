@@ -3184,6 +3184,8 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
           {...modal}
           safeMode={safeOn}
           onDryRun={(sel) => api.invoke('backups:plan', { items: sel, owners: modal.owners || [], includeImpact: true })}
+          onReviewSavedPlan={(items) => api.invoke('backups:plan', { items, owners: modal.owners || [] })}
+          onSavePlan={(results) => api.invoke('backups:savePlan', { title: modal.title, results })}
           onExportPlan={(results) => api.invoke('export:html', { title: 'Export Dry Run', fileName: 'dry-run.html', html: planHtml(modal.title, results) })}
           onClose={() => setModal(null)}
         />

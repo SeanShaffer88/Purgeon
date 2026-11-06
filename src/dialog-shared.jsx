@@ -61,8 +61,17 @@ function CleanupImpactView({ results, impact }) {
 }
 
 // A dry run's results: what would happen to each selected item, with nothing changed.
-export function PlanView({ results, onBack, onExport, impact }) {
+export function PlanView({ results, onBack, onExport, impact, onSave }) {
   const skipped = results.filter((r) => !r.ok);
+  const [saveStatus, setSaveStatus] = useState('');
+  const save = async () => {
+    setSaveStatus('saving');
+    try {
+      setSaveStatus(await onSave() ? 'saved' : '');
+    } catch {
+      setSaveStatus('failed');
+    }
+  };
   return (
     <div className="plan">
       <div className="plan-bar">
@@ -71,10 +80,14 @@ export function PlanView({ results, onBack, onExport, impact }) {
           {results.length - skipped.length}{tx(" would be removed or put back")}{skipped.length ? tx(", {p0} would be skipped", { p0: (skipped.length) }) : ''}.
         </span>
         <span className="plan-actions">
-          <button onClick={onExport}>{tx("Export Plan…")}</button>
+          {onSave && <button onClick={save} disabled={saveStatus === 'saving'}>{tx("Save Plan…")}</button>}
+          <button onClick={onExport}>{tx(onSave ? "Export HTML…" : "Export Plan…")}</button>
           <button onClick={onBack}>{tx("Back to the List")}</button>
         </span>
       </div>
+      {saveStatus === 'saving' && <p className="impact-note" role="status">{tx("Saving plan…")}</p>}
+      {saveStatus === 'saved' && <p className="impact-note" role="status">{tx("Cleanup plan saved.")}</p>}
+      {saveStatus === 'failed' && <p className="impact-note" role="alert">{tx("Could not save the cleanup plan.")}</p>}
       {impact && <CleanupImpactView results={results} impact={impact} />}
       <div className="tree">
         {[...skipped, ...results.filter((r) => r.ok)].slice(0, 800).map((r, i) => (

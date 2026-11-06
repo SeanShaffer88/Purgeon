@@ -12,7 +12,7 @@ const cache = new Map();
 const noop = () => {};
 const dialog = ({ children, buttons }) => React.createElement('section', null, children, buttons);
 const compiled = new Map();
-for (const name of ['dialog-shared.jsx', 'command-dialogs.jsx', 'dialogs.jsx', 'more.jsx', 'onboarding.jsx']) {
+for (const name of ['dialog-shared.jsx', 'command-dialogs.jsx', 'dialogs.jsx', 'more.jsx', 'onboarding.jsx', 'saved-plan-review.jsx']) {
   const entry = `fixture:${name}`;
   const bundle = await rolldown({ input: entry, transform: { jsx: 'react-jsx' }, plugins: [{
     name: 'inert-ui-fixture',
@@ -36,7 +36,8 @@ function componentModule(name) {
     if (id === './backend/impact.js') return { summarizeImpact: noop, failureHint: noop };
     if (id === './backend/winpath.js') return {};
     if (id === './leftover-sections.js') return { leftoverSections };
-    if (id === './dialog-shared.jsx' || id === './command-dialogs.jsx') return componentModule(id.slice(2));
+    if (id === './backend/saved-cleanup-plans.js') return { readSavedCleanupPlan: noop, reviewSavedCleanupPlan: noop };
+    if (id === './dialog-shared.jsx' || id === './command-dialogs.jsx' || id === './saved-plan-review.jsx') return componentModule(id.slice(2));
     throw new Error(`Unexpected UI fixture import: ${id}`);
   };
   Function('require', 'module', 'exports', 'window', output)(dependency, module, module.exports, { api: { invoke() { throw new Error('SSR fixture must not call native API'); } } });
@@ -44,6 +45,22 @@ function componentModule(name) {
   return module.exports;
 }
 const render = (Component, props) => renderToStaticMarkup(React.createElement(Component, props));
+
+test('Saved Cleanup Plan renders saved data as text and leaves the review without cleanup controls', () => {
+  const { SavedPlanReview } = componentModule('saved-plan-review.jsx');
+  const html = render(SavedPlanReview, {
+    state: {
+      status: 'ready', document: { title: '<script>fixture</script>', createdAt: '2026-01-01T00:00:00.000Z' },
+      rows: [{ saved: { kind: 'value', path: 'HKCU\\Fixture', name: '', detail: '<img onerror=fixture>', group: 'Fixture group' }, status: 'unchanged' }],
+    },
+  });
+  assert.match(html, /&lt;script&gt;fixture&lt;\/script&gt;/);
+  assert.match(html, /&lt;img onerror=fixture&gt;/);
+  assert.match(html, /Current scan and fresh dry run/);
+  assert.match(html, /No observed change/);
+  assert.match(html, /\(default\)/);
+  assert.doesNotMatch(html, /<script>|<img |<button/);
+});
 
 test('Cleanup Impact Lab keeps selector evidence in original plan order and labels incomplete inventory', () => {
   const { PlanView } = componentModule('dialog-shared.jsx');

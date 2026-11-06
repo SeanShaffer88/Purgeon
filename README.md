@@ -296,6 +296,8 @@ From there, **Uninstall** and **Analyze Leftovers** are one click away.
 
 **Dry Run** previews the selected cleanup without changing anything. In the leftovers dialog, **Cleanup Impact Lab** shows why an item was selected, observed installed-application and shared-file references, and service, task or startup targets visible in Startup Manager. It also describes the recovery method that would be attempted. Unavailable inventories and omitted matches are marked. Removal checks the current system again, and recovery depends on the recorded backup or Recycle Bin entry.
 
+**Save Plan…** saves up to 800 dry-run rows as a UTF-8 JSON file of up to 1 MiB. **Open Saved Plan…** compares that file with the current leftover scan and runs a fresh dry run for uniquely matched items. The review leaves your selection unchanged. Matching rows show what Purgeon observed, and the saved file never authorizes cleanup. **Export HTML…** remains available for a readable report.
+
 ![Dry run](docs/screenshots/dry-run.png)
 
 **Tools › Search Registry** finds registry keys named after a word, and values that mention it, in the `Software` branches of your user and the machine. Results go through the same protection rules as leftovers, start unticked, and are backed up before removal.

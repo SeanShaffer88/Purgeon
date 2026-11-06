@@ -829,7 +829,13 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 
 /* safety: dry run, safe mode, interrupted removal */
 .plan-bar { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; padding: 6px 0; }
-.plan-actions { margin-left: auto; display: flex; gap: 6px; }
+.plan-actions { margin-left: auto; display: flex; flex-wrap: wrap; gap: 6px; }
+.saved-plan-open { margin-bottom: 8px; }
+.saved-plan h3, .saved-plan p { margin: 0 0 8px; overflow-wrap: anywhere; }
+.saved-plan table { table-layout: fixed; border-collapse: collapse; width: 100%; }
+.saved-plan th, .saved-plan td { padding: 6px 8px; text-align: left; vertical-align: top; overflow-wrap: anywhere; }
+.saved-plan th { background: var(--raised); }
+.saved-plan td { border-top: 1px solid var(--border); }
 .plan .result .mark { color: var(--green); }
 .plan .result.fail .mark { color: var(--amber); }
 .cleanup-impact { display: grid; gap: 8px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px; margin-bottom: 8px; }
