@@ -80,3 +80,41 @@ test('unavailable, disabled, denied, unsupported and empty results remain distin
   setSys({ persistenceTrace: async () => ({ status: 'matches', lookbackDays: 99, events: [] }) });
   assert.equal((await __handlers['tasks:trace'](request)).status, 'unavailable');
 });
+
+test('the desktop trace adapter invokes the native command with the typed request', async (t) => {
+  const { createTauriSys } = await import('../src/backend/tauri-sys.js');
+  for (const key of ['window', '__APP_VERSION__']) {
+    const previous = Object.getOwnPropertyDescriptor(globalThis, key);
+    t.after(() => {
+      if (previous) Object.defineProperty(globalThis, key, previous);
+      else delete globalThis[key];
+    });
+  }
+
+  const calls = [];
+  const response = { status: 'noMatch', lookbackDays: 7, events: [] };
+  const failure = Error('inert native trace rejection');
+  const run = { kind: 'run', source: 'hklm-run32', name: 'Fixture' };
+  const task = { kind: 'task', path: '\\Fixture\\Agent' };
+  globalThis.__APP_VERSION__ = '1.6.1';
+  globalThis.window = {
+    __TAURI_INTERNALS__: {
+      async invoke(command, args) {
+        calls.push([command, args]);
+        if (command === 'sys_info') return { env: {} };
+        assert.equal(command, 'persistence_trace');
+        if (args.request.kind === 'task') throw failure;
+        return response;
+      },
+    },
+  };
+
+  const adapter = await createTauriSys();
+  assert.equal(await adapter.persistenceTrace(run), response);
+  await assert.rejects(adapter.persistenceTrace(task), (error) => error === failure);
+  assert.deepEqual(calls, [
+    ['sys_info', {}],
+    ['persistence_trace', { request: run }],
+    ['persistence_trace', { request: task }],
+  ]);
+});
