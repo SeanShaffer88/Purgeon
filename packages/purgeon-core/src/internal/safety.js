@@ -39,8 +39,11 @@ const inside = (child, parent) => {
 };
 
 // Reads installed programs and shared-file counts: { programs: [{ key, name, location }], shared: [{ path, count }] }.
-export async function readState() {
+export { cleanDir, inside, longKey };
+
+export async function readState({ requireEvidence = false } = {}) {
   const [s] = await runPSJson(READ_STATE);
+  if (requireEvidence && (!Array.isArray(s?.programs) || !Array.isArray(s?.shared))) throw new Error('Ownership inventory is unavailable');
   return { programs: s?.programs || [], shared: s?.shared || [] };
 }
 

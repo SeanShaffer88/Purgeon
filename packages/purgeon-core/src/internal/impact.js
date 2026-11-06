@@ -1,8 +1,8 @@
 // Pre-change impact summary + failure next steps, as pure text logic so both are
 // testable and identical wherever they are shown.
 //
-// The impact summary answers, before anything is removed: how much is going, about
-// how much space it frees, and whether a restart may be needed. The space figure is
+// The impact summary counts the selection, estimates its size and flags a possible
+// restart. The size estimate is
 // the removal backup's forecast (files measured, registry entries estimated) — the
 // same number the backup itself works from, labelled "about" because folder sizes
 // are measured with a cap.
@@ -25,7 +25,7 @@ export function summarizeImpact(items, forecastBytes) {
     count: list.length,
     needsRestart: list.some((i) => RESTART_KINDS.has(i.kind)),
     text: list.length
-      ? `${list.length} selected: ${parts.join(', ')} · about ${size} will be freed (everything is backed up first, so it can be put back)`
+      ? `${list.length} selected: ${parts.join(', ')} · about ${size} of selected data`
       : 'Nothing selected.',
   };
 }

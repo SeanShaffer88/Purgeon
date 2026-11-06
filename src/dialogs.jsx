@@ -27,8 +27,11 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
   const treeId = useId();
   const allowed = (it) => safeAllowed(it, safeMode);
   const [checked, setChecked] = useState(() => new Set(items.map((it, idx) => (it.confidence === 'high' && allowed(it) ? idx : -1)).filter((i) => i >= 0)));
-  const [plan, setPlan] = useState(null);
-  const [planning, setPlanning] = useState(false);
+  const [preview, setPreview] = useState(null);
+  const dryRunButton = useRef(null);
+  const currentPreview = preview?.checked === checked && preview.items === items && preview.safeMode === safeMode ? preview : null;
+  const planning = currentPreview?.status === 'loading';
+  const plan = currentPreview?.plan;
   const hidden = items.filter((it) => !allowed(it)).length;
   const [collapsed, setCollapsed] = useState(new Set());
   // Pre-change impact summary for the current selection: what is going, about how
@@ -37,12 +40,12 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
   const [impact, setImpact] = useState(null);
   const impactSeq = useRef(0);
   useEffect(() => {
+    const seq = ++impactSeq.current;
     const sel = items.filter((_, i) => checked.has(i));
     if (!sel.length) {
       setImpact(null);
       return;
     }
-    const seq = ++impactSeq.current;
     api
       .invoke('backups:forecast', { items: sel })
       .then((bytes) => {
@@ -72,11 +75,13 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
     });
   const selected = () => items.filter((_, i) => checked.has(i));
   const dryRun = async () => {
-    setPlanning(true);
+    const request = { checked, items, safeMode, status: 'loading' };
+    setPreview(request);
     try {
-      setPlan(await onDryRun(selected()));
-    } finally {
-      setPlanning(false);
+      const result = await onDryRun(selected());
+      setPreview((current) => current === request ? { ...request, status: 'ready', plan: result } : current);
+    } catch {
+      setPreview((current) => current === request ? { ...request, status: 'failed' } : current);
     }
   };
 
@@ -91,7 +96,7 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
           <button onClick={() => setChecked(new Set(items.map((_, i) => i).filter((i) => allowed(items[i]))))}>{tx("Select All")}</button>
           <button onClick={() => setChecked(new Set())}>{tx("Select None")}</button>
           {onDryRun && (
-            <button disabled={!checked.size || planning} onClick={dryRun} title={tx("Check what would happen, without changing anything")}>
+            <button ref={dryRunButton} disabled={!checked.size || planning} onClick={dryRun} title={tx("Check what would happen, without changing anything")}>
               {planning ? tx("Checking…") : tx("Dry Run")}
             </button>
           )}
@@ -110,8 +115,13 @@ export function LeftoversDialog({ title, heading, items, onClose, onRemove, onDr
         </div>
       )}
 
+      {planning && <div className="impact-note" role="status">{tx("Checking the selected items…")}</div>}
+      {currentPreview?.status === 'failed' && <div className="impact-note" role="alert">{tx("The dry run could not finish. Try Dry Run again.")}</div>}
       {plan ? (
-        <PlanView results={plan} onBack={() => setPlan(null)} onExport={() => onExportPlan(plan)} />
+        <PlanView results={plan.results} impact={plan.impact} onBack={() => {
+          setPreview(null);
+          dryRunButton.current?.focus();
+        }} onExport={() => onExportPlan(plan.results)} />
       ) : items.length === 0 ? (
         <div className="empty-box">{tx("No leftovers found. Everything was removed cleanly.")}</div>
       ) : (

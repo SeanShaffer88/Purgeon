@@ -115,16 +115,34 @@ foreach ($s in Get-CimInstance Win32_Service -ErrorAction SilentlyContinue) {
 @($out) | ConvertTo-Json -Compress -Depth 3
 `;
 
-async function list() {
-  const state = await readState();
+function readRows(state) {
   const input = JSON.stringify({
     runKeys: RUN_KEYS.map(({ id, key, approved }) => ({ id, key: key.replace(/^HKCU/, 'HKEY_CURRENT_USER').replace(/^HKLM/, 'HKEY_LOCAL_MACHINE'), approved: approved.replace(/^HKCU/, 'HKEY_CURRENT_USER').replace(/^HKLM/, 'HKEY_LOCAL_MACHINE') })),
     folders: STARTUP_FOLDERS.map(({ id, dir, approved }) => ({ id, dir: dir(), approved: approved.replace(/^HKCU/, 'HKEY_CURRENT_USER').replace(/^HKLM/, 'HKEY_LOCAL_MACHINE') })),
     managedServices: Object.keys(state.services || {}),
   });
-  const rows = await runPSJson(LIST, { input });
-  const native = (await scheduledTasks.list()).filter((task) => !task.isWindows).map((task) => ({ type: 'task', source: 'task', name: task.name, path: task.path + task.name, taskId: task.taskId, command: task.command, enabled: task.enabled, unsupportedReason: task.unsupportedReason, company: '', triggers: '' }));
+  return runPSJson(LIST, { input });
+}
+
+const taskEntries = (tasks) => tasks.filter((task) => !task.isWindows).map((task) => ({ type: 'task', source: 'task', name: task.name, path: task.path + task.name, taskId: task.taskId, command: task.command, enabled: task.enabled, unsupportedReason: task.unsupportedReason, company: '', triggers: '' }));
+
+async function list() {
+  const state = await readState();
+  const rows = await readRows(state);
+  const native = taskEntries(await scheduledTasks.list());
   return [...rows, ...native].map((r) => ({ ...shape(r, state), windows: /^Microsoft/i.test(r.company || '') }));
+}
+
+// Impact reports which inventory providers responded, keeping available observations on failure.
+export async function referenceInventory(taskRows) {
+  const rows = Promise.resolve().then(readState).then(async (state) => (await readRows(state)).map((row) => shape(row, state)));
+  const tasks = (taskRows ? Promise.resolve(taskRows) : scheduledTasks.list()).then(taskEntries);
+  const sources = await Promise.allSettled([rows, tasks]);
+  const available = sources.filter((source) => source.status === 'fulfilled');
+  return {
+    entries: available.flatMap((source) => source.value),
+    status: available.length === 2 ? 'observed' : available.length === 1 ? 'partial' : 'unavailable',
+  };
 }
 
 // Adds the id, on/off state, location text and admin/effect hints the UI shows.
