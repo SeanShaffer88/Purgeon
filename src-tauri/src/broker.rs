@@ -855,10 +855,17 @@ pub(crate) fn receive_until<T: for<'de> Deserialize<'de>>(
     pipe: Handle,
     deadline: Instant,
 ) -> Result<T, String> {
+    receive_bounded_until(pipe, deadline, MAX_MESSAGE)
+}
+pub(crate) fn receive_bounded_until<T: for<'de> Deserialize<'de>>(
+    pipe: Handle,
+    deadline: Instant,
+    limit: usize,
+) -> Result<T, String> {
     let mut length = [0u8; 4];
     transfer(pipe, &mut length, false, deadline)?;
     let size = u32::from_le_bytes(length) as usize;
-    if size == 0 || size > MAX_MESSAGE {
+    if size == 0 || size > limit.min(MAX_MESSAGE) {
         return Err("Broker payload exceeds limit".into());
     }
     let mut data = vec![0u8; size];

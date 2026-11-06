@@ -16,6 +16,7 @@ mod atomic_file;
 mod boot_native;
 mod broker;
 mod debloat_native;
+mod driver_advisor;
 mod driver_inventory;
 mod driver_native;
 mod eventlogs_native;
@@ -267,6 +268,13 @@ async fn execute_task_operation(plan_id: String) -> Result<task_native::ResultVi
     tauri::async_runtime::spawn_blocking(move || task_native::execute(&plan_id))
         .await
         .map_err(|e| e.to_string())?
+}
+
+#[tauri::command]
+async fn driver_retirement_advisor() -> Result<driver_advisor::Report, String> {
+    tauri::async_runtime::spawn_blocking(driver_advisor::read)
+        .await
+        .map_err(|_| driver_advisor::FAILURE.to_string())?
 }
 
 #[tauri::command]
@@ -2498,6 +2506,7 @@ pub fn run() {
             prepare_task_operation,
             execute_task_operation,
             driver_inventory,
+            driver_retirement_advisor,
             prepare_driver_operation,
             execute_driver_operation,
             driver_recovery,

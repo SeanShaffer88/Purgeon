@@ -113,6 +113,7 @@ export const ACTION_TIPS = {
   eventLogs: 'Every Windows event log with its size: save a copy of any of them, clear one (a copy is saved first and kept), or turn recording off. The Security log can be saved but never cleared or turned off.',
   healthCheck: 'A plain-words once-over of the PC: drive health and free space, system files, a recent restore point, waiting updates, recent crashes, startup load and battery wear. Nothing is repaired; each line names the tool that fixes it.',
   scheduledTasks: 'Everything Windows runs on a schedule: run, stop, turn off or on, delete (with its definition saved first), and create simple tasks. Windows\' own tasks can be run or turned off but never deleted.',
+  driverRetirementAdvisor: 'Checks present and non-present Windows device records for bindings to third-party driver packages. The result is read-only and cannot establish that a package is safe to remove.',
   sharedComponents: 'Shows the shared runtimes, shared folders and shared files Purgeon keeps during removals, with the programs that depend on each one where Windows records them.',
   settings: 'Every Purgeon option in one window — uninstalling, appearance, window and tray, background behaviour and backup limits. Changes apply at once, so the window can stay open while you change several.',
   duplicateFiles: 'Finds files with identical contents (SHA-256, never name alone) under a folder you pick. A review tool: nothing is ticked for you, one copy of each file is always kept, and removals go to the Recycle Bin.',
@@ -204,6 +205,8 @@ export const LABEL_TIPS = {
   'Uninstall': 'Runs the program’s own uninstaller, then scans for leftovers. Everything removed is backed up first.',
   'Dry Run': 'Shows exactly what would be removed or skipped, item by item, without changing anything.',
   'Remove rule': 'Removes this inbound firewall rule after backing it up; it can be restored from Change History.',
+  'Check driver bindings': 'Collects a fresh read-only sample of Windows driver packages and their observed device bindings.',
+  'Check again': 'Refreshes the read-only observation.',
   'Show more': 'Shows more items of this list.',
 };
 
