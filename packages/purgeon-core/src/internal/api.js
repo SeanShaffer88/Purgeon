@@ -258,14 +258,15 @@ const handlers = {
     return { ...result, restorePoint: rp };
   },
   'log:open': () => open(log.folder()),
-  'backups:restore': (id) => {
-    newStop('restoreRun');
-    return backups.restore(id, undefined, () => opStops.restoreRun?.stopped);
+  'backups:restore': (request) => {
+    const stop = newStop('restoreRun');
+    const id = typeof request === 'string' ? request : request?.id;
+    return backups.restore(id, undefined, () => stop.stopped, { includeReadback: request?.includeReadback === true });
   },
   'backups:restoreCancel': () => stopOp('restoreRun'),
-  'backups:restoreEntries': ({ id, indexes }) => {
-    newStop('restoreRun');
-    return backups.restore(id, indexes, () => opStops.restoreRun?.stopped);
+  'backups:restoreEntries': ({ id, indexes, includeReadback }) => {
+    const stop = newStop('restoreRun');
+    return backups.restore(id, indexes, () => stop.stopped, { includeReadback: includeReadback === true });
   },
   'backups:verifyPackage': (id) => {
     const stop = newStop('verifyRun');
@@ -793,9 +794,9 @@ const recorders = {
   }),
   'restore:create': ({ description }, result) =>
     result.created ? { type: 'Restore point', title: `Created restore point "${description}"`, detail: 'Use Windows System Restore to go back to it' } : null,
-  'backups:restore': (id, results) => ({
+  'backups:restore': (request, results) => ({
     type: 'Restore',
-    title: `Restored the backup of ${String(id).replace(/^[^_]*_/, '').replace(/-/g, ' ') || 'removed items'}`,
+    title: `Restored the backup of ${String(typeof request === 'string' ? request : request?.id).replace(/^[^_]*_/, '').replace(/-/g, ' ') || 'removed items'}`,
     detail: `${results.filter((r) => r.ok).length} of ${results.length} entries restored`,
   }),
   'graph:removeOrphan': (orphan, out) => ({

@@ -10,7 +10,7 @@ import { isProtected, isProtectedKey } from './paths.js';
 import { regAddArgs } from './snapshots.js';
 import { isJunkPath, installedFamilies } from './junk.js';
 import { readState, guardReason } from './safety.js';
-import { readSettings } from './settings.js';
+import { readSettings, settingsFile } from './settings.js';
 import { isLegacyMsiDirectory, isMsiFile } from './installers.js';
 import { cleanupImpact, hasImpactPaths } from './cleanup-impact.js';
 import * as startup from './startup.js';
@@ -75,7 +75,7 @@ async function withRecoveryLease(operation) {
   }
 }
 const removeItems = (...args) => withRecoveryLease((token) => removeItemsLocked(token, ...args));
-const restore = (...args) => withRecoveryLease((token) => restoreLocked(token, ...args));
+const restore = (id, indexes, shouldStop, options) => withRecoveryLease((token) => restoreLocked(token, id, indexes, shouldStop, undefined, options));
 const prune = (...args) => withRecoveryLease((token) => pruneLocked(token, ...args));
 const restoreManyFromRecycleBin = (...args) => withRecoveryLease((token) => restoreManyFromRecycleBinLocked(token, ...args));
 const resolveInterrupted = async (action) => {
@@ -142,15 +142,21 @@ function isEncrypted(text) {
   return text.startsWith(ENC_PREFIX);
 }
 
-async function readEncryptedText(p) {
+async function readEncryptedText(p, { readOnly = false } = {}) {
   const raw = await sys.readText(p);
   if (!isEncrypted(raw)) return raw;
-  const password = await encryptionKey();
+  const password = readOnly ? (sys.secretKeys ? '' : await sys.secretGet?.()) : await encryptionKey();
   const keys = sys.secretKeys ? await sys.secretKeys() : [password].filter(Boolean);
-  if (!keys.length) throw new Error('This backup is encrypted but no encryption key is available for this data root.');
   for (const key of keys) {
     try { return await decryptText(raw, key); } catch { /* Try retained prior keys. */ }
   }
+  if (readOnly && sys.readOptionalText) {
+    try {
+      const legacy = JSON.parse(await sys.readOptionalText(settingsFile()) || '{}')?.encryptionKey;
+      if (typeof legacy === 'string' && legacy && !keys.includes(legacy)) return await decryptText(raw, legacy);
+    } catch { /* Verification never migrates or repairs settings. */ }
+  }
+  if (!keys.length) throw new Error('This backup is encrypted but no encryption key is available for this data root.');
   throw new Error('No retained encryption key can decrypt this backup. Set its original password to recover it.');
 }
 
@@ -662,11 +668,8 @@ async function readPending() {
     return { corrupt: true, reviewRequired: true, detail: recoveryError(error.message).message };
   }
 }
-async function readRecoveryManifest(p, allowChangedFiles = false) {
-  try {
-    const dir = backupDir(p.id);
-    const m = JSON.parse(await readEncryptedText(path.join(dir, 'manifest.json')));
-    if (!isObject(m) || m.id !== p.id || typeof m.title !== 'string' || !nonblank(m.created) || !Number.isFinite(Date.parse(m.created)) || !Array.isArray(m.entries) || ('complete' in m && typeof m.complete !== 'boolean')) throw new Error('invalid manifest identity or schema');
+function validateRecoveryManifest(m, id) {
+    if (!isObject(m) || m.id !== id || typeof m.title !== 'string' || !nonblank(m.created) || !Number.isFinite(Date.parse(m.created)) || !Array.isArray(m.entries) || ('complete' in m && typeof m.complete !== 'boolean')) throw new Error('invalid manifest identity or schema');
     m.entries.forEach(validateRecoveryEntry);
     if ('intents' in m && !Array.isArray(m.intents)) throw new Error('invalid intent journal');
     for (const [index, intent] of (m.intents || []).entries()) {
@@ -691,6 +694,13 @@ async function readRecoveryManifest(p, allowChangedFiles = false) {
     }
     if ('recovery' in m && (!isObject(m.recovery) || m.recovery.action !== 'rollback' || !['in-progress', 'completed'].includes(m.recovery.status) || !nonblank(m.recovery.started) || (m.recovery.status === 'completed' && (!nonblank(m.recovery.completed) || !m.fingerprint || m.complete !== true || m.inFlight || !m.entries.length)))) throw new Error('invalid rollback progress evidence');
     if (!m.entries.length && !m.inFlight && (m.intents || []).some((intent) => intent.status !== 'not-present')) throw new Error('empty manifest has unresolved operation evidence');
+}
+
+async function readRecoveryManifest(p, allowChangedFiles = false) {
+  try {
+    const dir = backupDir(p.id);
+    const m = JSON.parse(await readEncryptedText(path.join(dir, 'manifest.json')));
+    validateRecoveryManifest(m, p.id);
     if (m.fingerprint && (await verify(dir, m)).size && !allowChangedFiles) throw new Error('stored backup files changed after sealing');
     return { dir, manifest: m };
   } catch (error) {
@@ -810,20 +820,30 @@ async function pruneLocked(_leaseToken, { maxDays = 0, maxMB = 0 } = {}, now = D
 }
 
 async function list() {
-  const dirs = (await sys.readDir(backupRoot).catch(() => [])).filter((d) => d.dir);
+  const dirs = (await sys.readDir(backupRoot).catch(() => [])).filter((d) => d.dir && !d.link && safeReadinessName(d.name));
   const manifests = await Promise.all(
     dirs.map(async (d) => {
-      const m = await readEncryptedText(path.join(backupRoot, d.name, 'manifest.json'))
+      const dir = path.join(backupRoot, d.name);
+      const children = await sys.readDir(dir).catch(() => []);
+      if (!regularBackupFile(children, 'manifest.json')) return null;
+      const m = await readEncryptedText(path.join(dir, 'manifest.json'), { readOnly: true })
         .then(JSON.parse)
         .catch(() => null);
-      if (!m) return null;
+      try { validateRecoveryManifest(m, d.name); } catch { return null; }
       // Verification lives in a sidecar file, not the manifest, so recording
       // it never breaks the manifest's own fingerprint.
-      const v = await sys.readText(path.join(backupRoot, d.name, 'verified.json')).then(JSON.parse).catch(() => null);
-      if (v) {
-        m.verified = v.ok === true;
+      const v = regularBackupFile(children, 'verified.json')
+        ? await sys.readText(path.join(dir, 'verified.json')).then(JSON.parse).catch(() => null) : null;
+      const bound = validReadinessRecord(v, m) && v.manifestDigest === await sha256Text(JSON.stringify(m));
+      delete m.verified;
+      delete m.verifiedAt;
+      delete m.verifyProblems;
+      delete m.readiness;
+      if (bound) {
+        m.verified = v.readiness.status === 'unknown' ? null : v.readiness.status === 'checked';
         m.verifiedAt = v.at || null;
         m.verifyProblems = Array.isArray(v.problems) ? v.problems : [];
+        m.readiness = v.readiness;
       }
       return m;
     })
@@ -855,71 +875,152 @@ async function binPresence(originals) {
     { input: JSON.stringify(originals) }
   );
   const arr = JSON.parse(out.trim() || '[]');
-  return new Set((Array.isArray(arr) ? arr : [arr]).map((p) => String(p).toLowerCase()));
+  const paths = Array.isArray(arr) ? arr : [arr];
+  if (!paths.every((target) => typeof target === 'string')) throw new Error('Invalid Recycle Bin observation');
+  return new Set(paths.map((target) => target.toLowerCase()));
 }
 
-// Proves a backup package can be restored, and records the verdict in a
-// verified.json sidecar (never inside the fingerprinted manifest):
-//   1. the seal is intact — manifest fingerprint matches and no stored file
-//      changed (the same check a restore runs);
-//   2. a trial restore of the stored exports — registry/service exports are
-//      copied to a scratch folder and must still parse;
-//   3. recycled files and folders are confirmed present in the Recycle Bin.
-// Anything that cannot be checked (no PowerShell, a short-named path) is
-// reported as unchecked, never as a failure.
+const safeReadinessName = (name) => validBackupFile(name) && /^[a-z0-9][a-z0-9._-]*$/i.test(name);
+const regularBackupFile = (children, name) => children.some((file) => file.name === name && file.file && !file.link);
+const digestValue = (value) => typeof value === 'string' && /^[a-f0-9]{64}$/.test(value);
+const readinessStates = new Set(['checked', 'blocked', 'unknown']);
+function readinessStatus(entries, problems) {
+  if (problems.length || entries.some((row) => row.status === 'blocked')) return 'blocked';
+  return !entries.length || entries.some((row) => row.status === 'unknown') ? 'unknown' : 'checked';
+}
+const validReadinessRecord = (record, manifest) => (
+  record?.schema === 1 && digestValue(record.manifestDigest) && Number.isFinite(Date.parse(record.at))
+  && Array.isArray(record.problems) && record.problems.every((problem) => typeof problem === 'string')
+  && readinessStates.has(record.readiness?.status) && Array.isArray(record.readiness.entries)
+  && record.readiness.entries.length === manifest.entries.length
+  && record.readiness.entries.every((row, index) => row?.index === index && readinessStates.has(row.status) && typeof row.detail === 'string')
+  && record.readiness.status === readinessStatus(record.readiness.entries, record.problems)
+);
+const localObservedPath = (p) => typeof p === 'string' && /^[a-z]:\\[^:<>"|?*\x00-\x1f]+$/i.test(p) && path.resolve(p) === p;
+
+function readinessHashNames(manifest) {
+  const names = manifest.entries.map((entry) => entry.file).filter(Boolean);
+  const files = manifest.files;
+  const valid = (name) => safeReadinessName(name) && !['manifest.json', 'verified.json'].includes(name.toLowerCase());
+  const uniqueNames = new Set(names.map((name) => name.toLowerCase()));
+  const referenced = new Set(names);
+  if (uniqueNames.size !== names.length || !names.every(valid)) throw new Error('Invalid stored export names');
+  if (files === undefined && manifest.fingerprint === undefined) return names;
+  if (!digestValue(manifest.fingerprint) || !isObject(files) || Object.keys(files).length !== names.length
+    || !Object.keys(files).every((name) => valid(name) && referenced.has(name) && digestValue(files[name]))) throw new Error('Invalid stored export hash table');
+  return names;
+}
+
+// Readiness records the checks possible now. It never imports an export or writes a trial copy.
 async function verifyPackage(id, shouldStop) {
-  const dir = backupDir(id);
-  const manifest = JSON.parse(await readEncryptedText(path.join(dir, 'manifest.json')));
-  const record = async (result) => {
-    await sys.writeTextAtomic(path.join(dir, 'verified.json'), JSON.stringify(result, null, 2)).catch(() => {});
-    return result;
-  };
-  let changed;
-  try {
-    changed = await verify(dir, manifest);
-  } catch (e) {
-    return record({ ok: false, at: new Date().toISOString(), problems: [e.message], exportsChecked: 0, binChecked: 0 });
-  }
-  const problems = [...changed].map((n) => `The stored file ${n} was changed after the backup was made`);
+  const at = new Date().toISOString();
+  const problems = [];
+  let entries = [];
   let exportsChecked = 0;
-  const scratch = path.join(dir, '.trial');
-  try {
-    await sys.makeDir(scratch);
-    for (const e of manifest.entries) {
-      if (shouldStop && shouldStop()) return { ok: false, cancelled: true, at: new Date().toISOString(), problems: ['The check was cancelled before it finished'], exportsChecked, binChecked: 0 }; // not recorded: a cancelled check is not a verdict on the package
-      if (e.kind === 'task') {
-        if (!/^[a-f0-9]{32}$/i.test(e.nativeTaskJournalId || '')) { problems.push(`Legacy task XML for ${e.path} requires manual review`); continue; }
-        try { const native = await nativeTasks.recoveryStatus(e.nativeTaskJournalId); if (!native?.completed || native.deleted !== true || !native.recoverable || native.path !== e.path) problems.push(`Native task deletion recovery evidence for ${e.path} needs review`); else exportsChecked++; }
-        catch (error) { problems.push(error.message); }
-        continue;
-      }
-      if (!e.file || changed.has(e.file)) continue;
-      if (e.kind !== 'key' && e.kind !== 'service' && e.kind !== 'task' && e.kind !== 'firewall') continue;
-      const text = await sys.readText(path.join(dir, e.file)).catch(() => '');
-      if (!text.trim()) {
-        problems.push(`The stored copy for ${e.path} is empty`);
-        continue;
-      }
-      if ((e.kind === 'key' || e.kind === 'service') && !/REGEDIT|Windows Registry Editor/i.test(text.slice(0, 200))) {
-        problems.push(`The registry export for ${e.path} no longer parses`);
-        continue;
-      }
-      await sys.writeText(path.join(scratch, e.file), text);
-      exportsChecked++;
-    }
-  } finally {
-    await sys.removePath(scratch).catch(() => {});
-  }
   let binChecked = 0;
-  const recycledPaths = manifest.entries.filter((e) => e.recycled && !String(e.path).includes('~')).map((e) => e.path);
-  if (recycledPaths.length) {
-    const present = await binPresence(recycledPaths).catch(() => null);
-    if (present) {
-      binChecked = recycledPaths.length;
-      for (const p of recycledPaths) if (!present.has(p.toLowerCase())) problems.push(`${p} is no longer in the Recycle Bin`);
+  let dir, manifest, manifestDigest, children;
+  const result = (cancelled = false) => ({
+    ok: !cancelled && problems.length === 0, at, problems: cancelled ? ['The check was cancelled before it finished'] : problems, exportsChecked, binChecked,
+    readiness: { status: cancelled ? 'unknown' : readinessStatus(entries, problems), entries }, recorded: false, ...(cancelled && { cancelled: true }),
+  });
+  const record = async () => {
+    if (shouldStop?.()) return result(true);
+    const verdict = result();
+    if (!manifestDigest || (children.some((file) => file.name.toLowerCase() === 'verified.json') && !regularBackupFile(children, 'verified.json'))) return verdict;
+    try {
+      await sys.writeTextAtomic(path.join(dir, 'verified.json'), JSON.stringify({ schema: 1, manifestDigest, ...verdict, recorded: true }, null, 2));
+      return { ...verdict, recorded: true };
+    } catch { /* Live evidence remains available if the historical record could not be saved. */ }
+    return verdict;
+  };
+  if (shouldStop?.()) return result(true);
+  if (!safeReadinessName(id)) throw new Error('Invalid backup id');
+  let raw;
+  try {
+    dir = backupDir(id);
+    const folder = (await sys.readDir(backupRoot)).find((entry) => entry.name === id);
+    if (!folder) return result();
+    if (!folder.dir || folder.link) {
+      problems.push('Backup directory is not an ordinary package folder.');
+      return result();
+    }
+    children = await sys.readDir(dir);
+    if (!regularBackupFile(children, 'manifest.json')) {
+      if (children.some((entry) => entry.name === 'manifest.json')) problems.push('Backup manifest is not a regular package file.');
+      return result();
+    }
+    raw = await readEncryptedText(path.join(dir, 'manifest.json'), { readOnly: true });
+  } catch {
+    return shouldStop?.() ? result(true) : result();
+  }
+  let names;
+  try {
+    manifest = JSON.parse(raw);
+    validateRecoveryManifest(manifest, id);
+    manifestDigest = await sha256Text(JSON.stringify(manifest));
+    names = readinessHashNames(manifest);
+    if (manifest.complete === false || manifest.inFlight || manifest.recovery) throw new Error('Backup is unavailable for an ordinary restore');
+    if (manifest.fingerprint) {
+      const { fingerprint, ...content } = manifest;
+      if (await sha256Text(JSON.stringify(content)) !== fingerprint) throw new Error('Backup manifest fingerprint did not match');
+    }
+  } catch {
+    const detail = 'Backup manifest, identity or seal could not be validated.';
+    problems.push(detail);
+    entries = manifestDigest ? manifest.entries.map((_, index) => ({ index, status: 'blocked', detail })) : [];
+    return record();
+  }
+  if (shouldStop?.()) return result(true);
+  const regular = names.filter((name) => regularBackupFile(children, name));
+  const hashes = manifest.fingerprint && regular.length ? await sys.sha256Files(regular.map((name) => path.join(dir, name))).catch(() => []) : [];
+  const byName = new Map(regular.map((name, index) => [name, hashes[index]]));
+  if (shouldStop?.()) return result(true);
+  const recycledPaths = manifest.entries.filter((entry) => entry.recycled && localObservedPath(entry.path) && !entry.path.includes('~')).map((entry) => entry.path);
+  const present = recycledPaths.length ? await binPresence(recycledPaths).catch(() => null) : null;
+  if (present) binChecked = recycledPaths.length;
+  const add = (index, status, detail) => {
+    entries.push({ index, status, detail });
+    if (status === 'blocked') problems.push(detail);
+  };
+  for (const [index, entry] of manifest.entries.entries()) {
+    if (shouldStop?.()) return result(true);
+    if (entry.kind === 'task') {
+      if (!/^[a-f0-9]{32}$/i.test(entry.nativeTaskJournalId || '')) {
+        add(index, 'blocked', 'Legacy task XML requires manual review.');
+        continue;
+      }
+      const native = await nativeTasks.recoveryStatus(entry.nativeTaskJournalId).catch(() => null);
+      if (native?.completed === true && native.deleted === true && native.recoverable === true && native.path === entry.path) {
+        exportsChecked++;
+        add(index, 'checked', 'Matching completed native deletion journal observed.');
+      } else add(index, 'unknown', 'Native task recovery evidence could not be confirmed.');
+    } else if (entry.file) {
+      if (!byName.has(entry.file) && children.some((file) => file.name === entry.file)) add(index, 'blocked', 'Stored export is not a regular package file.');
+      else if (!byName.has(entry.file)) add(index, 'unknown', 'Stored export was not observed in the package directory.');
+      else if (manifest.fingerprint && !digestValue(byName.get(entry.file))) add(index, 'unknown', 'Stored export could not be read for hashing.');
+      else if (manifest.fingerprint && byName.get(entry.file) !== manifest.files[entry.file]) add(index, 'blocked', 'Stored export hash did not match.');
+      else {
+        const s = await sys.stat(path.join(dir, entry.file)).catch(() => null);
+        if (s?.size === 0) add(index, 'blocked', 'Stored export is empty.');
+        else if (!s || s.dir !== false || !Number.isFinite(s.size)) add(index, 'unknown', 'Stored export metadata could not be confirmed.');
+        else {
+          exportsChecked++;
+          add(index, manifest.fingerprint ? 'checked' : 'unknown', manifest.fingerprint
+            ? 'Stored export hash matched. Import behavior was not tested.'
+            : 'Stored export is present. This legacy package has no integrity seal.');
+        }
+      }
+    } else if (entry.recycled) {
+      add(index, 'unknown', present?.has(entry.path.toLowerCase())
+        ? 'A matching original path was observed in the Recycle Bin. Exact item identity was not checked.'
+        : 'A matching Recycle Bin record could not be confirmed.');
+    } else {
+      add(index, manifest.fingerprint ? 'checked' : 'unknown', manifest.fingerprint
+        ? 'Inline recovery data passed manifest and seal checks.'
+        : 'Inline recovery data is present. This legacy package has no integrity seal.');
     }
   }
-  return record({ ok: problems.length === 0, at: new Date().toISOString(), problems, exportsChecked, binChecked });
+  return record();
 }
 
 // Moves the newest Recycle Bin copy of each original path back into place, in one pass. Each
@@ -984,7 +1085,7 @@ const restoreFromRecycleBin = async (original) => (await restoreManyFromRecycleB
 
 // Restores a backup. With `onlyIndexes` (an array of entry positions), only
 // those entries are restored — the Recovery Packages tool's selective restore.
-async function restoreLocked(leaseToken, id, onlyIndexes, shouldStop, internalToken) {
+async function restoreLocked(leaseToken, id, onlyIndexes, shouldStop, internalToken, { includeReadback = false } = {}) {
   const { reg, runPS } = recoveryCommands(leaseToken);
   const dir = backupDir(id);
   if (!(await sys.exists(path.join(dir, 'manifest.json')))) throw new Error('This backup no longer exists. It may have been removed by the backup limits in Tools › Backup Settings.');
@@ -994,6 +1095,9 @@ async function restoreLocked(leaseToken, id, onlyIndexes, shouldStop, internalTo
   const changed = await verify(dir, manifest);
   const only = Array.isArray(onlyIndexes) ? new Set(onlyIndexes) : null;
   const results = [];
+  const reportReadback = (status, detail) => {
+    if (includeReadback) results.at(-1).readback = { status, detail, at: new Date().toISOString() };
+  };
   for (const [entryIndex, e] of manifest.entries.entries()) {
     if (only && !only.has(entryIndex)) continue;
     if (shouldStop && shouldStop()) {
@@ -1024,11 +1128,23 @@ async function restoreLocked(leaseToken, id, onlyIndexes, shouldStop, internalTo
       results.push({ ...e, ok: r.ok, detail: r.ok ? 'Service restored; restart Windows to start it' : r.stderr });
     } else if (e.kind === 'task') {
       if (!/^[a-f0-9]{32}$/i.test(e.nativeTaskJournalId || '')) { results.push({ ...e, ok: false, detail: 'Legacy task XML requires manual review; it is not elevated recovery authority.' }); continue; }
-      try { const native = await nativeTasks.recoveryStatus(e.nativeTaskJournalId); if (!native?.completed || native.deleted !== true || native.path !== e.path) throw new Error('Task backup does not reference a completed native deletion journal.'); await nativeTasks.restoreDeleted(e.nativeTaskJournalId); results.push({ ...e, ok: true, detail: 'Native task original restored disabled without overwriting another task' }); }
+      try {
+        const native = await nativeTasks.recoveryStatus(e.nativeTaskJournalId);
+        if (!native?.completed || native.deleted !== true || native.path !== e.path) throw new Error('Task backup does not reference a completed native deletion journal.');
+        const restored = await nativeTasks.restoreDeleted(e.nativeTaskJournalId);
+        results.push({ ...e, ok: true, detail: 'Native task original restored disabled without overwriting another task' });
+        const exact = restored.settled === true && restored.changed === true && restored.task?.path === e.path && restored.task.enabled === false;
+        reportReadback(exact ? 'confirmed' : 'unknown', exact ? 'Native readback confirmed the exact task path and disabled state.' : 'The exact disabled task could not be confirmed.');
+      }
       catch (error) { results.push({ ...e, ok: false, detail: error.message }); }
     } else if (e.kind === 'firewall') {
-      const out = await runPS(firewallRestoreScript(e.path, path.join(dir, e.file))).catch((err) => err.message);
+      let confirmed = false;
+      const out = await runPS(firewallRestoreScript(e.path, path.join(dir, e.file))).then((text) => {
+        confirmed = text.trim() === 'OK';
+        return text;
+      }).catch((err) => err.message);
       results.push({ ...e, ok: /^OK/.test(out.trim()), detail: /^OK/.test(out.trim()) ? 'Firewall rule restored' : out.trim() });
+      if (confirmed) reportReadback('confirmed', 'Readback matched the supported firewall rule fields.');
     } else if (e.recycled) {
       let recycled;
       try { recycled = await restoreManyFromRecycleBinLocked(leaseToken, [e.path]); }
@@ -1039,9 +1155,20 @@ async function restoreLocked(leaseToken, id, onlyIndexes, shouldStop, internalTo
       const out = String(recycled[e.path] || 'Restore outcome uncertain; helper returned no result').trim();
       const detail = { OK: 'Restored from the Recycle Bin', EXISTS: 'Already back in place', NOTFOUND: 'Not in the Recycle Bin any more (it may have been emptied)' }[out] || out.replace(/^ERR /, '');
       results.push({ ...e, ok: out === 'OK' || out === 'EXISTS', ...(!recycled[e.path] ? { uncertain: true } : {}), detail });
+      if (includeReadback && out === 'EXISTS') reportReadback('unknown', 'The destination was already occupied. Its identity was not checked.');
+      if (includeReadback && out === 'OK' && !shouldStop?.() && localObservedPath(e.path)) {
+        const s = await Promise.resolve().then(() => sys.stat(e.path)).catch(() => null);
+        const confirmed = s?.dir === (e.kind === 'dir');
+        reportReadback(confirmed ? 'confirmed' : 'unknown', confirmed
+          ? 'The expected item type is present at the original path. Contents were not checked.'
+          : 'The expected item type could not be observed at the original path.');
+      }
     } else {
       results.push({ ...e, ok: false, detail: 'Not restorable' });
     }
+  }
+  if (includeReadback) for (const item of results) if (item.ok && !item.uncertain && !item.readback) {
+    item.readback = { status: 'unknown', detail: 'No supported readback was available for this result.', at: new Date().toISOString() };
   }
   return results;
 }

@@ -268,7 +268,7 @@ kbd {
 
 /* Recovery Packages dialog (Tools › Advanced Tools) */
 .recovery-cols { display: flex; gap: 14px; align-items: flex-start; }
-.pkg-list { width: 44%; flex: none; }
+.pkg-list { width: 44%; flex: none; min-width: 0; overflow-wrap: anywhere; }
 .pkg-row { display: flex; align-items: center; gap: 8px; width: 100%; text-align: left; background: none; border: none; border-radius: 6px; padding: 7px 9px; color: var(--text); cursor: pointer; font-size: 13px; }
 .pkg-row:hover { background: var(--hover); }
 .pkg-row.sel { background: var(--hover); }
@@ -280,7 +280,10 @@ kbd {
 .pkg-entries { flex: 1; min-width: 0; }
 .pkg-entries-head { font-size: 12px; text-transform: uppercase; letter-spacing: .6px; color: var(--muted); margin-bottom: 8px; }
 .pkg-entry { display: flex; gap: 8px; align-items: flex-start; padding: 5px 4px; font-size: 13px; border-radius: 5px; }
+.pkg-entry > span { min-width: 0; overflow-wrap: anywhere; }
 .pkg-entry:hover { background: var(--hover); }
+.pkg-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.readiness-detail { display: block; }
 
 /* Secure Erase dialog (Tools › Advanced Tools) */
 .erase-drop { width: 100%; border: 1.5px dashed #3a3b3f; border-radius: 8px; padding: 20px; text-align: center; color: var(--muted); background: var(--panel); cursor: pointer; font-size: 13px; }

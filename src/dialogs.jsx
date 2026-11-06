@@ -211,25 +211,36 @@ export function RecoveryDialog({ onClose }) {
   const [results, setResults] = useState(null);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
+  const [liveVerification, setLiveVerification] = useState(null);
+  const restoreButton = useRef(null);
+  const restoreAllButton = useRef(null);
+  const returnToContents = useRef(false);
 
-  const load = async (keep) => {
+  const load = async (keep, preserveSelection = false) => {
     const list = await api.invoke('backups:list').catch(() => []);
     setPackages(list);
     const sel = list.find((p) => p.id === (keep || selectedId)) || list[0];
     if (sel) {
       setSelectedId(sel.id);
-      setTicked(new Set(sel.entries.map((_, i) => i)));
+      if (!preserveSelection || sel.id !== keep) setTicked(new Set(sel.entries.map((_, i) => i)));
     }
   };
   useEffect(() => {
     load();
   }, []);
+  useEffect(() => {
+    if (!results && returnToContents.current) {
+      returnToContents.current = false;
+      (restoreButton.current?.disabled ? restoreAllButton.current : restoreButton.current)?.focus();
+    }
+  }, [results]);
 
   const selected = (packages || []).find((p) => p.id === selectedId) || null;
   const pick = (p) => {
     setSelectedId(p.id);
     setResults(null);
     setError('');
+    setLiveVerification(null);
     setTicked(new Set(p.entries.map((_, i) => i)));
   };
 
@@ -237,11 +248,15 @@ export function RecoveryDialog({ onClose }) {
     if (!selected) return;
     setBusy('Verifying…');
     setError('');
+    setLiveVerification(null);
     try {
       const v = await api.invoke('backups:verifyPackage', selected.id);
-      await load(selected.id);
       if (v.cancelled) setError(tx("Verification cancelled — the package keeps its previous verdict."));
-      else if (!v.ok) setError(tx("Verification found problems: {p0}", { p0: (v.problems.join('; ')) }));
+      else if (!v.recorded) setLiveVerification(v);
+      else {
+        await load(selected.id, true);
+        if (!v.ok) setError(tx("Verification found problems: {p0}", { p0: (v.problems.join('; ')) }));
+      }
     } catch (e) {
       setError(e.message);
     } finally {
@@ -256,8 +271,8 @@ export function RecoveryDialog({ onClose }) {
     try {
       const out =
         indexes.length === selected.entries.length
-          ? await api.invoke('backups:restore', selected.id)
-          : await api.invoke('backups:restoreEntries', { id: selected.id, indexes });
+          ? await api.invoke('backups:restore', { id: selected.id, includeReadback: true })
+          : await api.invoke('backups:restoreEntries', { id: selected.id, indexes, includeReadback: true });
       setResults(out);
     } catch (e) {
       setError(e.message);
@@ -266,19 +281,17 @@ export function RecoveryDialog({ onClose }) {
     }
   };
 
-  const badge = (p) =>
-    p.verified === true ? (
-      <span className="pkg-badge ok">{tx("Restorable ✓ verified")}</span>
-    ) : p.verified === false ? (
-      <span className="pkg-badge bad">{tx("Verification failed")}</span>
-    ) : (
-      <span className="pkg-badge warn">{tx("Not verified")}</span>
-    );
+  const readinessLabel = (status) => ({ checked: 'Checked', blocked: 'Blocked', unknown: 'Unknown' }[status] || 'Not checked');
+  const badge = (p) => {
+    const status = p.readiness?.status;
+    return <span className={'pkg-badge ' + (status === 'checked' ? 'ok' : status === 'blocked' ? 'bad' : 'warn')}>{tx(readinessLabel(status))}</span>;
+  };
 
   return (
     <Dialog title={tx("Recovery Packages")} onClose={onClose} width={880} buttons={<button className="primary" onClick={onClose}>{tx("Close")}</button>}>
-      <p className="muted" style={{ marginBottom: 10 }}>{tx("Backups taken before removals. Each new package is test-restored when it is created, so “Restorable” means it was proven, not hoped.")}</p>
-      {error && <div className="error-bar" style={{ marginBottom: 10 }}><span>{error}</span></div>}
+      <p className="muted" style={{ marginBottom: 10 }}>{tx("Restore Readiness shows the evidence available when a backup was checked. Recovery can still depend on current permissions and the destination state.")}</p>
+      {error && <div className="error-bar" role="alert" style={{ marginBottom: 10 }}><span>{error}</span></div>}
+      {busy && !error && <div className="impact-note" role="status">{tx(busy)}</div>}
       {packages === null ? (
         <p className="muted">{tx("Loading…")}</p>
       ) : packages.length === 0 ? (
@@ -287,17 +300,31 @@ export function RecoveryDialog({ onClose }) {
         <div className="recovery-cols">
           <div className="pkg-list">
             {packages.map((p) => (
-              <button key={p.id} className={`pkg-row ${p.id === selectedId ? 'sel' : ''}`} onClick={() => pick(p)}>
+              <button key={p.id} className={`pkg-row ${p.id === selectedId ? 'sel' : ''}`} onClick={() => pick(p)} disabled={!!busy} aria-pressed={p.id === selectedId}>
                 <span className="pkg-name">{p.title}</span>
                 {badge(p)}
               </button>
             ))}
-            <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
-              <button onClick={verify} disabled={!selected || !!busy} title={tx("Re-check this package: seal, stored files, trial restore, Recycle Bin contents")}>
+            <div className="pkg-actions">
+              <button onClick={verify} disabled={!selected || !!busy} title={tx("Check this package and its available recovery evidence")}>
                 {busy === 'Verifying…' ? tx("Verifying…") : tx("Verify Selected")}
               </button>
               {busy === 'Verifying…' && <button onClick={() => api.invoke('backups:verifyCancel').catch(() => {})}>{tx("Cancel")}</button>}
             </div>
+            {selected?.verifiedAt && <p className="muted">{tx("Last check")} <time dateTime={selected.verifiedAt}>{new Date(selected.verifiedAt).toLocaleString()}</time></p>}
+            {liveVerification && (
+              <details className="muted">
+                <summary>{tx("Latest check could not be confirmed saved")} · {tx(readinessLabel(liveVerification.readiness.status))}</summary>
+                <p>{tx("Checked at")} <time dateTime={liveVerification.at}>{new Date(liveVerification.at).toLocaleString()}</time></p>
+                <ul>
+                  {liveVerification.readiness.entries.length
+                    ? liveVerification.readiness.entries.map((row) => (
+                      <li key={row.index}>{tx("Entry {p0}", { p0: row.index + 1 })} · {tx(readinessLabel(row.status))} · {tx(row.detail)}</li>
+                    ))
+                    : liveVerification.problems.map((detail, i) => <li key={i}>{tx(detail)}</li>)}
+                </ul>
+              </details>
+            )}
             {selected && selected.verified === false && (selected.verifyProblems || []).length > 0 && (
               <ul className="muted" style={{ marginTop: 8, paddingLeft: 16 }}>
                 {selected.verifyProblems.map((pr, i) => (
@@ -315,16 +342,20 @@ export function RecoveryDialog({ onClose }) {
                     <input
                       type="checkbox"
                       checked={ticked.has(i)}
+                      disabled={!!busy}
                       onChange={() => setTicked((t) => { const n = new Set(t); if (n.has(i)) n.delete(i); else n.add(i); return n; })}
                     />
-                    <span>{(ENTRY_LABEL[e.kind] || ((x) => x.path))(e)}{e.recycled ? tx(" (in the Recycle Bin)") : ''}</span>
+                    <span>
+                      {(ENTRY_LABEL[e.kind] || ((x) => x.path))(e)}{e.recycled ? tx(" (Recycle Bin record)") : ''}
+                      {selected.readiness?.entries[i] && <span className="muted readiness-detail">{tx(readinessLabel(selected.readiness.entries[i].status))} · {tx(selected.readiness.entries[i].detail)}</span>}
+                    </span>
                   </label>
                 ))}
-                <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
-                  <button className="primary" onClick={() => restore([...ticked].sort((a, b) => a - b))} disabled={!ticked.size || !!busy} title={tx("Restore only the ticked items")}>
+                <div className="pkg-actions">
+                  <button ref={restoreButton} className="primary" onClick={() => restore([...ticked].sort((a, b) => a - b))} disabled={!ticked.size || !!busy} title={tx("Restore only the ticked items")}>
                     {busy === 'Restoring…' ? tx("Restoring…") : tx("Restore Ticked Items")}
                   </button>
-                  <button onClick={() => restore(selected.entries.map((_, i) => i))} disabled={!!busy} title={tx("Restore everything in this package")}>{tx("Restore Everything")}</button>
+                  <button ref={restoreAllButton} onClick={() => restore(selected.entries.map((_, i) => i))} disabled={!!busy} title={tx("Restore everything in this package")}>{tx("Restore Everything")}</button>
                   {busy === 'Restoring…' && <button onClick={() => api.invoke('backups:restoreCancel').catch(() => {})}>{tx("Cancel")}</button>}
                 </div>
               </>
@@ -334,11 +365,16 @@ export function RecoveryDialog({ onClose }) {
                 <div className="pkg-entries-head">{tx("Restore results")}</div>
                 {results.map((r, i) => (
                   <div key={i} className="pkg-entry">
-                    <span>{r.ok ? '✓' : '✗'} {(ENTRY_LABEL[r.kind] || ((x) => x.path))(r)} <span className="muted">— {tx(r.detail)}</span></span>
+                    <span>
+                      {r.ok ? '✓' : '✗'} {(ENTRY_LABEL[r.kind] || ((x) => x.path))(r)} <span className="muted">— {tx(r.detail)}</span>
+                      <span className="muted readiness-detail">
+                        {tx("Readback")} · {r.readback ? tx(r.readback.status === 'confirmed' ? 'Confirmed' : 'Unknown') + ' · ' + tx(r.readback.detail) : tx("Not checked")}
+                      </span>
+                    </span>
                   </div>
                 ))}
                 <div style={{ marginTop: 12 }}>
-                  <button onClick={() => setResults(null)}>{tx("Back to Contents")}</button>
+                  <button onClick={() => { returnToContents.current = true; setResults(null); }}>{tx("Back to Contents")}</button>
                 </div>
               </>
             )}
