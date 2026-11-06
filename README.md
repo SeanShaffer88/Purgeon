@@ -180,6 +180,7 @@ Follow the vendor's interactive instructions. Purgeon supplies no silent or forc
 - **Live tracking:** run as administrator, it also follows the installer with Windows' own event tracing. It records every file and registry change by the installer, the programs it starts and Windows Installer, as it happens and at any depth. Temporary files and Windows' bookkeeping are left out.
 - **Changed settings:** existing settings the installer changed (a file association, a replaced Run entry) are recorded and put back when you uninstall.
 - **Monitored Programs** (`Ctrl+3`) lists the recordings. Uninstalling one removes exactly what its installation created.
+- Select one recording and choose **Compare Recording…** to review it alongside another saved session. The comparison shows targets observed in each recording, metadata differences and changed-file counts. The version stamp describes the installer file. Installed versions and capture completeness are unknown. Very large recordings and result groups show their comparison limits.
 - **Command line:** `Purgeon --monitor "setup.exe"` records an installation without the window.
 
 ![Monitored programs](docs/screenshots/monitored.png)
