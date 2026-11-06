@@ -196,10 +196,27 @@ struct Checkpoint {
     phase: String,
     detail: String,
     payload: PathBuf,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
     target: Option<RegistrationTarget>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(
+        default,
+        deserialize_with = "deserialize_present",
+        skip_serializing_if = "Option::is_none"
+    )]
     observation_scope: Option<String>,
+}
+
+// A missing field defaults to None, but a present field must contain a value.
+fn deserialize_present<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    T::deserialize(deserializer).map(Some)
 }
 
 struct Policy {
@@ -1746,6 +1763,42 @@ mod tests {
     }
 
     #[test]
+    fn checkpoint_rejects_explicit_null_observation_fields() {
+        let root = Path::new(r"C:\fixture");
+        let path = root.join("launch-intent");
+        let id = "a".repeat(32);
+        for version in [1, 2] {
+            let mut checkpoint: serde_json::Value =
+                serde_json::from_slice(&checkpoint_bytes(root, &id)).unwrap();
+            checkpoint["schemaVersion"] = version.into();
+            assert!(
+                validated_checkpoint(root, &path, &serde_json::to_vec(&checkpoint).unwrap())
+                    .is_ok()
+            );
+            for field in ["target", "observationScope"] {
+                let mut changed = checkpoint.clone();
+                changed[field] = serde_json::Value::Null;
+                assert!(
+                    validated_checkpoint(root, &path, &serde_json::to_vec(&changed).unwrap())
+                        .is_err(),
+                    "explicit null {field} in v{version}"
+                );
+            }
+            if version == 2 {
+                checkpoint["observationScope"] = scope_token(&id, "fixture-host", "fixture-sid")
+                    .unwrap()
+                    .into();
+                assert!(validated_checkpoint(
+                    root,
+                    &path,
+                    &serde_json::to_vec(&checkpoint).unwrap()
+                )
+                .is_err());
+            }
+        }
+    }
+
+    #[test]
     fn handoff_rejects_invalid_v2_metadata_and_stale_review_before_observation() {
         let root = Path::new(r"C:\fixture");
         let path = root.join("launch-intent");
@@ -2043,7 +2096,7 @@ mod tests {
             admit(&op, &m.products).unwrap();
             let result = if failure == "invalid-observation" {
                 let mut target = fixture_target();
-                target.version = "\n".repeat(129);
+                target.version = "1.2\n".into();
                 run_with_setup(&op, &mut attempt, |_| Ok(()), || Ok(((), target))).unwrap()
             } else {
                 run(&op, &mut attempt).unwrap()
