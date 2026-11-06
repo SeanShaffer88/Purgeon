@@ -929,14 +929,31 @@ fn windows_antivirus_health() -> AntivirusHealth {
         fn GetProcAddress(module: *mut c_void, name: *const u8) -> *mut c_void;
         fn FreeLibrary(module: *mut c_void) -> i32;
     }
-    struct SystemLibrary(*mut c_void);
+    windows_antivirus_health_with(
+        || crate::windows_tools::system_file("wscapi.dll"),
+        LoadLibraryExW,
+        GetProcAddress,
+        FreeLibrary,
+    )
+}
+
+fn windows_antivirus_health_with(
+    system_path: impl FnOnce() -> Result<PathBuf, String>,
+    load: unsafe extern "system" fn(*const u16, *mut c_void, u32) -> *mut c_void,
+    resolve: unsafe extern "system" fn(*mut c_void, *const u8) -> *mut c_void,
+    free: unsafe extern "system" fn(*mut c_void) -> i32,
+) -> AntivirusHealth {
+    struct SystemLibrary {
+        module: *mut c_void,
+        free: unsafe extern "system" fn(*mut c_void) -> i32,
+    }
     impl Drop for SystemLibrary {
         fn drop(&mut self) {
             // This wrapper is constructed only for an owned, non-null module.
-            unsafe { FreeLibrary(self.0) };
+            unsafe { (self.free)(self.module) };
         }
     }
-    let Ok(path) = crate::windows_tools::system_file("wscapi.dll") else {
+    let Ok(path) = system_path() else {
         return AntivirusHealth::Unknown;
     };
     let path: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
@@ -944,7 +961,7 @@ fn windows_antivirus_health() -> AntivirusHealth {
     // The OS-resolved absolute path and System32 dependency search avoid
     // application or working-directory lookup.
     let module = unsafe {
-        LoadLibraryExW(
+        load(
             path.as_ptr(),
             std::ptr::null_mut(),
             LOAD_LIBRARY_SEARCH_SYSTEM32,
@@ -953,9 +970,13 @@ fn windows_antivirus_health() -> AntivirusHealth {
     if module.is_null() {
         return AntivirusHealth::Unknown;
     }
-    let library = SystemLibrary(module);
-    let address =
-        unsafe { GetProcAddress(library.0, c"WscGetSecurityProviderHealth".as_ptr().cast()) };
+    let library = SystemLibrary { module, free };
+    let address = unsafe {
+        resolve(
+            library.module,
+            c"WscGetSecurityProviderHealth".as_ptr().cast(),
+        )
+    };
     if address.is_null() {
         return AntivirusHealth::Unknown;
     }
@@ -1641,6 +1662,174 @@ mod tests {
             registration_observation(&target, "avg", &unrelated),
             RegistrationObservation::Observed
         );
+    }
+
+    #[test]
+    fn handoff_scope_refuses_blank_control_and_oversize_identity() {
+        let id = "a".repeat(32);
+        let too_long = "x".repeat(257);
+        for invalid in ["", " ", "host\0other", "sid\nforged", &too_long] {
+            assert!(scope_token(&id, invalid, "fixture-sid").is_none());
+            assert!(scope_token(&id, "fixture-host", invalid).is_none());
+        }
+    }
+
+    #[test]
+    fn handoff_registration_ignores_unrelated_records_and_requires_all_seen_sources() {
+        let mut target = fixture_target();
+        target.sources.push(SOURCE_IDS[0].into());
+        let registry = || Record {
+            version: target.version.clone(),
+            ..record(&target.name, &target.publisher, SOURCE_IDS[3])
+        };
+        let wsc = record(&target.name.to_ascii_uppercase(), "", SOURCE_IDS[0]);
+        let other = || record("Unrelated product", "Other publisher", SOURCE_IDS[4]);
+        assert_eq!(
+            registration_observation(&target, "avg", &snapshot(vec![other()])),
+            RegistrationObservation::NotObserved
+        );
+        assert_eq!(
+            registration_observation(&target, "avg", &snapshot(vec![registry(), other()])),
+            RegistrationObservation::Unknown
+        );
+        assert_eq!(
+            registration_observation(&target, "avg", &snapshot(vec![registry(), other(), wsc])),
+            RegistrationObservation::Observed
+        );
+    }
+
+    #[test]
+    fn handoff_byte_drift_stops_before_observation_and_keeps_the_checkpoint() {
+        let fixture = AdapterFixture::new();
+        let root = &fixture.effects.root;
+        let path = root.join("launch-intent");
+        let id = "a".repeat(32);
+        let original = checkpoint_bytes(root, &id);
+        fs::write(&path, &original).unwrap();
+        let mut m = Manager::default();
+        let review = discover_reviews(root, &mut m).unwrap().remove(0);
+        // Model a stale cached observation without bypassing the pin's
+        // deliberate sharing restrictions on the real checkpoint.
+        m.reviews.get_mut(&review.review_id).unwrap().bytes[0] ^= 1;
+        let result = handoff_with(
+            &Mutex::new(m),
+            HandoffRequest {
+                review_id: review.review_id,
+            },
+            |_| panic!("stale bytes reached scope"),
+            || panic!("stale bytes reached inventory"),
+            || panic!("stale bytes reached health"),
+        );
+        assert_eq!(result.unwrap_err(), "Checkpoint changed since review");
+        assert_eq!(fs::read(path).unwrap(), original);
+    }
+
+    #[test]
+    fn handoff_wsc_optional_loader_and_export_release_only_owned_modules() {
+        #[derive(Default)]
+        struct Fixture {
+            case: u8,
+            flags: u32,
+            path_correct: bool,
+            name_correct: bool,
+            loads: usize,
+            resolves: usize,
+            calls: usize,
+            frees: usize,
+        }
+        thread_local! {
+            static WSC: std::cell::RefCell<Fixture> = std::cell::RefCell::new(Fixture::default());
+        }
+        let system_path = r"C:\Windows\System32\wscapi.dll";
+        unsafe extern "system" fn load(
+            path: *const u16,
+            file: *mut c_void,
+            flags: u32,
+        ) -> *mut c_void {
+            WSC.with_borrow_mut(|f| {
+                let actual = (0..128)
+                    .map(|i| unsafe { *path.add(i) })
+                    .take_while(|c| *c != 0)
+                    .collect::<Vec<_>>();
+                f.path_correct = file.is_null()
+                    && String::from_utf16_lossy(&actual) == r"C:\Windows\System32\wscapi.dll";
+                f.flags = flags;
+                f.loads += 1;
+                if f.case == 1 {
+                    std::ptr::null_mut()
+                } else {
+                    std::ptr::dangling_mut::<u8>().cast()
+                }
+            })
+        }
+        unsafe extern "system" fn resolve(module: *mut c_void, name: *const u8) -> *mut c_void {
+            WSC.with_borrow_mut(|f| {
+                f.name_correct = module == std::ptr::dangling_mut::<u8>().cast()
+                    && unsafe { std::ffi::CStr::from_ptr(name.cast()) }
+                        == c"WscGetSecurityProviderHealth";
+                f.resolves += 1;
+                if f.case == 2 {
+                    std::ptr::null_mut()
+                } else {
+                    health as *const () as *mut c_void
+                }
+            })
+        }
+        unsafe extern "system" fn health(provider: u32, result: *mut i32) -> i32 {
+            WSC.with_borrow_mut(|f| {
+                f.calls += 1;
+                if provider != 0x4 || f.frees != 0 || unsafe { *result } != -1 {
+                    return -1;
+                }
+                unsafe {
+                    *result = if f.case == 4 { 2 } else { 0 };
+                }
+                i32::from(f.case == 4)
+            })
+        }
+        unsafe extern "system" fn free(module: *mut c_void) -> i32 {
+            WSC.with_borrow_mut(|f| {
+                f.frees += usize::from(module == std::ptr::dangling_mut::<u8>().cast())
+            });
+            1
+        }
+        for (case, expected, activity) in [
+            (0, AntivirusHealth::Unknown, (0, 0, 0, 0)),
+            (1, AntivirusHealth::Unknown, (1, 0, 0, 0)),
+            (2, AntivirusHealth::Unknown, (1, 1, 0, 1)),
+            (3, AntivirusHealth::Good, (1, 1, 1, 1)),
+            (4, AntivirusHealth::Unknown, (1, 1, 1, 1)),
+        ] {
+            WSC.with(|slot| {
+                slot.replace(Fixture {
+                    case,
+                    ..Fixture::default()
+                })
+            });
+            let result = windows_antivirus_health_with(
+                || {
+                    if case == 0 {
+                        Err("System32 unavailable".into())
+                    } else {
+                        Ok(PathBuf::from(system_path))
+                    }
+                },
+                load,
+                resolve,
+                free,
+            );
+            assert_eq!(result, expected);
+            WSC.with_borrow(|f| {
+                assert_eq!((f.loads, f.resolves, f.calls, f.frees), activity);
+                if f.loads != 0 {
+                    assert!(f.path_correct);
+                    assert_eq!(f.flags, 0x800);
+                }
+                if f.resolves != 0 {
+                    assert!(f.name_correct);
+                }
+            });
+        }
     }
 
     #[test]
@@ -4332,6 +4521,12 @@ public sealed class FixtureHandler : HttpMessageHandler {
         assert_eq!(status.phase, "reviewRequired");
         assert_eq!(status.cleanup, "retained");
         assert!(read_restart_status(&root, &"b".repeat(32)).is_err());
+        fs::write(
+            &path,
+            serde_json::to_vec(&serde_json::json!({"schemaVersion":3,"id":id})).unwrap(),
+        )
+        .unwrap();
+        assert!(read_restart_status(&root, &id).is_err());
         fs::write(&path, b"{").unwrap();
         assert!(read_restart_status(&root, &id).is_err());
         assert!(has_marker(&root).unwrap());
