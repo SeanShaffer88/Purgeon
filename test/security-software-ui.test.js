@@ -191,6 +191,43 @@ test('unknown launch outcome is held for review', async () => {
 });
 
 const review = { reviewId: 'review-1', toolId: 'avg', state: 'reviewRequired', detail: 'Previous attempt', canAcknowledge: true };
+test('a fresh handoff check is explicit and never removes the pending review barrier', async () => {
+  const list = { products: [product], reviews: [review] };
+  const observation = { reviewId: review.reviewId, registration: 'notObserved', antivirusHealth: 'poor' };
+  const f = fixture({ 'securitySoftware:list': () => list, 'securitySoftware:checkHandoff': () => observation });
+  await f.controller.load();
+  await f.controller.checkHandoff(review);
+  assert.deepEqual(f.states.at(-1).handoff.result, observation);
+  assert.equal(isSecurityRunEligible(product, f.states.at(-1)), false);
+  assert.deepEqual(f.calls.map(({ channel, arg }) => [channel, arg]), [
+    ['securitySoftware:list', undefined], ['securitySoftware:checkHandoff', { reviewId: review.reviewId }],
+  ]);
+  f.controller.dispose();
+});
+
+test('refresh, acknowledgment, and disposal discard an in-flight handoff result', async () => {
+  for (const action of ['load', 'acknowledge', 'dispose']) {
+    const pending = deferred();
+    const f = fixture({
+      'securitySoftware:list': () => ({ products: [product], reviews: [review] }),
+      'securitySoftware:checkHandoff': () => pending.promise,
+      'securitySoftware:acknowledge': async (arg, admission) => {
+        await admission.approve();
+        return { reviewId: arg.reviewId, outcome: 'acknowledged' };
+      },
+    });
+    await f.controller.load();
+    const checking = f.controller.checkHandoff(review);
+    await f.controller[action](review);
+    const count = f.states.length;
+    pending.resolve({ reviewId: review.reviewId, registration: 'observed', antivirusHealth: 'good' });
+    await checking;
+    assert.equal(f.states.length, count);
+    assert.equal(f.states.at(-1).handoff?.result, undefined);
+    assert.deepEqual(f.errors, []);
+    f.controller.dispose();
+  }
+});
 test('acknowledgment requires admission, clears only after success, refreshes without launching', async () => {
   const f = fixture({ 'securitySoftware:acknowledge': async (arg, admission) => { assert.equal(admission.requiresApproval, true); await admission.approve(); return { reviewId: arg.reviewId, outcome: 'acknowledged' }; } });
   await f.controller.run(product); await f.controller.acknowledge(review);

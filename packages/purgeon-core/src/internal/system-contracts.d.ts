@@ -16,6 +16,11 @@ export type AvToolId = 'avg' | 'avast' | 'norton' | 'mcafee';
 export interface AvReview { reviewId: string; toolId: AvToolId | null; planId: string | null; state: 'reviewRequired' | 'unreadable'; detail: string; canAcknowledge: boolean }
 export interface AvAcknowledgeRequest { reviewId: string; acknowledgment: 'reviewedUtilityClosed' }
 export interface AvAcknowledgeResult { reviewId: string; outcome: 'acknowledged' }
+export interface AvHandoffResult {
+  reviewId: string; productName: string | null; observedAt: string;
+  registration: 'observed' | 'notObserved' | 'unknown';
+  antivirusHealth: 'good' | 'notMonitored' | 'poor' | 'snoozed' | 'unknown';
+}
 export interface AvInventory {
   reviews: AvReview[];
   products: Array<{id: string; name: string; publisher: string; version: string; sources: string[]; category: string; toolId: AvToolId | null; unsupportedReason: string | null; builtIn: boolean; helpUrl: string | null}>;
@@ -29,6 +34,7 @@ export interface AvCancelResult { accepted: boolean; status: AvStatus }
 export interface SystemAdapter {
   info: { version: string; env: Record<string, string>; home: string; dataDir: string; exe: string; portable: boolean; args: string[]; launch: string[]; [key: string]: unknown };
   acknowledgeSecuritySoftwareRemoval(request: AvAcknowledgeRequest): Promise<AvAcknowledgeResult>;
+  checkSecuritySoftwareHandoff(request: { reviewId: string }): Promise<AvHandoffResult>;
   securitySoftwareInventory(): Promise<AvInventory>;
   prepareSecuritySoftwareRemoval(request: {productId: string}): Promise<AvPlan>;
   launchSecuritySoftwareRemoval(planId: string): Promise<AvLaunchResult>;

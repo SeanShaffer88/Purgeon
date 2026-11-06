@@ -10,6 +10,7 @@ export const isSecurityRunEligible = (product, state) => canRunSecurityProduct(p
 export const securitySoftwareStatus = (state, count) => state.loading ? 'Reading installed security software…' : `${count} security products · ${state.message || 'Select a product to inspect its utility'}`;
 export function createSecuritySoftwareController({ invoke, confirm, confirmReview = async () => false, onChange, onError, schedule = setTimeout, unschedule = clearTimeout }) {
   let alive = true, busy = false, timer, plan, loadId = 0, generation = 0, polls = 0, launched = false, cancellationRequested = false;
+  let handoffId = 0;
   const blocked = new Set();
   let state = { inventory: null, loading: true, phase: '', message: '', busy: false };
   const update = patch => { state = { ...state, ...patch, reviewBlocked: blocked.size > 0 }; if (alive) onChange(state); };
@@ -29,16 +30,17 @@ export function createSecuritySoftwareController({ invoke, confirm, confirmRevie
     async load() {
       if (!alive || busy) return;
       const id = ++loadId;
-      update({ loading: true });
+      handoffId++;
+      update({ loading: true, handoff: null });
       try { const inventory = await invoke('securitySoftware:list'); if (alive && id === loadId) update({ inventory, loading: false }); }
       catch (e) { if (alive && id === loadId) { update({ inventory: null, loading: false }); report(e); } }
     },
     async run(product) {
       if (!alive || !isSecurityRunEligible(product, state)) return;
-      const operation = ++generation; loadId++;
+      const operation = ++generation; loadId++; handoffId++;
       let currentPlan;
       busy = true; launched = false; cancellationRequested = false; plan = null; polls = 0;
-      update({ busy: true, loading: false, phase: 'preparing', message: 'Preparing utility details…' });
+      update({ busy: true, loading: false, handoff: null, phase: 'preparing', message: 'Preparing utility details…' });
       try {
         currentPlan = await invoke('securitySoftware:prepare', { productId: product.id });
         if (!alive || operation !== generation) { await cancelPlan(currentPlan.id); return; }
@@ -86,11 +88,27 @@ export function createSecuritySoftwareController({ invoke, confirm, confirmRevie
       } catch (e) { if (alive && operation === generation) { update({ phase: 'failed', message: e.message }); report(e); } }
       finally { if (operation === generation) { busy = false; unschedule(timer); update({ busy: false }); } }
     },
+    async checkHandoff(review) {
+      const reviewId = review?.reviewId;
+      if (!alive || busy || state.loading || state.handoff?.pending
+          || !state.inventory?.reviews?.some(row => row.reviewId === reviewId && row.canAcknowledge && row.state === 'reviewRequired')) return;
+      const id = ++handoffId;
+      const currentCheck = () => alive && handoffId === id;
+      update({ handoff: { reviewId, pending: true } });
+      try {
+        const result = await invoke('securitySoftware:checkHandoff', { reviewId });
+        if (!currentCheck()) return;
+        if (result?.reviewId !== reviewId) throw Error('Review no longer matches.');
+        update({ handoff: { reviewId, result } });
+      } catch {
+        if (currentCheck()) update({ handoff: { reviewId, unavailable: true } });
+      }
+    },
     async acknowledge(review) {
       if (!alive || busy || !review?.canAcknowledge || review.state !== 'reviewRequired') return;
       const operation = ++generation;
-      busy = true; loadId++;
-      update({ busy: true, loading: false, message: 'Waiting for acknowledgment confirmation…' });
+      busy = true; loadId++; handoffId++;
+      update({ busy: true, loading: false, handoff: null, message: 'Waiting for acknowledgment confirmation…' });
       let asked = false;
       try {
         const result = await invoke('securitySoftware:acknowledge', { reviewId: review.reviewId, acknowledgment: 'reviewedUtilityClosed' }, {
@@ -121,7 +139,7 @@ export function createSecuritySoftwareController({ invoke, confirm, confirmRevie
       } catch (e) { if (current(operation, id)) report(e); }
     },
     dispose() {
-      alive = false; loadId++; unschedule(timer);
+      alive = false; loadId++; handoffId++; unschedule(timer);
       if (plan && (!launched || ['prepared', 'downloading', 'verifying'].includes(state.phase))) cancelPlan(plan.id).catch(() => {});
     },
   };

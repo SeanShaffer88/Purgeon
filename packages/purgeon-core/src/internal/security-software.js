@@ -23,6 +23,15 @@ export async function acknowledge(argument) {
   if (!record(value) || value.reviewId !== request.reviewId || value.outcome !== 'acknowledged') invalidResponse();
   return { reviewId: value.reviewId, outcome: value.outcome };
 }
+export async function checkHandoff(argument) {
+  const reviewId = request(argument, 'reviewId');
+  const value = await sys.checkSecuritySoftwareHandoff({ reviewId });
+  if (!record(value) || value.reviewId !== reviewId || !(value.productName === null || text(value.productName))
+      || !['observed', 'notObserved', 'unknown'].includes(value.registration)
+      || !['good', 'notMonitored', 'poor', 'snoozed', 'unknown'].includes(value.antivirusHealth)
+      || !timestamp(value.observedAt) || (value.productName === null && value.registration !== 'unknown')) invalidResponse();
+  return { reviewId, productName: value.productName, registration: value.registration, antivirusHealth: value.antivirusHealth, observedAt: value.observedAt };
+}
 export const launchRequest = argument => ({ planId: request(argument, 'planId') });
 function shapeStatus(value, id) {
   if (!record(value) || value.id !== id || !['prepared', 'downloading', 'verifying', 'launching', 'launched', 'cancelled', 'failed', 'reviewRequired', 'acknowledged'].includes(value.phase)

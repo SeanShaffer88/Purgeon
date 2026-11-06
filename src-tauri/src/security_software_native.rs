@@ -3,9 +3,10 @@ use crate::updater_native::{self, Pin};
 use serde::{Deserialize, Serialize};
 use std::{
     collections::HashMap,
+    ffi::c_void,
     fs::{self, OpenOptions},
     io::Write,
-    os::windows::{fs::OpenOptionsExt, process::CommandExt},
+    os::windows::{ffi::OsStrExt, fs::OpenOptionsExt, process::CommandExt},
     path::{Path, PathBuf},
     process::Command,
     sync::{
@@ -20,6 +21,8 @@ const RECOVERY: &str = "Purgeon cannot undo vendor removal. The utility may requ
 const STALE_INVENTORY: &str =
     "Current inventory no longer confirms this product and utility. Refresh inventory and prepare a new plan.";
 static REFRESH: Mutex<()> = Mutex::new(());
+static HANDOFF: Mutex<()> = Mutex::new(());
+const CHECKPOINT_LIMIT: u64 = 4096;
 const SOURCE_IDS: [&str; 7] = [
     "SecurityCenter2/AntiVirusProduct",
     "SecurityCenter2/AntiSpywareProduct",
@@ -129,13 +132,62 @@ pub struct AcknowledgeResult {
     review_id: String,
     outcome: String,
 }
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct HandoffRequest {
+    pub review_id: String,
+}
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum RegistrationObservation {
+    Observed,
+    NotObserved,
+    Unknown,
+}
+#[derive(Debug, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "camelCase")]
+enum AntivirusHealth {
+    Good,
+    NotMonitored,
+    Poor,
+    Snoozed,
+    Unknown,
+}
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct HandoffResult {
+    review_id: String,
+    product_name: Option<String>,
+    registration: RegistrationObservation,
+    antivirus_health: AntivirusHealth,
+    observed_at: String,
+}
 struct HeldReview {
     dto: RemovalReview,
     pin: Pin,
     bytes: Vec<u8>,
+    path: PathBuf,
     _parents: Vec<Pin>,
 }
-#[derive(Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RegistrationTarget {
+    name: String,
+    publisher: String,
+    version: String,
+    sources: Vec<String>,
+}
+impl From<&Product> for RegistrationTarget {
+    fn from(product: &Product) -> Self {
+        Self {
+            name: product.name.clone(),
+            publisher: product.publisher.clone(),
+            version: product.version.clone(),
+            sources: product.sources.clone(),
+        }
+    }
+}
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct Checkpoint {
     schema_version: u32,
@@ -144,6 +196,8 @@ struct Checkpoint {
     phase: String,
     detail: String,
     payload: PathBuf,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    target: Option<RegistrationTarget>,
 }
 
 struct Policy {
@@ -349,7 +403,7 @@ struct Snapshot {
     records: Vec<Record>,
     sources: Vec<Source>,
 }
-fn normalize(snapshot: Snapshot, previous: &[Product]) -> Result<Inventory, String> {
+fn validate_snapshot(snapshot: &Snapshot) -> Result<(), String> {
     if snapshot.records.len() > 16640 || snapshot.sources.len() != 7 {
         return Err("Inventory exceeds bounds or misses sources".into());
     }
@@ -363,11 +417,7 @@ fn normalize(snapshot: Snapshot, previous: &[Product]) -> Result<Inventory, Stri
     }) {
         return Err("Invalid source outcome".into());
     }
-    let mut products: Vec<Product> = Vec::new();
-    // Registry evidence first: matching WMI display names can corroborate it.
-    let mut records = snapshot.records;
-    records.sort_by_key(|r| r.source.starts_with("SecurityCenter2/"));
-    for r in records {
+    for r in &snapshot.records {
         if r.name.len() > 512
             || r.publisher.len() > 512
             || r.version.len() > 128
@@ -376,6 +426,16 @@ fn normalize(snapshot: Snapshot, previous: &[Product]) -> Result<Inventory, Stri
         {
             return Err("Invalid inventory record".into());
         }
+    }
+    Ok(())
+}
+fn normalize(snapshot: Snapshot, previous: &[Product]) -> Result<Inventory, String> {
+    validate_snapshot(&snapshot)?;
+    let mut products: Vec<Product> = Vec::new();
+    // Registry evidence first: matching WMI display names can corroborate it.
+    let mut records = snapshot.records;
+    records.sort_by_key(|r| r.source.starts_with("SecurityCenter2/"));
+    for r in records {
         let n = r.name.trim();
         if n.is_empty() {
             continue;
@@ -551,20 +611,18 @@ fn manager() -> &'static Mutex<Manager> {
     static VALUE: OnceLock<Mutex<Manager>> = OnceLock::new();
     VALUE.get_or_init(|| Mutex::new(Manager::default()))
 }
-pub fn inventory() -> Result<Inventory, String> {
-    inventory_with(
-        manager(),
-        &REFRESH,
-        || {
-            script(
-                include_str!("security_software/inventory.ps1"),
-                serde_json::json!({}),
-                Duration::from_secs(40),
-                &AtomicBool::new(false),
-            )
-        },
-        |m| discover_reviews(&native_root()?, m),
+fn read_inventory() -> Result<Vec<u8>, String> {
+    script(
+        include_str!("security_software/inventory.ps1"),
+        serde_json::json!({}),
+        Duration::from_secs(40),
+        &AtomicBool::new(false),
     )
+}
+pub fn inventory() -> Result<Inventory, String> {
+    inventory_with(manager(), &REFRESH, read_inventory, |m| {
+        discover_reviews(&native_root()?, m)
+    })
 }
 fn inventory_with(
     manager: &Mutex<Manager>,
@@ -651,8 +709,14 @@ fn has_marker(root: &Path) -> Result<bool, String> {
     Ok(false)
 }
 fn validated_checkpoint(root: &Path, path: &Path, bytes: &[u8]) -> Result<Checkpoint, String> {
+    if bytes.len() as u64 > CHECKPOINT_LIMIT {
+        return Err("Recovery checkpoint exceeds bounds".into());
+    }
     let c: Checkpoint = serde_json::from_slice(bytes).map_err(|_| "Malformed checkpoint")?;
-    if c.schema_version != 1
+    if !matches!((c.schema_version, &c.target), (1, None) | (2, Some(_)))
+        || c.target
+            .as_ref()
+            .is_some_and(|t| !valid_target(t, &c.tool_id))
         || !valid_id(&c.id)
         || policy(&c.tool_id).is_err()
         || c.phase != "reviewRequired"
@@ -692,7 +756,9 @@ fn discover_reviews(root: &Path, m: &mut Manager) -> Result<Vec<RemovalReview>, 
             Ok(_) => {}
         }
         if let Some(held) = m.reviews.values().find(|r| {
-            r.pin.read_bounded(4096).is_ok_and(|b| b == r.bytes)
+            r.pin
+                .read_bounded(CHECKPOINT_LIMIT)
+                .is_ok_and(|b| b == r.bytes)
                 && validated_checkpoint(root, &path, &r.bytes).is_ok()
         }) {
             // Match the actual path as well: two tools may contain identical bytes.
@@ -706,7 +772,7 @@ fn discover_reviews(root: &Path, m: &mut Manager) -> Result<Vec<RemovalReview>, 
             let parents = pin_ancestors(root)?;
             // READ + DELETE; share read only denies writers and substitutions.
             let pin = Pin::open(&path, false, 0x80010000, 1)?;
-            let bytes = pin.read_bounded(4096)?;
+            let bytes = pin.read_bounded(CHECKPOINT_LIMIT)?;
             let checkpoint = validated_checkpoint(root, &path, &bytes)?;
             let dto = RemovalReview { review_id: review_id.clone(), tool_id: Some(checkpoint.tool_id),
                 plan_id: Some(checkpoint.id), state: "reviewRequired".into(),
@@ -715,6 +781,7 @@ fn discover_reviews(root: &Path, m: &mut Manager) -> Result<Vec<RemovalReview>, 
                 dto,
                 pin,
                 bytes,
+                path,
                 _parents: parents,
             })
         })();
@@ -725,6 +792,180 @@ fn discover_reviews(root: &Path, m: &mut Manager) -> Result<Vec<RemovalReview>, 
         }
     }
     Ok(result)
+}
+fn registry_source(id: &str) -> bool {
+    SOURCE_IDS[3..].contains(&id)
+}
+fn valid_target(target: &RegistrationTarget, tool_id: &str) -> bool {
+    target.name.len() <= 512
+        && target.publisher.len() <= 512
+        && target.version.len() <= 128
+        && [&target.name, &target.publisher, &target.version]
+            .into_iter()
+            .all(|value| !value.chars().any(char::is_control))
+        && match_tool(&target.name, &target.publisher) == Some(tool_id)
+        && target.sources.iter().any(|id| registry_source(id))
+        && target.sources.len() <= SOURCE_IDS.len()
+        && target.sources.iter().enumerate().all(|(index, id)| {
+            SOURCE_IDS.contains(&id.as_str()) && !target.sources[..index].contains(id)
+        })
+}
+fn registration_observation(
+    target: &RegistrationTarget,
+    tool_id: &str,
+    snapshot: &Snapshot,
+) -> RegistrationObservation {
+    use RegistrationObservation::{NotObserved, Observed, Unknown};
+    // Every uninstall view may contain the exact metadata. Other WSC classes
+    // only corroborate sources seen at launch and cannot supply a publisher/version.
+    if validate_snapshot(snapshot).is_err()
+        || target.version.trim().is_empty()
+        || snapshot.sources.iter().any(|source| {
+            (registry_source(&source.id) || target.sources.contains(&source.id))
+                && source.status != "ok"
+        })
+    {
+        return Unknown;
+    }
+    let mut matching_sources = Vec::new();
+    for record in &snapshot.records {
+        let name = record.name.trim();
+        let same_name = name.eq_ignore_ascii_case(&target.name);
+        let registry = registry_source(&record.source);
+        if !same_name
+            && !(registry
+                && (match_tool(name, &record.publisher) == Some(tool_id)
+                    || record.publisher.eq_ignore_ascii_case(&target.publisher)))
+        {
+            continue;
+        }
+        let exact = if registry {
+            name == target.name
+                && record.publisher == target.publisher
+                && record.version == target.version
+        } else {
+            same_name && record.publisher.is_empty() && record.version.is_empty()
+        };
+        if !exact
+            || !target.sources.contains(&record.source)
+            || matching_sources.contains(&record.source.as_str())
+        {
+            return Unknown;
+        }
+        matching_sources.push(record.source.as_str());
+    }
+    if matching_sources.is_empty() {
+        NotObserved
+    } else if matching_sources.len() == target.sources.len() {
+        Observed
+    } else {
+        Unknown
+    }
+}
+fn health_observation(status: i32, health: i32) -> AntivirusHealth {
+    match (status, health) {
+        (0, 0) => AntivirusHealth::Good,
+        (0, 1) => AntivirusHealth::NotMonitored,
+        (0, 2) => AntivirusHealth::Poor,
+        (0, 3) => AntivirusHealth::Snoozed,
+        _ => AntivirusHealth::Unknown,
+    }
+}
+fn windows_antivirus_health() -> AntivirusHealth {
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn LoadLibraryExW(path: *const u16, file: *mut c_void, flags: u32) -> *mut c_void;
+        fn GetProcAddress(module: *mut c_void, name: *const u8) -> *mut c_void;
+        fn FreeLibrary(module: *mut c_void) -> i32;
+    }
+    struct SystemLibrary(*mut c_void);
+    impl Drop for SystemLibrary {
+        fn drop(&mut self) {
+            // This wrapper is constructed only for an owned, non-null module.
+            unsafe { FreeLibrary(self.0) };
+        }
+    }
+    let Ok(path) = crate::windows_tools::system_file("wscapi.dll") else {
+        return AntivirusHealth::Unknown;
+    };
+    let path: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    const LOAD_LIBRARY_SEARCH_SYSTEM32: u32 = 0x800;
+    // The OS-resolved absolute path and System32 dependency search avoid
+    // application or working-directory lookup.
+    let module = unsafe {
+        LoadLibraryExW(
+            path.as_ptr(),
+            std::ptr::null_mut(),
+            LOAD_LIBRARY_SEARCH_SYSTEM32,
+        )
+    };
+    if module.is_null() {
+        return AntivirusHealth::Unknown;
+    }
+    let library = SystemLibrary(module);
+    let address =
+        unsafe { GetProcAddress(library.0, c"WscGetSecurityProviderHealth".as_ptr().cast()) };
+    if address.is_null() {
+        return AntivirusHealth::Unknown;
+    }
+    // The named export has the documented ABI. The owned module stays loaded
+    // until after the call.
+    let get_health: unsafe extern "system" fn(u32, *mut i32) -> i32 =
+        unsafe { std::mem::transmute(address) };
+    const WSC_SECURITY_PROVIDER_ANTIVIRUS: u32 = 0x4;
+    let mut health = -1;
+    // The documented API accepts a writable enum-sized output pointer. S_FALSE
+    // means the service is not running, regardless of the output it supplied.
+    let status = unsafe { get_health(WSC_SECURITY_PROVIDER_ANTIVIRUS, &mut health) };
+    health_observation(status, health)
+}
+fn current_review(manager: &Mutex<Manager>, id: &str) -> Result<Checkpoint, String> {
+    let m = manager.lock().map_err(|_| "Removal manager unavailable")?;
+    let held = m.reviews.get(id).ok_or("Unknown or stale review ID")?;
+    let bytes = held.pin.read_bounded(CHECKPOINT_LIMIT)?;
+    if bytes != held.bytes {
+        return Err("Checkpoint changed since review".into());
+    }
+    let root = held.path.parent().ok_or("Invalid checkpoint path")?;
+    validated_checkpoint(root, &held.path, &bytes)
+}
+fn handoff_with(
+    manager: &Mutex<Manager>,
+    request: HandoffRequest,
+    inventory: impl FnOnce() -> Result<Vec<u8>, String>,
+    health: impl FnOnce() -> AntivirusHealth,
+) -> Result<HandoffResult, String> {
+    if !valid_id(&request.review_id) {
+        return Err("Invalid native review ID".into());
+    }
+    let checkpoint = current_review(manager, &request.review_id)?;
+    let registration =
+        checkpoint
+            .target
+            .as_ref()
+            .map_or(RegistrationObservation::Unknown, |target| {
+                inventory()
+                    .ok()
+                    .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+                    .map_or(RegistrationObservation::Unknown, |snapshot| {
+                        registration_observation(target, &checkpoint.tool_id, &snapshot)
+                    })
+            });
+    let antivirus_health = health();
+    current_review(manager, &request.review_id)?;
+    Ok(HandoffResult {
+        review_id: request.review_id,
+        product_name: checkpoint.target.map(|target| target.name),
+        registration,
+        antivirus_health,
+        observed_at: timestamp(now()?)?,
+    })
+}
+pub fn check_handoff(request: HandoffRequest) -> Result<HandoffResult, String> {
+    let _active = HANDOFF
+        .try_lock()
+        .map_err(|_| "Handoff check unavailable or already running")?;
+    handoff_with(manager(), request, read_inventory, windows_antivirus_health)
 }
 pub fn acknowledge(request: AcknowledgeRequest) -> Result<AcknowledgeResult, String> {
     if !valid_id(&request.review_id)
@@ -881,19 +1122,16 @@ pub fn status(id: &str) -> Result<Status, String> {
 fn read_restart_status(root: &Path, id: &str) -> Result<Status, String> {
     let path = root.join("launch-intent");
     let held = Pin::open(&path, false, 0x80000000, 1)?;
-    if fs::metadata(&path).map_err(|e| e.to_string())?.len() > 4096 {
-        return Err("Recovery checkpoint exceeds bounds".into());
-    }
-    let bytes = fs::read(&path).map_err(|e| e.to_string())?;
-    if bytes.len() > 4096 {
-        return Err("Recovery checkpoint exceeds bounds".into());
-    }
+    let bytes = held.read_bounded(CHECKPOINT_LIMIT)?;
     let marker: serde_json::Value =
         serde_json::from_slice(&bytes).map_err(|_| "Recovery checkpoint needs manual review")?;
-    held.verify(false)?;
-    if marker.get("schemaVersion") != Some(&serde_json::json!(1))
-        || marker.get("id").and_then(|v| v.as_str()) != Some(id)
-    {
+    let recognized = match marker.get("schemaVersion").and_then(|v| v.as_u64()) {
+        // Legacy status is review-only and never grants acknowledgment.
+        Some(1) => true,
+        Some(2) => validated_checkpoint(root, &path, &bytes).is_ok(),
+        _ => false,
+    };
+    if !recognized || marker.get("id").and_then(|v| v.as_str()) != Some(id) {
         return Err("Unknown native plan ID; retained checkpoint needs review".into());
     }
     Ok(Status{id:id.into(),phase:"reviewRequired".into(),bytes_received:0,cancellation_requested:false,cleanup:"retained".into(),detail:"The utility may have started before Purgeon closed; review open windows before retrying. No automatic relaunch or cleanup was attempted.".into()})
@@ -978,7 +1216,7 @@ impl Payload {
 trait Effects {
     fn download(&mut self, op: &Operation) -> Result<u64, String>;
     fn verify(&mut self, op: &Operation) -> Result<(), String>;
-    fn persist(&mut self, op: &Operation) -> Result<(), String>;
+    fn persist(&mut self, op: &Operation, target: &RegistrationTarget) -> Result<(), String>;
     fn launch(&mut self) -> Result<(), String>;
     fn cleanup(&mut self) -> Result<(), String>;
 }
@@ -1054,10 +1292,21 @@ impl Effects for NativeEffects {
     fn verify(&mut self, op: &Operation) -> Result<(), String> {
         self.verify_with(op, script)
     }
-    fn persist(&mut self, op: &Operation) -> Result<(), String> {
+    fn persist(&mut self, op: &Operation, target: &RegistrationTarget) -> Result<(), String> {
         let payload = self.payload.as_ref().ok_or("Payload unavailable")?;
         payload.recheck()?;
         let path = self.root.join("launch-intent");
+        let bytes = serde_json::to_vec(&Checkpoint {
+            schema_version: 2,
+            id: op.plan.id.clone(),
+            tool_id: op.plan.tool_id.clone(),
+            phase: "reviewRequired".into(),
+            detail: "Utility may have started; no automatic retry".into(),
+            payload: payload.path.clone(),
+            target: Some(target.clone()),
+        })
+        .map_err(|e| e.to_string())?;
+        validated_checkpoint(&self.root, &path, &bytes)?;
         // Exclusive durable checkpoint is intentionally never automatically removed.
         // Even a partial checkpoint blocks a restart; unknown state never authorizes retry.
         self.checkpoint = Some(
@@ -1069,7 +1318,6 @@ impl Effects for NativeEffects {
                 .map_err(|e| e.to_string())?,
         );
         let file = self.checkpoint.as_mut().unwrap();
-        let bytes=serde_json::to_vec(&serde_json::json!({"schemaVersion":1,"id":op.plan.id,"toolId":op.plan.tool_id,"phase":"reviewRequired","detail":"Utility may have started; no automatic retry","payload":payload.path})).map_err(|e|e.to_string())?;
         file.write_all(&bytes)
             .and_then(|()| file.sync_all())
             .map_err(|e| e.to_string())?;
@@ -1089,14 +1337,23 @@ impl Effects for NativeEffects {
     }
 }
 #[cfg(test)]
+fn fixture_target() -> RegistrationTarget {
+    RegistrationTarget {
+        name: "AVG AntiVirus FREE".into(),
+        publisher: "AVG Technologies".into(),
+        version: "1.2.3".into(),
+        sources: vec![SOURCE_IDS[3].into()],
+    }
+}
+#[cfg(test)]
 fn run(op: &Operation, effects: &mut impl Effects) -> Result<LaunchResult, String> {
-    run_with_setup(op, effects, |_| Ok(()), || Ok(()))
+    run_with_setup(op, effects, |_| Ok(()), || Ok(((), fixture_target())))
 }
 fn run_with_setup<E: Effects, G, R>(
     op: &Operation,
     effects: &mut E,
     setup: impl FnOnce(&mut E) -> Result<G, String>,
-    reserve_launch: impl FnOnce() -> Result<R, String>,
+    reserve_launch: impl FnOnce() -> Result<(R, RegistrationTarget), String>,
 ) -> Result<LaunchResult, String> {
     let result = (|| {
         let _guard = setup(effects)?;
@@ -1110,8 +1367,8 @@ fn run_with_setup<E: Effects, G, R>(
         effects.verify(op)?;
         {
             // Keep the inventory stable through the durable checkpoint and launch boundary.
-            let _refresh = reserve_launch()?;
-            effects.persist(op)?;
+            let (_refresh, target) = reserve_launch()?;
+            effects.persist(op, &target)?;
             op.state
                 .lock()
                 .map_err(|_| "Operation unavailable")?
@@ -1191,7 +1448,7 @@ fn reserve_final_launch<'a>(
     manager: &Mutex<Manager>,
     refresh: &'a Mutex<()>,
     plan: &Plan,
-) -> Result<MutexGuard<'a, ()>, String> {
+) -> Result<(MutexGuard<'a, ()>, RegistrationTarget), String> {
     let guard = refresh.try_lock().map_err(|error| match error {
         std::sync::TryLockError::WouldBlock => {
             "Inventory refresh is in progress. Wait for it to finish and prepare a new plan."
@@ -1199,10 +1456,14 @@ fn reserve_final_launch<'a>(
         std::sync::TryLockError::Poisoned(_) => "Inventory unavailable",
     })?;
     let m = manager.lock().map_err(|_| "Removal manager unavailable")?;
-    if !inventory_confirms_plan(&m.products, plan) {
-        return Err(STALE_INVENTORY.into());
-    }
-    Ok(guard)
+    let product = m
+        .products
+        .iter()
+        .find(|product| {
+            product.id == plan.product_id && product.tool_id.as_deref() == Some(&plan.tool_id)
+        })
+        .ok_or(STALE_INVENTORY)?;
+    Ok((guard, RegistrationTarget::from(product)))
 }
 
 fn inventory_confirms_plan(products: &[Product], plan: &Plan) -> bool {
@@ -1256,6 +1517,214 @@ mod tests {
     static ACK_TEST: Mutex<()> = Mutex::new(());
 
     #[test]
+    fn handoff_registration_uses_exact_registry_metadata_and_source_completeness() {
+        let target = RegistrationTarget {
+            name: "AVG AntiVirus FREE".into(),
+            publisher: "AVG Technologies".into(),
+            version: "1.2.3".into(),
+            sources: vec![SOURCE_IDS[3].into()],
+        };
+        let exact = || Record {
+            version: target.version.clone(),
+            ..record(&target.name, &target.publisher, SOURCE_IDS[3])
+        };
+        assert_eq!(
+            registration_observation(&target, "avg", &snapshot(vec![exact()])),
+            RegistrationObservation::Observed
+        );
+        assert_eq!(
+            registration_observation(&target, "avg", &snapshot(vec![])),
+            RegistrationObservation::NotObserved
+        );
+        for records in [
+            vec![exact(), exact()],
+            vec![Record {
+                source: SOURCE_IDS[4].into(),
+                ..exact()
+            }],
+            vec![Record {
+                version: "1.2.4".into(),
+                ..exact()
+            }],
+            vec![Record {
+                name: "AVG Internet Security".into(),
+                ..exact()
+            }],
+            vec![record(&target.name, "", SOURCE_IDS[0])],
+        ] {
+            assert_eq!(
+                registration_observation(&target, "avg", &snapshot(records)),
+                RegistrationObservation::Unknown
+            );
+        }
+        let mut partial = snapshot(vec![exact()]);
+        partial.sources[4].status = "unavailable".into();
+        assert_eq!(
+            registration_observation(&target, "avg", &partial),
+            RegistrationObservation::Unknown
+        );
+        let mut unrelated = snapshot(vec![exact()]);
+        unrelated.sources[1].status = "unavailable".into();
+        assert_eq!(
+            registration_observation(&target, "avg", &unrelated),
+            RegistrationObservation::Observed
+        );
+    }
+
+    #[test]
+    fn handoff_windows_health_accepts_only_s_ok_and_known_documented_values() {
+        assert_eq!(health_observation(0, 0), AntivirusHealth::Good);
+        assert_eq!(health_observation(0, 1), AntivirusHealth::NotMonitored);
+        assert_eq!(health_observation(0, 2), AntivirusHealth::Poor);
+        assert_eq!(health_observation(0, 3), AntivirusHealth::Snoozed);
+        for (status, health) in [(1, 2), (-2147467259, 0), (0, -1), (0, 4)] {
+            assert_eq!(health_observation(status, health), AntivirusHealth::Unknown);
+        }
+    }
+
+    #[test]
+    fn handoff_reads_v1_and_v2_after_restart_without_mutating_checkpoint() {
+        for version in [1, 2] {
+            let fixture = AdapterFixture::new();
+            let root = &fixture.effects.root;
+            let path = root.join("launch-intent");
+            let id = "a".repeat(32);
+            let mut checkpoint: Checkpoint =
+                serde_json::from_slice(&checkpoint_bytes(root, &id)).unwrap();
+            checkpoint.schema_version = version;
+            checkpoint.target = (version == 2).then(fixture_target);
+            let bytes = serde_json::to_vec(&checkpoint).unwrap();
+            fs::write(&path, &bytes).unwrap();
+            assert_eq!(
+                read_restart_status(root, &id).unwrap().phase,
+                "reviewRequired"
+            );
+            let mut restarted = Manager::default();
+            let review = discover_reviews(root, &mut restarted).unwrap().remove(0);
+            let m = Mutex::new(restarted);
+            let request = || HandoffRequest {
+                review_id: review.review_id.clone(),
+            };
+            let result = handoff_with(
+                &m,
+                request(),
+                || {
+                    assert_eq!(
+                        version, 2,
+                        "legacy target must not be inferred from inventory"
+                    );
+                    Ok(inventory_bytes(vec![], "ok"))
+                },
+                || AntivirusHealth::Good,
+            )
+            .unwrap();
+            assert_eq!(
+                result.product_name,
+                checkpoint.target.map(|target| target.name)
+            );
+            assert_eq!(
+                result.registration,
+                if version == 1 {
+                    RegistrationObservation::Unknown
+                } else {
+                    RegistrationObservation::NotObserved
+                }
+            );
+            assert_eq!(result.antivirus_health, AntivirusHealth::Good);
+            if version == 1 {
+                // Exercise the optional system export without depending on
+                // this machine's health, inventory, or WSC service state.
+                let native = handoff_with(
+                    &m,
+                    request(),
+                    || panic!("legacy review reached inventory"),
+                    windows_antivirus_health,
+                )
+                .unwrap();
+                assert_eq!(native.registration, RegistrationObservation::Unknown);
+                assert_eq!(native.product_name, None);
+            }
+            assert_eq!(fs::read(&path).unwrap(), bytes);
+            assert!(has_marker(root).unwrap());
+            assert_eq!(m.lock().unwrap().reviews.len(), 1);
+            let unavailable = handoff_with(
+                &m,
+                request(),
+                || Err("inventory denied".into()),
+                || AntivirusHealth::Poor,
+            )
+            .unwrap();
+            assert_eq!(unavailable.registration, RegistrationObservation::Unknown);
+            assert_eq!(unavailable.antivirus_health, AntivirusHealth::Poor);
+            assert!(handoff_with(
+                &m,
+                request(),
+                || Err("inventory denied".into()),
+                || {
+                    m.lock().unwrap().reviews.clear();
+                    AntivirusHealth::Unknown
+                }
+            )
+            .is_err());
+            assert_eq!(fs::read(&path).unwrap(), bytes);
+        }
+    }
+
+    #[test]
+    fn handoff_rejects_invalid_v2_metadata_and_stale_review_before_observation() {
+        let root = Path::new(r"C:\fixture");
+        let path = root.join("launch-intent");
+        let id = "a".repeat(32);
+        let mut checkpoint: Checkpoint =
+            serde_json::from_slice(&checkpoint_bytes(root, &id)).unwrap();
+        checkpoint.schema_version = 2;
+        assert!(
+            validated_checkpoint(root, &path, &serde_json::to_vec(&checkpoint).unwrap()).is_err()
+        );
+        for target in [
+            RegistrationTarget {
+                name: "AVG Business Security".into(),
+                ..fixture_target()
+            },
+            RegistrationTarget {
+                version: "x".repeat(4096),
+                ..fixture_target()
+            },
+            RegistrationTarget {
+                sources: vec![SOURCE_IDS[0].into()],
+                ..fixture_target()
+            },
+            RegistrationTarget {
+                sources: vec![SOURCE_IDS[3].into(), SOURCE_IDS[3].into()],
+                ..fixture_target()
+            },
+            RegistrationTarget {
+                sources: vec![SOURCE_IDS[3].into(), "forged".into()],
+                ..fixture_target()
+            },
+        ] {
+            checkpoint.target = Some(target);
+            assert!(
+                validated_checkpoint(root, &path, &serde_json::to_vec(&checkpoint).unwrap())
+                    .is_err()
+            );
+        }
+        assert!(serde_json::from_value::<HandoffRequest>(serde_json::json!({
+            "reviewId":id,"path":"forged"
+        }))
+        .is_err());
+        for review_id in ["../fixture".into(), id] {
+            assert!(handoff_with(
+                &Mutex::new(Manager::default()),
+                HandoffRequest { review_id },
+                || panic!("stale review reached inventory"),
+                || panic!("stale review reached WSC"),
+            )
+            .is_err());
+        }
+    }
+
+    #[test]
     fn actual_checkpoint_blocks_independent_review_until_owner_finalizes() {
         let (ready, paused) = std::sync::mpsc::channel();
         let (resume, resumed) = std::sync::mpsc::channel();
@@ -1274,8 +1743,12 @@ mod tests {
                 fn verify(&mut self, _: &Operation) -> Result<(), String> {
                     Ok(())
                 }
-                fn persist(&mut self, op: &Operation) -> Result<(), String> {
-                    self.fixture.effects.persist(op)?;
+                fn persist(
+                    &mut self,
+                    op: &Operation,
+                    target: &RegistrationTarget,
+                ) -> Result<(), String> {
+                    self.fixture.effects.persist(op, target)?;
                     self.ready.send(self.fixture.effects.root.clone()).unwrap();
                     self.resumed
                         .recv_timeout(Duration::from_secs(15))
@@ -1426,10 +1899,14 @@ mod tests {
             fn verify(&mut self, _: &Operation) -> Result<(), String> {
                 Ok(())
             }
-            fn persist(&mut self, op: &Operation) -> Result<(), String> {
-                self.fixture.effects.persist(op)?;
+            fn persist(
+                &mut self,
+                op: &Operation,
+                target: &RegistrationTarget,
+            ) -> Result<(), String> {
+                self.fixture.effects.persist(op, target)?;
                 match self.failure {
-                    "persist" => self.fixture.effects.persist(op),
+                    "persist" => self.fixture.effects.persist(op, target),
                     "partial" => {
                         self.fixture
                             .effects
@@ -1518,7 +1995,7 @@ mod tests {
     fn actual_checkpoint_owner_panic_releases_handle_and_preserves_payload() {
         let op = planned(&mut cached());
         let mut fixture = AdapterFixture::inert(&op);
-        fixture.effects.persist(&op).unwrap();
+        fixture.effects.persist(&op, &fixture_target()).unwrap();
         let marker = fixture.effects.root.join("launch-intent");
         let bytes = fs::read(&marker).unwrap();
         let payload = fixture.effects.payload.as_ref().unwrap().path.clone();
@@ -1559,7 +2036,7 @@ mod tests {
             },
         };
         fixture.populate_inert(&op);
-        fixture.effects.persist(&op).unwrap();
+        fixture.effects.persist(&op, &fixture_target()).unwrap();
         fs::write(root.join("ready"), b"ready").unwrap();
         let deadline = Instant::now() + Duration::from_secs(30);
         while Instant::now() < deadline {
@@ -2035,6 +2512,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
             },
             pin: Pin::open(&path, false, 0x80010000, 1).unwrap(),
             bytes,
+            path: path.clone(),
             _parents: vec![],
         };
         {
@@ -2351,6 +2829,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
                 },
                 pin: Pin::open(&path, false, 0x80000000, 1).unwrap(),
                 bytes: b"inert review".to_vec(),
+                path: path.clone(),
                 _parents: vec![],
             },
         );
@@ -3323,6 +3802,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
                 },
                 pin: Pin::open(&path, false, 0x80010000, 1).unwrap(),
                 bytes: b"retained checkpoint".to_vec(),
+                path: path.clone(),
                 _parents: vec![],
             },
         );
@@ -3402,7 +3882,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
         fn verify(&mut self, op: &Operation) -> Result<(), String> {
             self.effect("verify", Some(op))
         }
-        fn persist(&mut self, op: &Operation) -> Result<(), String> {
+        fn persist(&mut self, op: &Operation, _: &RegistrationTarget) -> Result<(), String> {
             self.effect("persist", Some(op))
         }
         fn launch(&mut self) -> Result<(), String> {
@@ -3792,11 +4272,13 @@ public sealed class FixtureHandler : HttpMessageHandler {
         };
         let mut m = cached();
         let op = planned(&mut m);
-        effects.persist(&op).unwrap();
+        effects.persist(&op, &fixture_target()).unwrap();
         let checkpoint = root.join("launch-intent");
         let bytes = fs::read(&checkpoint).unwrap();
-        assert!(validated_checkpoint(&root, &checkpoint, &bytes).is_ok());
-        assert!(effects.persist(&op).is_err());
+        let persisted = validated_checkpoint(&root, &checkpoint, &bytes).unwrap();
+        assert_eq!(persisted.schema_version, 2);
+        assert_eq!(persisted.target, Some(fixture_target()));
+        assert!(effects.persist(&op, &fixture_target()).is_err());
         assert_eq!(fs::read(&checkpoint).unwrap(), bytes);
         assert_eq!(op.snapshot().unwrap().phase, "prepared");
         effects.cleanup().unwrap();
@@ -3818,9 +4300,13 @@ public sealed class FixtureHandler : HttpMessageHandler {
             fn verify(&mut self, _: &Operation) -> Result<(), String> {
                 Ok(())
             }
-            fn persist(&mut self, op: &Operation) -> Result<(), String> {
+            fn persist(
+                &mut self,
+                op: &Operation,
+                target: &RegistrationTarget,
+            ) -> Result<(), String> {
                 self.barrier.wait();
-                self.native.persist(op)
+                self.native.persist(op, target)
             }
             fn launch(&mut self) -> Result<(), String> {
                 self.launches.fetch_add(1, Ordering::SeqCst);
@@ -3931,7 +4417,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
                             },
                         )
                     },
-                    || Ok(()),
+                    || Ok(((), fixture_target())),
                 )
                 .unwrap();
                 assert_eq!(result.outcome, if cancel { "cancelled" } else { "failed" });

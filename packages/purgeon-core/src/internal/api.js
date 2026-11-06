@@ -537,6 +537,7 @@ const handlers = {
   'securitySoftware:list': (request) => securitySoftware.list(request),
   'securitySoftware:prepare': (request) => securitySoftware.prepare(request),
   'securitySoftware:acknowledge': (request) => securitySoftware.acknowledge(request),
+  'securitySoftware:checkHandoff': (request) => securitySoftware.checkHandoff(request),
   'securitySoftware:launch': (request) => securitySoftware.launch(request),
   'securitySoftware:cancel': (request) => securitySoftware.cancel(request),
   'securitySoftware:status': (request) => securitySoftware.status(request),
@@ -941,7 +942,7 @@ let activeMutation = null;
 // Only reviewed queries and cancellation/UI controls bypass serialization.
 // Unclassified handlers are guarded, including newly added handlers.
 const concurrentChannels = new Set(`
-securitySoftware:list securitySoftware:prepare securitySoftware:status securitySoftware:cancel
+securitySoftware:list securitySoftware:prepare securitySoftware:status securitySoftware:cancel securitySoftware:checkHandoff
 app:isAdmin app:specs app:sysinfo app:ready app:dataDamage app:quit
 app:setTray app:setOnTop app:show app:hideToTray app:closeAnswered
 settings:get programs:list programs:measure programs:measureStore icons:get
