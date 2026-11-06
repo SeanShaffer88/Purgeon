@@ -8,6 +8,8 @@ const outcomes = new Set(['would-change', 'no-change', 'skipped']);
 const fields = (value, names) => value && typeof value === 'object' && !Array.isArray(value)
   && Object.keys(value).length === names.length && names.every((name) => Object.hasOwn(value, name));
 const text = (value, limit) => typeof value === 'string' && value.length <= limit && !value.includes('\0');
+const validDisplay = (row) => kinds.has(row.kind) && text(row.path, 32767) && row.path.trim()
+  && text(row.name, 32767) && text(row.group, 512) && outcomes.has(row.outcome) && text(row.detail, 4096);
 const createdAt = (value) => typeof value === 'string' && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\.\d{3}Z$/.test(value)
   && Number.isFinite(Date.parse(value)) && new Date(value).toISOString() === value;
 const invalid = () => new Error('Invalid or unsupported saved cleanup plan');
@@ -16,16 +18,16 @@ function validate(plan) {
   if (!fields(plan, ['format', 'version', 'createdAt', 'title', 'rows']) || plan.format !== FORMAT
     || plan.version !== 1 || !createdAt(plan.createdAt) || !text(plan.title, 512)
     || !Array.isArray(plan.rows) || plan.rows.length > MAX_ROWS
-    || !plan.rows.every((row) => fields(row, ['kind', 'path', 'name', 'group', 'outcome', 'detail'])
-      && kinds.has(row.kind) && text(row.path, 32767) && row.path.trim()
-      && text(row.name, 32767) && text(row.group, 512) && outcomes.has(row.outcome) && text(row.detail, 4096))) throw invalid();
+    || !plan.rows.every((row) => fields(row, ['kind', 'path', 'name', 'group', 'outcome', 'detail']) && validDisplay(row))) throw invalid();
   return plan;
 }
 
 function projection(result) {
-  if (!result || typeof result.ok !== 'boolean') throw invalid();
-  const outcome = !result.ok ? 'skipped' : ['Already gone', 'Already exists'].includes(result.detail) ? 'no-change' : 'would-change';
-  return { kind: result.kind, path: result.path, name: result.name ?? '', group: result.program ?? '', outcome, detail: result.detail };
+  if (!result || typeof result.ok !== 'boolean') return null;
+  const noChange = result.detail === 'Already gone' || (result.ok && result.detail === 'Already exists');
+  const outcome = noChange ? 'no-change' : result.ok ? 'would-change' : 'skipped';
+  const row = { kind: result.kind, path: result.path, name: result.name ?? '', group: result.program ?? '', outcome, detail: result.detail };
+  return validDisplay(row) ? row : null;
 }
 
 export function serializeSavedCleanupPlan({ title, results }) {
@@ -93,12 +95,12 @@ export async function reviewSavedCleanupPlan(plan, currentItems, { isAllowed, ch
   for (const { key, comparison } of matched) {
     const result = fresh.get(key);
     if (result === null) { comparison.status = 'ambiguous'; continue; }
-    if (!result || typeof result.ok !== 'boolean' || !text(result.detail, 4096)) continue;
     const observed = projection(result);
+    if (!observed) continue;
     comparison.current = observed;
-    if (observed.outcome === 'skipped') comparison.status = /^(Could not check|No current supported native task identity)/.test(observed.detail)
+    if (observed.detail === 'Already gone') comparison.status = 'missing';
+    else if (observed.outcome === 'skipped') comparison.status = /^(Could not check|No current supported native task identity)/.test(observed.detail)
       ? 'unavailable' : 'blocked';
-    else if (observed.detail === 'Already gone') comparison.status = 'missing';
     else {
       const previous = comparison.saved;
       comparison.status = previous.outcome === observed.outcome && previous.group === observed.group && previous.detail === observed.detail

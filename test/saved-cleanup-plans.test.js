@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { __handlers } from '../src/backend/api.js';
 import { setSys } from '../src/backend/sys.js';
+import { planRemoval } from '../src/backend/backups.js';
 import { readSavedCleanupPlan, reviewSavedCleanupPlan, serializeSavedCleanupPlan, SAVED_PLAN_MAX_BYTES } from '../packages/purgeon-core/src/internal/saved-cleanup-plans.js';
 
 test('saving a cleanup preview asks for an explicit destination and writes only display fields', async () => {
@@ -140,4 +141,30 @@ test('fresh denials, conflicting results and failed providers cannot change save
     isAllowed: () => true, check: () => assert.fail('duplicate saved rows reached the planner'),
   });
   assert.deepEqual(duplicated.map((row) => row.status), ['ambiguous', 'ambiguous']);
+});
+
+test('a service the cleanup planner reports already gone saves as no change and reviews as missing', async () => {
+  const service = { kind: 'service', path: 'FixtureService' };
+  setSys({ runPS: async () => 'GONE' });
+  const check = (items) => planRemoval({ items });
+  const { results } = await check([service]);
+  assert.deepEqual(results, [{ ...service, ok: false, detail: 'Already gone' }]);
+  const plan = saved(results);
+  assert.equal(plan.rows[0].outcome, 'no-change');
+  const [review] = await reviewSavedCleanupPlan(plan, [service], { isAllowed: () => true, check });
+  assert.equal(review.status, 'missing');
+  assert.deepEqual(review.current, plan.rows[0]);
+});
+
+test('malformed current display scalars leave only that row unavailable', async () => {
+  const file = result();
+  const other = result('file', path + '.bak');
+  for (const program of [{ private: 'fixture' }, false, 'bad\0group', 'x'.repeat(513)]) {
+    const [malformed, valid] = await reviewSavedCleanupPlan(saved([file, other]), [file, other], {
+      isAllowed: () => true,
+      check: async () => ({ results: [{ ...file, program }, other] }),
+    });
+    assert.deepEqual(malformed, { saved: saved().rows[0], status: 'unavailable' });
+    assert.equal(valid.status, 'unchanged');
+  }
 });
