@@ -245,7 +245,9 @@ test('prune holds one lease through selection, hook and nested deletion', async 
   const { files, calls } = await fixture({ m });
   files.delete(pendingPath);
   files.set(`${root}\\newest\\manifest.json`, JSON.stringify({ ...m, id: 'newest', created: '2026-11-01T00:00:00.000Z' }));
-  setSys({ readDir: async () => [{ name: id, dir: true }, { name: 'newest', dir: true }] });
+  setSys({ readDir: async (target) => target === root
+    ? [{ name: id, dir: true }, { name: 'newest', dir: true }]
+    : files.has(target + '\\manifest.json') ? [{ name: 'manifest.json', file: true, link: false }] : [] });
   let hookCalls = 0;
   const removed = await backups.prune({ maxDays: 1 }, Date.parse('2026-11-03'), { beforeFirstRemove: async () => {
     hookCalls++;
