@@ -96,6 +96,12 @@ async fn acknowledge_security_software_removal(
 ) -> Result<security_software_native::AcknowledgeResult, String> {
     security_software_call(move || security_software_native::acknowledge(request)).await
 }
+#[tauri::command]
+async fn check_security_software_handoff(
+    request: security_software_native::HandoffRequest,
+) -> Result<security_software_native::HandoffResult, String> {
+    security_software_call(move || security_software_native::check_handoff(request)).await
+}
 
 #[tauri::command]
 async fn security_software_inventory() -> Result<security_software_native::Inventory, String> {
@@ -165,6 +171,11 @@ mod security_software_binding_tests {
             assert!(acknowledge_security_software_removal(acknowledgment)
                 .await
                 .is_err());
+            let handoff = serde_json::from_value::<security_software_native::HandoffRequest>(
+                serde_json::json!({"reviewId": "../invalid"}),
+            )
+            .unwrap();
+            assert!(check_security_software_handoff(handoff).await.is_err());
             assert!(launch_security_software_removal(request()).await.is_err());
             assert!(cancel_security_software_removal(request()).await.is_err());
             assert!(security_software_removal_status(request()).await.is_err());
@@ -2474,6 +2485,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             persistence_trace,
             acknowledge_security_software_removal,
+            check_security_software_handoff,
             security_software_inventory,
             prepare_security_software_removal,
             launch_security_software_removal,

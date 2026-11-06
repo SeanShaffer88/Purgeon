@@ -8,6 +8,23 @@ const productId = 'a'.repeat(32), planId = 'b'.repeat(32);
 const plan = { id: planId, productId, toolId: 'avg', productName: 'AVG', toolName: 'AVG Clear', recoveryLimits: 'No rollback', expiresAt: '2026-11-04T20:00:00Z' };
 const status = { id: planId, phase: 'prepared', bytesReceived: 0, cancellationRequested: false, cleanup: 'none', detail: 'Ready' };
 const inventory = { reviews: [], products: [{ id: productId, name: 'AVG', publisher: 'AVG Technologies', version: '1', sources: ['registry'], category: 'antivirus', toolId: 'avg', unsupportedReason: null, builtIn: false, helpUrl: null }], sources: [{ id: 'registry', status: 'ok', detail: '' }], complete: true, observedAt: '2026-11-04T19:00:00Z' };
+test('handoff check sends only the review identity and validates independent native observations', async () => {
+  const reviewId = 'c'.repeat(32);
+  const observation = { reviewId, productName: null, registration: 'unknown', antivirusHealth: 'good', observedAt: inventory.observedAt };
+  const calls = fixture({ checkSecuritySoftwareHandoff: async request => { calls.push(request); return { ...observation, payload: 'private' }; } });
+  assert.deepEqual(await api.invoke('securitySoftware:checkHandoff', { reviewId }), observation);
+  assert.deepEqual(calls, [{ reviewId }]);
+  for (const bad of [{ reviewId, path: 'private' }, { reviewId: '../fixture' }, null]) {
+    await assert.rejects(security.checkHandoff(bad), /Invalid security-software request/);
+  }
+  assert.equal(calls.length, 1);
+  for (const patch of [{ reviewId: planId }, { registration: 'removed' }, { antivirusHealth: 'protected' }, { productName: {} }, { observedAt: 'invalid' }]) {
+    fixture({ checkSecuritySoftwareHandoff: async () => ({ ...observation, ...patch }) });
+    await assert.rejects(security.checkHandoff({ reviewId }), /invalid security-software response/i);
+  }
+  const binding = securitySoftwareAdapter((...args) => args);
+  assert.deepEqual(binding.checkSecuritySoftwareHandoff({ reviewId }), ['check_security_software_handoff', { request: { reviewId } }]);
+});
 function fixture(overrides = {}) {
   const calls = [];
   setSys({ securitySoftwareInventory: async () => { calls.push('list'); return inventory; },

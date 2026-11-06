@@ -150,6 +150,8 @@ Use **Remove AV** to inspect registered security products and, for supported con
 
 Inventory combines Windows `SecurityCenter2` antivirus, antispyware and firewall registrations with HKLM and HKCU uninstall entries in both 64-bit and 32-bit registry views. You can inspect each source's status; failed or unavailable sources produce an incomplete inventory. Security Center/WMI registrations can remain after uninstalling a product. An entry does not prove that the product remains installed or actively protects your PC.
 
+After closing the vendor utility and any elevation prompt, choose **Check now** in the previous-attempt panel. Purgeon compares fresh registration metadata with the product recorded at launch and shows Windows Security Center's aggregate antivirus health separately. Registration is unknown when the checkpoint belongs to a different Windows installation or user, or when the checkpoint lacks enough metadata. These observations do not establish removal success or confirm the utility is closed. Acknowledge the previous attempt separately after your review.
+
 Single-click a product to select it. Double-click it, press Enter on its name, or choose **Run vendor removal utility** to review a supported utility. Every launch requires a confirmation that you cannot suppress. Purgeon downloads the utility on demand from a fixed official vendor endpoint and checks Windows Authenticode, the exact reviewed publisher identity and product metadata. It keeps the verified payload pinned through launch and refuses mismatches.
 
 Supported tools and official procedures:

@@ -4,6 +4,7 @@ import { invoke } from '@tauri-apps/api/core';
 export function securitySoftwareAdapter(invokeNative) {
   return {
     acknowledgeSecuritySoftwareRemoval: (request) => invokeNative('acknowledge_security_software_removal', { request }),
+    checkSecuritySoftwareHandoff: (request) => invokeNative('check_security_software_handoff', { request }),
     securitySoftwareInventory: () => invokeNative('security_software_inventory'),
     prepareSecuritySoftwareRemoval: (request) => invokeNative('prepare_security_software_removal', { request }),
     launchSecuritySoftwareRemoval: (planId) => invokeNative('launch_security_software_removal', { request: { planId } }),

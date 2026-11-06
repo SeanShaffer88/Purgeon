@@ -2,6 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ConfirmDialog } from './core-dialog.jsx';
 import { canRunSecurityProduct, isSecurityRunEligible, securitySoftwareStatus, createSecuritySoftwareController } from './security-software-controller.js';
 
+const registrationLabel = new Map([['observed', 'Observed'], ['notObserved', 'Not observed']]);
+const healthLabel = new Map([['good', 'Good'], ['notMonitored', 'Not monitored'], ['poor', 'Poor'], ['snoozed', 'Snoozed']]);
+
 export function SecuritySoftwareView({ filter = '', onError, onStatus, api = window.api }) {
   const [state, setState] = useState({ inventory: null, loading: true, busy: false, phase: '', message: '' });
   const [selected, setSelected] = useState(null);
@@ -42,7 +45,27 @@ export function SecuritySoftwareView({ filter = '', onError, onStatus, api = win
     {!!reviews.length && <section className="security-warning" aria-label="Previous utility attempts">
       <h2>Previous utility attempts require review</h2>
       <p>Check that the previous vendor utility has finished or closed, including any elevation prompt. Purgeon cannot determine whether removal completed. All vendor utilities remain blocked until every previous attempt is acknowledged.</p>
-      {reviews.map(review => <div key={review.reviewId}><p><strong>{review.toolId ?? 'Unknown vendor utility'}</strong>: {review.detail}{!review.canAcknowledge || review.state !== 'reviewRequired' ? ' Acknowledgment is unavailable for this recovery record; all vendor utilities remain blocked.' : ''}</p><button disabled={state.busy || !review.canAcknowledge || review.state !== 'reviewRequired'} onClick={() => controller.current.acknowledge(review)}>Acknowledge previous attempt</button></div>)}
+      {reviews.map(review => {
+        const available = review.canAcknowledge && review.state === 'reviewRequired';
+        const check = state.handoff?.reviewId === review.reviewId ? state.handoff : null;
+        const result = check?.result;
+        return <div key={review.reviewId}>
+          <p><strong>{review.toolId ?? 'Unknown vendor utility'}</strong>: {review.detail}{!available ? ' Acknowledgment is unavailable for this recovery record; all vendor utilities remain blocked.' : ''}</p>
+          <div className="security-toolbar">
+            <button disabled={state.busy || state.loading || state.handoff?.pending || !available} onClick={() => controller.current.checkHandoff(review)}>Check now</button>
+            <button disabled={state.busy || !available} onClick={() => controller.current.acknowledge(review)}>Acknowledge previous attempt</button>
+          </div>
+          <div role="status" aria-live="polite">
+            {check?.pending && <p>Reading registration and Windows antivirus health…</p>}
+            {check?.unavailable && <p>Could not check this review. Refresh inventory or try again.</p>}
+            {result && <>
+              <p><strong>Registration:</strong> {registrationLabel.get(result.registration) ?? 'Unknown'} · {result.productName ?? 'Original product unavailable'}</p>
+              <p><strong>Windows antivirus health:</strong> {healthLabel.get(result.antivirusHealth) ?? 'Unknown'} (aggregate)</p>
+              <p>These observations do not verify that the utility closed or removal completed.</p>
+            </>}
+          </div>
+        </div>;
+      })}
     </section>}
     <div className="security-table-wrap" aria-busy={state.loading}>
       <table className="security-table"><thead><tr><th scope="col">Installed product</th><th scope="col">Publisher</th><th scope="col">Version</th><th scope="col">Utility availability</th></tr></thead>
