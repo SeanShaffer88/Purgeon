@@ -17,6 +17,7 @@ import * as dns from './dns.js';
 import * as restore from './restore.js';
 import * as measure from './measure.js';
 import * as startup from './startup.js';
+import { traceStartup, traceTask } from './persistence-trace.js';
 import * as history from './history.js';
 import * as snapshots from './snapshots.js';
 import * as junk from './junk.js';
@@ -567,6 +568,7 @@ const handlers = {
   },
   // Scheduled Tasks (Tools > System Tools).
   'tasks:list': () => tasks.list(),
+  'tasks:trace': traceTask,
   'tasks:setEnabled': ({ task, on }) => tasks.setEnabled(task, on),
   'tasks:runNow': ({ task }) => tasks.runNow(task),
   'tasks:stop': ({ task }) => tasks.stop(task),
@@ -709,6 +711,7 @@ const handlers = {
   'transfer:undo': async (id) => (await lazyTransfer.get()).undo(id),
   'startup:list': () => startup.list(),
   'startup:set': ({ entry, enable }) => startup.setEnabled(entry, enable),
+  'startup:trace': traceStartup,
   'startup:delayed': ({ entry, delayed }) => startup.setDelayed(entry, delayed),
   // Trusted publisher allowlist (Enhancement 5)
   'trusted:list': () => trusted.list(),
@@ -956,7 +959,7 @@ queue:get queue:restartPending trials:list
 explore:diskMap disk:drives disk:scan disk:list disk:measure disk:open
 processes:sample processes:alertThresholds processes:openFolder power:state
 restore:state restore:openUi boot:state logs:channels health:weekly
-tasks:list tasks:pickProgram cookies:rules explore:timeline program:analyze
+tasks:list tasks:trace tasks:pickProgram cookies:rules explore:timeline program:analyze
 registry:search browsers:list browsers:running
 transfer:pickFolder transfer:folder portable:find portable:checkUpdates
 shell:enabled shell:resolve autostart:enabled
@@ -965,7 +968,7 @@ associations:ownerFor associations:extensionsForProgram restorepoint:list
 plugins:list plugins:validate sync:status
 profiler:report profiler:regressions installers:check ctxmenu:list
 open:url groups:get transfer:pickSave transfer:pickOpen transfer:classify
-startup:list trusted:list trusted:isTrusted trusted:filterInsights
+startup:list startup:trace trusted:list trusted:isTrusted trusted:filterInsights
 update:settings dns:status debloat:list debloat:previousDamaged dialog:confirm history:list
 programs:measureCancel items:removeCancel backups:restoreCancel backups:verifyCancel
 erase:runCancel duplicates:scanCancel games:listCancel graph:graphCancel

@@ -12,7 +12,7 @@ const cache = new Map();
 const noop = () => {};
 const dialog = ({ children, buttons }) => React.createElement('section', null, children, buttons);
 const compiled = new Map();
-for (const name of ['dialog-shared.jsx', 'command-dialogs.jsx', 'dialogs.jsx', 'more.jsx', 'onboarding.jsx', 'saved-plan-review.jsx']) {
+for (const name of ['dialog-shared.jsx', 'command-dialogs.jsx', 'dialogs.jsx', 'more.jsx', 'onboarding.jsx', 'saved-plan-review.jsx', 'persistence-trace.jsx']) {
   const entry = `fixture:${name}`;
   const bundle = await rolldown({ input: entry, transform: { jsx: 'react-jsx' }, plugins: [{
     name: 'inert-ui-fixture',
@@ -37,7 +37,7 @@ function componentModule(name) {
     if (id === './backend/winpath.js') return {};
     if (id === './leftover-sections.js') return { leftoverSections };
     if (id === './backend/saved-cleanup-plans.js') return { readSavedCleanupPlan: noop, reviewSavedCleanupPlan: noop };
-    if (id === './dialog-shared.jsx' || id === './command-dialogs.jsx' || id === './saved-plan-review.jsx') return componentModule(id.slice(2));
+    if (['./dialog-shared.jsx', './command-dialogs.jsx', './saved-plan-review.jsx', './persistence-trace.jsx'].includes(id)) return componentModule(id.slice(2));
     throw new Error(`Unexpected UI fixture import: ${id}`);
   };
   Function('require', 'module', 'exports', 'window', output)(dependency, module, module.exports, { api: { invoke() { throw new Error('SSR fixture must not call native API'); } } });
@@ -45,6 +45,26 @@ function componentModule(name) {
   return module.exports;
 }
 const render = (Component, props) => renderToStaticMarkup(React.createElement(Component, props));
+
+test('Persistence Trace shows event-time writer or event account with explicit uncertainty', () => {
+  const { PersistenceTraceDialog } = componentModule('persistence-trace.jsx');
+  const atMs = 1720000000000;
+  const run = render(PersistenceTraceDialog, { onClose: noop, view: { kind: 'run', label: '<fixture>', result: {
+    status: 'partial', events: [{ recordId: '1', atMs, action: 'created', writerProcess: 'fixture.exe', writerPid: 12, recordedDisableAtMs: atMs - 1 }],
+  } } });
+  assert.match(run, /Run value created/);
+  assert.match(run, /After matching saved disable entry · computer unverified/);
+  assert.doesNotMatch(run, /Recreated after recorded disable/);
+  assert.match(run, /event at the time it was recorded/);
+  assert.match(run, /search was incomplete/i);
+  assert.match(run, /&lt;fixture&gt;/);
+  const task = render(PersistenceTraceDialog, { onClose: noop, view: { kind: 'task', label: 'Fixture task', result: {
+    status: 'matches', events: [{ recordId: '2', atMs, action: 'registered', account: 'Fixture account' }],
+  } } });
+  assert.match(task, /creator process is unknown/);
+  assert.match(task, /Fixture account/);
+  assert.doesNotMatch(task, /Event-time writer/);
+});
 
 test('Saved Cleanup Plan renders saved data as text and leaves the review without cleanup controls', () => {
   const { SavedPlanReview } = componentModule('saved-plan-review.jsx');

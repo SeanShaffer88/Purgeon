@@ -1,5 +1,6 @@
 import { tx } from './backend/i18n.js';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { PersistenceTraceDialog, usePersistenceTrace } from './persistence-trace.jsx';
 
 const api = window.api;
 
@@ -53,9 +54,11 @@ export function StartupView({ mode = 'startup', filter, admin, programs, onError
   const [trust, setTrust] = useState({});
   const [working, setWorking] = useState(new Set());
   const [pending, setPending] = useState({ signin: new Set(), reboot: new Set() });
+  const trace = usePersistenceTrace();
 
   const load = async () => {
     if (!alive.current) return;
+    trace.close();
     const generation = ++loadGeneration.current;
     const current = () => alive.current && generation === loadGeneration.current;
     try {
@@ -190,7 +193,7 @@ export function StartupView({ mode = 'startup', filter, admin, programs, onError
           {g.items.map((e) => {
             const fx = EFFECT[e.effect];
             const busy = working.has(e.id);
-            return (
+            const toggleButton = (
               <button
                 key={e.id}
                 className={`tweak ${e.enabled ? 'on' : 'off'} ${busy ? 'busy' : ''}`}
@@ -252,9 +255,18 @@ export function StartupView({ mode = 'startup', filter, admin, programs, onError
                 </span>
               </button>
             );
+            if (e.type !== 'run') return toggleButton;
+            return (
+              <div key={e.id} className="persistence-row">
+                {toggleButton}
+                <button className="trace-row-action" disabled={busy} aria-label={tx("Trace {p0}", { p0: e.name })}
+                  onClick={() => trace.open('run', e.name, { type: 'run', source: e.source, name: e.name })}>{tx("Trace…")}</button>
+              </div>
+            );
           })}
         </section>
       ))}
+      {trace.view && <PersistenceTraceDialog view={trace.view} onClose={trace.close} />}
       {rules.length > 0 && (
         <section className="tweak-group">
           <div className="tweak-group-head">

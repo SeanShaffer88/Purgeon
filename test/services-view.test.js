@@ -15,7 +15,9 @@ test('actual Startup load partitions before downstream effects and rejects stale
   for (const mode of ['startup', 'services']) {
     const pending = [], output = [], errors = [];
     const alive = { current: true }, loadGeneration = { current: 0 };
-    const load = compile(declaration('load'), { alive, loadGeneration, mode, entriesForMode, api: { invoke: (channel) => { assert.equal(channel, 'startup:list'); return new Promise((resolve, reject) => pending.push({ resolve, reject })); } }, setEntries: (value) => output.push(value), onError: (value) => errors.push(value) });
+    let traceCloses = 0;
+    const trace = { close: () => { traceCloses++; } };
+    const load = compile(declaration('load'), { alive, loadGeneration, mode, entriesForMode, trace, api: { invoke: (channel) => { assert.equal(channel, 'startup:list'); return new Promise((resolve, reject) => pending.push({ resolve, reject })); } }, setEntries: (value) => output.push(value), onError: (value) => errors.push(value) });
     const first = load(), second = load();
     pending[1].resolve(entries);
     await second;
@@ -28,6 +30,7 @@ test('actual Startup load partitions before downstream effects and rejects stale
     pending[2].resolve(entries);
     await detached;
     assert.equal(output.length, 1);
+    assert.equal(traceCloses, 3);
   }
 });
 

@@ -360,6 +360,8 @@ These are permanent. They are never selected for you, need administrator rights,
 
 ## Startup & Services
 
+**Persistence Trace** checks up to seven days of existing Windows events for the selected Run entry or scheduled task. A Run creation can show the process and PID recorded at event time. Task events show the recorded account where available, while the creator process remains unknown. A matching machine Run disable entry provides an earlier timestamp with unverified computer identity. Current enabled state and gaps in logging remain unknown. The trace reads existing logs without changing logging settings or requesting elevation. [Registry event fields](https://learn.microsoft.com/en-us/previous-versions/windows/it-pro/windows-10/security/threat-protection/auditing/event-4657) · [Event logging process fields](https://learn.microsoft.com/en-us/windows/win32/wes/eventschema-execution-systempropertiestype-element)
+
 ![Startup and services](docs/screenshots/startup.png)
 
 **Startup & Services** (`Ctrl+6`) shows everything that runs without you starting it:
