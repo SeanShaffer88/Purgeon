@@ -53,6 +53,27 @@ async fn persistence_trace(
         .map_err(|_| "Persistence trace is unavailable".into())
 }
 
+#[cfg(test)]
+mod persistence_trace_binding_tests {
+    use super::*;
+
+    #[test]
+    fn invalid_run_name_returns_an_empty_unsupported_trace_through_command() {
+        let request = serde_json::from_value::<persistence_trace::Request>(serde_json::json!({
+            "kind": "run",
+            "source": "hkcu-run",
+            "name": "",
+        }))
+        .unwrap();
+        let trace = tauri::async_runtime::block_on(persistence_trace(request)).unwrap();
+
+        assert_eq!(
+            serde_json::to_value(trace).unwrap(),
+            serde_json::json!({"status": "unsupported", "lookbackDays": 7, "events": []})
+        );
+    }
+}
+
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 #[derive(serde::Deserialize)]
