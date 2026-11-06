@@ -16,6 +16,7 @@ mod atomic_file;
 mod boot_native;
 mod broker;
 mod debloat_native;
+mod disposable_installer_lab;
 mod driver_advisor;
 mod driver_inventory;
 mod driver_native;
@@ -282,6 +283,37 @@ async fn driver_inventory() -> Result<Vec<driver_native::DriverView>, String> {
     tauri::async_runtime::spawn_blocking(driver_native::list)
         .await
         .map_err(|e| e.to_string())?
+}
+#[tauri::command]
+async fn generate_installer_lab(
+    app: tauri::AppHandle,
+) -> Result<Option<disposable_installer_lab::View>, String> {
+    tauri::async_runtime::spawn_blocking(move || {
+        disposable_installer_lab::select_and_generate(&app)
+    })
+    .await
+    .map_err(|_| "Installer lab preparation unavailable.".to_owned())?
+}
+#[tauri::command]
+async fn open_installer_lab_folder(id: String) -> Result<(), String> {
+    tauri::async_runtime::spawn_blocking(move || disposable_installer_lab::open_folder(&id))
+        .await
+        .map_err(|_| "Lab folder is unavailable.".to_owned())?
+}
+
+#[cfg(test)]
+mod installer_lab_binding_tests {
+    #[test]
+    fn invalid_folder_id_is_rejected_by_the_actual_command() {
+        tauri::async_runtime::block_on(async {
+            assert_eq!(
+                super::open_installer_lab_folder("../Lab.wsb".into())
+                    .await
+                    .unwrap_err(),
+                "Invalid lab identity."
+            );
+        });
+    }
 }
 #[tauri::command]
 async fn prepare_driver_operation(
@@ -2507,6 +2539,8 @@ pub fn run() {
             execute_task_operation,
             driver_inventory,
             driver_retirement_advisor,
+            generate_installer_lab,
+            open_installer_lab_folder,
             prepare_driver_operation,
             execute_driver_operation,
             driver_recovery,

@@ -202,6 +202,7 @@ Follow the vendor's interactive instructions. Purgeon supplies no silent or forc
 ![Two trials running](docs/screenshots/trials.png)
 
 - **Tools › Trial Installs** lets you try a program and review and undo its recorded changes where recovery data is available.
+- **Tools › Disposable Installer Lab** prepares an offline Windows Sandbox session for a local EXE or MSI, up to 1 GiB. Choose the installer and where to create a new lab folder. Review the files and follow Read me.txt to open the sandbox and run the installer manually inside it. The lab checks neither Sandbox availability nor installer compatibility. It maps only its dedicated input folder, read-only. If preparation is interrupted, an incomplete folder can remain without Lab.wsb. A short code can bring guest registration counts back into the lab panel. The counts are untrusted and there is no host cleanup or recovery action. [Windows Sandbox configuration](https://learn.microsoft.com/en-us/windows/security/application-security/application-isolation/windows-sandbox/windows-sandbox-configure-using-wsb-file)
 - A snapshot is taken, the installer runs, and you use the program for as long as you like.
 - **Try Over** removes everything added since the snapshot, including what the program created while you tried it, and puts changed settings back. You review the full list first, and everything removed is backed up.
 - **Keep It** ends the trial and keeps the program.

@@ -1,6 +1,13 @@
 // The app's system layer: thin calls into the Rust core (src-tauri/src/lib.rs).
 import { invoke } from '@tauri-apps/api/core';
 
+export function installerLabAdapter(invokeNative) {
+  return {
+    generateInstallerLab: () => invokeNative('generate_installer_lab'),
+    openInstallerLabFolder: id => invokeNative('open_installer_lab_folder', { id }),
+  };
+}
+
 export function securitySoftwareAdapter(invokeNative) {
   return {
     acknowledgeSecuritySoftwareRemoval: (request) => invokeNative('acknowledge_security_software_removal', { request }),
@@ -20,6 +27,7 @@ export async function createTauriSys() {
   return {
     openDialog: (options) => import('@tauri-apps/plugin-dialog').then(({ open }) => open(options)),
     saveDialog: (options) => import('@tauri-apps/plugin-dialog').then(({ save }) => save(options)),
+    ...installerLabAdapter(invoke),
     ...securitySoftwareAdapter(invoke),
     queryOperation: (request) => invoke('query_operation', { request }),
     selectResource: (selection) => invoke('select_resource', { selection }),

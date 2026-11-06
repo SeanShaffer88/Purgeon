@@ -1,0 +1,20 @@
+Purgeon Disposable Installer Lab
+
+These files prepare a manual Windows Sandbox session. Availability has not been checked.
+This lab may not support installers that need internet access or a guest restart.
+
+1. Review Lab.wsb. Only Input is mapped into the guest, read-only.
+2. If Windows Sandbox is available, manually open Lab.wsb. Do not open Installer.exe,
+   Installer.msi, or the scripts on the host.
+3. Inside the guest, open PowerShell and run:
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\PurgeonLab\Start.ps1
+   Start checks the staged installer hash and records the guest baseline. If it fails, stop.
+4. In the guest, manually open Installer.exe or Installer.msi in C:\PurgeonLab.
+5. After the installer closes, inside the same guest run:
+   powershell.exe -NoProfile -ExecutionPolicy Bypass -File C:\PurgeonLab\Finish.ps1
+6. Type the resulting code into the lab panel before closing Sandbox. The guest is discarded
+   when Sandbox closes. The generated host files remain in your chosen output location.
+
+The code counts added, missing, or changed uninstall registrations in the covered guest views.
+It is guest-provided and can be forged. The checksum only catches typing mistakes.
+The lab has no host restore, uninstall, or recovery action.

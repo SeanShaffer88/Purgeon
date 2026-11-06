@@ -56,6 +56,7 @@ const LogsDialog = optionalDialog(() => import('./dialogs.jsx'), 'LogsDialog');
 const HealthDialog = optionalDialog(() => import('./dialogs.jsx'), 'HealthDialog');
 const TasksDialog = optionalDialog(() => import('./dialogs.jsx'), 'TasksDialog');
 const DriverRetirementAdvisorDialog = optionalDialog(() => import('./driver-retirement-advisor.jsx'), 'DriverRetirementAdvisorDialog');
+const DisposableInstallerLabDialog = optionalDialog(() => import('./disposable-installer-lab.jsx'), 'DisposableInstallerLabDialog');
 const TakeSnapshotDialog = optionalDialog(() => import('./snapshots.jsx'), 'TakeSnapshotDialog');
 const ComparisonDialog = optionalDialog(() => import('./snapshots.jsx'), 'ComparisonDialog');
 const GroupDialog = optionalDialog(() => import('./groups.jsx'), 'GroupDialog');
@@ -422,6 +423,7 @@ const MENUS = [
       ['toggleResourceAlerts', 'Resource Alerts'],
       ['toggleSizeHistory', 'Record Program Size History'],
       ['trials', 'Trial Installs...'],
+      ['disposableInstallerLab', 'Disposable Installer Lab...'],
       ['queue', 'Uninstall Queue...'],
       null,
       { group: 'Records', tip: 'Backups, snapshots and the history of changes', items: [
@@ -2328,6 +2330,7 @@ const [reducedMotion, setReducedMotion] = useState(false);
     queue: () => openQueue(),
     queueAdd: () => (view === 'desktop' || view === 'store') && (markedRows.length || current) && queueAdd(markedRows.length ? markedRows : [current]),
     trials: () => openTrials(),
+    disposableInstallerLab: () => setModal({ type: 'disposableInstallerLab' }),
     diskMap: () => openDiskMap(),
     regSearch: () => setModal({ type: 'regSearch' }),
     browsers: () => openBrowsers(),
@@ -3247,6 +3250,7 @@ ${visible.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.version)}</td><td>$
       {modal?.type === 'health' && <HealthDialog onClose={() => setModal(null)} />}
       {modal?.type === 'tasks' && <TasksDialog onClose={() => setModal(null)} />}
       {modal?.type === 'driverRetirementAdvisor' && <DriverRetirementAdvisorDialog onClose={() => setModal(null)} />}
+      {modal?.type === 'disposableInstallerLab' && <DisposableInstallerLabDialog onClose={() => setModal(null)} />}
       {modal?.type === 'shared' && <SharedDialog onClose={() => setModal(null)} />}
       {modal?.type === 'erase' && <EraseDialog onClose={() => setModal(null)} />}
       {modal?.type === 'games' && <GamesDialog onClose={() => setModal(null)} />}

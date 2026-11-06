@@ -865,6 +865,10 @@ input[type='checkbox']:indeterminate::after { content: ''; width: 7px; height: 2
 .driver-advisor select { min-width: 0; max-width: 100%; }
 .driver-advisor p { margin: 0; }
 .driver-advisor-details { display: grid; gap: 6px; padding: 8px; border: 1px solid var(--border); }
+.installer-lab { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; overflow-wrap: anywhere; }
+.installer-lab p { margin: 0; }
+.installer-lab input { min-width: 0; max-width: 100%; width: 100%; }
+.installer-lab .lab-actions { display: flex; flex-wrap: wrap; gap: 6px; }
 .persistence-trace-events li { padding: 6px 8px; border-bottom: 1px solid var(--border); }
 .tree-item.locked { opacity: 0.45; }
 .choices { margin: 6px 0 0 18px; padding: 0; }
