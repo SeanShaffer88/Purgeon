@@ -198,6 +198,8 @@ struct Checkpoint {
     payload: PathBuf,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     target: Option<RegistrationTarget>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    observation_scope: Option<String>,
 }
 
 struct Policy {
@@ -713,10 +715,18 @@ fn validated_checkpoint(root: &Path, path: &Path, bytes: &[u8]) -> Result<Checkp
         return Err("Recovery checkpoint exceeds bounds".into());
     }
     let c: Checkpoint = serde_json::from_slice(bytes).map_err(|_| "Malformed checkpoint")?;
-    if !matches!((c.schema_version, &c.target), (1, None) | (2, Some(_)))
-        || c.target
-            .as_ref()
-            .is_some_and(|t| !valid_target(t, &c.tool_id))
+    if !matches!(
+        (c.schema_version, &c.target, &c.observation_scope),
+        (1, None, None) | (2, None, None) | (2, Some(_), Some(_))
+    ) || c.observation_scope.as_ref().is_some_and(|token| {
+        token.len() != 64
+            || !token
+                .bytes()
+                .all(|b| b.is_ascii_hexdigit() && !b.is_ascii_uppercase())
+    }) || c
+        .target
+        .as_ref()
+        .is_some_and(|t| !valid_target(t, &c.tool_id))
         || !valid_id(&c.id)
         || policy(&c.tool_id).is_err()
         || c.phase != "reviewRequired"
@@ -809,6 +819,30 @@ fn valid_target(target: &RegistrationTarget, tool_id: &str) -> bool {
         && target.sources.iter().enumerate().all(|(index, id)| {
             SOURCE_IDS.contains(&id.as_str()) && !target.sources[..index].contains(id)
         })
+}
+fn observation_scope(id: &str) -> Option<String> {
+    let machine: String = winreg::RegKey::predef(winreg::enums::HKEY_LOCAL_MACHINE)
+        .open_subkey_with_flags(
+            r"SOFTWARE\Microsoft\Cryptography",
+            winreg::enums::KEY_READ | winreg::enums::KEY_WOW64_64KEY,
+        )
+        .and_then(|key| key.get_value("MachineGuid"))
+        .ok()?;
+    let sid = crate::broker::current_sid().ok()?;
+    scope_token(id, &machine, &sid)
+}
+fn scope_token(id: &str, machine: &str, sid: &str) -> Option<String> {
+    use sha2::{Digest, Sha256};
+    if [machine, sid]
+        .into_iter()
+        .any(|s| s.trim().is_empty() || s.len() > 256 || s.chars().any(char::is_control))
+    {
+        return None;
+    }
+    let digest = Sha256::digest(format!(
+        "Purgeon AV review scope v1\0{id}\0{machine}\0{sid}"
+    ));
+    Some(digest.iter().map(|byte| format!("{byte:02x}")).collect())
 }
 fn registration_observation(
     target: &RegistrationTarget,
@@ -932,6 +966,7 @@ fn current_review(manager: &Mutex<Manager>, id: &str) -> Result<Checkpoint, Stri
 fn handoff_with(
     manager: &Mutex<Manager>,
     request: HandoffRequest,
+    scope: impl FnOnce(&str) -> Option<String>,
     inventory: impl FnOnce() -> Result<Vec<u8>, String>,
     health: impl FnOnce() -> AntivirusHealth,
 ) -> Result<HandoffResult, String> {
@@ -939,18 +974,23 @@ fn handoff_with(
         return Err("Invalid native review ID".into());
     }
     let checkpoint = current_review(manager, &request.review_id)?;
-    let registration =
-        checkpoint
-            .target
-            .as_ref()
-            .map_or(RegistrationObservation::Unknown, |target| {
-                inventory()
-                    .ok()
-                    .and_then(|bytes| serde_json::from_slice(&bytes).ok())
-                    .map_or(RegistrationObservation::Unknown, |snapshot| {
-                        registration_observation(target, &checkpoint.tool_id, &snapshot)
-                    })
-            });
+    let registration = checkpoint
+        .target
+        .as_ref()
+        .filter(|_| {
+            checkpoint
+                .observation_scope
+                .as_ref()
+                .is_some_and(|expected| scope(&checkpoint.id).as_ref() == Some(expected))
+        })
+        .map_or(RegistrationObservation::Unknown, |target| {
+            inventory()
+                .ok()
+                .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+                .map_or(RegistrationObservation::Unknown, |snapshot| {
+                    registration_observation(target, &checkpoint.tool_id, &snapshot)
+                })
+        });
     let antivirus_health = health();
     current_review(manager, &request.review_id)?;
     Ok(HandoffResult {
@@ -965,7 +1005,13 @@ pub fn check_handoff(request: HandoffRequest) -> Result<HandoffResult, String> {
     let _active = HANDOFF
         .try_lock()
         .map_err(|_| "Handoff check unavailable or already running")?;
-    handoff_with(manager(), request, read_inventory, windows_antivirus_health)
+    handoff_with(
+        manager(),
+        request,
+        observation_scope,
+        read_inventory,
+        windows_antivirus_health,
+    )
 }
 pub fn acknowledge(request: AcknowledgeRequest) -> Result<AcknowledgeResult, String> {
     if !valid_id(&request.review_id)
@@ -1296,16 +1342,25 @@ impl Effects for NativeEffects {
         let payload = self.payload.as_ref().ok_or("Payload unavailable")?;
         payload.recheck()?;
         let path = self.root.join("launch-intent");
-        let bytes = serde_json::to_vec(&Checkpoint {
+        let observation_scope = valid_target(target, &op.plan.tool_id)
+            .then(|| observation_scope(&op.plan.id))
+            .flatten();
+        let mut record = Checkpoint {
             schema_version: 2,
             id: op.plan.id.clone(),
             tool_id: op.plan.tool_id.clone(),
             phase: "reviewRequired".into(),
             detail: "Utility may have started; no automatic retry".into(),
             payload: payload.path.clone(),
-            target: Some(target.clone()),
-        })
-        .map_err(|e| e.to_string())?;
+            target: observation_scope.as_ref().map(|_| target.clone()),
+            observation_scope,
+        };
+        let mut bytes = serde_json::to_vec(&record).map_err(|e| e.to_string())?;
+        if bytes.len() as u64 > CHECKPOINT_LIMIT && record.target.is_some() {
+            record.target = None;
+            record.observation_scope = None;
+            bytes = serde_json::to_vec(&record).map_err(|e| e.to_string())?;
+        }
         validated_checkpoint(&self.root, &path, &bytes)?;
         // Exclusive durable checkpoint is intentionally never automatically removed.
         // Even a partial checkpoint blocks a restart; unknown state never authorizes retry.
@@ -1583,8 +1638,8 @@ mod tests {
     }
 
     #[test]
-    fn handoff_reads_v1_and_v2_after_restart_without_mutating_checkpoint() {
-        for version in [1, 2] {
+    fn handoff_reads_legacy_and_scoped_checkpoints_after_restart_without_mutation() {
+        for (version, has_target) in [(1, false), (2, false), (2, true)] {
             let fixture = AdapterFixture::new();
             let root = &fixture.effects.root;
             let path = root.join("launch-intent");
@@ -1592,7 +1647,10 @@ mod tests {
             let mut checkpoint: Checkpoint =
                 serde_json::from_slice(&checkpoint_bytes(root, &id)).unwrap();
             checkpoint.schema_version = version;
-            checkpoint.target = (version == 2).then(fixture_target);
+            let bound = has_target;
+            checkpoint.target = has_target.then(fixture_target);
+            checkpoint.observation_scope =
+                bound.then(|| scope_token(&id, "fixture-host", "fixture-sid").unwrap());
             let bytes = serde_json::to_vec(&checkpoint).unwrap();
             fs::write(&path, &bytes).unwrap();
             assert_eq!(
@@ -1608,11 +1666,9 @@ mod tests {
             let result = handoff_with(
                 &m,
                 request(),
+                |id| scope_token(id, "fixture-host", "fixture-sid"),
                 || {
-                    assert_eq!(
-                        version, 2,
-                        "legacy target must not be inferred from inventory"
-                    );
+                    assert!(bound, "unbound target must not be inferred from inventory");
                     Ok(inventory_bytes(vec![], "ok"))
                 },
                 || AntivirusHealth::Good,
@@ -1624,10 +1680,10 @@ mod tests {
             );
             assert_eq!(
                 result.registration,
-                if version == 1 {
-                    RegistrationObservation::Unknown
-                } else {
+                if bound {
                     RegistrationObservation::NotObserved
+                } else {
+                    RegistrationObservation::Unknown
                 }
             );
             assert_eq!(result.antivirus_health, AntivirusHealth::Good);
@@ -1637,6 +1693,7 @@ mod tests {
                 let native = handoff_with(
                     &m,
                     request(),
+                    |_| panic!("legacy review resolved a scope"),
                     || panic!("legacy review reached inventory"),
                     windows_antivirus_health,
                 )
@@ -1650,15 +1707,33 @@ mod tests {
             let unavailable = handoff_with(
                 &m,
                 request(),
+                |id| scope_token(id, "fixture-host", "fixture-sid"),
                 || Err("inventory denied".into()),
                 || AntivirusHealth::Poor,
             )
             .unwrap();
             assert_eq!(unavailable.registration, RegistrationObservation::Unknown);
             assert_eq!(unavailable.antivirus_health, AntivirusHealth::Poor);
+            for other in [
+                scope_token(&id, "other-host", "fixture-sid"),
+                scope_token(&id, "fixture-host", "other-sid"),
+                None,
+            ] {
+                let moved = handoff_with(
+                    &m,
+                    request(),
+                    |_| other,
+                    || panic!("out-of-scope review reached inventory"),
+                    || AntivirusHealth::Good,
+                )
+                .unwrap();
+                assert_eq!(moved.registration, RegistrationObservation::Unknown);
+                assert_eq!(moved.antivirus_health, AntivirusHealth::Good);
+            }
             assert!(handoff_with(
                 &m,
                 request(),
+                |id| scope_token(id, "fixture-host", "fixture-sid"),
                 || Err("inventory denied".into()),
                 || {
                     m.lock().unwrap().reviews.clear();
@@ -1678,9 +1753,11 @@ mod tests {
         let mut checkpoint: Checkpoint =
             serde_json::from_slice(&checkpoint_bytes(root, &id)).unwrap();
         checkpoint.schema_version = 2;
+        checkpoint.target = Some(fixture_target());
         assert!(
             validated_checkpoint(root, &path, &serde_json::to_vec(&checkpoint).unwrap()).is_err()
         );
+        checkpoint.observation_scope = scope_token(&id, "fixture-host", "fixture-sid");
         for target in [
             RegistrationTarget {
                 name: "AVG Business Security".into(),
@@ -1709,6 +1786,14 @@ mod tests {
                     .is_err()
             );
         }
+        checkpoint.target = Some(fixture_target());
+        for scope in ["", "garbage", &"A".repeat(64)] {
+            checkpoint.observation_scope = Some(scope.into());
+            assert!(
+                validated_checkpoint(root, &path, &serde_json::to_vec(&checkpoint).unwrap())
+                    .is_err()
+            );
+        }
         assert!(serde_json::from_value::<HandoffRequest>(serde_json::json!({
             "reviewId":id,"path":"forged"
         }))
@@ -1717,6 +1802,7 @@ mod tests {
             assert!(handoff_with(
                 &Mutex::new(Manager::default()),
                 HandoffRequest { review_id },
+                |_| panic!("stale review resolved a scope"),
                 || panic!("stale review reached inventory"),
                 || panic!("stale review reached WSC"),
             )
@@ -1939,7 +2025,14 @@ mod tests {
                 }
             }
         }
-        for failure in ["persist", "partial", "cancel", "launch", "cleanup"] {
+        for failure in [
+            "persist",
+            "partial",
+            "cancel",
+            "launch",
+            "cleanup",
+            "invalid-observation",
+        ] {
             let mut m = cached();
             let op = planned(&mut m);
             let mut attempt = Attempt {
@@ -1948,19 +2041,37 @@ mod tests {
                 launches: 0,
             };
             admit(&op, &m.products).unwrap();
-            let result = run(&op, &mut attempt).unwrap();
+            let result = if failure == "invalid-observation" {
+                let mut target = fixture_target();
+                target.version = "\n".repeat(129);
+                run_with_setup(&op, &mut attempt, |_| Ok(()), || Ok(((), target))).unwrap()
+            } else {
+                run(&op, &mut attempt).unwrap()
+            };
             assert_eq!(
                 result.outcome,
                 match failure {
                     "cancel" | "cleanup" => "cancelled",
-                    "launch" => "reviewRequired",
+                    "launch" | "invalid-observation" => "reviewRequired",
                     _ => "failed",
                 }
             );
-            assert_eq!(attempt.launches, usize::from(failure == "launch"));
+            assert_eq!(
+                attempt.launches,
+                usize::from(matches!(failure, "launch" | "invalid-observation"))
+            );
+            if failure == "invalid-observation" {
+                let root = &attempt.fixture.effects.root;
+                let path = root.join("launch-intent");
+                let checkpoint =
+                    validated_checkpoint(root, &path, &fs::read(&path).unwrap()).unwrap();
+                assert_eq!(checkpoint.schema_version, 2);
+                assert!(checkpoint.target.is_none());
+                assert!(checkpoint.observation_scope.is_none());
+            }
             assert_eq!(
                 op.snapshot().unwrap().cleanup,
-                if ["launch", "cleanup"].contains(&failure) {
+                if ["launch", "cleanup", "invalid-observation"].contains(&failure) {
                     "retained"
                 } else {
                     "removed"
@@ -2438,7 +2549,7 @@ public sealed class FixtureHandler : HttpMessageHandler {
         assert!(validated_checkpoint(root, &root.join("launch-intent"), &bytes).is_ok());
         assert!(validated_checkpoint(root, &root.join("norton.launch-intent"), &bytes).is_err());
         for (field, value) in [
-            ("schemaVersion", serde_json::json!(2)),
+            ("schemaVersion", serde_json::json!(3)),
             ("id", serde_json::json!("bad")),
             ("toolId", serde_json::json!("unknown")),
             ("phase", serde_json::json!("launched")),
@@ -4277,7 +4388,9 @@ public sealed class FixtureHandler : HttpMessageHandler {
         let bytes = fs::read(&checkpoint).unwrap();
         let persisted = validated_checkpoint(&root, &checkpoint, &bytes).unwrap();
         assert_eq!(persisted.schema_version, 2);
-        assert_eq!(persisted.target, Some(fixture_target()));
+        let scope = observation_scope(&op.plan.id);
+        assert_eq!(persisted.target, scope.as_ref().map(|_| fixture_target()));
+        assert_eq!(persisted.observation_scope, scope);
         assert!(effects.persist(&op, &fixture_target()).is_err());
         assert_eq!(fs::read(&checkpoint).unwrap(), bytes);
         assert_eq!(op.snapshot().unwrap().phase, "prepared");
