@@ -183,8 +183,6 @@ type Delete = unsafe extern "system" fn(*mut c_void) -> i32;
 struct Session {
     handle: Option<u32>,
     close: Close,
-    shutdown: Shutdown,
-    active: bool,
 }
 impl Drop for Session {
     fn drop(&mut self) {
@@ -193,21 +191,86 @@ impl Drop for Session {
                 (self.close)(h);
             }
         }
-        if self.active {
-            unsafe {
-                (self.shutdown)();
-            }
+    }
+}
+struct DismRuntime(Option<Shutdown>);
+impl Drop for DismRuntime {
+    fn drop(&mut self) {
+        if let Some(shutdown) = self.0.take() {
+            unsafe { shutdown() };
         }
     }
 }
+struct DismApi {
+    initialize: Initialize,
+    open: Open,
+    get: Get,
+    close: Close,
+    shutdown: Shutdown,
+    delete: Delete,
+}
+type ReadRows<'a> = &'a dyn Fn() -> Result<Vec<Row>, String>;
+
+const ELEVATION_REQUIRED: i32 = 0x8007_02e4_u32 as i32;
+#[derive(Debug)]
+pub(crate) enum DismError {
+    ElevationRequired,
+    Other(String),
+}
+impl From<String> for DismError {
+    fn from(message: String) -> Self {
+        Self::Other(message)
+    }
+}
+impl DismError {
+    fn message(self) -> String {
+        match self {
+            Self::ElevationRequired => {
+                format!("Native DISM initialization failed: {ELEVATION_REQUIRED:#x}")
+            }
+            Self::Other(message) => message,
+        }
+    }
+}
+
+impl DismApi {
+    fn with_rows<T>(
+        &self,
+        use_rows: impl FnOnce(ReadRows<'_>) -> Result<T, String>,
+    ) -> Result<T, DismError> {
+        let status = unsafe { (self.initialize)(0, std::ptr::null(), std::ptr::null()) };
+        match status {
+            0 => {}
+            ELEVATION_REQUIRED => return Err(DismError::ElevationRequired),
+            _ => return Err(format!("Native DISM initialization failed: {status:#x}").into()),
+        }
+        let mut runtime = DismRuntime(Some(self.shutdown));
+        let result = use_rows(&|| read_rows(self.open, self.get, self.close, self.delete));
+        let stopped = unsafe { (self.shutdown)() };
+        runtime.0 = None;
+        let value = result?;
+        if stopped != 0 {
+            return Err("DISM session cleanup failed".to_owned().into());
+        }
+        Ok(value)
+    }
+}
+
 pub fn rows() -> Result<Vec<Row>, String> {
+    with_rows(|read| read()).map_err(DismError::message)
+}
+
+// Keep the DLL and one initialized runtime alive across independent snapshots.
+pub(crate) fn with_rows<T>(
+    use_rows: impl FnOnce(ReadRows<'_>) -> Result<T, String>,
+) -> Result<T, DismError> {
     let _lock = DISM.lock().map_err(|e| e.to_string())?;
     let path = windows_tools::system_file("DismApi.dll")?;
     let path: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
     let library =
         Library(unsafe { LoadLibraryExW(path.as_ptr(), std::ptr::null_mut(), 0x100 | 0x800) });
     if library.0.is_null() {
-        return Err("Windows DISM API unavailable".into());
+        return Err("Windows DISM API unavailable".to_owned().into());
     }
     let initialize: Initialize =
         unsafe { std::mem::transmute(library.address(c"DismInitialize")?) };
@@ -216,16 +279,18 @@ pub fn rows() -> Result<Vec<Row>, String> {
     let close: Close = unsafe { std::mem::transmute(library.address(c"DismCloseSession")?) };
     let shutdown: Shutdown = unsafe { std::mem::transmute(library.address(c"DismShutdown")?) };
     let delete: Delete = unsafe { std::mem::transmute(library.address(c"DismDelete")?) };
-    let status = unsafe { initialize(0, std::ptr::null(), std::ptr::null()) };
-    if status != 0 {
-        return Err(format!("Native DISM initialization failed: {status:#x}"));
-    }
-    let mut session = Session {
-        handle: None,
+    DismApi {
+        initialize,
+        open,
+        get,
         close,
         shutdown,
-        active: true,
-    };
+        delete,
+    }
+    .with_rows(use_rows)
+}
+
+fn read_rows(open: Open, get: Get, close: Close, delete: Delete) -> Result<Vec<Row>, String> {
     let mut handle = 0;
     let online: Vec<u16> = "DISM_{53BFAE52-B167-4E2F-A258-0A37B57FF845}"
         .encode_utf16()
@@ -242,7 +307,10 @@ pub fn rows() -> Result<Vec<Row>, String> {
     if status != 0 {
         return Err(format!("Native DISM online session failed: {status:#x}"));
     }
-    session.handle = Some(handle);
+    let mut session = Session {
+        handle: Some(handle),
+        close,
+    };
     let mut pointer = std::ptr::null_mut();
     let mut count = 0;
     let status = unsafe { get(handle, 1, &mut pointer, &mut count) };
@@ -323,9 +391,7 @@ pub fn rows() -> Result<Vec<Row>, String> {
     }
     let closed = unsafe { close(handle) };
     session.handle = None;
-    let stopped = unsafe { shutdown() };
-    session.active = false;
-    if closed != 0 || stopped != 0 {
+    if closed != 0 {
         return Err("DISM session cleanup failed".into());
     }
     Ok(output)
@@ -538,6 +604,201 @@ pub fn unused(row: &Row, manifest: &package::Manifest, guards: &Guards) -> Resul
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[derive(Default)]
+    struct DismFixture {
+        events: Vec<&'static str>,
+        fields: Vec<Vec<u16>>,
+        initialize: i32,
+        close: i32,
+        shutdown: i32,
+        get: i32,
+        opens: u32,
+    }
+
+    thread_local! {
+        static DISM_FIXTURE: std::cell::RefCell<DismFixture> = std::cell::RefCell::new(DismFixture::default());
+    }
+    fn configure_dism(f: DismFixture) {
+        DISM_FIXTURE.with(|slot| {
+            slot.replace(DismFixture {
+                fields: [
+                    "oem1.inf",
+                    "test.inf",
+                    "test.cat",
+                    "Net",
+                    "{00000000-0000-0000-0000-000000000000}",
+                    "Test provider",
+                ]
+                .into_iter()
+                .map(|s| s.encode_utf16().chain(Some(0)).collect())
+                .collect(),
+                ..f
+            });
+        });
+    }
+    fn dism_events() -> Vec<&'static str> {
+        DISM_FIXTURE.with_borrow(|f| f.events.clone())
+    }
+    unsafe extern "system" fn dism_init(_: u32, _: *const u16, _: *const u16) -> i32 {
+        DISM_FIXTURE.with_borrow_mut(|f| {
+            f.events.push("initialize");
+            f.initialize
+        })
+    }
+    unsafe extern "system" fn dism_open(
+        _: *const u16,
+        _: *const u16,
+        _: *const u16,
+        handle: *mut u32,
+    ) -> i32 {
+        DISM_FIXTURE.with_borrow_mut(|f| {
+            f.events.push("open");
+            f.opens += 1;
+            unsafe {
+                *handle = f.opens;
+            }
+            0
+        })
+    }
+    unsafe extern "system" fn dism_get(
+        handle: u32,
+        _: i32,
+        pointer: *mut *mut RawPackage,
+        count: *mut u32,
+    ) -> i32 {
+        DISM_FIXTURE.with_borrow_mut(|f| {
+            f.events.push(if handle == 1 { "get-a" } else { "get-b" });
+            let mut rows = [false, true].map(|inbox| RawPackage {
+                published: f.fields[0].as_ptr(),
+                original: f.fields[1].as_ptr(),
+                inbox: i32::from(inbox),
+                catalog: f.fields[2].as_ptr(),
+                class_name: f.fields[3].as_ptr(),
+                class_guid: f.fields[4].as_ptr(),
+                class_description: std::ptr::null(),
+                boot_critical: 0,
+                signature: 0,
+                provider: f.fields[5].as_ptr(),
+                date: [2024, 2, 0, 29, 0, 0, 0, 0],
+                major: 1,
+                minor: 2,
+                build: 3,
+                revision: handle,
+            });
+            rows[1].published = std::ptr::null();
+            unsafe {
+                *count = rows.len() as u32;
+                *pointer = Box::into_raw(Box::new(rows)).cast();
+            }
+            f.get
+        })
+    }
+    unsafe extern "system" fn dism_delete(pointer: *mut c_void) -> i32 {
+        drop(unsafe { Box::from_raw(pointer.cast::<[RawPackage; 2]>()) });
+        DISM_FIXTURE.with_borrow_mut(|f| f.events.push("delete"));
+        0
+    }
+    unsafe extern "system" fn dism_close(_: u32) -> i32 {
+        DISM_FIXTURE.with_borrow_mut(|f| {
+            f.events.push("close");
+            f.close
+        })
+    }
+    unsafe extern "system" fn dism_shutdown() -> i32 {
+        DISM_FIXTURE.with_borrow_mut(|f| {
+            f.events.push("shutdown");
+            f.shutdown
+        })
+    }
+    const MOCK_DISM: DismApi = DismApi {
+        initialize: dism_init,
+        open: dism_open,
+        get: dism_get,
+        close: dism_close,
+        shutdown: dism_shutdown,
+        delete: dism_delete,
+    };
+
+    #[test]
+    fn dism_brackets_two_fresh_snapshots_in_one_runtime() {
+        configure_dism(DismFixture::default());
+        let (first, second) = MOCK_DISM
+            .with_rows(|read| {
+                let first = read()?;
+                DISM_FIXTURE.with_borrow_mut(|f| f.events.push("device-sample"));
+                Ok((first, read()?))
+            })
+            .unwrap();
+        assert_eq!((first.len(), second.len()), (1, 1));
+        assert_eq!(first[0].published, "oem1.inf");
+        assert_eq!(first[0].version, "1.2.3.1");
+        assert_eq!(second[0].version, "1.2.3.2");
+        assert_eq!(
+            dism_events(),
+            [
+                "initialize",
+                "open",
+                "get-a",
+                "delete",
+                "close",
+                "device-sample",
+                "open",
+                "get-b",
+                "delete",
+                "close",
+                "shutdown"
+            ]
+        );
+    }
+
+    #[test]
+    fn dism_runtime_surfaces_denial_and_cleans_up_failed_inventory() {
+        configure_dism(DismFixture {
+            initialize: ELEVATION_REQUIRED,
+            ..DismFixture::default()
+        });
+        let result: Result<(), DismError> = MOCK_DISM.with_rows(|_| panic!("opened while denied"));
+        assert!(matches!(result, Err(DismError::ElevationRequired)));
+        assert_eq!(dism_events(), ["initialize"]);
+        assert!(DismError::ElevationRequired
+            .message()
+            .ends_with("0x800702e4"));
+
+        for failure in [
+            DismFixture {
+                close: 5,
+                ..DismFixture::default()
+            },
+            DismFixture {
+                shutdown: 5,
+                ..DismFixture::default()
+            },
+            DismFixture {
+                get: 5,
+                ..DismFixture::default()
+            },
+        ] {
+            configure_dism(failure);
+            assert!(matches!(
+                MOCK_DISM.with_rows(|read| read()),
+                Err(DismError::Other(_))
+            ));
+            assert_eq!(
+                dism_events(),
+                ["initialize", "open", "get-a", "delete", "close", "shutdown"]
+            );
+        }
+        configure_dism(DismFixture {
+            initialize: 5,
+            ..DismFixture::default()
+        });
+        assert!(matches!(
+            MOCK_DISM.with_rows(|read| read()),
+            Err(DismError::Other(_))
+        ));
+        assert_eq!(dism_events(), ["initialize"]);
+    }
+
     fn row() -> Row {
         Row {
             published: "oem1.inf".into(),

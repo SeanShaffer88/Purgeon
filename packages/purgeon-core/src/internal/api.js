@@ -54,6 +54,7 @@ import * as running from './running.js';
 import * as maintenance from './maintenance.js';
 import * as queue from './queue.js';
 import * as drivers from './drivers.js';
+import { driverRetirementAdvice } from './driver-retirement-advisor.js';
 import * as trials from './trials.js';
 const explore = lazyNamespace(lazyExplore);
 import * as diskusage from './diskusage.js';
@@ -361,6 +362,7 @@ const handlers = {
   },
   'junk:cleanSystemCancel': () => stopOp('cleanSystem'),
   'drivers:list': () => drivers.listDrivers(),
+  'drivers:advisor': driverRetirementAdvice,
   'drivers:candidates': () => drivers.oldDriverCandidates(),
   'drivers:delete': async ({ driverId, inf }) => {
     if (inf !== undefined) throw new Error('Raw INF removal is no longer supported. Refresh the driver inventory and review the native package identity.');
@@ -952,7 +954,7 @@ backups:list backups:plan backups:forecast backups:interrupted backups:verifyPac
 log:open shared:components erase:pick erase:collect policy:get
 duplicates:pick duplicates:scan programs:duplicates selfhealth:check
 games:list graph:graph graph:program snapshots:list snapshots:compare
-junk:scan junk:scanSystem drivers:list drivers:candidates drivers:recovery
+junk:scan junk:scanSystem drivers:list drivers:advisor drivers:candidates drivers:recovery
 programs:insights programs:sizeHistory files:signatures security:verifySignature
 owners:who owners:pick orphans:scan winget:available winget:upgrades winget:find
 archive:list running:bootImpact running:inbound maintenance:status
